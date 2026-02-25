@@ -107,7 +107,7 @@ async function subTransHandler(args: string, ctx: any, store: SubagentStore, pi:
 
 	const switchFn = resolveSwitchSession(ctx, store);
 	if (!switchFn) {
-		ctx.ui.notify("Session switch not ready. Run any /sub:* command first.", "warning");
+		ctx.ui.notify("Session switch not ready. Run /sub:enable-switch first.", "warning");
 		return;
 	}
 
@@ -218,7 +218,7 @@ async function subBackHandler(ctx: any, store: SubagentStore): Promise<void> {
 
 	const switchFn = resolveSwitchSession(ctx, store);
 	if (!switchFn) {
-		ctx.ui.notify("Session switch not ready. Run any /sub:* command first.", "warning");
+		ctx.ui.notify("Session switch not ready. Run /sub:enable-switch first.", "warning");
 		return;
 	}
 
