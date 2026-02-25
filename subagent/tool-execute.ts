@@ -448,6 +448,31 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 			updateCommandRunsWidget(store, ctx);
 
 			const startedState = continueFromRun ? "resumed" : "started";
+			const contextLabel = runState.contextMode === "main" ? "main context" : "dedicated sub-session";
+
+			pi.sendMessage(
+				{
+					customType: "subagent-tool",
+					content:
+						`[subagent:${resolvedAgent}#${runId}] ${startedState}` +
+						`\nTask: ${taskForDisplay}` +
+						(continueFromRun ? `\nContinued from: #${params.continueRunId}` : "") +
+						`\nContext: ${contextLabel} · turn ${runState.turnCount}`,
+					display: true,
+					details: {
+						runId,
+						agent: resolvedAgent,
+						task: taskForDisplay,
+						continuedFromRunId: params.continueRunId,
+						turnCount: runState.turnCount,
+						contextMode: runState.contextMode,
+						sessionFile: runState.sessionFile,
+						status: startedState,
+						progressText: runState.progressText,
+					},
+				},
+				{ deliverAs: "followUp", triggerTurn: false },
+			);
 
 			void (async () => {
 				try {
