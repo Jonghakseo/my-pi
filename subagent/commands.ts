@@ -796,6 +796,33 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 		},
 	});
 
+	pi.on("input", async (event, ctx) => {
+		if (event.source === "extension") {
+			return { action: "continue" as const };
+		}
+
+		const text = event.text ?? "";
+		if (!text.startsWith(">> ")) {
+			return { action: "continue" as const };
+		}
+
+		const forwardedArgs = text.slice(3).trim();
+		if (!forwardedArgs) {
+			ctx.ui.notify("Usage: >> <task> | >> <runId> <task>", "info");
+			return { action: "handled" as const };
+		}
+
+		const firstSpace = forwardedArgs.indexOf(" ");
+		const firstToken = firstSpace === -1 ? forwardedArgs : forwardedArgs.slice(0, firstSpace);
+		if (/^\d+$/.test(firstToken) && !store.commandRuns.has(Number(firstToken))) {
+			ctx.ui.notify(`Unknown subagent run #${firstToken}.`, "error");
+			return { action: "handled" as const };
+		}
+
+		await subCommand.handler(forwardedArgs, ctx, true);
+		return { action: "handled" as const };
+	});
+
 	pi.on("session_start", async (_event, ctx) => {
 		store.commandRuns.clear();
 		store.commandWidgetCtx = ctx;
