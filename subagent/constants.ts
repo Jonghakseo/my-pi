@@ -31,6 +31,12 @@ export function formatSymbolHints(): string {
 		.join("  ");
 }
 
+/** Short label shown in the widget when inside a child session. */
+export const PARENT_HINT = "↩ parent (><)";
+
+/** Custom entry type for persisting parent session links across session switches. */
+export const PARENT_ENTRY_TYPE = "subagent-parent";
+
 // ─── commands.ts ───────────────────────────────────────────────────────────
 
 export const STATUS_OUTPUT_PREVIEW_MAX_CHARS = 2_000;

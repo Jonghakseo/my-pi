@@ -34,6 +34,7 @@ import {
 	CONTINUATION_OUTPUT_CONTEXT_MAX_CHARS,
 	DEFAULT_TURN_COUNT,
 	MS_PER_SECOND,
+	PARENT_ENTRY_TYPE,
 	RUN_OUTPUT_MESSAGE_MAX_CHARS,
 	RUN_TICK_INTERVAL_MS,
 	SUBVIEW_OVERLAY_MAX_HEIGHT,
@@ -64,23 +65,31 @@ function resolveSwitchSession(ctx: any, store: SubagentStore): ((sessionPath: st
 
 /**
  * Shared handler for switching to a subagent session (used by both /sub:trans and <>).
+ * After a successful switch, persists a `subagent-parent` entry in the child session
+ * so that `><` / `sub:back` can navigate back even across pi restarts.
  */
-async function subTransHandler(args: string, ctx: any, store: SubagentStore): Promise<void> {
+async function subTransHandler(args: string, ctx: any, store: SubagentStore, pi: ExtensionAPI): Promise<void> {
 	const raw = (args ?? "").trim();
 	let runId: number;
 	let run: CommandRunState | undefined;
 
 	if (!raw) {
-		ctx.ui.notify("Usage: <> <runId> or /sub:trans <runId>", "info");
-		return;
+		// No args: auto-switch to latest completed run
+		const latest = getLatestRun(store, ["done", "error"]);
+		if (!latest) {
+			ctx.ui.notify("No completed runs to switch to.", "info");
+			return;
+		}
+		runId = latest.id;
+		run = latest;
+	} else {
+		runId = parseInt(raw);
+		if (isNaN(runId)) {
+			ctx.ui.notify("Usage: <> [runId] or /sub:trans <runId>", "error");
+			return;
+		}
+		run = store.commandRuns.get(runId);
 	}
-
-	runId = parseInt(raw);
-	if (isNaN(runId)) {
-		ctx.ui.notify("Usage: <> <runId> or /sub:trans <runId>", "error");
-		return;
-	}
-	run = store.commandRuns.get(runId);
 
 	if (!run) {
 		ctx.ui.notify(`Run #${runId} not found. Use /sub:open to see recent runs.`, "error");
@@ -101,30 +110,108 @@ async function subTransHandler(args: string, ctx: any, store: SubagentStore): Pr
 		return;
 	}
 
-	// Push current session to stack before switching (for >< navigation)
-	const currentSession = ctx.sessionManager.getSessionFile();
-	if (currentSession) {
-		store.sessionStack.push(currentSession);
-	}
+	// Capture current session path before switching — this becomes the parent link.
+	const parentSessionFile = normalizePath(ctx.sessionManager.getSessionFile()) ?? undefined;
 
 	try {
 		const result = await switchFn(run.sessionFile);
 		if (result.cancelled) {
-			if (currentSession) store.sessionStack.pop();
 			ctx.ui.notify(`Failed to switch to session for run #${runId}.`, "error");
+			return;
+		}
+
+		// Persist parent link in the child session we just switched into.
+		if (parentSessionFile) {
+			pi.appendEntry(PARENT_ENTRY_TYPE, {
+				parentSessionFile,
+				runId,
+				via: "<>",
+				v: 1,
+			});
+			store.currentParentSessionFile = parentSessionFile;
+			updateCommandRunsWidget(store);
 		}
 	} catch (err) {
-		if (currentSession) store.sessionStack.pop();
 		ctx.ui.notify(`Session switch error: ${err}`, "error");
 	}
 }
 
 /**
+ * Stage A: normalize a path — trim outer whitespace, strip CR/LF/TAB only.
+ * Preserves interior spaces (valid in macOS paths).
+ */
+function normalizePath(raw: unknown): string | null {
+	if (!raw || typeof raw !== "string") return null;
+	const cleaned = raw.replace(/[\r\n\t]+/g, "").trim();
+	return cleaned || null;
+}
+
+/**
+ * Stage B: compact a path — strip ALL whitespace (repair wrap/corruption artifacts).
+ * Only used as fallback when Stage A path does not exist on disk.
+ */
+function compactPath(raw: unknown): string | null {
+	if (!raw || typeof raw !== "string") return null;
+	const cleaned = raw.replace(/\s+/g, "").trim();
+	return cleaned || null;
+}
+
+/**
+ * Try to resolve a valid on-disk path from a raw value using 2-stage strategy.
+ * Returns null when neither stage yields an existing file.
+ */
+function resolveValidPath(raw: unknown): string | null {
+	const stageA = normalizePath(raw);
+	if (stageA && fs.existsSync(stageA)) return stageA;
+	const stageB = compactPath(raw);
+	if (stageB && stageB !== stageA && fs.existsSync(stageB)) return stageB;
+	return null;
+}
+
+/**
+ * Resolve the best parent session path.
+ * Uses `store.currentParentSessionFile` first, then rescans session entries as fallback.
+ * Applies 2-stage normalization (preserve spaces → compact fallback) and validates existence.
+ */
+function resolveParentSessionFile(ctx: any, store: SubagentStore): string | null {
+	// Primary: in-memory cached value.
+	const cached = resolveValidPath(store.currentParentSessionFile);
+	if (cached) return cached;
+
+	// Fallback: rescan current session entries for the latest valid parent link.
+	try {
+		const entries = ctx.sessionManager?.getEntries?.() ?? [];
+		let best: string | null = null;
+		for (const entry of entries) {
+			if ((entry as any).type === "custom" && (entry as any).customType === PARENT_ENTRY_TYPE) {
+				const candidate = resolveValidPath((entry as any).data?.parentSessionFile);
+				if (candidate) best = candidate;
+			}
+		}
+		if (best) {
+			store.currentParentSessionFile = best;
+			return best;
+		}
+	} catch (_e) {
+		// Ignore rescan errors; fall through to null.
+	}
+
+	return null;
+}
+
+/**
  * Shared handler for returning to parent session (used by both /sub:back and ><).
+ * Resolves the parent from `store.currentParentSessionFile` (persisted in session entries).
  */
 async function subBackHandler(ctx: any, store: SubagentStore): Promise<void> {
-	if (store.sessionStack.length === 0) {
-		ctx.ui.notify("No parent session to return to.", "info");
+	const parentSession = resolveParentSessionFile(ctx, store);
+	if (!parentSession) {
+		// Clear stale in-memory reference so widget hides the hint.
+		if (store.currentParentSessionFile) {
+			store.currentParentSessionFile = null;
+			updateCommandRunsWidget(store);
+		}
+		ctx.ui.notify("No parent session (file deleted or not linked).", "info");
 		return;
 	}
 
@@ -134,17 +221,144 @@ async function subBackHandler(ctx: any, store: SubagentStore): Promise<void> {
 		return;
 	}
 
-	const parentSession = store.sessionStack.pop()!;
 	try {
 		const result = await switchFn(parentSession);
 		if (result.cancelled) {
-			store.sessionStack.push(parentSession);
 			ctx.ui.notify("Failed to return to parent session.", "error");
 		}
+		// Note: currentParentSessionFile will be set correctly by restoreRunsFromSession
+		// when the parent session loads (via session_switch event).
 	} catch (err) {
-		store.sessionStack.push(parentSession);
 		ctx.ui.notify(`Session switch error: ${err}`, "error");
 	}
+}
+
+/**
+ * Clear commandRuns and restore from current session entries.
+ * Used by both session_start and session_switch handlers.
+ * Also restores `currentParentSessionFile` from the latest `subagent-parent` entry.
+ */
+function restoreRunsFromSession(store: SubagentStore, ctx: any): void {
+	store.commandRuns.clear();
+	store.commandWidgetCtx = ctx;
+
+	try {
+		const entries = ctx.sessionManager.getEntries();
+		const restoredRuns = new Map<number, CommandRunState>();
+		const removedRunIds = new Set<number>();
+		let maxRunId = 0;
+
+		// Restore parent link from latest subagent-parent entry (if any).
+		let latestParentSessionFile: string | null = null;
+		for (const entry of entries) {
+			if (entry.type === "custom") {
+				const ce = entry as any;
+				if (ce.customType === PARENT_ENTRY_TYPE && ce.data?.parentSessionFile) {
+					const cleaned = normalizePath(ce.data.parentSessionFile);
+					if (cleaned) latestParentSessionFile = cleaned;
+				}
+			}
+		}
+		store.currentParentSessionFile = latestParentSessionFile;
+
+		// First pass: collect removed run IDs
+		for (const entry of entries) {
+			if (entry.type === "custom") {
+				const ce = entry as any;
+				if (ce.customType === "subagent-removed" && ce.data?.runId != null) {
+					removedRunIds.add(ce.data.runId);
+				}
+			}
+		}
+
+		for (const entry of entries) {
+			if (entry.type !== "custom_message") continue;
+			const cm = entry as any;
+			if (cm.customType !== "subagent-command" && cm.customType !== "subagent-tool") continue;
+			const d = cm.details;
+			if (!d || typeof d.runId !== "number") continue;
+
+			const runId = d.runId;
+			if (runId > maxRunId) maxRunId = runId;
+
+			const existing = restoredRuns.get(runId);
+
+			// Determine status from the message content
+			const content = typeof cm.content === "string" ? cm.content : "";
+			const isCompleted = content.includes("] completed");
+			const isFailed = content.includes("] failed");
+			const isError = content.includes("] error");
+
+			if (isCompleted || isFailed || isError) {
+				// Final message — create or overwrite with done/error state
+				const status = isCompleted ? "done" : "error";
+				const run: CommandRunState = {
+					id: runId,
+					agent: d.agent ?? existing?.agent ?? "unknown",
+					task: d.task ?? existing?.task ?? "",
+					status,
+					startedAt: existing?.startedAt ?? Date.now(),
+					elapsedMs: existing?.elapsedMs ?? 0,
+					toolCalls: existing?.toolCalls ?? 0,
+					lastLine: "",
+					lastOutput: "",
+					continuedFromRunId: d.continuedFromRunId,
+					turnCount: d.turnCount ?? existing?.turnCount ?? DEFAULT_TURN_COUNT,
+					sessionFile: d.sessionFile ?? existing?.sessionFile,
+					contextMode: d.contextMode ?? existing?.contextMode,
+					usage: d.usage ?? existing?.usage,
+					model: d.model ?? existing?.model,
+					progressText: d.progressText ?? existing?.progressText,
+				};
+				// Extract progress and output from content payload
+				const lines = content.split("\n");
+				if (!run.progressText) {
+					const progressLine = lines.find((l: string) => l.startsWith("Progress: "));
+					if (progressLine) run.progressText = progressLine.slice("Progress: ".length).trim();
+				}
+				const bodyStart = lines.findIndex((l: string) => l === "") + 1;
+				if (bodyStart > 0 && bodyStart < lines.length) {
+					run.lastOutput = lines.slice(bodyStart).join("\n");
+					run.lastLine = getLastNonEmptyLine(run.lastOutput);
+				}
+				restoredRuns.set(runId, run);
+			} else {
+				// Started/resumed message — always update so we track the latest continuation.
+				// If a completion message follows, it will overwrite this.
+				// If not (crash/abort), this "interrupted" state persists.
+				restoredRuns.set(runId, {
+					id: runId,
+					agent: d.agent ?? existing?.agent ?? "unknown",
+					task: d.task ?? existing?.task ?? "",
+					status: "error",
+					startedAt: existing?.startedAt ?? Date.now(),
+					elapsedMs: existing?.elapsedMs ?? 0,
+					toolCalls: existing?.toolCalls ?? 0,
+					lastLine: "(interrupted — started but no completion found)",
+					lastOutput: existing?.lastOutput,
+					continuedFromRunId: d.continuedFromRunId,
+					turnCount: d.turnCount ?? existing?.turnCount ?? DEFAULT_TURN_COUNT,
+					sessionFile: d.sessionFile ?? existing?.sessionFile,
+					contextMode: d.contextMode ?? existing?.contextMode,
+					usage: existing?.usage,
+					model: existing?.model,
+					progressText: d.progressText ?? existing?.progressText,
+				});
+			}
+		}
+
+		for (const [id, run] of restoredRuns) {
+			if (removedRunIds.has(id)) continue;
+			store.commandRuns.set(id, run);
+		}
+		if (maxRunId >= store.nextCommandRunId) {
+			store.nextCommandRunId = maxRunId + 1;
+		}
+	} catch (_e) {
+		// Silently ignore restore errors — fresh state is fine
+	}
+
+	updateCommandRunsWidget(store, ctx);
 }
 
 export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
@@ -692,7 +906,7 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 		description: "Switch to a subagent session in interactive mode: /sub:trans <runId>",
 		handler: async (args, ctx) => {
 			captureSwitchSession(store, ctx);
-			await subTransHandler(args, ctx, store);
+			await subTransHandler(args, ctx, store, pi);
 		},
 	});
 
@@ -927,7 +1141,7 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 		}
 
 		const raw = text.slice(2).trim();
-		await subTransHandler(raw, ctx, store);
+		await subTransHandler(raw, ctx, store, pi);
 		return { action: "handled" as const };
 	});
 
@@ -1048,115 +1262,11 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 	});
 
 	pi.on("session_start", async (_event, ctx) => {
-		store.commandRuns.clear();
-		store.commandWidgetCtx = ctx;
+		restoreRunsFromSession(store, ctx);
+	});
 
-		// Restore subagent run history from session entries so that
-		// reload / session-switch preserves the run list and allows resume.
-		try {
-			const entries = ctx.sessionManager.getEntries();
-			const restoredRuns = new Map<number, CommandRunState>();
-			const removedRunIds = new Set<number>();
-			let maxRunId = 0;
-
-			// First pass: collect removed run IDs
-			for (const entry of entries) {
-				if (entry.type === "custom") {
-					const ce = entry as any;
-					if (ce.customType === "subagent-removed" && ce.data?.runId != null) {
-						removedRunIds.add(ce.data.runId);
-					}
-				}
-			}
-
-			for (const entry of entries) {
-				if (entry.type !== "custom_message") continue;
-				const cm = entry as any;
-				if (cm.customType !== "subagent-command" && cm.customType !== "subagent-tool") continue;
-				const d = cm.details;
-				if (!d || typeof d.runId !== "number") continue;
-
-				const runId = d.runId;
-				if (runId > maxRunId) maxRunId = runId;
-
-				const existing = restoredRuns.get(runId);
-
-				// Determine status from the message content
-				const content = typeof cm.content === "string" ? cm.content : "";
-				const isCompleted = content.includes("] completed");
-				const isFailed = content.includes("] failed");
-				const isError = content.includes("] error");
-
-				if (isCompleted || isFailed || isError) {
-					// Final message — create or overwrite with done/error state
-					const status = isCompleted ? "done" : "error";
-					const run: CommandRunState = {
-						id: runId,
-						agent: d.agent ?? existing?.agent ?? "unknown",
-						task: d.task ?? existing?.task ?? "",
-						status,
-						startedAt: existing?.startedAt ?? Date.now(),
-						elapsedMs: existing?.elapsedMs ?? 0,
-						toolCalls: existing?.toolCalls ?? 0,
-						lastLine: "",
-						lastOutput: "",
-						continuedFromRunId: d.continuedFromRunId,
-						turnCount: d.turnCount ?? existing?.turnCount ?? DEFAULT_TURN_COUNT,
-						sessionFile: d.sessionFile ?? existing?.sessionFile,
-						contextMode: d.contextMode ?? existing?.contextMode,
-						usage: d.usage ?? existing?.usage,
-						model: d.model ?? existing?.model,
-						progressText: d.progressText ?? existing?.progressText,
-					};
-					// Extract progress and output from content payload
-					const lines = content.split("\n");
-					if (!run.progressText) {
-						const progressLine = lines.find((l: string) => l.startsWith("Progress: "));
-						if (progressLine) run.progressText = progressLine.slice("Progress: ".length).trim();
-					}
-					const bodyStart = lines.findIndex((l: string) => l === "") + 1;
-					if (bodyStart > 0 && bodyStart < lines.length) {
-						run.lastOutput = lines.slice(bodyStart).join("\n");
-						run.lastLine = getLastNonEmptyLine(run.lastOutput);
-					}
-					restoredRuns.set(runId, run);
-				} else {
-					// Started/resumed message — always update so we track the latest continuation.
-					// If a completion message follows, it will overwrite this.
-					// If not (crash/abort), this "interrupted" state persists.
-					restoredRuns.set(runId, {
-						id: runId,
-						agent: d.agent ?? existing?.agent ?? "unknown",
-						task: d.task ?? existing?.task ?? "",
-						status: "error",
-						startedAt: existing?.startedAt ?? Date.now(),
-						elapsedMs: existing?.elapsedMs ?? 0,
-						toolCalls: existing?.toolCalls ?? 0,
-						lastLine: "(interrupted — started but no completion found)",
-						lastOutput: existing?.lastOutput,
-						continuedFromRunId: d.continuedFromRunId,
-						turnCount: d.turnCount ?? existing?.turnCount ?? DEFAULT_TURN_COUNT,
-						sessionFile: d.sessionFile ?? existing?.sessionFile,
-						contextMode: d.contextMode ?? existing?.contextMode,
-						usage: existing?.usage,
-						model: existing?.model,
-						progressText: d.progressText ?? existing?.progressText,
-					});
-				}
-			}
-
-			for (const [id, run] of restoredRuns) {
-				if (removedRunIds.has(id)) continue;
-				store.commandRuns.set(id, run);
-			}
-			if (maxRunId >= store.nextCommandRunId) {
-				store.nextCommandRunId = maxRunId + 1;
-			}
-		} catch (_e) {
-			// Silently ignore restore errors — fresh state is fine
-		}
-
-		updateCommandRunsWidget(store, ctx);
+	pi.on("session_switch", async (_event, ctx) => {
+		restoreRunsFromSession(store, ctx);
 	});
 
 }

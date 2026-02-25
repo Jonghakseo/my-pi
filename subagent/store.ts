@@ -16,10 +16,12 @@ export interface SubagentStore {
 	renderedRunWidgetIds: Set<number>;
 	nextCommandRunId: number;
 	commandWidgetCtx: any;
-	/** Stack of session file paths for <> / >< navigation (in-memory only). */
+	/** @deprecated Kept for backward compat; persistent parent link now used instead. */
 	sessionStack: string[];
 	/** Captured switchSession from ExtensionCommandContext (for use in input handlers). */
 	switchSessionFn: ((sessionPath: string) => Promise<{ cancelled: boolean }>) | null;
+	/** Persistent parent session file path, restored from session entries. Null when at root. */
+	currentParentSessionFile: string | null;
 }
 
 export function createStore(): SubagentStore {
@@ -30,6 +32,7 @@ export function createStore(): SubagentStore {
 		commandWidgetCtx: null,
 		sessionStack: [],
 		switchSessionFn: null,
+		currentParentSessionFile: null,
 	};
 }
 

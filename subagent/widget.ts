@@ -12,6 +12,7 @@ import {
 	getUsedContextPercent,
 	resolveContextWindow,
 } from "./format.js";
+import { PARENT_HINT } from "./constants.js";
 
 const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"] as const;
 const SPINNER_INTERVAL_MS = 120;
@@ -35,6 +36,31 @@ export function updateCommandRunsWidget(store: SubagentStore, ctx?: any): void {
 	const activeCtx = ctx ?? store.commandWidgetCtx;
 	if (!activeCtx || !activeCtx.hasUI) return;
 	store.commandWidgetCtx = activeCtx;
+
+	// Parent session hint — visible when inside a child session (persistent parent link exists)
+	if (store.currentParentSessionFile) {
+		activeCtx.ui.setWidget(
+			"sub-parent",
+			(_tui: any, theme: any) => {
+				const box = new Box(1, 0);
+				const content = new Text("", 0, 0);
+				box.addChild(content);
+				return {
+					render(width: number): string[] {
+						const innerWidth = Math.max(1, width - 2);
+						content.setText(truncateToWidth(theme.fg("accent", PARENT_HINT), innerWidth));
+						return box.render(width);
+					},
+					invalidate() {
+						box.invalidate();
+					},
+				};
+			},
+			{ placement: "belowEditor" },
+		);
+	} else {
+		activeCtx.ui.setWidget("sub-parent", undefined);
+	}
 
 	const statusPriority = (status: "running" | "done" | "error") =>
 		status === "running" ? 0 : status === "error" ? 1 : 2;
