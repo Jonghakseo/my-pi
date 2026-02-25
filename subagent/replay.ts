@@ -27,18 +27,17 @@ import {
 	MIN_SEPARATOR_WIDTH,
 	MIN_TASK_WIDTH,
 	MIN_TERMINAL_ROWS,
-	MS_PER_SECOND,
 	OVERLAY_HORIZONTAL_MARGIN,
 	PREVIEW_WIDTH_DIVISOR,
 	REPLAY_CONTENT_MAX_CHARS,
 	RESERVED_LAYOUT_ROWS,
-	SECONDS_PER_MINUTE,
 	TASK_WIDTH_PADDING,
 	TOOL_CALL_ARGS_SUMMARY_MAX_CHARS,
 	TOOL_RESULT_DETAILS_SUMMARY_MAX_CHARS,
 	USAGE_EXTRA_ROWS,
 } from "./constants.js";
 import { formatUsageStats } from "./format.js";
+import { formatDuration, formatDurationBetween } from "../time-utils.js";
 import type { CommandRunState, SessionReplayItem } from "./types.js";
 
 // ─── Replay Helpers ──────────────────────────────────────────────────────────
@@ -51,13 +50,6 @@ function truncateSingleLine(value: string, max: number): string {
 
 function formatReplayTime(date: Date): string {
 	return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
-}
-
-function formatElapsedDuration(start: Date, end: Date): string {
-	const diffSec = Math.max(0, Math.floor((end.getTime() - start.getTime()) / MS_PER_SECOND));
-	if (diffSec < SECONDS_PER_MINUTE) return `${diffSec}s`;
-	const diffMin = Math.floor(diffSec / SECONDS_PER_MINUTE);
-	return `${diffMin}m ${diffSec % SECONDS_PER_MINUTE}s`;
 }
 
 function parseDateSafely(raw: unknown): Date {
@@ -146,7 +138,7 @@ export function readSessionReplayItems(sessionFile: string): SessionReplayItem[]
 		if (entry?.type !== "message" || !entry.message) continue;
 		const msg = entry.message;
 		const ts = parseDateSafely(msg.timestamp ?? entry.timestamp);
-		const elapsed = prevTime ? formatElapsedDuration(prevTime, ts) : undefined;
+		const elapsed = prevTime ? formatDurationBetween(prevTime, ts) : undefined;
 		prevTime = ts;
 
 		if (msg.role === "user") {
@@ -318,7 +310,7 @@ export class SubagentSessionReplayOverlay {
 		const container = new Container();
 		const pad = "  ";
 		const innerWidth = Math.max(MIN_INNER_WIDTH, width - OVERLAY_HORIZONTAL_MARGIN);
-		const elapsedSec = Math.max(0, Math.round(this.run.elapsedMs / MS_PER_SECOND));
+		const elapsedLabel = formatDuration(this.run.elapsedMs);
 		const usageLine = this.run.usage ? formatUsageStats(this.run.usage, this.run.model) : "";
 		const task = this.run.task.replace(/\s*\n+\s*/g, " ").replace(/\s{2,}/g, " ").trim();
 		const hasDetailOpen = this.expandedIndex !== null;
@@ -333,7 +325,7 @@ export class SubagentSessionReplayOverlay {
 					theme.fg("toolTitle", theme.bold(`#${this.run.id} ${this.run.agent}`)) +
 					theme.fg(
 						"dim",
-						`  [${this.run.status}] ctx:${this.run.contextMode ?? "sub"} turn:${this.run.turnCount ?? DEFAULT_TURN_COUNT}  ${elapsedSec}s  tools:${this.run.toolCalls}`,
+						`  [${this.run.status}] ctx:${this.run.contextMode ?? "sub"} turn:${this.run.turnCount ?? DEFAULT_TURN_COUNT}  ${elapsedLabel}  tools:${this.run.toolCalls}`,
 					),
 				0,
 				0,

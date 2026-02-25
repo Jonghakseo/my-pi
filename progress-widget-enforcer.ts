@@ -1,6 +1,7 @@
 import { Type } from "@mariozechner/pi-ai";
 import { truncateToWidth, visibleWidth } from "@mariozechner/pi-tui";
 import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
+import { formatElapsedSince } from "./time-utils.ts";
 import { isAgentsModeEnabled } from "./system-mode/state.ts";
 
 const WIDGET_KEY = "progress-widget-enforcer";
@@ -40,11 +41,6 @@ function normalizeProgress(input: string | undefined): string {
 	const oneLine = input.replace(/\s+/g, " ").trim();
 	if (!oneLine) return DEFAULT_PROGRESS;
 	return oneLine.length > MAX_PROGRESS_LEN ? `${oneLine.slice(0, MAX_PROGRESS_LEN - 1)}…` : oneLine;
-}
-
-function formatSeconds(startedAt: number): string {
-	const sec = Math.max(0, Math.floor((Date.now() - startedAt) / 1000));
-	return `${sec}초`;
 }
 
 function getPhaseMeta(phase: ProgressPhase): { icon: string; label: string; color: "warning" | "accent" | "success" } {
@@ -129,7 +125,7 @@ export default function (pi: ExtensionAPI) {
 		if (!ctx.hasUI) return;
 		if (phase !== "done" && runStartedAt <= 0) return;
 
-		const elapsedLabel = phase === "done" ? doneElapsedLabel ?? "0초" : formatSeconds(runStartedAt);
+		const elapsedLabel = phase === "done" ? doneElapsedLabel ?? "0초" : formatElapsedSince(runStartedAt);
 		const hideDoneProgress = phase === "done" && isDefaultProgress;
 		ctx.ui.setWidget(
 			WIDGET_KEY,
@@ -214,7 +210,7 @@ export default function (pi: ExtensionAPI) {
 	pi.on("agent_end", async (_event, ctx) => {
 		requireInitialProgress = false;
 		phase = "done";
-		doneElapsedLabel = runStartedAt > 0 ? formatSeconds(runStartedAt) : "0초";
+		doneElapsedLabel = runStartedAt > 0 ? formatElapsedSince(runStartedAt) : "0초";
 		renderWidget(ctx);
 		stopTimer();
 		runStartedAt = 0;

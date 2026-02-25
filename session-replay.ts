@@ -1,22 +1,15 @@
 import { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import { applyExtensionDefaults } from "./themeMap.ts";
-import { 
-  Box, Text, Markdown, Container, Spacer, 
-  matchesKey, Key, truncateToWidth, getMarkdownTheme 
+import { formatDurationBetween } from "./time-utils.ts";
+import {
+  Box, Text, Markdown, Container, Spacer,
+  matchesKey, Key, truncateToWidth, getMarkdownTheme
 } from "@mariozechner/pi-tui";
 import { DynamicBorder, getMarkdownTheme as getPiMdTheme } from "@mariozechner/pi-coding-agent";
 
 // Minimal shim for timestamp handling if not directly in Message objects
 function formatTime(date: Date): string {
     return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-}
-
-function getElapsedTime(start: Date, end: Date): string {
-    const diffMs = end.getTime() - start.getTime();
-    const diffSec = Math.floor(diffMs / 1000);
-    if (diffSec < 60) return `${diffSec}s`;
-    const diffMin = Math.floor(diffSec / 60);
-    return `${diffMin}m ${diffSec % 60}s`;
 }
 
 interface HistoryItem {
@@ -156,7 +149,7 @@ export default function(pi: ExtensionAPI) {
                 if (!msg) continue;
 
                 const ts = msg.timestamp ? new Date(msg.timestamp) : new Date();
-                const elapsed = prevTime ? getElapsedTime(prevTime, ts) : undefined;
+                const elapsed = prevTime ? formatDurationBetween(prevTime, ts) : undefined;
                 prevTime = ts;
 
                 const role = msg.role;
