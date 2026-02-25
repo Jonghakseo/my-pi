@@ -25,6 +25,7 @@ import { getLatestRun, removeRun, trimCommandRunHistory } from "./run-utils.js";
 import { updateCommandRunsWidget } from "./widget.js";
 
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
+import { matchesKey } from "@mariozechner/pi-tui";
 import { renderSubagentToolCall, renderSubagentToolResult } from "./tool-render.js";
 import { createSubagentToolExecute } from "./tool-execute.js";
 import {
@@ -1491,12 +1492,55 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 		return { action: "handled" as const };
 	});
 
+	// ── onTerminalInput hack: auto-redirect <> / >< to command path ─────
+	// When switchSessionFn is not yet captured, rewrite editor text to the
+	// equivalent slash command right before Enter is processed.  The editor
+	// reads its state.lines at submit time, so a synchronous setEditorText()
+	// in the input listener guarantees the command path sees "/sub:trans …".
+	// Once switchSessionFn is captured (first successful command execution),
+	// the normal input event handler handles <> / >< directly and this
+	// listener becomes a no-op pass-through.
+	let unsubTerminalInput: (() => void) | null = null;
+
+	function registerTerminalInputRedirect(ctx: any): void {
+		// Unsubscribe previous listener to avoid duplicates on session_switch.
+		unsubTerminalInput?.();
+		unsubTerminalInput = null;
+
+		unsubTerminalInput = ctx.ui.onTerminalInput((data: string) => {
+			// Fast path: already captured — skip entirely.
+			if (store.switchSessionFn) return undefined;
+
+			// Only intercept Enter key (all terminal variants).
+			if (!matchesKey(data, "enter")) return undefined;
+
+			const editorText = (ctx.ui.getEditorText() ?? "").trim();
+
+			// <> [runId]  →  /sub:trans [runId]
+			if (editorText.startsWith("<>")) {
+				const args = editorText.slice(2).trim();
+				ctx.ui.setEditorText(args ? `/sub:trans ${args}` : "/sub:trans");
+				return undefined; // let Enter proceed with rewritten text
+			}
+
+			// ><  →  /sub:back
+			if (editorText === "><") {
+				ctx.ui.setEditorText("/sub:back");
+				return undefined;
+			}
+
+			return undefined;
+		});
+	}
+
 	pi.on("session_start", async (_event, ctx) => {
 		restoreRunsFromSession(store, ctx, pi);
+		registerTerminalInputRedirect(ctx);
 	});
 
 	pi.on("session_switch", async (_event, ctx) => {
 		restoreRunsFromSession(store, ctx, pi);
+		registerTerminalInputRedirect(ctx);
 	});
 
 }
