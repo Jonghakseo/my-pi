@@ -1,6 +1,7 @@
 import { Type } from "@mariozechner/pi-ai";
 import { truncateToWidth, visibleWidth } from "@mariozechner/pi-tui";
 import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
+import { isAgentsModeEnabled } from "./system-mode/state.ts";
 
 const WIDGET_KEY = "progress-widget-enforcer";
 const MAX_PROGRESS_LEN = 140;
@@ -52,7 +53,13 @@ function getPhaseMeta(phase: ProgressPhase): { icon: string; label: string; colo
 	return { icon: "🚀", label: "RUNNING", color: "accent" };
 }
 
-function buildProgressCard(progress: string, phase: ProgressPhase, elapsedLabel: string, hideDoneProgress: boolean) {
+function buildProgressCard(
+	progress: string,
+	phase: ProgressPhase,
+	elapsedLabel: string,
+	hideDoneProgress: boolean,
+	agentsModeEnabled: boolean,
+) {
 	return (_tui: unknown, theme: any) => ({
 		render(width: number): string[] {
 			const meta = getPhaseMeta(phase);
@@ -66,9 +73,10 @@ function buildProgressCard(progress: string, phase: ProgressPhase, elapsedLabel:
 			const statusText = displayProgress;
 
 			if (width < 20) {
+				const compactPrefix = agentsModeEnabled ? "🤖 " : "";
 				const compactText = statusText
-					? `${meta.icon} ${statusText} • ${elapsedLabel}`
-					: `${meta.icon} • ${elapsedLabel}`;
+					? `${compactPrefix}${meta.icon} ${statusText} • ${elapsedLabel}`
+					: `${compactPrefix}${meta.icon} • ${elapsedLabel}`;
 				return [truncateToWidth(compactText, width)];
 			}
 
@@ -84,7 +92,8 @@ function buildProgressCard(progress: string, phase: ProgressPhase, elapsedLabel:
 			};
 
 			const statusMain = statusText ? `${meta.icon} ${statusText}` : `${meta.icon}`;
-			const statusLine = `${fg(meta.color, statusMain)} ${fg("dim", `• ${elapsedLabel}`)}`;
+			const agentModeBadge = agentsModeEnabled ? `${fg("warning", "🤖 AGENT MODE")} ${fg("dim", "• ")}` : "";
+			const statusLine = `${agentModeBadge}${fg(meta.color, statusMain)} ${fg("dim", `• ${elapsedLabel}`)}`;
 			const lines = [border(`╭${"─".repeat(innerWidth)}╮`), row(statusLine)];
 
 			lines.push(border(`╰${"─".repeat(innerWidth)}╯`));
@@ -110,9 +119,13 @@ export default function (pi: ExtensionAPI) {
 
 		const elapsedLabel = phase === "done" ? doneElapsedLabel ?? "0초" : formatSeconds(runStartedAt);
 		const hideDoneProgress = phase === "done" && isDefaultProgress;
-		ctx.ui.setWidget(WIDGET_KEY, buildProgressCard(currentProgress, phase, elapsedLabel, hideDoneProgress), {
-			placement: "aboveEditor",
-		});
+		ctx.ui.setWidget(
+			WIDGET_KEY,
+			buildProgressCard(currentProgress, phase, elapsedLabel, hideDoneProgress, isAgentsModeEnabled()),
+			{
+				placement: "aboveEditor",
+			},
+		);
 	};
 
 	const stopTimer = () => {

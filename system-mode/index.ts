@@ -9,6 +9,7 @@
  */
 
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
+import { setAgentsModeEnabled } from "./state.ts";
 
 const AGENTS_PROMPT = `## Agent Delegation Mode
 
@@ -58,7 +59,9 @@ export default function (pi: ExtensionAPI) {
 		description: "Switch to default system prompt (no delegation)",
 		handler: async (_args, ctx) => {
 			mode = "default";
+			setAgentsModeEnabled(false);
 			ctx.ui.setStatus("system-mode", undefined);
+			ctx.ui.setWidget("system-mode-banner", undefined);
 			ctx.ui.notify("System mode: default ✏️ — Direct work mode", "info");
 		},
 	});
@@ -67,7 +70,9 @@ export default function (pi: ExtensionAPI) {
 		description: "Switch to agent delegation mode (all work via subagents)",
 		handler: async (_args, ctx) => {
 			mode = "agents";
+			setAgentsModeEnabled(true);
 			ctx.ui.setStatus("system-mode", ctx.ui.theme.fg("warning", "🤖 agents"));
+			ctx.ui.setWidget("system-mode-banner", undefined);
 			ctx.ui.notify("System mode: agents 🤖 — All work delegated to subagents", "info");
 		},
 	});
