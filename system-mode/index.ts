@@ -80,8 +80,7 @@ export default function (pi: ExtensionAPI) {
 		},
 	});
 
-	pi.on("session_start", async (_event, ctx) => {
-		// Restore mode from the latest system-mode-change entry
+	const restoreModeFromEntries = (ctx: Parameters<Parameters<typeof pi.on>[1]>[1]) => {
 		const entries = ctx.sessionManager.getEntries();
 		let restoredMode: "default" | "agents" = "default";
 		for (const entry of entries) {
@@ -93,6 +92,14 @@ export default function (pi: ExtensionAPI) {
 			}
 		}
 		applyMode(restoredMode);
+	};
+
+	pi.on("session_start", async (_event, ctx) => {
+		restoreModeFromEntries(ctx);
+	});
+
+	pi.on("session_switch", async (_event, ctx) => {
+		restoreModeFromEntries(ctx);
 	});
 
 	pi.on("before_agent_start", async (event, _ctx) => {
