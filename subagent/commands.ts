@@ -28,6 +28,7 @@ import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import { renderSubagentToolCall, renderSubagentToolResult } from "./tool-render.js";
 import { createSubagentToolExecute } from "./tool-execute.js";
 import {
+	AGENT_SYMBOL_MAP,
 	COMMAND_COMPLETION_LIMIT,
 	COMMAND_TASK_PREVIEW_CHARS,
 	CONTINUATION_OUTPUT_CONTEXT_MAX_CHARS,
@@ -37,6 +38,7 @@ import {
 	RUN_TICK_INTERVAL_MS,
 	SUBVIEW_OVERLAY_MAX_HEIGHT,
 	SUBVIEW_OVERLAY_WIDTH,
+	formatSymbolHints,
 } from "./constants.js";
 
 export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
@@ -772,17 +774,11 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 		},
 	});
 
-	pi.registerCommand("subabort", {
-		description: "Alias of /sub:abort",
-		handler: async (args, ctx) => {
-			await handleSubAbort(args, ctx);
-		},
-	});
 
 	// /hotkeys "Extensions" 섹션에 >> shorthand 사용법을 노출한다.
 	// 실제 입력 처리는 아래 input 핸들러에서 수행된다.
 	pi.registerShortcut(">>", {
-		description: "Typed prefix: >> <task> or >> <runId> <task> (run/resume subagent)",
+		description: ">> <task> | >><symbol> <task> (e.g. >>? >>@ >>!)",
 		handler: async () => {
 			// Documentation-only entry.
 		},
@@ -794,13 +790,36 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 		}
 
 		const text = event.text ?? "";
-		if (!text.startsWith(">> ")) {
+		if (!text.startsWith(">>")) {
+			return { action: "continue" as const };
+		}
+
+		// ── Symbol shortcut: >>? task, >>@ task, >>! task, etc. ──
+		if (text.length >= 3) {
+			const symbolChar = text[2];
+			const symbolAgent = symbolChar !== " " ? AGENT_SYMBOL_MAP[symbolChar] : undefined;
+			if (symbolAgent) {
+				const task = text.slice(3).trim();
+				if (!task) {
+					ctx.ui.notify(formatSymbolHints(), "info");
+					return { action: "handled" as const };
+				}
+				await subCommand.handler(`${symbolAgent} ${task}`, ctx, true);
+				return { action: "handled" as const };
+			}
+		}
+
+		// ── Original >> <args> pattern ──
+		if (text[2] !== " ") {
 			return { action: "continue" as const };
 		}
 
 		const forwardedArgs = text.slice(3).trim();
 		if (!forwardedArgs) {
-			ctx.ui.notify("Usage: >> <task> | >> <runId> <task>", "info");
+			ctx.ui.notify(
+				`>> [agent] <task> | >> <runId> <task> | >><symbol> <task>\n${formatSymbolHints()}`,
+				"info",
+			);
 			return { action: "handled" as const };
 		}
 

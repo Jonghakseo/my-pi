@@ -62,6 +62,19 @@ function normalizeAgentAlias(value: string): string {
 	return value.toLowerCase().replace(/[^a-z0-9]/g, "");
 }
 
+/**
+ * Extract initials from agent name parts.
+ * "fast-finder" → "ff", "deep-reviewer" → "dr", "worker" → "w"
+ */
+function getAgentInitials(name: string): string {
+	return name
+		.toLowerCase()
+		.split(/[^a-z0-9]+/)
+		.filter(Boolean)
+		.map((part) => part[0])
+		.join("");
+}
+
 function uniqueAgentsByName(candidates: AgentConfig[]): AgentConfig[] {
 	const map = new Map<string, AgentConfig>();
 	for (const agent of candidates) {
@@ -102,6 +115,16 @@ export function matchSubCommandAgent(agents: AgentConfig[], token: string): Agen
 	if (prefix.length === 1) return { matchedAgent: prefix[0], ambiguousAgents: [] };
 	if (prefix.length > 1) return { ambiguousAgents: prefix };
 
+	// Initials match: "ff" → fast-finder, "dr" → deep-reviewer
+	const initialsMatch = uniqueAgentsByName(
+		agents.filter((agent) => {
+			const agentInitials = getAgentInitials(agent.name);
+			return normalized === agentInitials;
+		}),
+	);
+	if (initialsMatch.length === 1) return { matchedAgent: initialsMatch[0], ambiguousAgents: [] };
+	if (initialsMatch.length > 1) return { ambiguousAgents: initialsMatch };
+
 	const contains = uniqueAgentsByName(
 		agents.filter((agent) => {
 			const name = agent.name.toLowerCase();
@@ -133,6 +156,8 @@ export function getSubCommandAgentCompletions(
 			const nameNormalized = normalizeAgentAlias(name);
 			const parts = name.split(/[^a-z0-9]+/).filter(Boolean);
 
+			const agentInitials = getAgentInitials(name);
+
 			let score = Number.POSITIVE_INFINITY;
 			if (!raw) score = 100;
 			else if (name === raw || (normalized && nameNormalized === normalized)) score = 0;
@@ -142,7 +167,8 @@ export function getSubCommandAgentCompletions(
 				(normalized && parts.some((part) => normalizeAgentAlias(part).startsWith(normalized)))
 			)
 				score = 2;
-			else if (name.includes(raw) || (normalized && nameNormalized.includes(normalized))) score = 3;
+			else if (normalized && agentInitials === normalized) score = 3;
+			else if (name.includes(raw) || (normalized && nameNormalized.includes(normalized))) score = 4;
 
 			return { agent, score };
 		})
@@ -156,6 +182,42 @@ export function getSubCommandAgentCompletions(
 		}));
 
 	return scored.length > 0 ? scored : null;
+}
+
+/**
+ * Compute shortest usable alias for each agent and return a formatted hint string.
+ * e.g. "v→verifier  w→worker  ff→fast-finder  dr→deep-reviewer"
+ */
+export function computeAgentAliasHints(agents: AgentConfig[]): string {
+	const hints: string[] = [];
+
+	for (const agent of agents) {
+		const name = agent.name.toLowerCase();
+		const initials = getAgentInitials(name);
+
+		// Find shortest unique name-prefix via matchSubCommandAgent
+		let shortestAlias = name;
+		for (let i = 1; i <= name.length; i++) {
+			const candidate = name.slice(0, i);
+			const result = matchSubCommandAgent(agents, candidate);
+			if (result.matchedAgent?.name === agent.name) {
+				shortestAlias = candidate;
+				break;
+			}
+		}
+
+		// Try initials — prefer for multi-word agents when equally short or shorter
+		if (initials.length >= 2 && initials.length <= shortestAlias.length) {
+			const result = matchSubCommandAgent(agents, initials);
+			if (result.matchedAgent?.name === agent.name) {
+				shortestAlias = initials;
+			}
+		}
+
+		hints.push(shortestAlias === name ? name : `${shortestAlias}→${name}`);
+	}
+
+	return hints.join("  ");
 }
 
 // ─── Concurrency ─────────────────────────────────────────────────────────────

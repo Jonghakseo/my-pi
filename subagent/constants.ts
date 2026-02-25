@@ -10,6 +10,27 @@
 export const MS_PER_SECOND = 1_000;
 export const DEFAULT_TURN_COUNT = 1;
 
+/**
+ * Special-character shortcuts for the >> prefix input.
+ * `>>? task` → researcher, `>>@ task` → fast-finder, etc.
+ */
+export const AGENT_SYMBOL_MAP: Record<string, string> = {
+	"!": "decider",
+	"*": "deep-reviewer",
+	"@": "fast-finder",
+	"#": "framer",
+	"~": "planner",
+	"?": "researcher",
+	"^": "verifier",
+};
+
+/** Format symbol hints for display, e.g. ">>? researcher  >>@ fast-finder ..." */
+export function formatSymbolHints(): string {
+	return Object.entries(AGENT_SYMBOL_MAP)
+		.map(([sym, agent]) => `>>${sym} ${agent}`)
+		.join("  ");
+}
+
 // ─── commands.ts ───────────────────────────────────────────────────────────
 
 export const STATUS_OUTPUT_PREVIEW_MAX_CHARS = 4_000;

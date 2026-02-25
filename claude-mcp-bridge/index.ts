@@ -544,10 +544,45 @@ function formatToolResult(result: unknown): string {
 	return JSON.stringify(result, null, 2);
 }
 
+type JsonSchemaProp = {
+	type?: string;
+	description?: string;
+	enum?: unknown[];
+	items?: { type?: string };
+};
+
+/**
+ * Map a single JSON Schema property to the appropriate TypeBox type.
+ * Preserves type, description, and enum information so the LLM receives
+ * accurate type hints and the framework can validate/coerce values.
+ */
+function mapPropertyType(prop: JsonSchemaProp): ReturnType<typeof Type.Any> {
+	const opts: Record<string, unknown> = {};
+	if (typeof prop.description === "string") opts.description = prop.description;
+
+	switch (prop.type) {
+		case "string":
+			if (Array.isArray(prop.enum) && prop.enum.every((v): v is string => typeof v === "string")) {
+				return Type.Union(prop.enum.map((v) => Type.Literal(v)), opts) as unknown as ReturnType<typeof Type.Any>;
+			}
+			return Type.String(opts) as unknown as ReturnType<typeof Type.Any>;
+		case "boolean":
+			return Type.Boolean(opts) as unknown as ReturnType<typeof Type.Any>;
+		case "number":
+			return Type.Number(opts) as unknown as ReturnType<typeof Type.Any>;
+		case "integer":
+			return Type.Integer(opts) as unknown as ReturnType<typeof Type.Any>;
+		case "array":
+			return Type.Array(Type.Any(), opts) as unknown as ReturnType<typeof Type.Any>;
+		default:
+			return Type.Any(opts);
+	}
+}
+
 function createParameterSchema(inputSchema: Record<string, unknown>): ReturnType<typeof Type.Object> {
 	const schema = inputSchema as {
 		type?: string;
-		properties?: Record<string, { description?: string }>;
+		properties?: Record<string, JsonSchemaProp>;
 		required?: string[];
 	};
 
@@ -559,9 +594,7 @@ function createParameterSchema(inputSchema: Record<string, unknown>): ReturnType
 	const properties: Record<string, ReturnType<typeof Type.Any>> = {};
 
 	for (const [key, prop] of Object.entries(schema.properties)) {
-		const base = Type.Any(
-			typeof prop?.description === "string" ? { description: prop.description } : {},
-		);
+		const base = mapPropertyType(prop);
 
 		if (required.has(key)) {
 			properties[key] = base;
