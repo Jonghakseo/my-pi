@@ -12,7 +12,24 @@ import {
 	getUsedContextPercent,
 	resolveContextWindow,
 } from "./format.js";
+
+const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"] as const;
+const SPINNER_INTERVAL_MS = 120;
+const SPINNER_REFRESH_MS = 150;
 import { type SubagentStore, truncateText } from "./store.js";
+
+/** Fast timer that drives spinner animation while any run is active. */
+let spinnerTimer: ReturnType<typeof setInterval> | undefined;
+
+function manageSpinnerTimer(store: SubagentStore): void {
+	const hasRunning = Array.from(store.commandRuns.values()).some((r) => r.status === "running");
+	if (hasRunning && !spinnerTimer) {
+		spinnerTimer = setInterval(() => updateCommandRunsWidget(store), SPINNER_REFRESH_MS);
+	} else if (!hasRunning && spinnerTimer) {
+		clearInterval(spinnerTimer);
+		spinnerTimer = undefined;
+	}
+}
 
 export function updateCommandRunsWidget(store: SubagentStore, ctx?: any): void {
 	const activeCtx = ctx ?? store.commandWidgetCtx;
@@ -39,6 +56,7 @@ export function updateCommandRunsWidget(store: SubagentStore, ctx?: any): void {
 
 	if (runs.length === 0) {
 		activeCtx.ui.setWidget("subagent-runs", undefined);
+		manageSpinnerTimer(store);
 		return;
 	}
 
@@ -58,7 +76,7 @@ export function updateCommandRunsWidget(store: SubagentStore, ctx?: any): void {
 						theme.fg(
 							"muted",
 							truncateText(
-								"Tip: /subview <id> opens latest output (UI-only) · /subrm <id> removes one run · /subclear all clears all",
+								"Tip: /subview [id] opens output (UI-only) · /subrm [id] removes a run · /subclear all clears all",
 								Math.max(20, width),
 							),
 						),
@@ -88,7 +106,8 @@ export function updateCommandRunsWidget(store: SubagentStore, ctx?: any): void {
 					render(width: number): string[] {
 						const lines: string[] = [];
 						const statusColor = run.status === "running" ? "warning" : run.status === "done" ? "success" : "error";
-						const statusIcon = run.status === "running" ? "⏳" : run.status === "done" ? "✓" : "✗";
+						const spinnerFrame = SPINNER_FRAMES[Math.floor(Date.now() / SPINNER_INTERVAL_MS) % SPINNER_FRAMES.length];
+						const statusIcon = run.status === "running" ? spinnerFrame : run.status === "done" ? "✓" : "✗";
 						const elapsedSec = Math.max(0, Math.round(run.elapsedMs / 1000));
 						const contextWindow = resolveContextWindow(activeCtx, run.model);
 						const usedContextPercent = getUsedContextPercent(run.usage?.contextTokens, contextWindow);
@@ -109,7 +128,7 @@ export function updateCommandRunsWidget(store: SubagentStore, ctx?: any): void {
 							turnLabel +
 							modeLabel +
 							`\x1b[38;5;${AGENT_NAME_PALETTE[agentBgIndex(run.agent)]}m ${run.agent}\x1b[39m` +
-							theme.fg("dim", `  (${elapsedSec}s) | Tools: ${run.toolCalls}`) +
+							theme.fg("dim", `  (${elapsedSec}s)`) +
 							contextShort,
 						);
 
@@ -140,4 +159,6 @@ export function updateCommandRunsWidget(store: SubagentStore, ctx?: any): void {
 			{ placement: "belowEditor" },
 		);
 	}
+
+	manageSpinnerTimer(store);
 }
