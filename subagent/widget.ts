@@ -2,7 +2,7 @@
  * Subagent run status widget — renders per-run status boxes below the editor.
  */
 
-import { Box, Text } from "@mariozechner/pi-tui";
+import { Box, Text, truncateToWidth, visibleWidth } from "@mariozechner/pi-tui";
 import {
 	AGENT_NAME_PALETTE,
 	agentBgIndex,
@@ -91,20 +91,32 @@ export function updateCommandRunsWidget(store: SubagentStore, ctx?: any): void {
 							remainingContextPercent !== undefined ? getContextBarColorByRemaining(remainingContextPercent) : undefined;
 						const contextShort = contextBar
 							? contextBarColor
-								? theme.fg(contextBarColor, ` ${contextBar}`)
-								: theme.fg("dim", ` ${contextBar}`)
+								? theme.fg(contextBarColor, contextBar)
+								: theme.fg("dim", contextBar)
 							: "";
 						const turnLabel = run.turnCount > 1 ? theme.fg("dim", ` · Turn ${run.turnCount}`) : "";
 						const modeLabel = run.contextMode === "main" ? theme.fg("warning", " · MainCtx") : "";
 
-						lines.push(
+						const statusLeft =
 							theme.fg(statusColor, `${statusIcon} #${run.id}`) +
-							turnLabel +
 							modeLabel +
 							`\x1b[38;5;${AGENT_NAME_PALETTE[agentBgIndex(run.agent)]}m ${run.agent}\x1b[39m` +
 							theme.fg("dim", `  (${elapsedSec}s)`) +
-							contextShort,
-						);
+							turnLabel;
+
+						if (contextShort) {
+							const contextWidth = visibleWidth(contextShort);
+							if (contextWidth >= innerWidth) {
+								lines.push(truncateToWidth(contextShort, innerWidth));
+							} else {
+								const maxLeftWidth = Math.max(1, innerWidth - contextWidth - 1);
+								const fittedLeft = truncateToWidth(statusLeft, maxLeftWidth);
+								const gapWidth = Math.max(1, innerWidth - visibleWidth(fittedLeft) - contextWidth);
+								lines.push(`${fittedLeft}${" ".repeat(gapWidth)}${contextShort}`);
+							}
+						} else {
+							lines.push(truncateToWidth(statusLeft, innerWidth));
+						}
 
 						const normalizedTask = run.task.replace(/\s*\n+\s*/g, " ").replace(/\s{2,}/g, " ").trim();
 						const taskLine = truncateText(normalizedTask, Math.max(1, innerWidth - 4));
