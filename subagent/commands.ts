@@ -21,7 +21,7 @@ import { buildMainContextText, makeSubagentSessionFile, wrapTaskWithMainContext 
 import { type SubagentStore, truncateText, updateRunFromResult } from "./store.js";
 import type { CommandRunState, SingleResult, SubagentDetails } from "./types.js";
 import { SubagentParams } from "./types.js";
-import { getLatestRun, trimCommandRunHistory } from "./run-utils.js";
+import { getLatestRun, removeRun, trimCommandRunHistory } from "./run-utils.js";
 import { updateCommandRunsWidget } from "./widget.js";
 
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
@@ -783,10 +783,13 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 				} finally {
 					clearInterval(tick);
 					runState.abortController = undefined;
-					const trimmedRunIds = trimCommandRunHistory(store);
-					for (const trimmedRunId of trimmedRunIds) {
-						pi.appendEntry("subagent-removed", { runId: trimmedRunId, reason: "trim" });
-					}
+					trimCommandRunHistory(store, {
+						maxRuns: 10,
+						ctx,
+						pi,
+						updateWidget: false,
+						removalReason: "trim",
+					});
 					updateCommandRunsWidget(store);
 				}
 			})();
@@ -957,19 +960,12 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 				return;
 			}
 
-			let aborted = false;
-			run.removed = true;
-			if (run.status === "running" && run.abortController) {
-				run.lastLine = "Aborting by /sub:rm...";
-				run.lastOutput = run.lastLine;
-				run.abortController.abort();
-				aborted = true;
-			}
-
-			run.abortController = undefined;
-			store.commandRuns.delete(id);
-			pi.appendEntry("subagent-removed", { runId: id });
-			updateCommandRunsWidget(store, ctx);
+			const { aborted } = removeRun(store, id, {
+				ctx,
+				pi,
+				reason: "Aborting by /sub:rm...",
+				removalReason: "sub-rm",
+			});
 			ctx.ui.notify(
 				aborted
 					? `Removed subagent #${id} (aborting in background).`
@@ -985,23 +981,41 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 			captureSwitchSession(store, ctx);
 			const mode = (args ?? "").trim().toLowerCase();
 			if (mode === "all") {
-				const count = store.commandRuns.size;
-				for (const id of store.commandRuns.keys()) {
-					pi.appendEntry("subagent-removed", { runId: id });
+				let removed = 0;
+				let aborted = 0;
+				for (const id of Array.from(store.commandRuns.keys())) {
+					const result = removeRun(store, id, {
+						ctx,
+						pi,
+						updateWidget: false,
+						reason: "Aborting by /sub:clear all...",
+						removalReason: "sub-clear",
+					});
+					if (!result.removed) continue;
+					removed++;
+					if (result.aborted) aborted++;
 				}
-				store.commandRuns.clear();
 				updateCommandRunsWidget(store, ctx);
-				ctx.ui.notify(`Cleared ${count} subagent job(s).`, "info");
+				ctx.ui.notify(
+					aborted > 0
+						? `Cleared ${removed} subagent job(s), aborting ${aborted} running job(s).`
+						: `Cleared ${removed} subagent job(s).`,
+					aborted > 0 ? "warning" : "info",
+				);
 				return;
 			}
 
 			let removed = 0;
 			for (const [id, run] of Array.from(store.commandRuns.entries())) {
-				if (run.status !== "running") {
-					pi.appendEntry("subagent-removed", { runId: id });
-					store.commandRuns.delete(id);
-					removed++;
-				}
+				if (run.status === "running") continue;
+				const result = removeRun(store, id, {
+					ctx,
+					pi,
+					updateWidget: false,
+					abortIfRunning: false,
+					removalReason: "sub-clear",
+				});
+				if (result.removed) removed++;
 			}
 			updateCommandRunsWidget(store, ctx);
 			ctx.ui.notify(`Cleared ${removed} finished subagent job(s).`, "info");
@@ -1235,9 +1249,12 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 				if (!latest) {
 					ctx.ui.notify("No subagent jobs.", "info");
 				} else {
-					pi.appendEntry("subagent-removed", { runId: latest.id });
-					store.commandRuns.delete(latest.id);
-					updateCommandRunsWidget(store, ctx);
+					removeRun(store, latest.id, {
+						ctx,
+						pi,
+						reason: "Aborting by <<...",
+						removalReason: "shortcut-clear",
+					});
 					ctx.ui.notify(`Cleared #${latest.id} (${latest.agent}).`, "info");
 				}
 			}
@@ -1266,9 +1283,14 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 				run.abortController.abort();
 				aborted++;
 			} else if (run.status !== "running") {
-				pi.appendEntry("subagent-removed", { runId: id });
-				store.commandRuns.delete(id);
-				cleared++;
+				const result = removeRun(store, id, {
+					ctx,
+					pi,
+					updateWidget: false,
+					abortIfRunning: false,
+					removalReason: "shortcut-clear",
+				});
+				if (result.removed) cleared++;
 			}
 		}
 		updateCommandRunsWidget(store, ctx);

@@ -19,7 +19,7 @@ import {
 import { buildMainContextText, makeSubagentSessionFile, wrapTaskWithMainContext } from "./session.js";
 import { MAX_CONCURRENCY, MAX_PARALLEL_TASKS, type SubagentStore, updateRunFromResult } from "./store.js";
 import type { ChainItemFields, CommandRunState, OnUpdateCallback, SingleResult, SubagentDetails, TaskItemFields } from "./types.js";
-import { formatCommandRunSummary, trimCommandRunHistory } from "./run-utils.js";
+import { formatCommandRunSummary, removeRun, trimCommandRunHistory } from "./run-utils.js";
 import { updateCommandRunsWidget } from "./widget.js";
 
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
@@ -294,18 +294,21 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 			}
 
 			if (asyncAction === "remove") {
-				run.removed = true;
-				if (run.status === "running" && run.abortController) {
-					run.lastLine = "Aborting by subagent tool remove...";
-					run.lastOutput = run.lastLine;
-					run.abortController.abort();
-				}
-				run.abortController = undefined;
-				store.commandRuns.delete(run.id);
-				pi.appendEntry("subagent-removed", { runId: run.id, reason: "tool-remove" });
-				updateCommandRunsWidget(store, ctx);
+				const { aborted } = removeRun(store, run.id, {
+					ctx,
+					pi,
+					reason: "Aborting by subagent tool remove...",
+					removalReason: "tool-remove",
+				});
 				return {
-					content: [{ type: "text", text: `Removed subagent run #${run.id}.` }],
+					content: [
+						{
+							type: "text",
+							text: aborted
+								? `Removed subagent run #${run.id} (aborting in background).`
+								: `Removed subagent run #${run.id}.`,
+						},
+					],
 					details: makeDetails("single")([]),
 				};
 			}
@@ -556,10 +559,13 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 					updateCommandRunsWidget(store);
 				} finally {
 					runState.abortController = undefined;
-					const trimmedRunIds = trimCommandRunHistory(store);
-					for (const trimmedRunId of trimmedRunIds) {
-						pi.appendEntry("subagent-removed", { runId: trimmedRunId, reason: "trim" });
-					}
+					trimCommandRunHistory(store, {
+						maxRuns: 10,
+						ctx,
+						pi,
+						updateWidget: false,
+						removalReason: "trim",
+					});
 					updateCommandRunsWidget(store);
 				}
 			})();
