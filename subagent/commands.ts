@@ -1106,6 +1106,13 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 		},
 	});
 
+	pi.registerShortcut(">>>", {
+		description: "Run subagent in dedicated sub-session (= /sub:new)",
+		handler: async () => {
+			// Documentation-only entry.
+		},
+	});
+
 	pi.on("input", async (event, ctx) => {
 		if (event.source === "extension") {
 			return { action: "continue" as const };
@@ -1114,6 +1121,27 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 		const text = event.text ?? "";
 		if (!text.startsWith(">>")) {
 			return { action: "continue" as const };
+		}
+
+		// ── >>> shortcut: dedicated sub-session (same as /sub:new) ──
+		// Must be matched before >> symbol/space patterns.
+		if (text.startsWith(">>>")) {
+			const forwardedArgs = text.slice(3).trim();
+			if (!forwardedArgs) {
+				ctx.ui.notify(
+					">>> [agent] <task> | >>> <runId> <task>  (dedicated sub-session)",
+					"info",
+				);
+				return { action: "handled" as const };
+			}
+			const firstSpace = forwardedArgs.indexOf(" ");
+			const firstToken = firstSpace === -1 ? forwardedArgs : forwardedArgs.slice(0, firstSpace);
+			if (/^\d+$/.test(firstToken) && !store.commandRuns.has(Number(firstToken))) {
+				ctx.ui.notify(`Unknown subagent run #${firstToken}.`, "error");
+				return { action: "handled" as const };
+			}
+			await subCommand.handler(forwardedArgs, ctx, false);
+			return { action: "handled" as const };
 		}
 
 		// ── Symbol shortcut: >>? task, >>@ task, >>! task, etc. ──
