@@ -772,7 +772,7 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 	// /hotkeys "Extensions" 섹션에 >> shorthand 사용법을 노출한다.
 	// 실제 입력 처리는 아래 input 핸들러에서 수행된다.
 	pi.registerShortcut(">>", {
-		description: ">> <task> | >><symbol> <task> (e.g. >>? >>@ >>!)",
+		description: "Run subagent task",
 		handler: async () => {
 			// Documentation-only entry.
 		},
@@ -825,6 +825,29 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 		}
 
 		await subCommand.handler(forwardedArgs, ctx, true);
+		return { action: "handled" as const };
+	});
+
+	// << shortcut for aborting subagent runs (equivalent to /sub:abort)
+	pi.registerShortcut("<<", {
+		description: "Abort subagent run",
+		handler: async () => {
+			// Documentation-only entry.
+		},
+	});
+
+	pi.on("input", async (event, ctx) => {
+		if (event.source === "extension") {
+			return { action: "continue" as const };
+		}
+
+		const text = event.text ?? "";
+		if (!text.startsWith("<<")) {
+			return { action: "continue" as const };
+		}
+
+		const args = text.slice(2).trim();
+		await handleSubAbort(args, ctx);
 		return { action: "handled" as const };
 	});
 
