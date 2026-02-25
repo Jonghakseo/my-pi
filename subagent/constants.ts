@@ -18,11 +18,11 @@ export const STALE_PENDING_COMPLETION_MS = 30 * 60 * 1_000;
  * `>>? task` → researcher, `>>@ task` → fast-finder, etc.
  */
 export const AGENT_SYMBOL_MAP: Record<string, string> = {
-	"!": "decider",
 	"*": "deep-reviewer",
-	"@": "fast-finder",
+	"+": "verifier",
+	"/": "fast-finder",
 	"?": "researcher",
-	"^": "verifier",
+	"&": "decider",
 };
 
 /** Format symbol hints for display, e.g. ">>? researcher  >>@ fast-finder ..." */
