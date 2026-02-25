@@ -341,7 +341,7 @@ export class SubagentSessionReplayOverlay {
 		);
 		container.addChild(
 			new Text(
-				pad + theme.fg("dim", `Task: ${truncateSingleLine(task, Math.max(MIN_TASK_WIDTH, innerWidth - TASK_WIDTH_PADDING))}`),
+				pad + theme.fg("dim", truncateSingleLine(task, Math.max(MIN_TASK_WIDTH, innerWidth - TASK_WIDTH_PADDING))),
 				0,
 				0,
 			),

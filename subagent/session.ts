@@ -146,7 +146,7 @@ export function buildMainContextText(ctx: any): string {
  */
 export function wrapTaskWithMainContext(task: string, contextText: string): string {
 	if (!contextText) return task;
-	return `[Main Session Context]\n${contextText}\n\n[Your Task]\n${task}`;
+	return `[Main Session Context]\n${contextText}\n\n[Request]\n${task}`;
 }
 
 export function writePromptToTempFile(agentName: string, prompt: string): { dir: string; filePath: string } {

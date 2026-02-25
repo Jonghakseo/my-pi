@@ -310,7 +310,7 @@ export async function runSingleAgent(
 			args.push("--append-system-prompt", tmpPromptPath);
 		}
 
-		args.push(`Task: ${task}`);
+		args.push(task);
 		let wasAborted = false;
 
 		const exitCode = await new Promise<number>((resolve) => {

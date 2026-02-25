@@ -136,7 +136,7 @@ function formatRunDetailOutput(run: CommandRunState): string {
 	const sessionOutput = sessionSummary.finalOutput?.trim() ? sessionSummary.finalOutput : "";
 	const lineOutput = run.lastLine?.trim() ? run.lastLine : "";
 	const output = runOutput || sessionOutput || lineOutput || "(no output)";
-	const lines: string[] = [formatCommandRunSummary(run), `Task: ${run.task}`];
+	const lines: string[] = [formatCommandRunSummary(run), run.task];
 
 	if (run.sessionFile) lines.push(`Session: ${run.sessionFile}`);
 	if (run.progressText) lines.push(`Progress: ${run.progressText}`);
@@ -221,7 +221,7 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 						details: makeDetails("single")([]),
 					};
 				}
-				const lines = runs.map((run) => `${formatCommandRunSummary(run)}\n  task: ${run.task}`);
+				const lines = runs.map((run) => `${formatCommandRunSummary(run)}\n  ${run.task}`);
 				return {
 					content: [{ type: "text", text: `Subagent runs\n\n${lines.join("\n\n")}` }],
 					details: makeDetails("single")([]),
@@ -255,7 +255,7 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 					content: [
 						{
 							type: "text",
-							text: `${formatCommandRunSummary(run)}\nTask: ${run.task}\n\n${preview}`,
+							text: `${formatCommandRunSummary(run)}\n${run.task}\n\n${preview}`,
 						},
 					],
 					details: makeDetails("single")([]),
@@ -455,7 +455,7 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 					customType: "subagent-tool",
 					content:
 						`[subagent:${resolvedAgent}#${runId}] ${startedState}` +
-						`\nTask: ${taskForDisplay}` +
+						`\n${taskForDisplay}` +
 						(continueFromRun ? `\nContinued from: #${params.continueRunId}` : "") +
 						`\nContext: ${contextLabel} · turn ${runState.turnCount}`,
 					display: true,
@@ -517,7 +517,7 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 							customType: "subagent-tool",
 							content:
 								`[subagent:${resolvedAgent}#${runId}] ${isError ? "failed" : "completed"}` +
-								`\nTask: ${taskForDisplay}` +
+								`\n${taskForDisplay}` +
 								(continueFromRun ? `\nContinued from: #${params.continueRunId}` : "") +
 								(usage ? `\nUsage: ${usage}` : "") +
 								(runState.progressText ? `\nProgress: ${runState.progressText}` : "") +
@@ -561,7 +561,7 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 							customType: "subagent-tool",
 							content:
 								`[subagent:${resolvedAgent}#${runId}] failed` +
-								`\nTask: ${taskForDisplay}` +
+								`\n${taskForDisplay}` +
 								(continueFromRun ? `\nContinued from: #${params.continueRunId}` : "") +
 								`\n\n${runState.lastLine}`,
 							display: true,

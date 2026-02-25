@@ -121,7 +121,6 @@ export function renderSubagentToolResult(result: any, { expanded }: { expanded: 
 			if (isError && r.errorMessage)
 				container.addChild(new Text(theme.fg("error", `Error: ${r.errorMessage}`), 0, 0));
 			container.addChild(new Spacer(1));
-			container.addChild(new Text(theme.fg("muted", "─── Task ───"), 0, 0));
 			container.addChild(new Text(theme.fg("dim", r.task), 0, 0));
 			container.addChild(new Spacer(1));
 			container.addChild(new Text(theme.fg("muted", "─── Output ───"), 0, 0));
@@ -194,7 +193,7 @@ export function renderSubagentToolResult(result: any, { expanded }: { expanded: 
 						0,
 					),
 				);
-				container.addChild(new Text(theme.fg("muted", "Task: ") + theme.fg("dim", r.task), 0, 0));
+				container.addChild(new Text(theme.fg("dim", r.task), 0, 0));
 
 				// Show tool calls
 				for (const item of displayItems) {
@@ -279,7 +278,7 @@ export function renderSubagentToolResult(result: any, { expanded }: { expanded: 
 				container.addChild(
 					new Text(`${theme.fg("muted", "─── ") + theme.fg("accent", r.agent)} ${rIcon}`, 0, 0),
 				);
-				container.addChild(new Text(theme.fg("muted", "Task: ") + theme.fg("dim", r.task), 0, 0));
+				container.addChild(new Text(theme.fg("dim", r.task), 0, 0));
 
 				// Show tool calls
 				for (const item of displayItems) {

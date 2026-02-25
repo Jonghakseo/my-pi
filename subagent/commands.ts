@@ -658,7 +658,7 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 					customType: "subagent-command",
 					content:
 						`[sub:${selectedAgent}#${runId}] ${startedState}` +
-						`\nTask: ${taskForDisplay}` +
+						`\n${taskForDisplay}` +
 						(continuedFromRunId !== undefined ? `\nContinued from: #${continuedFromRunId}` : "") +
 						`\nContext: ${contextLabel} · turn ${runState.turnCount}`,
 					display: true,
@@ -742,7 +742,7 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 							customType: "subagent-command",
 							content:
 								`[sub:${selectedAgent}#${runId}] ${isError ? "failed" : "completed"}` +
-								`\nTask: ${taskForDisplay}` +
+								`\n${taskForDisplay}` +
 								(continuedFromRunId !== undefined ? `\nContinued from: #${continuedFromRunId}` : "") +
 								(usage ? `\nUsage: ${usage}` : "") +
 								(runState.progressText ? `\nProgress: ${runState.progressText}` : "") +
@@ -889,7 +889,7 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 					: run.lastLine || "(no output captured)";
 			const content =
 				`Subagent #${run.id} [${run.status}] ${run.agent} ctx:${run.contextMode ?? "sub"} turn:${run.turnCount ?? DEFAULT_TURN_COUNT} ${elapsedSec}s tools:${run.toolCalls}` +
-				`\nTask: ${run.task}` +
+				`\n${run.task}` +
 				usageLine +
 				`\n\n${output || fallback}`;
 
