@@ -828,6 +828,64 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 		return { action: "handled" as const };
 	});
 
+	// <> shortcut: switch to subagent session (equivalent to /sub:trans)
+	pi.registerShortcut("<>", {
+		description: "Switch to subagent session",
+		handler: async () => {
+			// Documentation-only entry.
+		},
+	});
+
+	pi.on("input", async (event, ctx) => {
+		if (event.source === "extension") {
+			return { action: "continue" as const };
+		}
+
+		const text = event.text ?? "";
+		if (!text.startsWith("<>")) {
+			return { action: "continue" as const };
+		}
+
+		const raw = text.slice(2).trim();
+		let runId: number;
+		let run: CommandRunState | undefined;
+
+		if (!raw) {
+			run = getLatestRun(store, ["done", "error"]);
+			if (!run) {
+				ctx.ui.notify("No finished subagent runs to switch to.", "info");
+				return { action: "handled" as const };
+			}
+			runId = run.id;
+		} else {
+			runId = parseInt(raw);
+			if (isNaN(runId)) {
+				ctx.ui.notify("Usage: <> [runId]", "info");
+				return { action: "handled" as const };
+			}
+			run = store.commandRuns.get(runId);
+		}
+
+		if (!run) {
+			ctx.ui.notify(`Run #${runId} not found.`, "error");
+			return { action: "handled" as const };
+		}
+		if (run.status === "running") {
+			ctx.ui.notify(`Run #${runId} is still running.`, "error");
+			return { action: "handled" as const };
+		}
+		if (!run.sessionFile) {
+			ctx.ui.notify(`Run #${runId} has no session file.`, "error");
+			return { action: "handled" as const };
+		}
+
+		const success = await ctx.switchSession(run.sessionFile);
+		if (!success) {
+			ctx.ui.notify(`Failed to switch to session: ${run.sessionFile}`, "error");
+		}
+		return { action: "handled" as const };
+	});
+
 	// << shortcut: abort running jobs or clear finished jobs
 	pi.registerShortcut("<<", {
 		description: "Abort or clear subagent runs",
