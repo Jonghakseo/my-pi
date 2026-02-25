@@ -60,40 +60,11 @@ export function updateCommandRunsWidget(store: SubagentStore, ctx?: any): void {
 		return;
 	}
 
-	activeCtx.ui.setWidget(
-		"subagent-runs",
-		(_tui: any, theme: any) => {
-			const text = new Text("", 0, 0);
-			return {
-				render(width: number): string[] {
-					const runningCount = runs.filter((run) => run.status === "running").length;
-					const doneCount = runs.filter((run) => run.status === "done").length;
-					const errorCount = runs.filter((run) => run.status === "error").length;
+	activeCtx.ui.setWidget("subagent-runs", undefined);
 
-					const lines: string[] = [
-						theme.fg("toolTitle", theme.bold("Subagents")) +
-							theme.fg("dim", ` · ${runningCount} running · ${doneCount} done · ${errorCount} failed`),
-						theme.fg(
-							"muted",
-							truncateText(
-								"Tip: /subview [id] opens output (UI-only) · /subrm [id] removes a run · /subclear all clears all",
-								Math.max(20, width),
-							),
-						),
-					];
-
-					text.setText(lines.join("\n"));
-					return text.render(width);
-				},
-				invalidate() {
-					text.invalidate();
-				},
-			};
-		},
-		{ placement: "belowEditor" },
-	);
-
-	for (const run of runs) {
+	for (const [runIndex, run] of runs.entries()) {
+		const showSeparator = runIndex > 0;
+		const showBottomSeparator = runIndex === runs.length - 1;
 		store.renderedRunWidgetIds.add(run.id);
 		activeCtx.ui.setWidget(
 			`sub-${run.id}`,
@@ -105,6 +76,9 @@ export function updateCommandRunsWidget(store: SubagentStore, ctx?: any): void {
 				return {
 					render(width: number): string[] {
 						const lines: string[] = [];
+						const innerWidth = Math.max(1, width - 2);
+						if (showSeparator) lines.push(theme.fg("muted", "─".repeat(innerWidth)));
+
 						const statusColor = run.status === "running" ? "warning" : run.status === "done" ? "success" : "error";
 						const spinnerFrame = SPINNER_FRAMES[Math.floor(Date.now() / SPINNER_INTERVAL_MS) % SPINNER_FRAMES.length];
 						const statusIcon = run.status === "running" ? spinnerFrame : run.status === "done" ? "✓" : "✗";
@@ -132,7 +106,6 @@ export function updateCommandRunsWidget(store: SubagentStore, ctx?: any): void {
 							contextShort,
 						);
 
-						const innerWidth = Math.max(1, width - 2);
 						const normalizedTask = run.task.replace(/\s*\n+\s*/g, " ").replace(/\s{2,}/g, " ").trim();
 						const taskLine = truncateText(normalizedTask, Math.max(1, innerWidth - 4));
 						lines.push(theme.fg("dim", `  ${taskLine}`));
@@ -147,6 +120,8 @@ export function updateCommandRunsWidget(store: SubagentStore, ctx?: any): void {
 							const outputLine = truncateText(normalized, Math.max(1, innerWidth - 4));
 							lines.push(theme.fg("muted", `  ↳ ${outputLine}`));
 						}
+
+						if (showBottomSeparator) lines.push(theme.fg("muted", "─".repeat(innerWidth)));
 
 						content.setText(lines.join("\n"));
 						return box.render(width);
