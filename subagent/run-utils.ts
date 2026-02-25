@@ -62,6 +62,7 @@ export function getLatestRun(
 /**
  * Remove a run from the in-memory store with optional abort/persist side-effects.
  * This is the single deletion path used by commands/tool/trim logic.
+ * Also cleans up the globalLiveRuns registry to prevent leaks.
  */
 export function removeRun(store: SubagentStore, runId: number, options: RemoveRunOptions = {}): RemoveRunResult {
 	const run = store.commandRuns.get(runId);
@@ -73,16 +74,23 @@ export function removeRun(store: SubagentStore, runId: number, options: RemoveRu
 	let aborted = false;
 
 	run.removed = true;
-	if (abortIfRunning && run.status === "running" && run.abortController) {
+
+	// Abort via globalLiveRuns if the run's own abortController is missing
+	// (can happen after session switch clears commandRuns references).
+	const globalEntry = store.globalLiveRuns.get(runId);
+	const controller = run.abortController ?? globalEntry?.abortController;
+
+	if (abortIfRunning && run.status === "running" && controller) {
 		const reason = options.reason ?? "Aborting by remove...";
 		run.lastLine = reason;
 		run.lastOutput = reason;
-		run.abortController.abort();
+		controller.abort();
 		aborted = true;
 	}
 
 	run.abortController = undefined;
 	store.commandRuns.delete(runId);
+	store.globalLiveRuns.delete(runId);
 
 	if (persistRemovedEntry && options.pi) {
 		const payload: Record<string, unknown> = { runId };
@@ -116,7 +124,13 @@ export function trimCommandRunHistory(
 	const shouldUpdateWidget = typeof options === "number" ? false : (options.updateWidget ?? false);
 
 	const completed = Array.from(store.commandRuns.values())
-		.filter((run) => run.status !== "running")
+		.filter((run) => {
+			if (run.status === "running") return false;
+			// Never evict runs with pending cross-session completions.
+			const globalEntry = store.globalLiveRuns.get(run.id);
+			if (globalEntry?.pendingCompletion) return false;
+			return true;
+		})
 		.sort((a, b) => a.id - b.id);
 
 	const removedRunIds: number[] = [];

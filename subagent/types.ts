@@ -83,6 +83,36 @@ export interface AgentAliasMatch {
 
 export type OnUpdateCallback = (partial: AgentToolResult<SubagentDetails>) => void;
 
+/**
+ * Pending completion message stored when a run finishes while the user
+ * is in a different session from where the run originated.
+ */
+export interface PendingCompletion {
+	message: {
+		customType: string;
+		content: string;
+		display: boolean;
+		details: Record<string, unknown>;
+	};
+	options: {
+		deliverAs: "followUp";
+		triggerTurn?: boolean;
+	};
+}
+
+/**
+ * Global live run entry — tracks a running subagent process independently
+ * of the session lifecycle. Lives in a module-level Map that is never
+ * cleared by session switches.
+ */
+export interface GlobalRunEntry {
+	runState: CommandRunState;
+	abortController: AbortController;
+	originSessionFile: string;
+	/** Set when the run completes while the user is in a different session. */
+	pendingCompletion?: PendingCompletion;
+}
+
 // ─── Typebox Schemas ─────────────────────────────────────────────────────────
 
 export const TaskItem = Type.Object({

@@ -5,7 +5,7 @@
 import type { Message } from "@mariozechner/pi-ai";
 import { visibleWidth } from "@mariozechner/pi-tui";
 import { getDisplayItems, getFinalOutput, getLastNonEmptyLine, getLatestActivityPreview } from "./runner.js";
-import type { CommandRunState, SingleResult } from "./types.js";
+import type { CommandRunState, GlobalRunEntry, SingleResult } from "./types.js";
 
 export const MAX_PARALLEL_TASKS = 8;
 export const MAX_CONCURRENCY = 4;
@@ -13,6 +13,12 @@ export const COLLAPSED_ITEM_COUNT = 10;
 
 export interface SubagentStore {
 	commandRuns: Map<number, CommandRunState>;
+	/**
+	 * Global live run registry — tracks running subagent processes independently
+	 * of session lifecycle. Never cleared by session switches. Entries are removed
+	 * only when a run completes, is aborted, or is explicitly removed.
+	 */
+	globalLiveRuns: Map<number, GlobalRunEntry>;
 	renderedRunWidgetIds: Set<number>;
 	nextCommandRunId: number;
 	commandWidgetCtx: any;
@@ -27,6 +33,7 @@ export interface SubagentStore {
 export function createStore(): SubagentStore {
 	return {
 		commandRuns: new Map(),
+		globalLiveRuns: new Map(),
 		renderedRunWidgetIds: new Set(),
 		nextCommandRunId: 1,
 		commandWidgetCtx: null,

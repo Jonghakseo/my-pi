@@ -277,7 +277,8 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 			}
 
 			if (asyncAction === "abort") {
-				if (run.status !== "running" || !run.abortController) {
+				const abortCtrl = run.abortController ?? store.globalLiveRuns.get(run.id)?.abortController;
+				if (run.status !== "running" || !abortCtrl) {
 					return {
 						content: [{ type: "text", text: `Subagent run #${run.id} is not running.` }],
 						details: makeDetails("single")([]),
@@ -285,7 +286,7 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 				}
 				run.lastLine = "Aborting by subagent tool...";
 				run.lastOutput = run.lastLine;
-				run.abortController.abort();
+				abortCtrl.abort();
 				updateCommandRunsWidget(store, ctx);
 				return {
 					content: [{ type: "text", text: `Aborting subagent run #${run.id}...` }],
@@ -444,6 +445,19 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 
 			const abortController = new AbortController();
 			runState.abortController = abortController;
+
+			// Register in global live run registry (survives session switches).
+			let originSessionFile = "";
+			try {
+				const raw = ctx.sessionManager.getSessionFile() ?? "";
+				originSessionFile = raw.replace(/[\r\n\t]+/g, "").trim();
+			} catch { /* ignore */ }
+			store.globalLiveRuns.set(runId, {
+				runState,
+				abortController,
+				originSessionFile,
+			});
+
 			store.commandWidgetCtx = ctx;
 			updateCommandRunsWidget(store, ctx);
 
@@ -512,35 +526,58 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 					runState.lastOutput = rawOutput;
 					if (rawOutput) runState.lastLine = getLastNonEmptyLine(rawOutput);
 
-					pi.sendMessage(
-						{
-							customType: "subagent-tool",
-							content:
-								`[subagent:${resolvedAgent}#${runId}] ${isError ? "failed" : "completed"}` +
-								`\n${taskForDisplay}` +
-								(continueFromRun ? `\nContinued from: #${params.continueRunId}` : "") +
-								(usage ? `\nUsage: ${usage}` : "") +
-								(runState.progressText ? `\nProgress: ${runState.progressText}` : "") +
-								`\n\n${rawOutput}`,
-							display: true,
-							details: {
-								runId,
-								agent: resolvedAgent,
-								task: taskForDisplay,
-								continuedFromRunId: params.continueRunId,
-								turnCount: runState.turnCount,
-								contextMode: runState.contextMode,
-								sessionFile: runState.sessionFile,
-								exitCode: result.exitCode,
-								usage: result.usage,
-								model: result.model,
-								source: result.agentSource,
-								progressText: runState.progressText,
-								status: runState.status,
-							},
+					const completionMessage = {
+						customType: "subagent-tool" as const,
+						content:
+							`[subagent:${resolvedAgent}#${runId}] ${isError ? "failed" : "completed"}` +
+							`\n${taskForDisplay}` +
+							(continueFromRun ? `\nContinued from: #${params.continueRunId}` : "") +
+							(usage ? `\nUsage: ${usage}` : "") +
+							(runState.progressText ? `\nProgress: ${runState.progressText}` : "") +
+							`\n\n${rawOutput}`,
+						display: true,
+						details: {
+							runId,
+							agent: resolvedAgent,
+							task: taskForDisplay,
+							continuedFromRunId: params.continueRunId,
+							turnCount: runState.turnCount,
+							contextMode: runState.contextMode,
+							sessionFile: runState.sessionFile,
+							exitCode: result.exitCode,
+							usage: result.usage,
+							model: result.model,
+							source: result.agentSource,
+							progressText: runState.progressText,
+							status: runState.status,
 						},
-						{ deliverAs: "followUp", triggerTurn: true },
-					);
+					};
+					const completionOptions = { deliverAs: "followUp" as const, triggerTurn: true };
+
+					// Check if the user is still in the origin session.
+					const toolGlobalEntry = store.globalLiveRuns.get(runId);
+					let toolCurrentSession: string | null = null;
+					try {
+						const rawSession = ctx.sessionManager.getSessionFile() ?? null;
+						toolCurrentSession = rawSession ? rawSession.replace(/[\r\n\t]+/g, "").trim() : null;
+					} catch { /* ignore */ }
+
+					const toolInOrigin = !toolGlobalEntry
+						|| !toolCurrentSession
+						|| !toolGlobalEntry.originSessionFile
+						|| toolCurrentSession === toolGlobalEntry.originSessionFile;
+
+					if (toolInOrigin) {
+						pi.sendMessage(completionMessage, completionOptions);
+						store.globalLiveRuns.delete(runId);
+					} else {
+						// User is in a different session — queue for later delivery.
+						toolGlobalEntry.pendingCompletion = {
+							message: completionMessage,
+							options: completionOptions,
+						};
+						store.commandRuns.set(runId, runState);
+					}
 
 					if (ctx.hasUI) {
 						ctx.ui.notify(
@@ -556,30 +593,53 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 					runState.elapsedMs = Date.now() - runState.startedAt;
 					runState.lastLine = error?.message ? String(error.message) : "Subagent execution failed";
 					runState.lastOutput = runState.lastLine;
-					pi.sendMessage(
-						{
-							customType: "subagent-tool",
-							content:
-								`[subagent:${resolvedAgent}#${runId}] failed` +
-								`\n${taskForDisplay}` +
-								(continueFromRun ? `\nContinued from: #${params.continueRunId}` : "") +
-								`\n\n${runState.lastLine}`,
-							display: true,
-							details: {
-								runId,
-								agent: resolvedAgent,
-								task: taskForDisplay,
-								continuedFromRunId: params.continueRunId,
-								turnCount: runState.turnCount,
-								contextMode: runState.contextMode,
-								sessionFile: runState.sessionFile,
-								error: runState.lastLine,
-								progressText: runState.progressText,
-								status: runState.status,
-							},
+
+					const errorMessage = {
+						customType: "subagent-tool" as const,
+						content:
+							`[subagent:${resolvedAgent}#${runId}] failed` +
+							`\n${taskForDisplay}` +
+							(continueFromRun ? `\nContinued from: #${params.continueRunId}` : "") +
+							`\n\n${runState.lastLine}`,
+						display: true,
+						details: {
+							runId,
+							agent: resolvedAgent,
+							task: taskForDisplay,
+							continuedFromRunId: params.continueRunId,
+							turnCount: runState.turnCount,
+							contextMode: runState.contextMode,
+							sessionFile: runState.sessionFile,
+							error: runState.lastLine,
+							progressText: runState.progressText,
+							status: runState.status,
 						},
-						{ deliverAs: "followUp", triggerTurn: true },
-					);
+					};
+
+					// Error path: also check origin session for deferred delivery.
+					const errGlobalEntry = store.globalLiveRuns.get(runId);
+					let errCurrentSession: string | null = null;
+					try {
+						const rawErrSession = ctx.sessionManager.getSessionFile() ?? null;
+						errCurrentSession = rawErrSession ? rawErrSession.replace(/[\r\n\t]+/g, "").trim() : null;
+					} catch { /* ignore */ }
+
+					const errInOrigin = !errGlobalEntry
+						|| !errCurrentSession
+						|| !errGlobalEntry.originSessionFile
+						|| errCurrentSession === errGlobalEntry.originSessionFile;
+
+					if (errInOrigin) {
+						pi.sendMessage(errorMessage, { deliverAs: "followUp", triggerTurn: true });
+						store.globalLiveRuns.delete(runId);
+					} else {
+						errGlobalEntry.pendingCompletion = {
+							message: errorMessage,
+							options: { deliverAs: "followUp", triggerTurn: true },
+						};
+						store.commandRuns.set(runId, runState);
+					}
+
 					if (ctx.hasUI) ctx.ui.notify(`subagent tool run #${runId} failed: ${runState.lastLine}`, "error");
 					updateCommandRunsWidget(store);
 				} finally {

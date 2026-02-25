@@ -37,6 +37,7 @@ import {
 	PARENT_ENTRY_TYPE,
 	RUN_OUTPUT_MESSAGE_MAX_CHARS,
 	RUN_TICK_INTERVAL_MS,
+	STALE_PENDING_COMPLETION_MS,
 	SUBVIEW_OVERLAY_MAX_HEIGHT,
 	SUBVIEW_OVERLAY_WIDTH,
 	formatSymbolHints,
@@ -237,8 +238,13 @@ async function subBackHandler(ctx: any, store: SubagentStore): Promise<void> {
  * Clear commandRuns and restore from current session entries.
  * Used by both session_start and session_switch handlers.
  * Also restores `currentParentSessionFile` from the latest `subagent-parent` entry.
+ *
+ * After restoring session entries, merges any still-running global live runs
+ * into commandRuns so they remain visible and controllable across sessions.
+ * Also delivers any pending completion messages for runs that finished while
+ * the user was in a different session.
  */
-function restoreRunsFromSession(store: SubagentStore, ctx: any): void {
+function restoreRunsFromSession(store: SubagentStore, ctx: any, pi?: ExtensionAPI): void {
 	store.commandRuns.clear();
 	store.commandWidgetCtx = ctx;
 
@@ -372,6 +378,62 @@ function restoreRunsFromSession(store: SubagentStore, ctx: any): void {
 		}
 	} catch (_e) {
 		// Silently ignore restore errors — fresh state is fine
+	}
+
+	// ── Merge global live runs (origin session only) ────────────────────
+	// Only re-integrate runs that originated from the current session.
+	// Runs from other sessions stay hidden — they will appear when the
+	// user switches back to their origin session.
+	let mergeSessionFile: string | null = null;
+	try {
+		mergeSessionFile = normalizePath(ctx.sessionManager.getSessionFile());
+	} catch { /* ignore */ }
+
+	if (mergeSessionFile) {
+		for (const [runId, entry] of store.globalLiveRuns) {
+			if (entry.originSessionFile !== mergeSessionFile) continue;
+			if (entry.runState.status === "running" && !entry.runState.removed) {
+				store.commandRuns.set(runId, entry.runState);
+			}
+		}
+	}
+
+	// ── Deliver pending completions ─────────────────────────────────────
+	// If a run finished while the user was in a different session and the
+	// user has now switched back to the origin session, deliver the stored
+	// completion message via pi.sendMessage().
+	if (pi) {
+		let currentSessionFile: string | null = null;
+		try {
+			currentSessionFile = normalizePath(ctx.sessionManager.getSessionFile());
+		} catch { /* ignore */ }
+
+		if (currentSessionFile) {
+			for (const [runId, entry] of store.globalLiveRuns) {
+				if (!entry.pendingCompletion) continue;
+				if (entry.originSessionFile === currentSessionFile) {
+					try {
+						pi.sendMessage(entry.pendingCompletion.message, entry.pendingCompletion.options);
+					} catch { /* ignore delivery errors */ }
+					// Restore the completed run state into commandRuns for display.
+					store.commandRuns.set(runId, entry.runState);
+					store.globalLiveRuns.delete(runId);
+				}
+			}
+		}
+	}
+
+	// ── Evict stale pending completions (memory leak guard) ─────────────
+	// If a completed run's pending completion has been sitting for longer
+	// than the threshold without the user returning to its origin session,
+	// discard it to prevent unbounded memory growth.
+	for (const [runId, entry] of store.globalLiveRuns) {
+		if (!entry.pendingCompletion) continue;
+		if (entry.runState.status === "running") continue;
+		const age = Date.now() - (entry.runState.startedAt + entry.runState.elapsedMs);
+		if (age > STALE_PENDING_COMPLETION_MS) {
+			store.globalLiveRuns.delete(runId);
+		}
 	}
 
 	updateCommandRunsWidget(store, ctx);
@@ -639,6 +701,17 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 			const abortController = new AbortController();
 			runState.abortController = abortController;
 
+			// Register in global live run registry (survives session switches).
+			let originSessionFile = "";
+			try {
+				originSessionFile = normalizePath(ctx.sessionManager.getSessionFile()) ?? "";
+			} catch { /* ignore */ }
+			store.globalLiveRuns.set(runId, {
+				runState,
+				abortController,
+				originSessionFile,
+			});
+
 			store.commandWidgetCtx = ctx;
 			updateCommandRunsWidget(store, ctx);
 
@@ -737,35 +810,58 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 					runState.lastOutput = rawOutput;
 					if (rawOutput) runState.lastLine = getLastNonEmptyLine(rawOutput);
 
-					pi.sendMessage(
-						{
-							customType: "subagent-command",
-							content:
-								`[sub:${selectedAgent}#${runId}] ${isError ? "failed" : "completed"}` +
-								`\n${taskForDisplay}` +
-								(continuedFromRunId !== undefined ? `\nContinued from: #${continuedFromRunId}` : "") +
-								(usage ? `\nUsage: ${usage}` : "") +
-								(runState.progressText ? `\nProgress: ${runState.progressText}` : "") +
-								`\n\n${output}`,
-							display: true,
-							details: {
-								runId,
-								agent: selectedAgent,
-								task: taskForDisplay,
-								continuedFromRunId,
-								turnCount: runState.turnCount,
-								contextMode: runState.contextMode,
-								sessionFile: runState.sessionFile,
-								exitCode: result.exitCode,
-								usage: result.usage,
-								model: result.model,
-								source: result.agentSource,
-								progressText: runState.progressText,
-								status: runState.status,
-							},
+					const completionMessage = {
+						customType: "subagent-command" as const,
+						content:
+							`[sub:${selectedAgent}#${runId}] ${isError ? "failed" : "completed"}` +
+							`\n${taskForDisplay}` +
+							(continuedFromRunId !== undefined ? `\nContinued from: #${continuedFromRunId}` : "") +
+							(usage ? `\nUsage: ${usage}` : "") +
+							(runState.progressText ? `\nProgress: ${runState.progressText}` : "") +
+							`\n\n${output}`,
+						display: true,
+						details: {
+							runId,
+							agent: selectedAgent,
+							task: taskForDisplay,
+							continuedFromRunId,
+							turnCount: runState.turnCount,
+							contextMode: runState.contextMode,
+							sessionFile: runState.sessionFile,
+							exitCode: result.exitCode,
+							usage: result.usage,
+							model: result.model,
+							source: result.agentSource,
+							progressText: runState.progressText,
+							status: runState.status,
 						},
-						{ deliverAs: "followUp" },
-					);
+					};
+					const completionOptions = { deliverAs: "followUp" as const };
+
+					// Check if the user is still in the origin session.
+					const globalEntry = store.globalLiveRuns.get(runId);
+					let currentSessionFile: string | null = null;
+					try {
+						currentSessionFile = normalizePath(ctx.sessionManager.getSessionFile());
+					} catch { /* ignore */ }
+
+					const inOriginSession = !globalEntry
+						|| !currentSessionFile
+						|| !globalEntry.originSessionFile
+						|| currentSessionFile === globalEntry.originSessionFile;
+
+					if (inOriginSession) {
+						pi.sendMessage(completionMessage, completionOptions);
+						store.globalLiveRuns.delete(runId);
+					} else {
+						// User is in a different session — queue for later delivery.
+						globalEntry.pendingCompletion = {
+							message: completionMessage,
+							options: completionOptions,
+						};
+						// Re-insert into commandRuns so the widget shows completion.
+						store.commandRuns.set(runId, runState);
+					}
 
 					ctx.ui.notify(
 						isError
@@ -779,6 +875,51 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 					runState.elapsedMs = Date.now() - runState.startedAt;
 					runState.lastLine = error?.message ? String(error.message) : "Subagent execution failed";
 					runState.lastOutput = runState.lastLine;
+
+					const cmdErrorMessage = {
+						customType: "subagent-command" as const,
+						content:
+							`[sub:${selectedAgent}#${runId}] failed` +
+							`\n${taskForDisplay}` +
+							(continuedFromRunId !== undefined ? `\nContinued from: #${continuedFromRunId}` : "") +
+							`\n\n${runState.lastLine}`,
+						display: true,
+						details: {
+							runId,
+							agent: selectedAgent,
+							task: taskForDisplay,
+							continuedFromRunId,
+							turnCount: runState.turnCount,
+							contextMode: runState.contextMode,
+							sessionFile: runState.sessionFile,
+							error: runState.lastLine,
+							progressText: runState.progressText,
+							status: runState.status,
+						},
+					};
+
+					const cmdErrGlobalEntry = store.globalLiveRuns.get(runId);
+					let cmdErrCurrentSession: string | null = null;
+					try {
+						cmdErrCurrentSession = normalizePath(ctx.sessionManager.getSessionFile());
+					} catch { /* ignore */ }
+
+					const cmdErrInOrigin = !cmdErrGlobalEntry
+						|| !cmdErrCurrentSession
+						|| !cmdErrGlobalEntry.originSessionFile
+						|| cmdErrCurrentSession === cmdErrGlobalEntry.originSessionFile;
+
+					if (cmdErrInOrigin) {
+						pi.sendMessage(cmdErrorMessage, { deliverAs: "followUp" });
+						store.globalLiveRuns.delete(runId);
+					} else {
+						cmdErrGlobalEntry.pendingCompletion = {
+							message: cmdErrorMessage,
+							options: { deliverAs: "followUp" },
+						};
+						store.commandRuns.set(runId, runState);
+					}
+
 					ctx.ui.notify(`subagent #${runId} failed: ${runState.lastLine}`, "error");
 				} finally {
 					clearInterval(tick);
@@ -1034,10 +1175,13 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 		}
 
 		const abortRun = (run: CommandRunState): boolean => {
-			if (!run.abortController) return false;
+			// Try the run's own controller first, then fall back to globalLiveRuns
+			// (the run's controller may have been cleared after a session switch).
+			const controller = run.abortController ?? store.globalLiveRuns.get(run.id)?.abortController;
+			if (!controller) return false;
 			run.lastLine = "Aborting by user...";
 			run.lastOutput = run.lastLine;
-			run.abortController.abort();
+			controller.abort();
 			return true;
 		};
 
@@ -1295,10 +1439,11 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 				unknown.push(idStr);
 				continue;
 			}
-			if (run.status === "running" && run.abortController) {
+			const shortcutController = run.abortController ?? store.globalLiveRuns.get(id)?.abortController;
+			if (run.status === "running" && shortcutController) {
 				run.lastLine = "Aborting by user...";
 				run.lastOutput = run.lastLine;
-				run.abortController.abort();
+				shortcutController.abort();
 				aborted++;
 			} else if (run.status !== "running") {
 				const result = removeRun(store, id, {
@@ -1322,11 +1467,11 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 	});
 
 	pi.on("session_start", async (_event, ctx) => {
-		restoreRunsFromSession(store, ctx);
+		restoreRunsFromSession(store, ctx, pi);
 	});
 
 	pi.on("session_switch", async (_event, ctx) => {
-		restoreRunsFromSession(store, ctx);
+		restoreRunsFromSession(store, ctx, pi);
 	});
 
 }
