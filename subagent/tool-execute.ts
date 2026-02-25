@@ -302,6 +302,7 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 				}
 				run.abortController = undefined;
 				store.commandRuns.delete(run.id);
+				pi.appendEntry("subagent-removed", { runId: run.id, reason: "tool-remove" });
 				updateCommandRunsWidget(store, ctx);
 				return {
 					content: [{ type: "text", text: `Removed subagent run #${run.id}.` }],
@@ -507,6 +508,7 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 								model: result.model,
 								source: result.agentSource,
 								progressText: runState.progressText,
+								status: runState.status,
 							},
 						},
 						{ deliverAs: "followUp", triggerTurn: true },
@@ -545,6 +547,7 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 								sessionFile: runState.sessionFile,
 								error: runState.lastLine,
 								progressText: runState.progressText,
+								status: runState.status,
 							},
 						},
 						{ deliverAs: "followUp", triggerTurn: true },
@@ -553,7 +556,10 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 					updateCommandRunsWidget(store);
 				} finally {
 					runState.abortController = undefined;
-					trimCommandRunHistory(store);
+					const trimmedRunIds = trimCommandRunHistory(store);
+					for (const trimmedRunId of trimmedRunIds) {
+						pi.appendEntry("subagent-removed", { runId: trimmedRunId, reason: "trim" });
+					}
 					updateCommandRunsWidget(store);
 				}
 			})();

@@ -283,20 +283,36 @@ function restoreRunsFromSession(store: SubagentStore, ctx: any): void {
 
 			const existing = restoredRuns.get(runId);
 
-			// Determine status from the message content
+			// Determine final status primarily from structured metadata.
 			const content = typeof cm.content === "string" ? cm.content : "";
-			const isCompleted = content.includes("] completed");
-			const isFailed = content.includes("] failed");
-			const isError = content.includes("] error");
+			const statusRaw = typeof d.status === "string" ? d.status.trim().toLowerCase() : "";
+			const statusFromDetails: "done" | "error" | null =
+				statusRaw === "done" || statusRaw === "completed"
+					? "done"
+					: statusRaw === "error" || statusRaw === "failed"
+						? "error"
+						: null;
+			const statusFromExitCode: "done" | "error" | null =
+				typeof d.exitCode === "number" ? (d.exitCode === 0 ? "done" : "error") : null;
+			const statusFromErrorField: "done" | "error" | null =
+				typeof d.error === "string" && d.error.trim() ? "error" : null;
 
-			if (isCompleted || isFailed || isError) {
+			// Legacy fallback for old sessions where structured fields are missing.
+			const legacyStatusFromContent: "done" | "error" | null = content.includes("] completed")
+				? "done"
+				: content.includes("] failed") || content.includes("] error")
+					? "error"
+					: null;
+
+			const finalStatus = statusFromDetails ?? statusFromExitCode ?? statusFromErrorField ?? legacyStatusFromContent;
+
+			if (finalStatus) {
 				// Final message — create or overwrite with done/error state
-				const status = isCompleted ? "done" : "error";
 				const run: CommandRunState = {
 					id: runId,
 					agent: d.agent ?? existing?.agent ?? "unknown",
 					task: d.task ?? existing?.task ?? "",
-					status,
+					status: finalStatus,
 					startedAt: existing?.startedAt ?? Date.now(),
 					elapsedMs: existing?.elapsedMs ?? 0,
 					toolCalls: existing?.toolCalls ?? 0,
@@ -745,6 +761,7 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 								model: result.model,
 								source: result.agentSource,
 								progressText: runState.progressText,
+								status: runState.status,
 							},
 						},
 						{ deliverAs: "followUp" },
@@ -766,7 +783,10 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 				} finally {
 					clearInterval(tick);
 					runState.abortController = undefined;
-					trimCommandRunHistory(store);
+					const trimmedRunIds = trimCommandRunHistory(store);
+					for (const trimmedRunId of trimmedRunIds) {
+						pi.appendEntry("subagent-removed", { runId: trimmedRunId, reason: "trim" });
+					}
 					updateCommandRunsWidget(store);
 				}
 			})();

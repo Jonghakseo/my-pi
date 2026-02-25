@@ -38,13 +38,19 @@ export function getLatestRun(
  * Trim completed/errored command runs so that the store never exceeds
  * `maxRuns` entries. Oldest finished runs are removed first; running
  * runs are never evicted.
+ *
+ * Returns the run IDs that were evicted.
  */
-export function trimCommandRunHistory(store: SubagentStore, maxRuns = 10): void {
+export function trimCommandRunHistory(store: SubagentStore, maxRuns = 10): number[] {
 	const completed = Array.from(store.commandRuns.values())
 		.filter((run) => run.status !== "running")
 		.sort((a, b) => a.id - b.id);
+	const removedRunIds: number[] = [];
 	while (store.commandRuns.size > maxRuns && completed.length > 0) {
 		const oldest = completed.shift();
-		if (oldest) store.commandRuns.delete(oldest.id);
+		if (!oldest) continue;
+		store.commandRuns.delete(oldest.id);
+		removedRunIds.push(oldest.id);
 	}
+	return removedRunIds;
 }
