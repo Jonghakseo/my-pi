@@ -21,7 +21,7 @@ import { buildMainContextText, makeSubagentSessionFile, wrapTaskWithMainContext 
 import { type SubagentStore, truncateText, updateRunFromResult } from "./store.js";
 import type { CommandRunState, SingleResult, SubagentDetails } from "./types.js";
 import { SubagentParams } from "./types.js";
-import { formatCommandRunSummary, trimCommandRunHistory } from "./run-utils.js";
+import { formatCommandRunSummary, getLatestRun, trimCommandRunHistory } from "./run-utils.js";
 import { updateCommandRunsWidget } from "./widget.js";
 
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
@@ -508,7 +508,7 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 	});
 
 	pi.registerCommand("subview", {
-		description: "Open a subagent session replay overlay: /subview <runId>",
+		description: "Open a subagent session replay overlay: /subview [runId]",
 		getArgumentCompletions: (argumentPrefix) => {
 			const trimmedStart = argumentPrefix.trimStart();
 			if (trimmedStart.includes(" ")) return null;
@@ -527,13 +527,23 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 		},
 		handler: async (args, ctx) => {
 			const raw = (args ?? "").trim();
-			if (!/^\d+$/.test(raw)) {
-				ctx.ui.notify("Usage: /subview <runId>", "info");
+			let id: number;
+			let run: CommandRunState | undefined;
+
+			if (!raw) {
+				run = getLatestRun(store);
+				if (!run) {
+					ctx.ui.notify("No subagent runs yet.", "info");
+					return;
+				}
+				id = run.id;
+			} else if (/^\d+$/.test(raw)) {
+				id = Number(raw);
+				run = store.commandRuns.get(id);
+			} else {
+				ctx.ui.notify("Usage: /subview [runId]", "info");
 				return;
 			}
-
-			const id = Number(raw);
-			const run = store.commandRuns.get(id);
 			if (!run) {
 				const availableRunIds = Array.from(store.commandRuns.keys()).sort((a, b) => a - b);
 				const availableText =
@@ -590,16 +600,29 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 	});
 
 	pi.registerCommand("subtrans", {
-		description: "Switch to a subagent session in interactive mode",
+		description: "Switch to a subagent session in interactive mode: /subtrans [runId]",
 		handler: async (args, ctx) => {
-			const runId = parseInt(args.trim());
-			if (isNaN(runId)) {
-				ctx.ui.notify("Usage: /subtrans <runId>", "error");
-				return;
+			const raw = (args ?? "").trim();
+			let runId: number;
+			let run: CommandRunState | undefined;
+
+			if (!raw) {
+				run = getLatestRun(store, ["done", "error"]);
+				if (!run) {
+					ctx.ui.notify("No finished subagent runs to switch to.", "info");
+					return;
+				}
+				runId = run.id;
+			} else {
+				runId = parseInt(raw);
+				if (isNaN(runId)) {
+					ctx.ui.notify("Usage: /subtrans [runId]", "error");
+					return;
+				}
+				run = store.commandRuns.get(runId);
 			}
-			const run = store.commandRuns.get(runId);
 			if (!run) {
-				ctx.ui.notify(`Run #${runId} not found. Use /sub to list runs.`, "error");
+				ctx.ui.notify(`Run #${runId} not found. Use /subjobs to list runs.`, "error");
 				return;
 			}
 			if (run.status === "running") {
@@ -618,16 +641,26 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 	});
 
 	pi.registerCommand("subrm", {
-		description: "Remove one /sub job entry (aborts it if running): /subrm <runId>",
+		description: "Remove one /sub job entry (aborts it if running): /subrm [runId]",
 		handler: async (args, ctx) => {
 			const raw = (args ?? "").trim();
-			if (!/^\d+$/.test(raw)) {
-				ctx.ui.notify("Usage: /subrm <runId>", "info");
+			let id: number;
+			let run: CommandRunState | undefined;
+
+			if (!raw) {
+				run = getLatestRun(store);
+				if (!run) {
+					ctx.ui.notify("No subagent runs to remove.", "info");
+					return;
+				}
+				id = run.id;
+			} else if (/^\d+$/.test(raw)) {
+				id = Number(raw);
+				run = store.commandRuns.get(id);
+			} else {
+				ctx.ui.notify("Usage: /subrm [runId]", "info");
 				return;
 			}
-
-			const id = Number(raw);
-			const run = store.commandRuns.get(id);
 			if (!run) {
 				ctx.ui.notify(`Unknown subagent run #${id}.`, "error");
 				return;

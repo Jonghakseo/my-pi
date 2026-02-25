@@ -20,6 +20,21 @@ export function formatCommandRunSummary(run: CommandRunState): string {
 }
 
 /**
+ * Return the most recent run matching the optional status filter.
+ * Runs are ordered by descending ID (newest first).
+ * If no filter is given, the newest run overall is returned.
+ */
+export function getLatestRun(
+	store: SubagentStore,
+	statusFilter?: CommandRunState["status"] | CommandRunState["status"][],
+): CommandRunState | undefined {
+	const runs = Array.from(store.commandRuns.values()).sort((a, b) => b.id - a.id);
+	if (!statusFilter) return runs[0];
+	const allowed = Array.isArray(statusFilter) ? statusFilter : [statusFilter];
+	return runs.find((r) => allowed.includes(r.status));
+}
+
+/**
  * Trim completed/errored command runs so that the store never exceeds
  * `maxRuns` entries. Oldest finished runs are removed first; running
  * runs are never evicted.
