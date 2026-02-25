@@ -1,6 +1,6 @@
 import { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import { applyExtensionDefaults } from "./themeMap.ts";
-import { formatDurationBetween } from "./time-utils.ts";
+import { formatDurationBetween } from "./utils/time-utils.ts";
 import {
   Box, Text, Markdown, Container, Spacer,
   matchesKey, Key, truncateToWidth, getMarkdownTheme

@@ -37,7 +37,7 @@ import {
 	USAGE_EXTRA_ROWS,
 } from "./constants.js";
 import { formatUsageStats } from "./format.js";
-import { formatDuration, formatDurationBetween } from "../time-utils.js";
+import { formatDuration, formatDurationBetween } from "../utils/time-utils.js";
 import type { CommandRunState, SessionReplayItem } from "./types.js";
 
 // ─── Replay Helpers ──────────────────────────────────────────────────────────

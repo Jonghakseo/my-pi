@@ -1,7 +1,7 @@
 import { Type } from "@mariozechner/pi-ai";
 import { truncateToWidth, visibleWidth } from "@mariozechner/pi-tui";
 import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
-import { formatElapsedSince } from "./time-utils.ts";
+import { formatElapsedSince } from "./utils/time-utils.ts";
 import { isAgentsModeEnabled } from "./system-mode/state.ts";
 
 const WIDGET_KEY = "progress-widget-enforcer";
