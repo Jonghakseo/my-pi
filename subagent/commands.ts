@@ -1373,6 +1373,17 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 		},
 	});
 
+	pi.registerCommand("sub:enable-switch", {
+		description: "Enable <> / >< session-switch shortcuts for the current runtime",
+		handler: async (_args, ctx) => {
+			captureSwitchSession(store, ctx);
+			if (store.switchSessionFn) {
+				ctx.ui.notify("Session switching enabled. Use <> and >< shortcuts.", "info");
+			} else {
+				ctx.ui.notify("Could not capture session switch function. Try running any /sub:* command instead.", "warning");
+			}
+		},
+	});
 
 	// >< shortcut: back to parent session (pop from session stack)
 	pi.registerShortcut("><", {
