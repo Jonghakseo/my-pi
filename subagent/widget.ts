@@ -19,7 +19,15 @@ export function updateCommandRunsWidget(store: SubagentStore, ctx?: any): void {
 	if (!activeCtx || !activeCtx.hasUI) return;
 	store.commandWidgetCtx = activeCtx;
 
-	const runs = Array.from(store.commandRuns.values()).sort((a, b) => b.id - a.id);
+	const statusPriority = (status: "running" | "done" | "error") =>
+		status === "running" ? 0 : status === "error" ? 1 : 2;
+	const runs = Array.from(store.commandRuns.values()).sort((a, b) => {
+		const priorityDiff = statusPriority(a.status) - statusPriority(b.status);
+		if (priorityDiff !== 0) return priorityDiff;
+		const startedDiff = (b.startedAt ?? 0) - (a.startedAt ?? 0);
+		if (startedDiff !== 0) return startedDiff;
+		return b.id - a.id;
+	});
 	const visibleRunIds = new Set<number>(runs.map((run) => run.id));
 
 	for (const id of Array.from(store.renderedRunWidgetIds)) {
@@ -115,7 +123,7 @@ export function updateCommandRunsWidget(store: SubagentStore, ctx?: any): void {
 							lines.push(theme.fg("accent", `  ▸ ${progressLine}`));
 						}
 
-						if (run.lastLine) {
+						if (run.status !== "done" && run.lastLine) {
 							const normalized = run.lastLine.replace(/\s*\n+\s*/g, " ").replace(/\s{2,}/g, " ").trim();
 							const outputLine = truncateText(normalized, Math.max(1, innerWidth - 4));
 							lines.push(theme.fg("muted", `  ↳ ${outputLine}`));

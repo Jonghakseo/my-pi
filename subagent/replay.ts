@@ -5,6 +5,39 @@
 
 import * as fs from "node:fs";
 import { Container, Key, Spacer, Text, matchesKey, truncateToWidth, wrapTextWithAnsi } from "@mariozechner/pi-tui";
+import {
+	DEFAULT_TURN_COUNT,
+	DETAIL_LINE_PADDING,
+	DETAIL_PAGE_DIVISOR,
+	DETAIL_SECTION_RESERVED_ROWS,
+	DETAIL_WIDTH_PADDING,
+	ELLIPSIS_RESERVED_CHARS,
+	FALLBACK_TERMINAL_ROWS,
+	JSON_SUMMARY_MAX_CHARS,
+	LIST_HEIGHT_RATIO,
+	LIST_PAGE_DIVISOR,
+	MAX_LIST_ROWS,
+	MIN_BODY_ROWS,
+	MIN_DETAIL_BODY_ROWS,
+	MIN_DETAIL_WIDTH,
+	MIN_INNER_WIDTH,
+	MIN_LIST_ROWS,
+	MIN_PAGE_SIZE,
+	MIN_PREVIEW_WIDTH,
+	MIN_SEPARATOR_WIDTH,
+	MIN_TASK_WIDTH,
+	MIN_TERMINAL_ROWS,
+	MS_PER_SECOND,
+	OVERLAY_HORIZONTAL_MARGIN,
+	PREVIEW_WIDTH_DIVISOR,
+	REPLAY_CONTENT_MAX_CHARS,
+	RESERVED_LAYOUT_ROWS,
+	SECONDS_PER_MINUTE,
+	TASK_WIDTH_PADDING,
+	TOOL_CALL_ARGS_SUMMARY_MAX_CHARS,
+	TOOL_RESULT_DETAILS_SUMMARY_MAX_CHARS,
+	USAGE_EXTRA_ROWS,
+} from "./constants.js";
 import { formatUsageStats } from "./format.js";
 import type { CommandRunState, SessionReplayItem } from "./types.js";
 
@@ -12,8 +45,8 @@ import type { CommandRunState, SessionReplayItem } from "./types.js";
 
 function truncateSingleLine(value: string, max: number): string {
 	if (value.length <= max) return value;
-	if (max <= 3) return value.slice(0, max);
-	return `${value.slice(0, max - 3)}...`;
+	if (max <= ELLIPSIS_RESERVED_CHARS) return value.slice(0, max);
+	return `${value.slice(0, max - ELLIPSIS_RESERVED_CHARS)}...`;
 }
 
 function formatReplayTime(date: Date): string {
@@ -21,10 +54,10 @@ function formatReplayTime(date: Date): string {
 }
 
 function formatElapsedDuration(start: Date, end: Date): string {
-	const diffSec = Math.max(0, Math.floor((end.getTime() - start.getTime()) / 1000));
-	if (diffSec < 60) return `${diffSec}s`;
-	const diffMin = Math.floor(diffSec / 60);
-	return `${diffMin}m ${diffSec % 60}s`;
+	const diffSec = Math.max(0, Math.floor((end.getTime() - start.getTime()) / MS_PER_SECOND));
+	if (diffSec < SECONDS_PER_MINUTE) return `${diffSec}s`;
+	const diffMin = Math.floor(diffSec / SECONDS_PER_MINUTE);
+	return `${diffMin}m ${diffSec % SECONDS_PER_MINUTE}s`;
 }
 
 function parseDateSafely(raw: unknown): Date {
@@ -39,7 +72,7 @@ function parseDateSafely(raw: unknown): Date {
 	return new Date();
 }
 
-function summarizeJson(value: unknown, max = 140): string {
+function summarizeJson(value: unknown, max = JSON_SUMMARY_MAX_CHARS): string {
 	if (value === undefined || value === null) return "";
 	let text = "";
 	try {
@@ -64,7 +97,7 @@ function extractReplayContent(content: any): string {
 		}
 		if (part.type === "toolCall") {
 			const name = typeof part.name === "string" ? part.name : "tool";
-			const args = summarizeJson((part as any).arguments, 120);
+			const args = summarizeJson((part as any).arguments, TOOL_CALL_ARGS_SUMMARY_MAX_CHARS);
 			parts.push(args ? `→ ${name} ${args}` : `→ ${name}`);
 		}
 	}
@@ -73,8 +106,6 @@ function extractReplayContent(content: any): string {
 }
 
 /** Max characters kept per replay item content to avoid memory blowup. */
-const REPLAY_CONTENT_MAX_CHARS = 1000;
-
 function truncateReplayContent(text: string, max = REPLAY_CONTENT_MAX_CHARS): string {
 	if (text.length <= max) return text;
 	return `${text.slice(0, max)}\n… [truncated ${text.length - max} chars]`;
@@ -129,7 +160,7 @@ export function readSessionReplayItems(sessionFile: string): SessionReplayItem[]
 			const toolName = typeof msg.toolName === "string" ? msg.toolName : "tool";
 			let content = extractReplayContent(msg.content).trim();
 			if (!content && msg.details !== undefined) {
-				const detailPreview = summarizeJson(msg.details, 300);
+				const detailPreview = summarizeJson(msg.details, TOOL_RESULT_DETAILS_SUMMARY_MAX_CHARS);
 				if (detailPreview) content = `details: ${detailPreview}`;
 			}
 			if (!content) content = "(no output)";
@@ -157,18 +188,18 @@ export class SubagentSessionReplayOverlay {
 	}
 
 	private getTerminalRows(): number {
-		return Math.max(20, (process.stdout as any).rows || 40);
+		return Math.max(MIN_TERMINAL_ROWS, (process.stdout as any).rows || FALLBACK_TERMINAL_ROWS);
 	}
 
 	private getViewportSizes(hasDetail: boolean, hasUsage: boolean): { list: number; detail: number } {
 		const rows = this.getTerminalRows();
-		const reserved = 7 + (hasUsage ? 1 : 0); // top/header/task/sep/footer/help/bottom
-		const body = Math.max(6, rows - reserved);
-		if (!hasDetail) return { list: Math.max(4, body), detail: 0 };
+		const reserved = RESERVED_LAYOUT_ROWS + (hasUsage ? USAGE_EXTRA_ROWS : 0); // top/header/task/sep/footer/help/bottom
+		const body = Math.max(MIN_BODY_ROWS, rows - reserved);
+		if (!hasDetail) return { list: Math.max(MIN_LIST_ROWS, body), detail: 0 };
 
-		const detailBody = Math.max(8, body - 2); // detail separator + detail header
-		const list = Math.max(4, Math.min(12, Math.floor(detailBody * 0.4)));
-		const detail = Math.max(4, detailBody - list);
+		const detailBody = Math.max(MIN_DETAIL_BODY_ROWS, body - DETAIL_SECTION_RESERVED_ROWS); // detail separator + detail header
+		const list = Math.max(MIN_LIST_ROWS, Math.min(MAX_LIST_ROWS, Math.floor(detailBody * LIST_HEIGHT_RATIO)));
+		const detail = Math.max(MIN_LIST_ROWS, detailBody - list);
 		return { list, detail };
 	}
 
@@ -205,7 +236,7 @@ export class SubagentSessionReplayOverlay {
 				lines.push("");
 				continue;
 			}
-			const targetWidth = Math.max(8, contentWidth);
+			const targetWidth = Math.max(MIN_DETAIL_WIDTH, contentWidth);
 			const wrapped = wrapTextWithAnsi(sourceLine, targetWidth);
 			if (wrapped.length === 0) {
 				lines.push(sourceLine);
@@ -231,8 +262,8 @@ export class SubagentSessionReplayOverlay {
 	}
 
 	handleInput(data: string, tui: any): void {
-		const listPage = Math.max(1, Math.floor(this.getTerminalRows() / 4));
-		const detailPage = Math.max(4, Math.floor(this.getTerminalRows() / 5));
+		const listPage = Math.max(MIN_PAGE_SIZE, Math.floor(this.getTerminalRows() / LIST_PAGE_DIVISOR));
+		const detailPage = Math.max(MIN_LIST_ROWS, Math.floor(this.getTerminalRows() / DETAIL_PAGE_DIVISOR));
 		const hasDetailOpen = this.expandedIndex !== null;
 
 		if ((matchesKey(data, Key.left) || data === "h") && hasDetailOpen) {
@@ -279,8 +310,8 @@ export class SubagentSessionReplayOverlay {
 	render(width: number, _height: number, theme: any): string[] {
 		const container = new Container();
 		const pad = "  ";
-		const innerWidth = Math.max(24, width - 6);
-		const elapsedSec = Math.max(0, Math.round(this.run.elapsedMs / 1000));
+		const innerWidth = Math.max(MIN_INNER_WIDTH, width - OVERLAY_HORIZONTAL_MARGIN);
+		const elapsedSec = Math.max(0, Math.round(this.run.elapsedMs / MS_PER_SECOND));
 		const usageLine = this.run.usage ? formatUsageStats(this.run.usage, this.run.model) : "";
 		const task = this.run.task.replace(/\s*\n+\s*/g, " ").replace(/\s{2,}/g, " ").trim();
 		const hasDetailOpen = this.expandedIndex !== null;
@@ -295,7 +326,7 @@ export class SubagentSessionReplayOverlay {
 					theme.fg("toolTitle", theme.bold(`#${this.run.id} ${this.run.agent}`)) +
 					theme.fg(
 						"dim",
-						`  [${this.run.status}] ctx:${this.run.contextMode ?? "sub"} turn:${this.run.turnCount ?? 1}  ${elapsedSec}s  tools:${this.run.toolCalls}`,
+						`  [${this.run.status}] ctx:${this.run.contextMode ?? "sub"} turn:${this.run.turnCount ?? DEFAULT_TURN_COUNT}  ${elapsedSec}s  tools:${this.run.toolCalls}`,
 					),
 				0,
 				0,
@@ -303,13 +334,13 @@ export class SubagentSessionReplayOverlay {
 		);
 		container.addChild(
 			new Text(
-				pad + theme.fg("dim", `Task: ${truncateSingleLine(task, Math.max(10, innerWidth - 8))}`),
+				pad + theme.fg("dim", `Task: ${truncateSingleLine(task, Math.max(MIN_TASK_WIDTH, innerWidth - TASK_WIDTH_PADDING))}`),
 				0,
 				0,
 			),
 		);
 		if (usageLine) container.addChild(new Text(pad + theme.fg("dim", usageLine), 0, 0));
-		container.addChild(new Text(pad + theme.fg("muted", "─".repeat(Math.max(10, innerWidth))), 0, 0));
+		container.addChild(new Text(pad + theme.fg("muted", "─".repeat(Math.max(MIN_SEPARATOR_WIDTH, innerWidth))), 0, 0));
 
 		for (let row = 0; row < listViewport; row++) {
 			const idx = this.listScrollOffset + row;
@@ -340,17 +371,20 @@ export class SubagentSessionReplayOverlay {
 				`${marker} ${theme.fg(color, icon)} ${theme.bold(item.title)} ` +
 				theme.fg("dim", timeLabel) +
 				" " +
-				theme.fg("muted", truncateSingleLine(preview, Math.max(18, Math.floor(innerWidth / 2))));
+				theme.fg(
+					"muted",
+					truncateSingleLine(preview, Math.max(MIN_PREVIEW_WIDTH, Math.floor(innerWidth / PREVIEW_WIDTH_DIVISOR))),
+				);
 			line = truncateToWidth(line, innerWidth);
 			if (isSelected) line = theme.bg("selectedBg", line);
 			container.addChild(new Text(pad + line, 0, 0));
 		}
 
 		if (hasDetailOpen) {
-			container.addChild(new Text(pad + theme.fg("muted", "─".repeat(Math.max(10, innerWidth))), 0, 0));
+			container.addChild(new Text(pad + theme.fg("muted", "─".repeat(Math.max(MIN_SEPARATOR_WIDTH, innerWidth))), 0, 0));
 			const detailIndex = this.expandedIndex ?? this.selectedIndex;
 			const detailItem = this.items[detailIndex];
-			const detailLines = this.getDetailLines(detailIndex, Math.max(8, innerWidth - 4));
+			const detailLines = this.getDetailLines(detailIndex, Math.max(MIN_DETAIL_WIDTH, innerWidth - DETAIL_WIDTH_PADDING));
 			const maxDetailOffset = Math.max(0, detailLines.length - detailViewport);
 			if (this.detailScrollOffset > maxDetailOffset) this.detailScrollOffset = maxDetailOffset;
 			const start = this.detailScrollOffset;
@@ -372,12 +406,16 @@ export class SubagentSessionReplayOverlay {
 			for (let i = start; i < end; i++) {
 				const line = detailLines[i] ?? "";
 				container.addChild(
-					new Text(pad + theme.fg("toolOutput", `  ${truncateToWidth(line, Math.max(8, innerWidth - 2))}`), 0, 0),
+					new Text(
+						pad + theme.fg("toolOutput", `  ${truncateToWidth(line, Math.max(MIN_DETAIL_WIDTH, innerWidth - DETAIL_LINE_PADDING))}`),
+						0,
+						0,
+					),
 				);
 			}
 		}
 
-		container.addChild(new Text(pad + theme.fg("muted", "─".repeat(Math.max(10, innerWidth))), 0, 0));
+		container.addChild(new Text(pad + theme.fg("muted", "─".repeat(Math.max(MIN_SEPARATOR_WIDTH, innerWidth))), 0, 0));
 		const listStart = this.items.length === 0 ? 0 : this.listScrollOffset + 1;
 		const listEnd = Math.min(this.items.length, this.listScrollOffset + listViewport);
 		const listRange = `${listStart}-${listEnd}/${this.items.length}`;
