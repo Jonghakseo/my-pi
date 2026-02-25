@@ -10,6 +10,9 @@
 export const MS_PER_SECOND = 1_000;
 export const DEFAULT_TURN_COUNT = 1;
 
+/** Maximum age (ms) for pending cross-session completions before eviction. */
+export const STALE_PENDING_COMPLETION_MS = 30 * 60 * 1_000;
+
 /**
  * Special-character shortcuts for the >> prefix input.
  * `>>? task` → researcher, `>>@ task` → fast-finder, etc.
@@ -18,8 +21,6 @@ export const AGENT_SYMBOL_MAP: Record<string, string> = {
 	"!": "decider",
 	"*": "deep-reviewer",
 	"@": "fast-finder",
-	"#": "framer",
-	"~": "planner",
 	"?": "researcher",
 	"^": "verifier",
 };
