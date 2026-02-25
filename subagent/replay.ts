@@ -95,6 +95,13 @@ function extractReplayContent(content: any): string {
 			parts.push(part.text);
 			continue;
 		}
+		if (part.type === "thinking") {
+			const thinking = typeof part.thinking === "string" ? part.thinking : "";
+			if (thinking.trim()) {
+				parts.push(`💭 ${thinking}`);
+			}
+			continue;
+		}
 		if (part.type === "toolCall") {
 			const name = typeof part.name === "string" ? part.name : "tool";
 			const args = summarizeJson((part as any).arguments, TOOL_CALL_ARGS_SUMMARY_MAX_CHARS);
