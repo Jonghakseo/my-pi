@@ -851,12 +851,8 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 		let run: CommandRunState | undefined;
 
 		if (!raw) {
-			run = getLatestRun(store, ["done", "error"]);
-			if (!run) {
-				ctx.ui.notify("No finished subagent runs to switch to.", "info");
-				return { action: "handled" as const };
-			}
-			runId = run.id;
+			ctx.ui.notify("Usage: <> <runId>", "info");
+			return { action: "handled" as const };
 		} else {
 			runId = parseInt(raw);
 			if (isNaN(runId)) {
