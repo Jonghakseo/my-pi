@@ -134,7 +134,7 @@ export function updateCommandRunsWidget(store: SubagentStore, ctx?: any): void {
 
 						const innerWidth = Math.max(1, width - 2);
 						const normalizedTask = run.task.replace(/\s*\n+\s*/g, " ").replace(/\s{2,}/g, " ").trim();
-						const taskLine = truncateText(normalizedTask, Math.max(1, innerWidth - 2));
+						const taskLine = truncateText(normalizedTask, Math.max(1, innerWidth - 4));
 						lines.push(theme.fg("dim", `  ${taskLine}`));
 
 						if (run.progressText) {

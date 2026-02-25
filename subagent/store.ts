@@ -3,6 +3,7 @@
  */
 
 import type { Message } from "@mariozechner/pi-ai";
+import { visibleWidth } from "@mariozechner/pi-tui";
 import { getDisplayItems, getFinalOutput, getLastNonEmptyLine, getLatestActivityPreview } from "./runner.js";
 import type { CommandRunState, SingleResult } from "./types.js";
 
@@ -26,10 +27,33 @@ export function createStore(): SubagentStore {
 	};
 }
 
+const graphemeSegmenter = new Intl.Segmenter(undefined, { granularity: "grapheme" });
+
+function sliceToDisplayWidth(value: string, maxWidth: number): string {
+	if (maxWidth <= 0 || value.length === 0) return "";
+
+	let result = "";
+	let width = 0;
+
+	for (const { segment } of graphemeSegmenter.segment(value)) {
+		const segmentWidth = visibleWidth(segment);
+		if (segmentWidth <= 0) {
+			result += segment;
+			continue;
+		}
+		if (width + segmentWidth > maxWidth) break;
+		result += segment;
+		width += segmentWidth;
+	}
+
+	return result;
+}
+
 export function truncateText(value: string, max: number): string {
-	if (value.length <= max) return value;
-	if (max <= 3) return value.slice(0, max);
-	return `${value.slice(0, max - 3)}...`;
+	if (max <= 0 || value.length === 0) return "";
+	if (visibleWidth(value) <= max) return value;
+	if (max <= 3) return sliceToDisplayWidth(value, max);
+	return `${sliceToDisplayWidth(value, max - 3)}...`;
 }
 
 export function collectToolCallCount(messages: Message[]): number {
