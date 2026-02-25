@@ -848,30 +848,6 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 
 		const raw = text.slice(2).trim();
 
-		// << all — abort all running, clear all finished
-		if (raw.toLowerCase() === "all") {
-			let aborted = 0;
-			let cleared = 0;
-			for (const [id, run] of Array.from(store.commandRuns.entries())) {
-				if (run.status === "running" && run.abortController) {
-					run.lastLine = "Aborting by user...";
-					run.lastOutput = run.lastLine;
-					run.abortController.abort();
-					aborted++;
-				} else if (run.status !== "running") {
-					pi.appendEntry("subagent-removed", { runId: id });
-					store.commandRuns.delete(id);
-					cleared++;
-				}
-			}
-			updateCommandRunsWidget(store, ctx);
-			const parts: string[] = [];
-			if (aborted) parts.push(`${aborted} aborted`);
-			if (cleared) parts.push(`${cleared} cleared`);
-			ctx.ui.notify(parts.length ? parts.join(", ") : "No subagent jobs.", parts.length ? "warning" : "info");
-			return { action: "handled" as const };
-		}
-
 		// << 1,2,3 — multiple run IDs (comma-separated)
 		// << 1 — single run ID
 		// << (no args) — latest running or latest finished
