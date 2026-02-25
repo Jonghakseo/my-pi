@@ -92,9 +92,21 @@ function buildProgressCard(
 			};
 
 			const statusMain = statusText ? `${meta.icon} ${statusText}` : `${meta.icon}`;
-			const agentModeBadge = agentsModeEnabled ? `${fg("warning", "🤖 AGENT MODE")} ${fg("dim", "• ")}` : "";
-			const statusLine = `${agentModeBadge}${fg(meta.color, statusMain)} ${fg("dim", `• ${elapsedLabel}`)}`;
-			const lines = [border(`╭${"─".repeat(innerWidth)}╮`), row(statusLine)];
+			const statusLine = `${fg(meta.color, statusMain)} ${fg("dim", `• ${elapsedLabel}`)}`;
+
+			let topBorder: string;
+			if (agentsModeEnabled) {
+				const badgeText = " 🤖 AGENT MODE ";
+				const badgeVisWidth = visibleWidth(badgeText);
+				const dashTotal = innerWidth - badgeVisWidth;
+				const dashLeft = Math.max(1, Math.floor(dashTotal * 0.15));
+				const dashRight = Math.max(1, dashTotal - dashLeft);
+				topBorder = border(`╭${"─".repeat(dashLeft)}`) + fg("warning", badgeText) + border(`${"─".repeat(dashRight)}╮`);
+			} else {
+				topBorder = border(`╭${"─".repeat(innerWidth)}╮`);
+			}
+
+			const lines = [topBorder, row(statusLine)];
 
 			lines.push(border(`╰${"─".repeat(innerWidth)}╯`));
 			return lines.map((line) => truncateToWidth(line, width));
