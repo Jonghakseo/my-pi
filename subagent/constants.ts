@@ -26,9 +26,9 @@ export const AGENT_SYMBOL_MAP: Record<string, string> = {
 };
 
 /** Format symbol hints for display, e.g. ">>? researcher  >>@ fast-finder ..." */
-export function formatSymbolHints(): string {
+export function formatSymbolHints(prefix = ">>"): string {
 	return Object.entries(AGENT_SYMBOL_MAP)
-		.map(([sym, agent]) => `>>${sym} ${agent}`)
+		.map(([sym, agent]) => `${prefix}${sym} ${agent}`)
 		.join("  ");
 }
 

@@ -1251,7 +1251,7 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 	});
 
 	pi.registerShortcut(">>>", {
-		description: "Run subagent in dedicated sub-session (= /sub:new)",
+		description: "Run subagent in dedicated sub-session (= /sub:new, supports symbols)",
 		handler: async () => {
 			// Documentation-only entry.
 		},
@@ -1273,11 +1273,24 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 			const forwardedArgs = text.slice(3).trim();
 			if (!forwardedArgs) {
 				ctx.ui.notify(
-					">>> [agent] <task> | >>> <runId> <task>  (dedicated sub-session)",
+					`>>> [agent] <task> | >>> <runId> <task> | >>><symbol> <task>\n${formatSymbolHints(">>>")}`,
 					"info",
 				);
 				return { action: "handled" as const };
 			}
+
+			// Dedicated symbol shortcut: >>>? task, >>>/ task, >>>* task, etc.
+			const dedicatedSymbol = AGENT_SYMBOL_MAP[forwardedArgs[0]];
+			if (dedicatedSymbol) {
+				const task = forwardedArgs.slice(1).trim();
+				if (!task) {
+					ctx.ui.notify(formatSymbolHints(">>>"), "info");
+					return { action: "handled" as const };
+				}
+				await subCommand.handler(`${dedicatedSymbol} ${task}`, ctx, false);
+				return { action: "handled" as const };
+			}
+
 			const firstSpace = forwardedArgs.indexOf(" ");
 			const firstToken = firstSpace === -1 ? forwardedArgs : forwardedArgs.slice(0, firstSpace);
 			if (/^\d+$/.test(firstToken) && !store.commandRuns.has(Number(firstToken))) {
@@ -1359,6 +1372,7 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 			await subBackHandler(ctx, store);
 		},
 	});
+
 
 	// >< shortcut: back to parent session (pop from session stack)
 	pi.registerShortcut("><", {
