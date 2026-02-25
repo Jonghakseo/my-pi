@@ -65,7 +65,7 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 
 	const subCommand = {
 		description:
-			"Run a subagent in a dedicated sub-session: /subnew <agent|alias> <task>, /subnew <runId> <task>, /subnew <task> (defaults to worker)",
+			"Run a subagent in a dedicated sub-session: /sub:new <agent|alias> <task>, /sub:new <runId> <task>, /sub:new <task> (defaults to worker)",
 		getArgumentCompletions: (argumentPrefix) => {
 			const trimmedStart = argumentPrefix.trimStart();
 			if (trimmedStart.includes(" ")) return null;
@@ -89,11 +89,11 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 		handler: async (args, ctx, forceMainContextFromWrapper = false) => {
 			let input = (args ?? "").trim();
 			const usageText =
-				"Usage: /sub <agent|alias> <task> | /sub <runId> <task> | /sub <task> | /subnew <agent|alias> <task> | /subnew <runId> <task> | /subnew <task>";
+				"Usage: /sub:run <agent|alias> <task> | /sub:run <runId> <task> | /sub:run <task> | /sub:new <agent|alias> <task> | /sub:new <runId> <task> | /sub:new <task>";
 			let forceMainContext = forceMainContextFromWrapper;
 
 			if (input === "--main" || input.startsWith("--main ")) {
-				ctx.ui.notify("'--main' 접두어는 사용할 수 없습니다. /sub 또는 /subnew 명령 자체로 컨텍스트를 선택하세요.", "warning");
+				ctx.ui.notify("'--main' 접두어는 사용할 수 없습니다. /sub:run 또는 /sub:new 명령 자체로 컨텍스트를 선택하세요.", "warning");
 				return;
 			}
 
@@ -148,7 +148,7 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 
 				if (!agents.some((agent) => agent.name === selectedAgent)) {
 					ctx.ui.notify(
-						`Run #${targetRunId} references unknown agent "${previousAgentName}". Use /sub <agent> <task> instead.`,
+						`Run #${targetRunId} references unknown agent "${previousAgentName}". Use /sub:run <agent> <task> instead.`,
 						"error",
 					);
 					return;
@@ -256,7 +256,7 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 				runState.removed = false;
 				runState.turnCount = Math.max(DEFAULT_TURN_COUNT, runState.turnCount || DEFAULT_TURN_COUNT) + 1;
 				// NOTE(user-approved): continuation 시 기존 context/session을 유지한다.
-				// /sub 와 /subnew 간 모드 전환은 기존 run에는 소급 적용하지 않는다.
+				// /sub:run 과 /sub:new 간 모드 전환은 기존 run에는 소급 적용하지 않는다.
 				runState.contextMode = runState.contextMode ?? (forceMainContext ? "main" : "sub");
 				runState.sessionFile = runState.sessionFile ?? sessionFileForRun ?? makeSubagentSessionFile(runId);
 				sessionFileForRun = runState.sessionFile;
@@ -452,10 +452,10 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 		},
 	};
 
-	pi.registerCommand("subnew", subCommand);
+	pi.registerCommand("sub:new", subCommand);
 
-	pi.registerCommand("sub", {
-		description: "Run a subagent with main-session context inheritance: /sub <agent|alias> <task>",
+	pi.registerCommand("sub:run", {
+		description: "Run a subagent with main-session context inheritance: /sub:run <agent|alias> <task>",
 		getArgumentCompletions: subCommand.getArgumentCompletions,
 		handler: async (args, ctx) => {
 			const forwarded = (args ?? "").trim();
@@ -478,22 +478,16 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 			const lines = agents.map((a) => {
 				const tools = a.tools?.join(",") ?? "default";
 				const model = a.model ?? "(inherit current model)";
-				return `- ${a.name} [${a.source}]\n  model: ${model}\n  tools: ${tools}\n  ${a.description}`;
+				const description = a.description ? ` · ${a.description}` : "";
+				return truncateText(`${a.name} [${a.source}] · model: ${model} · tools: ${tools}${description}`, 220);
 			});
 
-			pi.sendMessage(
-				{
-					customType: "subagent-command",
-					content: `Available subagents (scope: ${scope})\n\n${lines.join("\n\n")}`,
-					display: true,
-				},
-				{ deliverAs: "followUp" },
-			);
+			ctx.ui.notify(`Available subagents (scope: ${scope})\n${lines.map((line) => `• ${line}`).join("\n")}`, "info");
 		},
 	});
 
-	pi.registerCommand("subview", {
-		description: "Open a subagent session replay overlay: /subview [runId]",
+	pi.registerCommand("sub:open", {
+		description: "Open a subagent session replay overlay: /sub:open [runId]",
 		getArgumentCompletions: (argumentPrefix) => {
 			const trimmedStart = argumentPrefix.trimStart();
 			if (trimmedStart.includes(" ")) return null;
@@ -526,7 +520,7 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 				id = Number(raw);
 				run = store.commandRuns.get(id);
 			} else {
-				ctx.ui.notify("Usage: /subview [runId]", "info");
+				ctx.ui.notify("Usage: /sub:open [runId]", "info");
 				return;
 			}
 			if (!run) {
@@ -584,8 +578,8 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 		},
 	});
 
-	pi.registerCommand("subtrans", {
-		description: "Switch to a subagent session in interactive mode: /subtrans [runId]",
+	pi.registerCommand("sub:trans", {
+		description: "Switch to a subagent session in interactive mode: /sub:trans [runId]",
 		handler: async (args, ctx) => {
 			const raw = (args ?? "").trim();
 			let runId: number;
@@ -601,13 +595,13 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 			} else {
 				runId = parseInt(raw);
 				if (isNaN(runId)) {
-					ctx.ui.notify("Usage: /subtrans [runId]", "error");
+					ctx.ui.notify("Usage: /sub:trans [runId]", "error");
 					return;
 				}
 				run = store.commandRuns.get(runId);
 			}
 			if (!run) {
-				ctx.ui.notify(`Run #${runId} not found. Use /subview to open recent runs.`, "error");
+				ctx.ui.notify(`Run #${runId} not found. Use /sub:open to open recent runs.`, "error");
 				return;
 			}
 			if (run.status === "running") {
@@ -625,8 +619,8 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 		},
 	});
 
-	pi.registerCommand("subrm", {
-		description: "Remove one /sub job entry (aborts it if running): /subrm [runId]",
+	pi.registerCommand("sub:rm", {
+		description: "Remove one /sub job entry (aborts it if running): /sub:rm [runId]",
 		handler: async (args, ctx) => {
 			const raw = (args ?? "").trim();
 			let id: number;
@@ -643,7 +637,7 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 				id = Number(raw);
 				run = store.commandRuns.get(id);
 			} else {
-				ctx.ui.notify("Usage: /subrm [runId]", "info");
+				ctx.ui.notify("Usage: /sub:rm [runId]", "info");
 				return;
 			}
 			if (!run) {
@@ -654,7 +648,7 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 			let aborted = false;
 			run.removed = true;
 			if (run.status === "running" && run.abortController) {
-				run.lastLine = "Aborting by /subrm...";
+				run.lastLine = "Aborting by /sub:rm...";
 				run.lastOutput = run.lastLine;
 				run.abortController.abort();
 				aborted = true;
@@ -673,8 +667,8 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 		},
 	});
 
-	pi.registerCommand("subclear", {
-		description: "Clear /sub job widget entries. /subclear (finished only) or /subclear all",
+	pi.registerCommand("sub:clear", {
+		description: "Clear /sub job widget entries. /sub:clear (finished only) or /sub:clear all",
 		handler: async (args, ctx) => {
 			const mode = (args ?? "").trim().toLowerCase();
 			if (mode === "all") {
@@ -768,7 +762,7 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 	};
 
 	pi.registerCommand("sub:abort", {
-		description: "Abort running /sub job(s). /sub:abort [runId|all]",
+		description: "Abort running subagent job(s). /sub:abort [runId|all]",
 		handler: async (args, ctx) => {
 			await handleSubAbort(args, ctx);
 		},
@@ -946,12 +940,4 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 		updateCommandRunsWidget(store, ctx);
 	});
 
-	// Hide subagent-command messages from the main agent's LLM context.
-	// They remain visible in the TUI but are stripped before each LLM call.
-	pi.on("context", async (event, _ctx) => {
-		const filtered = event.messages.filter(
-			(m: any) => !(m.role === "custom" && m.customType === "subagent-command"),
-		);
-		return { messages: filtered };
-	});
 }

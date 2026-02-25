@@ -40,10 +40,27 @@ export function extractTextFromContent(content: any): string {
 	return "";
 }
 
+const TOOL_CALL_CONTEXT_MAX_CHARS = 500;
+
+function stringifyToolCallArguments(args: unknown): string {
+	if (args === undefined || args === null) return "";
+	if (typeof args === "string") return args;
+	try {
+		return JSON.stringify(args);
+	} catch {
+		return String(args);
+	}
+}
+
+function truncateToolCallContext(text: string): string {
+	if (text.length <= TOOL_CALL_CONTEXT_MAX_CHARS) return text;
+	return `${text.slice(0, TOOL_CALL_CONTEXT_MAX_CHARS)}...`;
+}
+
 /**
  * Build a text representation of the main session context for injection into subagent tasks.
  * Instead of copying the entire session file (which causes persona confusion),
- * this extracts a concise text summary: compaction summary + last 10 messages.
+ * this extracts context text: compaction summary + last 10 messages (+ assistant tool calls).
  */
 export function buildMainContextText(ctx: any): string {
 	try {
@@ -59,7 +76,7 @@ export function buildMainContextText(ctx: any): string {
 			}
 		}
 
-		// 2. Collect last 10 message entries and extract text
+		// 2. Collect last 10 message entries and extract text/tool-calls
 		const messageEntries = entries.filter((e: any) => e.type === "message");
 		const recentMessages = messageEntries.slice(-10);
 
@@ -71,16 +88,39 @@ export function buildMainContextText(ctx: any): string {
 			const role = msg.role;
 			if (role === "user") {
 				const text = extractTextFromContent(msg.content);
-				if (text) {
-					const truncated = text.length > 500 ? `${text.slice(0, 500)}...` : text;
-					messageParts.push(`User: ${truncated}`);
+				if (text) messageParts.push(`User: ${text}`);
+				continue;
+			}
+
+			if (role === "assistant") {
+				const content = msg.content;
+				if (typeof content === "string") {
+					if (content) messageParts.push(`Assistant: ${content}`);
+					continue;
 				}
-			} else if (role === "assistant") {
-				const text = extractTextFromContent(msg.content);
-				if (text) {
-					const truncated = text.length > 500 ? `${text.slice(0, 500)}...` : text;
-					messageParts.push(`Assistant: ${truncated}`);
+
+				if (Array.isArray(content)) {
+					for (const part of content) {
+						if (!part || typeof part !== "object") continue;
+						if (part.type === "text" && typeof (part as any).text === "string" && (part as any).text) {
+							messageParts.push(`Assistant: ${(part as any).text}`);
+							continue;
+						}
+						if (part.type === "toolCall") {
+							const toolName = typeof (part as any).name === "string" ? (part as any).name : "tool";
+							const argsText = truncateToolCallContext(stringifyToolCallArguments((part as any).arguments));
+							messageParts.push(
+								argsText
+									? `Assistant ToolCall (${toolName}): ${argsText}`
+									: `Assistant ToolCall (${toolName})`,
+							);
+						}
+					}
+					continue;
 				}
+
+				const text = extractTextFromContent(content);
+				if (text) messageParts.push(`Assistant: ${text}`);
 			}
 			// Skip toolResult, custom, and other role types
 		}
@@ -94,14 +134,7 @@ export function buildMainContextText(ctx: any): string {
 			parts.push("[Recent Conversation]\n" + messageParts.join("\n\n"));
 		}
 
-		let result = parts.join("\n\n");
-
-		// 4. Truncate to 8000 chars
-		if (result.length > 8000) {
-			result = result.slice(0, 8000) + "\n... [truncated]";
-		}
-
-		return result;
+		return parts.join("\n\n");
 	} catch {
 		return "";
 	}

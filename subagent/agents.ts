@@ -24,6 +24,19 @@ export interface AgentDiscoveryResult {
 	projectAgentsDir: string | null;
 }
 
+const COMMON_SUBAGENT_NO_RECURSION_RULE = [
+	"Global Runtime Rule (subagent):",
+	"- Never invoke the `subagent` tool.",
+	"- Never trigger subagent commands/shorthands such as `/sub:*` or `>>`.",
+	"- If delegation is requested, explain that recursive subagent invocation is disabled and continue with available tools.",
+].join("\n");
+
+function attachCommonSubagentRule(systemPrompt: string): string {
+	const trimmed = systemPrompt.trimEnd();
+	if (trimmed.includes("Global Runtime Rule (subagent):")) return trimmed;
+	return trimmed ? `${trimmed}\n\n${COMMON_SUBAGENT_NO_RECURSION_RULE}` : COMMON_SUBAGENT_NO_RECURSION_RULE;
+}
+
 function loadAgentsFromDir(dir: string, source: "user" | "project"): AgentConfig[] {
 	const agents: AgentConfig[] = [];
 
@@ -66,7 +79,7 @@ function loadAgentsFromDir(dir: string, source: "user" | "project"): AgentConfig
 			description: frontmatter.description,
 			tools: tools && tools.length > 0 ? tools : undefined,
 			model: frontmatter.model,
-			systemPrompt: body,
+			systemPrompt: attachCommonSubagentRule(body),
 			source,
 			filePath,
 		});
