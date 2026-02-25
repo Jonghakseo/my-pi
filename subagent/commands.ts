@@ -6,6 +6,7 @@
  */
 
 import * as fs from "node:fs";
+import * as path from "node:path";
 import type { AgentScope } from "./agents.js";
 import { discoverAgents } from "./agents.js";
 import { formatUsageStats } from "./format.js";
@@ -66,6 +67,47 @@ function resolveSwitchSession(ctx: any, store: SubagentStore): ((sessionPath: st
 }
 
 /**
+ * Ensure the current session file exists on disk before switching away.
+ *
+ * pi's SessionManager only flushes JSONL to disk after the session has at least one
+ * assistant message. If users run only extension shortcuts/commands in a fresh session,
+ * the in-memory session can exist while the file path does not yet exist.
+ *
+ * To make `><` reliable, materialize the current in-memory entries to the current
+ * session path right before `<>` / `/sub:trans` switches into a child session.
+ */
+function ensureSessionFileMaterialized(ctx: any, sessionFile: string | null): void {
+	if (!sessionFile) return;
+	const normalized = normalizePath(sessionFile);
+	if (!normalized || fs.existsSync(normalized)) return;
+
+	try {
+		const rawHeader = ctx.sessionManager?.getHeader?.();
+		const header =
+			rawHeader && rawHeader.type === "session"
+				? rawHeader
+				: {
+					type: "session",
+					version: 3,
+					id: ctx.sessionManager?.getSessionId?.() ?? `fallback-${Date.now()}`,
+					timestamp: new Date().toISOString(),
+					cwd: ctx.sessionManager?.getCwd?.() ?? ctx.cwd ?? process.cwd(),
+				};
+		const entries = ctx.sessionManager?.getEntries?.();
+		const fileEntries = [header, ...(Array.isArray(entries) ? entries : [])];
+
+		const parentDir = path.dirname(normalized);
+		if (!fs.existsSync(parentDir)) {
+			fs.mkdirSync(parentDir, { recursive: true });
+		}
+		const content = `${fileEntries.map((e: any) => JSON.stringify(e)).join("\n")}\n`;
+		fs.writeFileSync(normalized, content, "utf8");
+	} catch (_e) {
+		// Ignore materialization errors; fallback messaging will handle missing parent.
+	}
+}
+
+/**
  * Shared handler for switching to a subagent session (used by both /sub:trans and <>).
  * After a successful switch, persists a `subagent-parent` entry in the child session
  * so that `><` / `sub:back` can navigate back even across pi restarts.
@@ -114,6 +156,7 @@ async function subTransHandler(args: string, ctx: any, store: SubagentStore, pi:
 
 	// Capture current session path before switching — this becomes the parent link.
 	const parentSessionFile = normalizePath(ctx.sessionManager.getSessionFile()) ?? undefined;
+	ensureSessionFileMaterialized(ctx, parentSessionFile ?? null);
 
 	try {
 		const result = await switchFn(run.sessionFile);
