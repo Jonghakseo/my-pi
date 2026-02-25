@@ -21,7 +21,7 @@ import { buildMainContextText, makeSubagentSessionFile, wrapTaskWithMainContext 
 import { type SubagentStore, truncateText, updateRunFromResult } from "./store.js";
 import type { CommandRunState, SingleResult, SubagentDetails } from "./types.js";
 import { SubagentParams } from "./types.js";
-import { formatCommandRunSummary, getLatestRun, trimCommandRunHistory } from "./run-utils.js";
+import { getLatestRun, trimCommandRunHistory } from "./run-utils.js";
 import { updateCommandRunsWidget } from "./widget.js";
 
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
@@ -390,7 +390,7 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 						? result.errorMessage || result.stderr || getFinalOutput(result.messages) || "(no output)"
 						: getFinalOutput(result.messages) || "(no output)";
 					const output =
-						rawOutput.length > RUN_OUTPUT_MESSAGE_MAX_CHARS
+						isError && rawOutput.length > RUN_OUTPUT_MESSAGE_MAX_CHARS
 							? `${rawOutput.slice(0, RUN_OUTPUT_MESSAGE_MAX_CHARS)}\n\n... [truncated]`
 							: rawOutput;
 					const usage = formatUsageStats(result.usage, result.model);
@@ -407,7 +407,7 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 								(continuedFromRunId !== undefined ? `\nContinued from: #${continuedFromRunId}` : "") +
 								(usage ? `\nUsage: ${usage}` : "") +
 								(runState.progressText ? `\nProgress: ${runState.progressText}` : "") +
-								(isError ? `\n\n${output}` : ""),
+								`\n\n${output}`,
 							display: true,
 							details: {
 								runId,
@@ -487,23 +487,6 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 				},
 				{ deliverAs: "followUp" },
 			);
-		},
-	});
-
-	pi.registerCommand("subjobs", {
-		description: "Show running/completed /sub jobs",
-		handler: async (_args, ctx) => {
-			store.commandWidgetCtx = ctx;
-			if (store.commandRuns.size === 0) {
-				ctx.ui.notify("No subagent jobs yet.", "info");
-				return;
-			}
-
-			const lines = Array.from(store.commandRuns.values())
-				.sort((a, b) => b.id - a.id)
-				.map((run) => `${formatCommandRunSummary(run)}\n  task: ${run.task}`);
-
-			ctx.ui.notify(`Subagent jobs\n\n${lines.join("\n\n")}`, "info");
 		},
 	});
 
@@ -622,7 +605,7 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 				run = store.commandRuns.get(runId);
 			}
 			if (!run) {
-				ctx.ui.notify(`Run #${runId} not found. Use /subjobs to list runs.`, "error");
+				ctx.ui.notify(`Run #${runId} not found. Use /subview to open recent runs.`, "error");
 				return;
 			}
 			if (run.status === "running") {
