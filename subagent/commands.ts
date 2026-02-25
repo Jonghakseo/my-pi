@@ -41,6 +41,112 @@ import {
 	formatSymbolHints,
 } from "./constants.js";
 
+/**
+ * Capture switchSession from an ExtensionCommandContext into the shared store.
+ * Command handlers receive ExtensionCommandContext (which has switchSession),
+ * while input/event handlers only get ExtensionContext (no switchSession).
+ * This allows input handlers (<>, ><) to use the captured function as fallback.
+ */
+function captureSwitchSession(store: SubagentStore, ctx: any): void {
+	if (typeof ctx?.switchSession === "function" && !store.switchSessionFn) {
+		store.switchSessionFn = ctx.switchSession.bind(ctx);
+	}
+}
+
+/**
+ * Resolve a working switchSession function from either the context or the store.
+ * Returns null if neither is available (no command has been run yet).
+ */
+function resolveSwitchSession(ctx: any, store: SubagentStore): ((sessionPath: string) => Promise<{ cancelled: boolean }>) | null {
+	if (typeof ctx?.switchSession === "function") return ctx.switchSession.bind(ctx);
+	return store.switchSessionFn;
+}
+
+/**
+ * Shared handler for switching to a subagent session (used by both /sub:trans and <>).
+ */
+async function subTransHandler(args: string, ctx: any, store: SubagentStore): Promise<void> {
+	const raw = (args ?? "").trim();
+	let runId: number;
+	let run: CommandRunState | undefined;
+
+	if (!raw) {
+		ctx.ui.notify("Usage: <> <runId> or /sub:trans <runId>", "info");
+		return;
+	}
+
+	runId = parseInt(raw);
+	if (isNaN(runId)) {
+		ctx.ui.notify("Usage: <> <runId> or /sub:trans <runId>", "error");
+		return;
+	}
+	run = store.commandRuns.get(runId);
+
+	if (!run) {
+		ctx.ui.notify(`Run #${runId} not found. Use /sub:open to see recent runs.`, "error");
+		return;
+	}
+	if (run.status === "running") {
+		ctx.ui.notify(`Run #${runId} is still running. Wait for it to finish or abort it first.`, "error");
+		return;
+	}
+	if (!run.sessionFile) {
+		ctx.ui.notify(`Run #${runId} has no session file.`, "error");
+		return;
+	}
+
+	const switchFn = resolveSwitchSession(ctx, store);
+	if (!switchFn) {
+		ctx.ui.notify("Session switch not ready. Run any /sub:* command first.", "warning");
+		return;
+	}
+
+	// Push current session to stack before switching (for >< navigation)
+	const currentSession = ctx.sessionManager.getSessionFile();
+	if (currentSession) {
+		store.sessionStack.push(currentSession);
+	}
+
+	try {
+		const result = await switchFn(run.sessionFile);
+		if (result.cancelled) {
+			if (currentSession) store.sessionStack.pop();
+			ctx.ui.notify(`Failed to switch to session for run #${runId}.`, "error");
+		}
+	} catch (err) {
+		if (currentSession) store.sessionStack.pop();
+		ctx.ui.notify(`Session switch error: ${err}`, "error");
+	}
+}
+
+/**
+ * Shared handler for returning to parent session (used by both /sub:back and ><).
+ */
+async function subBackHandler(ctx: any, store: SubagentStore): Promise<void> {
+	if (store.sessionStack.length === 0) {
+		ctx.ui.notify("No parent session to return to.", "info");
+		return;
+	}
+
+	const switchFn = resolveSwitchSession(ctx, store);
+	if (!switchFn) {
+		ctx.ui.notify("Session switch not ready. Run any /sub:* command first.", "warning");
+		return;
+	}
+
+	const parentSession = store.sessionStack.pop()!;
+	try {
+		const result = await switchFn(parentSession);
+		if (result.cancelled) {
+			store.sessionStack.push(parentSession);
+			ctx.ui.notify("Failed to return to parent session.", "error");
+		}
+	} catch (err) {
+		store.sessionStack.push(parentSession);
+		ctx.ui.notify(`Session switch error: ${err}`, "error");
+	}
+}
+
 export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 	pi.registerTool({
 		name: "subagent",
@@ -48,11 +154,11 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 		description: [
 			"Delegate tasks to specialized subagents with isolated context.",
 			"Modes: single (agent + task), parallel (tasks array), chain (sequential with {previous} placeholder).",
-			"Supports background async jobs via runAsync + asyncAction (list/status/abort/remove).",
+			"Supports background async jobs via runAsync + asyncAction (list/status/detail/abort/remove).",
 			"Use contextMode: \"main\" to inherit current main-session context, or \"isolated\" for dedicated sub-session.",
 			"Default agent scope is \"user\" (from ~/.pi/agent/agents).",
 			"To enable project-local agents in .pi/agents, set agentScope: \"both\" (or \"project\").",
-			"Important: Do NOT keep calling subagent for polling. Async runs push completion/failure/error updates automatically as follow-up messages; status/list is for occasional manual checks only.",
+			"Important: Do NOT keep calling subagent for polling. Async runs push completion/failure/error updates automatically as follow-up messages; status/detail/list is for occasional manual checks only.",
 		].join(" "),
 		parameters: SubagentParams,
 
@@ -87,6 +193,7 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 			return merged.length > 0 ? merged : null;
 		},
 		handler: async (args, ctx, forceMainContextFromWrapper = false) => {
+			captureSwitchSession(store, ctx);
 			let input = (args ?? "").trim();
 			const usageText =
 				"Usage: /sub:run <agent|alias> <task> | /sub:run <runId> <task> | /sub:run <task> | /sub:new <agent|alias> <task> | /sub:new <runId> <task> | /sub:new <task>";
@@ -458,6 +565,7 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 		description: "Run a subagent with main-session context inheritance: /sub:run <agent|alias> <task>",
 		getArgumentCompletions: subCommand.getArgumentCompletions,
 		handler: async (args, ctx) => {
+			captureSwitchSession(store, ctx);
 			const forwarded = (args ?? "").trim();
 			await subCommand.handler(forwarded, ctx, true);
 		},
@@ -466,6 +574,7 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 	pi.registerCommand("subagents", {
 		description: "List available subagents and their model/tool settings",
 		handler: async (args, ctx) => {
+			captureSwitchSession(store, ctx);
 			const scopeArg = (args ?? "").trim().toLowerCase();
 			const scope: AgentScope = scopeArg === "project" || scopeArg === "both" ? (scopeArg as AgentScope) : "user";
 			const discovery = discoverAgents(ctx.cwd, scope);
@@ -505,6 +614,7 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 			return items.length > 0 ? items : null;
 		},
 		handler: async (args, ctx) => {
+			captureSwitchSession(store, ctx);
 			const raw = (args ?? "").trim();
 			let id: number;
 			let run: CommandRunState | undefined;
@@ -579,49 +689,17 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 	});
 
 	pi.registerCommand("sub:trans", {
-		description: "Switch to a subagent session in interactive mode: /sub:trans [runId]",
+		description: "Switch to a subagent session in interactive mode: /sub:trans <runId>",
 		handler: async (args, ctx) => {
-			const raw = (args ?? "").trim();
-			let runId: number;
-			let run: CommandRunState | undefined;
-
-			if (!raw) {
-				run = getLatestRun(store, ["done", "error"]);
-				if (!run) {
-					ctx.ui.notify("No finished subagent runs to switch to.", "info");
-					return;
-				}
-				runId = run.id;
-			} else {
-				runId = parseInt(raw);
-				if (isNaN(runId)) {
-					ctx.ui.notify("Usage: /sub:trans [runId]", "error");
-					return;
-				}
-				run = store.commandRuns.get(runId);
-			}
-			if (!run) {
-				ctx.ui.notify(`Run #${runId} not found. Use /sub:open to open recent runs.`, "error");
-				return;
-			}
-			if (run.status === "running") {
-				ctx.ui.notify(`Run #${runId} is still running. Wait for it to finish or abort it first.`, "error");
-				return;
-			}
-			if (!run.sessionFile) {
-				ctx.ui.notify(`Run #${runId} has no session file.`, "error");
-				return;
-			}
-			const success = await ctx.switchSession(run.sessionFile);
-			if (!success) {
-				ctx.ui.notify(`Failed to switch to session: ${run.sessionFile}`, "error");
-			}
+			captureSwitchSession(store, ctx);
+			await subTransHandler(args, ctx, store);
 		},
 	});
 
 	pi.registerCommand("sub:rm", {
 		description: "Remove one /sub job entry (aborts it if running): /sub:rm [runId]",
 		handler: async (args, ctx) => {
+			captureSwitchSession(store, ctx);
 			const raw = (args ?? "").trim();
 			let id: number;
 			let run: CommandRunState | undefined;
@@ -670,6 +748,7 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 	pi.registerCommand("sub:clear", {
 		description: "Clear /sub job widget entries. /sub:clear (finished only) or /sub:clear all",
 		handler: async (args, ctx) => {
+			captureSwitchSession(store, ctx);
 			const mode = (args ?? "").trim().toLowerCase();
 			if (mode === "all") {
 				const count = store.commandRuns.size;
@@ -764,6 +843,7 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 	pi.registerCommand("sub:abort", {
 		description: "Abort running subagent job(s). /sub:abort [runId|all]",
 		handler: async (args, ctx) => {
+			captureSwitchSession(store, ctx);
 			await handleSubAbort(args, ctx);
 		},
 	});
@@ -847,38 +927,38 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 		}
 
 		const raw = text.slice(2).trim();
-		let runId: number;
-		let run: CommandRunState | undefined;
+		await subTransHandler(raw, ctx, store);
+		return { action: "handled" as const };
+	});
 
-		if (!raw) {
-			ctx.ui.notify("Usage: <> <runId>", "info");
-			return { action: "handled" as const };
-		} else {
-			runId = parseInt(raw);
-			if (isNaN(runId)) {
-				ctx.ui.notify("Usage: <> [runId]", "info");
-				return { action: "handled" as const };
-			}
-			run = store.commandRuns.get(runId);
-		}
+	// sub:back command: return to parent session (used by >< shortcut)
+	pi.registerCommand("sub:back", {
+		description: "Return to parent session (pop from session stack): /sub:back",
+		handler: async (_args, ctx) => {
+			captureSwitchSession(store, ctx);
+			await subBackHandler(ctx, store);
+		},
+	});
 
-		if (!run) {
-			ctx.ui.notify(`Run #${runId} not found.`, "error");
-			return { action: "handled" as const };
-		}
-		if (run.status === "running") {
-			ctx.ui.notify(`Run #${runId} is still running.`, "error");
-			return { action: "handled" as const };
-		}
-		if (!run.sessionFile) {
-			ctx.ui.notify(`Run #${runId} has no session file.`, "error");
-			return { action: "handled" as const };
+	// >< shortcut: back to parent session (pop from session stack)
+	pi.registerShortcut("><", {
+		description: "Back to parent session",
+		handler: async () => {
+			// Documentation-only entry.
+		},
+	});
+
+	pi.on("input", async (event, ctx) => {
+		if (event.source === "extension") {
+			return { action: "continue" as const };
 		}
 
-		const success = await ctx.switchSession(run.sessionFile);
-		if (!success) {
-			ctx.ui.notify(`Failed to switch to session: ${run.sessionFile}`, "error");
+		const text = event.text ?? "";
+		if (text.trim() !== "><") {
+			return { action: "continue" as const };
 		}
+
+		await subBackHandler(ctx, store);
 		return { action: "handled" as const };
 	});
 
