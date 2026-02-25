@@ -1266,32 +1266,22 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 			: [];
 
 		if (ids.length === 0) {
-			// No args: abort latest running, or clear latest finished
+			// No args: abort latest running job only.
+			// Never auto-clear finished runs — too dangerous on accidental <<.
 			const running = Array.from(store.commandRuns.values())
 				.filter((r) => r.status === "running")
 				.sort((a, b) => b.id - a.id);
 			if (running.length > 0) {
 				await handleSubAbort("", ctx);
 			} else {
-				const latest = getLatestRun(store);
-				if (!latest) {
-					ctx.ui.notify("No subagent jobs.", "info");
-				} else {
-					removeRun(store, latest.id, {
-						ctx,
-						pi,
-						reason: "Aborting by <<...",
-						removalReason: "shortcut-clear",
-					});
-					ctx.ui.notify(`Cleared #${latest.id} (${latest.agent}).`, "info");
-				}
+				ctx.ui.notify("No running jobs. Use << <id> or /sub:clear.", "info");
 			}
 			return { action: "handled" as const };
 		}
 
 		// Validate all IDs are numeric
 		if (!ids.every((id) => /^\d+$/.test(id))) {
-			ctx.ui.notify("Usage: << [runId,runId,...|all]", "info");
+			ctx.ui.notify("Usage: << [runId,runId,...]", "info");
 			return { action: "handled" as const };
 		}
 
