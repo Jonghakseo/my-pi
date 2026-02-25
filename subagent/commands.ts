@@ -779,6 +779,15 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 		},
 	});
 
+	// /hotkeys "Extensions" 섹션에 >> shorthand 사용법을 노출한다.
+	// 실제 입력 처리는 아래 input 핸들러에서 수행된다.
+	pi.registerShortcut(">>", {
+		description: "Typed prefix: >> <task> or >> <runId> <task> (run/resume subagent)",
+		handler: async () => {
+			// Documentation-only entry.
+		},
+	});
+
 	pi.on("input", async (event, ctx) => {
 		if (event.source === "extension") {
 			return { action: "continue" as const };
