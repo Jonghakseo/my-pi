@@ -828,9 +828,9 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 		return { action: "handled" as const };
 	});
 
-	// << shortcut for aborting subagent runs (equivalent to /sub:abort)
+	// << shortcut: abort running jobs or clear finished jobs
 	pi.registerShortcut("<<", {
-		description: "Abort subagent run",
+		description: "Abort or clear subagent runs",
 		handler: async () => {
 			// Documentation-only entry.
 		},
@@ -846,8 +846,94 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 			return { action: "continue" as const };
 		}
 
-		const args = text.slice(2).trim();
-		await handleSubAbort(args, ctx);
+		const raw = text.slice(2).trim();
+
+		// << all — abort all running, clear all finished
+		if (raw.toLowerCase() === "all") {
+			let aborted = 0;
+			let cleared = 0;
+			for (const [id, run] of Array.from(store.commandRuns.entries())) {
+				if (run.status === "running" && run.abortController) {
+					run.lastLine = "Aborting by user...";
+					run.lastOutput = run.lastLine;
+					run.abortController.abort();
+					aborted++;
+				} else if (run.status !== "running") {
+					pi.appendEntry("subagent-removed", { runId: id });
+					store.commandRuns.delete(id);
+					cleared++;
+				}
+			}
+			updateCommandRunsWidget(store, ctx);
+			const parts: string[] = [];
+			if (aborted) parts.push(`${aborted} aborted`);
+			if (cleared) parts.push(`${cleared} cleared`);
+			ctx.ui.notify(parts.length ? parts.join(", ") : "No subagent jobs.", parts.length ? "warning" : "info");
+			return { action: "handled" as const };
+		}
+
+		// << 1,2,3 — multiple run IDs (comma-separated)
+		// << 1 — single run ID
+		// << (no args) — latest running or latest finished
+		const ids = raw
+			? raw.split(",").map((s) => s.trim()).filter(Boolean)
+			: [];
+
+		if (ids.length === 0) {
+			// No args: abort latest running, or clear latest finished
+			const running = Array.from(store.commandRuns.values())
+				.filter((r) => r.status === "running")
+				.sort((a, b) => b.id - a.id);
+			if (running.length > 0) {
+				await handleSubAbort("", ctx);
+			} else {
+				const latest = getLatestRun(store);
+				if (!latest) {
+					ctx.ui.notify("No subagent jobs.", "info");
+				} else {
+					pi.appendEntry("subagent-removed", { runId: latest.id });
+					store.commandRuns.delete(latest.id);
+					updateCommandRunsWidget(store, ctx);
+					ctx.ui.notify(`Cleared #${latest.id} (${latest.agent}).`, "info");
+				}
+			}
+			return { action: "handled" as const };
+		}
+
+		// Validate all IDs are numeric
+		if (!ids.every((id) => /^\d+$/.test(id))) {
+			ctx.ui.notify("Usage: << [runId,runId,...|all]", "info");
+			return { action: "handled" as const };
+		}
+
+		let aborted = 0;
+		let cleared = 0;
+		const unknown: string[] = [];
+		for (const idStr of ids) {
+			const id = Number(idStr);
+			const run = store.commandRuns.get(id);
+			if (!run) {
+				unknown.push(idStr);
+				continue;
+			}
+			if (run.status === "running" && run.abortController) {
+				run.lastLine = "Aborting by user...";
+				run.lastOutput = run.lastLine;
+				run.abortController.abort();
+				aborted++;
+			} else if (run.status !== "running") {
+				pi.appendEntry("subagent-removed", { runId: id });
+				store.commandRuns.delete(id);
+				cleared++;
+			}
+		}
+		updateCommandRunsWidget(store, ctx);
+
+		const parts: string[] = [];
+		if (aborted) parts.push(`${aborted} aborted`);
+		if (cleared) parts.push(`${cleared} cleared`);
+		if (unknown.length) parts.push(`#${unknown.join(",#")} not found`);
+		ctx.ui.notify(parts.join(", ") || "Nothing to do.", parts.length ? (aborted ? "warning" : "info") : "info");
 		return { action: "handled" as const };
 	});
 
