@@ -517,12 +517,27 @@ function buildPiToolName(serverName: string, toolName: string): string {
 	return `mcp_${safeServer}_${safeTool}`;
 }
 
-function formatToolResult(result: unknown): string {
-	if (typeof result === "string") return result;
+function mimeToExt(mimeType: string): string {
+	switch (mimeType) {
+		case "image/png": return "png";
+		case "image/jpeg": return "jpg";
+		case "image/gif": return "gif";
+		case "image/webp": return "webp";
+		case "image/svg+xml": return "svg";
+		default: return "png";
+	}
+}
+
+type FormattedToolResult = { text: string; imagePaths: string[] };
+
+function formatToolResult(result: unknown): FormattedToolResult {
+	const imagePaths: string[] = [];
+
+	if (typeof result === "string") return { text: result, imagePaths };
 
 	if (result && typeof result === "object") {
 		const maybe = result as {
-			content?: Array<{ type?: string; text?: string }>;
+			content?: Array<{ type?: string; text?: string; data?: string; mimeType?: string }>;
 			structuredContent?: unknown;
 		};
 
@@ -530,18 +545,29 @@ function formatToolResult(result: unknown): string {
 			const chunks = maybe.content
 				.map((item) => {
 					if (item?.type === "text") return item.text ?? "";
+					if (item?.type === "image" && item.data) {
+						const ext = mimeToExt(item.mimeType ?? "image/png");
+						const tmpFile = path.join(os.tmpdir(), `mcp-image-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`);
+						try {
+							fs.writeFileSync(tmpFile, Buffer.from(item.data, "base64"));
+							imagePaths.push(tmpFile);
+							return `[Image saved: ${tmpFile}]`;
+						} catch {
+							return `[Image save failed: ${item.mimeType}, ${item.data.length} chars]`;
+						}
+					}
 					return JSON.stringify(item);
 				})
 				.filter(Boolean);
-			if (chunks.length > 0) return chunks.join("\n");
+			if (chunks.length > 0) return { text: chunks.join("\n"), imagePaths };
 		}
 
 		if (maybe.structuredContent !== undefined) {
-			return JSON.stringify(maybe.structuredContent, null, 2);
+			return { text: JSON.stringify(maybe.structuredContent, null, 2), imagePaths };
 		}
 	}
 
-	return JSON.stringify(result, null, 2);
+	return { text: JSON.stringify(result, null, 2), imagePaths };
 }
 
 type JsonSchemaProp = {
@@ -911,8 +937,15 @@ export default async function claudeMcpBridge(pi: ExtensionAPI) {
 
 					try {
 						const result = await manager.callTool(serverName, tool.name, params as Record<string, unknown>);
+						const formatted = formatToolResult(result);
+						const content: Array<{ type: string; text?: string; path?: string }> = [
+							{ type: "text", text: formatted.text },
+						];
+						for (const imgPath of formatted.imagePaths) {
+							content.push({ type: "text", text: `📎 Use Read tool to view: ${imgPath}` });
+						}
 						return {
-							content: [{ type: "text", text: formatToolResult(result) }],
+							content,
 							details: { server: serverName, tool: tool.name, raw: result },
 							isError: Boolean((result as { isError?: boolean })?.isError),
 						};
