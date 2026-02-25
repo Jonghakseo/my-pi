@@ -121,8 +121,8 @@ export const ContextModeSchema = StringEnum(["isolated", "main"] as const, {
 	default: "isolated",
 });
 
-export const AsyncActionSchema = StringEnum(["run", "list", "status", "abort", "remove"] as const, {
-	description: 'Async control action for tool-managed jobs. "run" starts a new job; others (list/status/abort/remove) are for occasional manual inspection/control only. Do NOT call subagent repeatedly for polling — completion/failure/error updates are delivered automatically as follow-up messages.',
+export const AsyncActionSchema = StringEnum(["run", "list", "status", "detail", "abort", "remove"] as const, {
+	description: 'Async control action for tool-managed jobs. "run" starts a new job; others (list/status/detail/abort/remove) are for occasional manual inspection/control only. Do NOT call subagent repeatedly for polling — completion/failure/error updates are delivered automatically as follow-up messages.',
 	default: "run",
 });
 
@@ -144,6 +144,6 @@ export const SubagentParams = Type.Object({
 		}),
 	),
 	asyncAction: Type.Optional(AsyncActionSchema),
-	runId: Type.Optional(Type.Number({ description: "Run ID for asyncAction=status|abort|remove. Use only for occasional manual checks/control; do not repeatedly poll, because completion/failure/error updates are delivered automatically." })),
+	runId: Type.Optional(Type.Number({ description: "Run ID for asyncAction=status|detail|abort|remove. Use only for occasional manual checks/control; do not repeatedly poll, because completion/failure/error updates are delivered automatically." })),
 	continueRunId: Type.Optional(Type.Number({ description: "Run ID of an existing completed/error run to continue. Reuses the run's session file for context continuity. The original run's agent is reused if 'agent' is not specified." })),
 });

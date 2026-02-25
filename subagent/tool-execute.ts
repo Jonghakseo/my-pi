@@ -5,6 +5,8 @@
  * that is passed to pi.registerTool({ execute: ... }).
  */
 
+import * as fs from "node:fs";
+
 import type { AgentConfig, AgentScope } from "./agents.js";
 import { discoverAgents } from "./agents.js";
 import { formatUsageStats } from "./format.js";
@@ -24,9 +26,140 @@ import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import {
 	DEFAULT_TURN_COUNT,
 	PLACEHOLDER_RUNNING_EXIT_CODE,
-	RUN_OUTPUT_MESSAGE_MAX_CHARS,
 	STATUS_OUTPUT_PREVIEW_MAX_CHARS,
 } from "./constants.js";
+
+type SessionToolCall = {
+	name: string;
+	argsText: string;
+};
+
+type SessionTurnToolCalls = {
+	turn: number;
+	toolCalls: SessionToolCall[];
+};
+
+type SessionDetailSummary = {
+	finalOutput: string;
+	turns: SessionTurnToolCalls[];
+	error?: string;
+};
+
+function stringifyToolCallArguments(args: unknown): string {
+	if (args === undefined || args === null) return "";
+	if (typeof args === "string") return args;
+	try {
+		return JSON.stringify(args);
+	} catch {
+		return String(args);
+	}
+}
+
+function getAssistantTextPart(content: unknown): string {
+	if (typeof content === "string") return content;
+	if (!Array.isArray(content)) return "";
+	for (const part of content) {
+		if (!part || typeof part !== "object") continue;
+		if ((part as any).type === "text" && typeof (part as any).text === "string") {
+			return (part as any).text;
+		}
+	}
+	return "";
+}
+
+function parseSessionDetailSummary(sessionFile?: string): SessionDetailSummary {
+	if (!sessionFile) {
+		return { finalOutput: "", turns: [], error: "Session file is not available for this run." };
+	}
+	if (!fs.existsSync(sessionFile)) {
+		return { finalOutput: "", turns: [], error: `Session file not found: ${sessionFile}` };
+	}
+
+	let raw = "";
+	try {
+		raw = fs.readFileSync(sessionFile, "utf-8");
+	} catch (error: any) {
+		const message = error?.message ? String(error.message) : "Unknown read error";
+		return { finalOutput: "", turns: [], error: `Failed to read session file: ${message}` };
+	}
+
+	const assistantMessages: any[] = [];
+	const turns: SessionTurnToolCalls[] = [];
+
+	for (const line of raw.split(/\r?\n/)) {
+		if (!line.trim()) continue;
+
+		let entry: any;
+		try {
+			entry = JSON.parse(line);
+		} catch {
+			continue;
+		}
+
+		if (entry?.type !== "message" || !entry.message || entry.message.role !== "assistant") continue;
+
+		assistantMessages.push(entry.message);
+		const turn = assistantMessages.length;
+		const toolCalls: SessionToolCall[] = [];
+		const content = entry.message.content;
+
+		if (Array.isArray(content)) {
+			for (const part of content) {
+				if (!part || typeof part !== "object") continue;
+				if ((part as any).type !== "toolCall") continue;
+				const name = typeof (part as any).name === "string" ? (part as any).name : "tool";
+				const argsText = stringifyToolCallArguments((part as any).arguments);
+				toolCalls.push({ name, argsText });
+			}
+		}
+
+		if (toolCalls.length > 0) {
+			turns.push({ turn, toolCalls });
+		}
+	}
+
+	let finalOutput = "";
+	for (let i = assistantMessages.length - 1; i >= 0; i--) {
+		const text = getAssistantTextPart(assistantMessages[i]?.content);
+		if (text) {
+			finalOutput = text;
+			break;
+		}
+	}
+
+	return { finalOutput, turns };
+}
+
+function formatRunDetailOutput(run: CommandRunState): string {
+	const sessionSummary = parseSessionDetailSummary(run.sessionFile);
+	const runOutput = run.lastOutput?.trim() ? run.lastOutput : "";
+	const sessionOutput = sessionSummary.finalOutput?.trim() ? sessionSummary.finalOutput : "";
+	const lineOutput = run.lastLine?.trim() ? run.lastLine : "";
+	const output = runOutput || sessionOutput || lineOutput || "(no output)";
+	const lines: string[] = [formatCommandRunSummary(run), `Task: ${run.task}`];
+
+	if (run.sessionFile) lines.push(`Session: ${run.sessionFile}`);
+	if (run.progressText) lines.push(`Progress: ${run.progressText}`);
+
+	lines.push("", "Result:", output, "", "Tool calls by turn:");
+
+	if (sessionSummary.error) {
+		lines.push(`- (session parse error) ${sessionSummary.error}`);
+	}
+
+	if (sessionSummary.turns.length === 0) {
+		lines.push("- (no tool calls)");
+	} else {
+		for (const turn of sessionSummary.turns) {
+			lines.push(`Turn ${turn.turn}:`);
+			for (const toolCall of turn.toolCalls) {
+				lines.push(`  - ${toolCall.name}${toolCall.argsText ? ` ${toolCall.argsText}` : ""}`);
+			}
+		}
+	}
+
+	return lines.join("\n");
+}
 
 export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore) {
 	return async (_toolCallId: string, params: Record<string, any>, signal: AbortSignal, onUpdate: OnUpdateCallback | undefined, ctx: any) => {
@@ -125,6 +258,20 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 							text: `${formatCommandRunSummary(run)}\nTask: ${run.task}\n\n${preview}`,
 						},
 					],
+					details: makeDetails("single")([]),
+				};
+			}
+
+			if (asyncAction === "detail") {
+				if (run.status === "running") {
+					return {
+						content: [{ type: "text", text: `Subagent run #${run.id} is still running. detail is available after completion.` }],
+						details: makeDetails("single")([]),
+						isError: true,
+					};
+				}
+				return {
+					content: [{ type: "text", text: formatRunDetailOutput(run) }],
 					details: makeDetails("single")([]),
 				};
 			}
@@ -331,10 +478,6 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 					const rawOutput = isError
 						? result.errorMessage || result.stderr || getFinalOutput(result.messages) || "(no output)"
 						: getFinalOutput(result.messages) || "(no output)";
-					const output =
-						rawOutput.length > RUN_OUTPUT_MESSAGE_MAX_CHARS
-							? `${rawOutput.slice(0, RUN_OUTPUT_MESSAGE_MAX_CHARS)}\n\n... [truncated]`
-							: rawOutput;
 					const usage = formatUsageStats(result.usage, result.model);
 
 					runState.lastOutput = rawOutput;
@@ -349,7 +492,7 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 								(continueFromRun ? `\nContinued from: #${params.continueRunId}` : "") +
 								(usage ? `\nUsage: ${usage}` : "") +
 								(runState.progressText ? `\nProgress: ${runState.progressText}` : "") +
-								(isError ? `\n\n${output}` : ""),
+								`\n\n${rawOutput}`,
 							display: true,
 							details: {
 								runId,
@@ -421,9 +564,9 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 						type: "text",
 						text: continueFromRun
 							? `Resumed async subagent run #${runId} (${resolvedAgent}) turn ${runState.turnCount}. ` +
-							  `Use asyncAction=status/list/abort/remove to monitor/control it.`
+							  `Use asyncAction=status/detail/list/abort/remove to monitor/control it.`
 							: `Started async subagent run #${runId} (${resolvedAgent}). ` +
-							  `Use asyncAction=status/list/abort/remove to monitor/control it.`,
+							  `Use asyncAction=status/detail/list/abort/remove to monitor/control it.`,
 					},
 				],
 				details: makeDetails("single")([]),

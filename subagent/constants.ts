@@ -33,7 +33,7 @@ export function formatSymbolHints(): string {
 
 // ─── commands.ts ───────────────────────────────────────────────────────────
 
-export const STATUS_OUTPUT_PREVIEW_MAX_CHARS = 4_000;
+export const STATUS_OUTPUT_PREVIEW_MAX_CHARS = 2_000;
 export const RUN_OUTPUT_MESSAGE_MAX_CHARS = 8_000;
 export const CONTINUATION_OUTPUT_CONTEXT_MAX_CHARS = 6_000;
 export const COMMAND_COMPLETION_LIMIT = 20;
