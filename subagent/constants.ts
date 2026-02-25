@@ -22,7 +22,7 @@ export const AGENT_SYMBOL_MAP: Record<string, string> = {
 	"+": "verifier",
 	"/": "fast-finder",
 	"?": "researcher",
-	"&": "decider",
+	"!": "decider",
 };
 
 /** Format symbol hints for display, e.g. ">>? researcher  >>@ fast-finder ..." */
