@@ -232,3 +232,12 @@ export function formatToolCallPlain(toolName: string, args: Record<string, unkno
 		}
 	}
 }
+
+// ─── Text Truncation ─────────────────────────────────────────────────────────
+
+/** Truncate text to at most `maxLines` lines, appending "..." if truncated. */
+export function truncateLines(text: string, maxLines = 2): string {
+	const lines = text.split("\n");
+	if (lines.length <= maxLines) return text;
+	return lines.slice(0, maxLines).join("\n") + "\n...";
+}

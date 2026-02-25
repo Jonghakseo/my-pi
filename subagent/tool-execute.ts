@@ -9,7 +9,7 @@ import * as fs from "node:fs";
 
 import type { AgentConfig, AgentScope } from "./agents.js";
 import { discoverAgents } from "./agents.js";
-import { formatUsageStats } from "./format.js";
+import { formatUsageStats, truncateLines } from "./format.js";
 import {
 	getFinalOutput,
 	getLastNonEmptyLine,
@@ -469,7 +469,7 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 					customType: "subagent-tool",
 					content:
 						`[subagent:${resolvedAgent}#${runId}] ${startedState}` +
-						`\n${taskForDisplay}` +
+						`\n${truncateLines(taskForDisplay, 2)}` +
 						(continueFromRun ? `\nContinued from: #${params.continueRunId}` : "") +
 						`\nContext: ${contextLabel} · turn ${runState.turnCount}`,
 					display: true,
