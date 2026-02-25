@@ -55,12 +55,16 @@ You are the **main agent** operating in delegation mode. Your primary role is a 
 export default function (pi: ExtensionAPI) {
 	let mode: "default" | "agents" = "default";
 
+	const applyMode = (newMode: "default" | "agents") => {
+		mode = newMode;
+		setAgentsModeEnabled(newMode === "agents");
+	};
+
 	pi.registerCommand("system:default", {
 		description: "Switch to default system prompt (no delegation)",
 		handler: async (_args, ctx) => {
-			mode = "default";
-			setAgentsModeEnabled(false);
-			ctx.ui.setStatus("system-mode", undefined);
+			applyMode("default");
+			pi.appendEntry("system-mode-change", { mode: "default" });
 			ctx.ui.setWidget("system-mode-banner", undefined);
 			ctx.ui.notify("System mode: default ✏️ — Direct work mode", "info");
 		},
@@ -69,12 +73,26 @@ export default function (pi: ExtensionAPI) {
 	pi.registerCommand("system:agents", {
 		description: "Switch to agent delegation mode (all work via subagents)",
 		handler: async (_args, ctx) => {
-			mode = "agents";
-			setAgentsModeEnabled(true);
-			ctx.ui.setStatus("system-mode", ctx.ui.theme.fg("warning", "🤖 agents"));
+			applyMode("agents");
+			pi.appendEntry("system-mode-change", { mode: "agents" });
 			ctx.ui.setWidget("system-mode-banner", undefined);
 			ctx.ui.notify("System mode: agents 🤖 — All work delegated to subagents", "info");
 		},
+	});
+
+	pi.on("session_start", async (_event, ctx) => {
+		// Restore mode from the latest system-mode-change entry
+		const entries = ctx.sessionManager.getEntries();
+		let restoredMode: "default" | "agents" = "default";
+		for (const entry of entries) {
+			if (entry.type === "custom") {
+				const ce = entry as any;
+				if (ce.customType === "system-mode-change" && ce.data?.mode) {
+					restoredMode = ce.data.mode === "agents" ? "agents" : "default";
+				}
+			}
+		}
+		applyMode(restoredMode);
 	});
 
 	pi.on("before_agent_start", async (event, _ctx) => {

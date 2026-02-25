@@ -10,7 +10,6 @@
  *   /theme <name>   — Switch directly by name
  *
  * Features:
- *   - Status line shows current theme name with accent color
  *   - Color swatch widget flashes briefly after each switch
  *   - Auto-dismisses swatch after 3 seconds
  *
@@ -24,12 +23,6 @@ import { applyExtensionDefaults } from "./themeMap.ts";
 export default function (pi: ExtensionAPI) {
 	let currentCtx: ExtensionContext | undefined;
 	let swatchTimer: ReturnType<typeof setTimeout> | null = null;
-
-	function updateStatus(ctx: ExtensionContext) {
-		if (!ctx.hasUI) return;
-		const name = ctx.ui.theme.name;
-		ctx.ui.setStatus("theme", `🎨 ${name}`);
-	}
 
 	function showSwatch(ctx: ExtensionContext) {
 		if (!ctx.hasUI) return;
@@ -96,7 +89,6 @@ export default function (pi: ExtensionAPI) {
 		const result = ctx.ui.setTheme(theme.name);
 
 		if (result.success) {
-			updateStatus(ctx);
 			showSwatch(ctx);
 			ctx.ui.notify(`${theme.name} (${index + 1}/${themes.length})`, "info");
 		} else {
@@ -136,7 +128,6 @@ export default function (pi: ExtensionAPI) {
 			if (arg) {
 				const result = ctx.ui.setTheme(arg);
 				if (result.success) {
-					updateStatus(ctx);
 					showSwatch(ctx);
 					ctx.ui.notify(`Theme: ${arg}`, "info");
 				} else {
@@ -157,7 +148,6 @@ export default function (pi: ExtensionAPI) {
 			const selectedName = selected.split(/\s/)[0];
 			const result = ctx.ui.setTheme(selectedName);
 			if (result.success) {
-				updateStatus(ctx);
 				showSwatch(ctx);
 				ctx.ui.notify(`Theme: ${selectedName}`, "info");
 			}
@@ -169,7 +159,6 @@ export default function (pi: ExtensionAPI) {
 	pi.on("session_start", async (_event, ctx) => {
 		currentCtx = ctx;
 		applyExtensionDefaults(import.meta.url, ctx);
-		updateStatus(ctx);
 	});
 
 	pi.on("session_shutdown", async () => {
