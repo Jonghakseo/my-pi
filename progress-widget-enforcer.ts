@@ -99,7 +99,7 @@ function buildProgressCard(
 				const badgeText = " 🤖 AGENT MODE ";
 				const badgeVisWidth = visibleWidth(badgeText);
 				const dashTotal = innerWidth - badgeVisWidth;
-				const dashLeft = Math.max(1, Math.floor(dashTotal * 0.15));
+				const dashLeft = Math.max(1, Math.floor(dashTotal / 2));
 				const dashRight = Math.max(1, dashTotal - dashLeft);
 				topBorder = border(`╭${"─".repeat(dashLeft)}`) + fg("warning", badgeText) + border(`${"─".repeat(dashRight)}╮`);
 			} else {
