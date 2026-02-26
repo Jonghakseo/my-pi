@@ -2,7 +2,6 @@ import { DynamicBorder, type ExtensionAPI, getMarkdownTheme as getPiMdTheme } fr
 import {
 	Box,
 	Container,
-	getMarkdownTheme,
 	Key,
 	Markdown,
 	matchesKey,

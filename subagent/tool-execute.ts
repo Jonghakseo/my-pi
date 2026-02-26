@@ -163,14 +163,21 @@ function formatRunDetailOutput(run: CommandRunState): string {
 	return lines.join("\n");
 }
 
+/** Return type for the subagent execute function (extends AgentToolResult with optional isError). */
+type SubagentExecuteResult = {
+	content: { type: "text"; text: string }[];
+	details: SubagentDetails;
+	isError?: boolean;
+};
+
 export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore) {
 	return async (
 		_toolCallId: string,
 		params: Record<string, any>,
-		signal: AbortSignal,
+		signal: AbortSignal | undefined,
 		onUpdate: OnUpdateCallback | undefined,
 		ctx: any,
-	) => {
+	): Promise<SubagentExecuteResult> => {
 		const agentScope: AgentScope = params.agentScope ?? "user";
 		const contextMode = params.contextMode ?? "isolated";
 		const inheritMainContext = contextMode === "main";

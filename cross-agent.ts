@@ -162,18 +162,11 @@ export default function (pi: ExtensionAPI) {
 
 		// Register commands
 		const seenCmds = new Set<string>();
-		let totalCommands = 0;
-		let totalSkills = 0;
-		let totalAgents = 0;
 
 		for (const g of groups) {
-			totalSkills += g.skills.length;
-			totalAgents += g.agents.length;
-
 			for (const cmd of g.commands) {
 				if (seenCmds.has(cmd.name)) continue;
 				seenCmds.add(cmd.name);
-				totalCommands++;
 				pi.registerCommand(cmd.name, {
 					description: `[${g.source}] ${cmd.description}`.slice(0, 120),
 					handler: async (args) => {
@@ -187,72 +180,6 @@ export default function (pi: ExtensionAPI) {
 
 		setTimeout(() => {
 			if (!ctx.hasUI) return;
-			return; // suppress startup banner
-			const width = Math.min((process.stdout.columns || 80) - 4, 100);
-			const pad = bg(" ".repeat(width));
-			const lines: string[] = [];
-
-			lines.push("");
-
-			for (let i = 0; i < groups.length; i++) {
-				const g = groups[i];
-
-				const counts: string[] = [];
-				if (g.skills.length)
-					counts.push(
-						yellow("(") + green(`${g.skills.length}`) + dim(` skill${g.skills.length > 1 ? "s" : ""}`) + yellow(")"),
-					);
-				if (g.commands.length)
-					counts.push(
-						yellow("(") +
-							green(`${g.commands.length}`) +
-							dim(` command${g.commands.length > 1 ? "s" : ""}`) +
-							yellow(")"),
-					);
-				if (g.agents.length)
-					counts.push(
-						yellow("(") + green(`${g.agents.length}`) + dim(` agent${g.agents.length > 1 ? "s" : ""}`) + yellow(")"),
-					);
-				const countStr = counts.length ? "  " + counts.join(" ") : "";
-				lines.push(pink(bold(`  ${g.source}`)) + countStr);
-
-				const items: string[] = [];
-				if (g.commands.length) {
-					items.push(yellow("/") + g.commands.map((c) => cyan(c.name)).join(yellow(", /")));
-				}
-				if (g.skills.length) {
-					items.push(yellow("/skill:") + g.skills.map((s) => cyan(s)).join(yellow(", /skill:")));
-				}
-				if (g.agents.length) {
-					items.push(yellow("@") + g.agents.map((a) => green(a.name)).join(yellow(", @")));
-				}
-
-				const body = items.join("\n");
-				lines.push(pad);
-
-				const maxRows = 3;
-				const innerWidth = width - 4;
-				const wrapped = wrapTextWithAnsi(body, innerWidth);
-				const shown = wrapped.slice(0, maxRows);
-
-				for (const wline of shown) {
-					const vis = visibleWidth(wline);
-					const fill = Math.max(0, width - vis - 4);
-					lines.push(bg("  " + wline + " ".repeat(fill) + "  "));
-				}
-
-				if (wrapped.length > maxRows) {
-					const overflow = dim("  ... more");
-					const oVis = visibleWidth(overflow);
-					const oFill = Math.max(0, width - oVis - 2);
-					lines.push(bg(overflow + " ".repeat(oFill) + "  "));
-				}
-
-				lines.push(pad);
-				if (i < groups.length - 1) lines.push("");
-			}
-
-			ctx.ui.notify(lines.join("\n"), "info");
 		}, 100);
 	});
 }
