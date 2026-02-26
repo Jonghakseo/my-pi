@@ -507,6 +507,29 @@ function restoreRunsFromSession(store: SubagentStore, ctx: any, pi?: ExtensionAP
 		}
 	}
 
+	// Fallback: if this session has no subagent markers at all, but we recently
+	// had in-memory runs for the same session file, reuse that snapshot so
+	// <> / >< hops do not make runs appear to "disappear".
+	if (store.commandRuns.size === 0 && !sawSubagentMarkers && currentSessionFile) {
+		const cached = store.sessionRunCache.get(currentSessionFile) ?? [];
+		for (const run of cached) {
+			if (run.removed) continue;
+			store.commandRuns.set(run.id, { ...run });
+		}
+	}
+
+	// Refresh per-session snapshot with the latest reconstructed view.
+	if (currentSessionFile) {
+		const latestSnapshot = Array.from(store.commandRuns.values())
+			.filter((run) => !run.removed)
+			.map((run) => ({ ...run }));
+		if (latestSnapshot.length > 0) {
+			store.sessionRunCache.set(currentSessionFile, latestSnapshot);
+		} else {
+			store.sessionRunCache.delete(currentSessionFile);
+		}
+	}
+
 	updateCommandRunsWidget(store, ctx);
 }
 
