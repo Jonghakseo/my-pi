@@ -51,6 +51,16 @@ function buildPrompt(question: string, context?: string): string {
 	return `${question}\n\n${ctx}`;
 }
 
+function clampLines(text: string, maxLines: number): string {
+	const lines = text.split("\n");
+	if (lines.length <= maxLines) return text;
+	const hidden = lines.length - maxLines;
+	const visible = lines.slice(0, maxLines);
+	const lastIndex = visible.length - 1;
+	visible[lastIndex] = `${visible[lastIndex]} … (+${hidden} lines)`;
+	return visible.join("\n");
+}
+
 function buildCancelledResult(
 	question: string,
 	context: string | undefined,
@@ -329,7 +339,7 @@ export default function askUserQuestionExtension(pi: ExtensionAPI) {
 			if (allowMultiple) {
 				text += `\n${theme.fg("dim", "Mode: multi-select")}`;
 			}
-			return new Text(text, 0, 0);
+			return new Text(clampLines(text, 2), 0, 0);
 		},
 
 		renderResult(result, _options, theme) {
