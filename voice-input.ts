@@ -5,17 +5,18 @@ import * as os from "node:os";
 import { basename, join } from "node:path";
 import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
 
-const VOICE_COMMAND = "voice";
 const VOICE_SHORTCUT = "alt+v";
 const VOICE_STATUS_KEY = "voice-input";
-const VOICE_MESSAGE_TYPE = "voice-input";
 
 const DEFAULT_RECORDER_BINS = ["sox", "rec"];
 const DEFAULT_WHISPER_BINS = ["whisper-cli", "whisper-cpp"];
+const DEFAULT_TTS_BINS = ["say"];
 const MAX_CAPTURE_CHARS = 8_000;
+const DEFAULT_TTS_SUMMARY_MAX_CHARS = 120;
 
 const RECORDING_STATUS = "🎙️ REC · Option+V 로 종료";
 const TRANSCRIBING_STATUS = "🧠 Whisper 변환 중...";
+const SPEAKING_STATUS = "🔊 응답 요약 음성 출력 중...";
 
 type LogLevel = "info" | "warning" | "error";
 
@@ -65,8 +66,100 @@ function tailText(text: string, maxChars: number): string {
 	return `...${text.slice(text.length - maxChars)}`;
 }
 
+function parseBooleanEnv(value: string | undefined, fallback: boolean): boolean {
+	const normalized = normalizeOptional(value)?.toLowerCase();
+	if (!normalized) return fallback;
+	if (["1", "true", "yes", "y", "on"].includes(normalized)) return true;
+	if (["0", "false", "no", "n", "off"].includes(normalized)) return false;
+	return fallback;
+}
+
+function parseBoundedIntEnv(value: string | undefined, fallback: number, min: number, max: number): number {
+	const normalized = normalizeOptional(value);
+	if (!normalized) return fallback;
+	const parsed = Number.parseInt(normalized, 10);
+	if (!Number.isFinite(parsed)) return fallback;
+	return Math.max(min, Math.min(max, parsed));
+}
+
+function ttsVoice(): string | null {
+	return normalizeOptional(process.env.PI_VOICE_TTS_VOICE);
+}
+
+function ttsRate(): string | null {
+	return normalizeOptional(process.env.PI_VOICE_TTS_RATE);
+}
+
+function ttsSummaryMaxChars(): number {
+	return parseBoundedIntEnv(process.env.PI_VOICE_TTS_MAX_CHARS, DEFAULT_TTS_SUMMARY_MAX_CHARS, 40, 260);
+}
+
+function stripMarkdownForSpeech(text: string): string {
+	return text
+		.replace(/```[\s\S]*?```/g, " ")
+		.replace(/`([^`]+)`/g, "$1")
+		.replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+		.replace(/^\s{0,3}#{1,6}\s+/gm, "")
+		.replace(/^\s*[-*+]\s+/gm, "")
+		.replace(/^\s*\d+\.\s+/gm, "")
+		.replace(/\s+/g, " ")
+		.trim();
+}
+
+function summarizeForSpeech(text: string, maxChars: number): string {
+	const normalized = stripMarkdownForSpeech(normalizeTranscript(text));
+	if (!normalized) return "";
+
+	const sentences =
+		normalized
+			.match(/[^.!?。！？]+[.!?。！？]?/gu)
+			?.map((sentence) => sentence.trim())
+			.filter(Boolean) ?? [];
+
+	let summary = sentences[0] ?? normalized;
+	if (summary.length < 18 && sentences.length > 1) {
+		summary = `${summary} ${sentences[1]}`.trim();
+	}
+
+	if (summary.length > maxChars) {
+		summary = `${summary.slice(0, maxChars - 1).trimEnd()}…`;
+	}
+
+	return summary;
+}
+
+function extractLatestAssistantText(messages: unknown[]): string {
+	for (let i = messages.length - 1; i >= 0; i--) {
+		const message = messages[i];
+		if (!message || typeof message !== "object") continue;
+		if ((message as { role?: unknown }).role !== "assistant") continue;
+
+		const content = (message as { content?: unknown }).content;
+		if (!Array.isArray(content)) continue;
+
+		const textParts: string[] = [];
+		for (const part of content) {
+			if (!part || typeof part !== "object") continue;
+			if ((part as { type?: unknown }).type !== "text") continue;
+			const text = (part as { text?: unknown }).text;
+			if (typeof text === "string" && text.trim()) {
+				textParts.push(text.trim());
+			}
+		}
+
+		const merged = normalizeTranscript(textParts.join(" "));
+		if (merged) return merged;
+	}
+
+	return "";
+}
+
 function whisperLanguage(): string {
 	return normalizeOptional(process.env.PI_VOICE_WHISPER_LANG) ?? "ko";
+}
+
+function ttsBins(): string[] {
+	return parseCandidateList(process.env.PI_VOICE_TTS_BIN, DEFAULT_TTS_BINS);
 }
 
 function whisperModelCandidates(): string[] {
@@ -325,15 +418,52 @@ async function transcribeWithWhisperCpp(wavPath: string): Promise<TranscriptionR
 	throw new Error(lastError || "사용 가능한 whisper.cpp CLI를 찾지 못함");
 }
 
+async function speakWithSystemTts(text: string): Promise<{ bin: string; spoken: string }> {
+	const spoken = normalizeTranscript(text);
+	if (!spoken) {
+		throw new Error("읽을 텍스트가 비어 있음");
+	}
+
+	const voice = ttsVoice();
+	const rate = ttsRate();
+	let lastError = "";
+
+	for (const bin of ttsBins()) {
+		const args: string[] = [];
+		if (voice) args.push("-v", voice);
+		if (rate) args.push("-r", rate);
+		args.push(spoken);
+
+		const result = await runCommand(bin, args);
+		if (result.code === 0) {
+			return { bin, spoken };
+		}
+
+		if (result.errorMessage && /ENOENT|not found/i.test(result.errorMessage)) {
+			lastError = `${bin} 실행 파일을 찾지 못함`;
+			continue;
+		}
+
+		const reason = tailText(result.stderr || result.stdout || result.errorMessage || "unknown error", 220);
+		lastError = `${bin} 실패 (code=${result.code}${result.signal ? `, signal=${result.signal}` : ""}): ${reason}`;
+	}
+
+	throw new Error(lastError || "사용 가능한 TTS 실행 파일을 찾지 못함");
+}
+
 export default function voiceInputExtension(pi: ExtensionAPI) {
 	let latestCtx: ExtensionContext | undefined;
 	let recorderProc: ChildProcess | null = null;
 	let recordingPath: string | null = null;
 	let recordingStartedAt = 0;
-	let recorderBin = "";
 	let recorderStderr = "";
 	let transcribing = false;
+	let speaking = false;
 	let agentRunning = false;
+	const ttsEnabled = parseBooleanEnv(process.env.PI_VOICE_TTS_ENABLED, true);
+	let pendingVoiceInputs: string[] = [];
+	let queuedVoiceRuns = 0;
+	let activeVoiceRun = false;
 
 	const setStatus = (text: string | undefined) => {
 		if (!latestCtx?.hasUI) return;
@@ -345,10 +475,50 @@ export default function voiceInputExtension(pi: ExtensionAPI) {
 		latestCtx.ui.notify(message, level);
 	};
 
-	const stateLabel = (): string => {
-		if (recorderProc) return "recording";
-		if (transcribing) return "transcribing";
-		return "idle";
+	const queueVoiceInput = (text: string) => {
+		const normalized = normalizeTranscript(text);
+		if (!normalized) {
+			throw new Error("음성 인식 결과가 비어 있음");
+		}
+
+		pendingVoiceInputs.push(normalized);
+		try {
+			if (agentRunning) {
+				pi.sendUserMessage(normalized, { deliverAs: "followUp" });
+			} else {
+				pi.sendUserMessage(normalized);
+			}
+		} catch (error) {
+			const idx = pendingVoiceInputs.indexOf(normalized);
+			if (idx >= 0) pendingVoiceInputs.splice(idx, 1);
+			throw error;
+		}
+	};
+
+	const speakResponseSummary = async (responseText: string, options?: { force?: boolean }) => {
+		if (!options?.force && !ttsEnabled) return false;
+		if (speaking) return false;
+
+		const summary = summarizeForSpeech(responseText, ttsSummaryMaxChars());
+		if (!summary) return false;
+
+		speaking = true;
+		setStatus(SPEAKING_STATUS);
+
+		try {
+			const spoken = await speakWithSystemTts(summary);
+			notify(`🔊 ${spoken.spoken}`, "info");
+			return true;
+		} catch (error) {
+			const message = error instanceof Error ? error.message : String(error);
+			notify(`음성 출력 실패: ${message}`, "warning");
+			return false;
+		} finally {
+			speaking = false;
+			if (!recorderProc && !transcribing) {
+				setStatus(undefined);
+			}
+		}
 	};
 
 	const stopAndDiscardRecording = async () => {
@@ -358,9 +528,9 @@ export default function voiceInputExtension(pi: ExtensionAPI) {
 		recorderProc = null;
 		recordingPath = null;
 		recordingStartedAt = 0;
-		recorderBin = "";
 		recorderStderr = "";
 		transcribing = false;
+		speaking = false;
 
 		if (proc) {
 			await stopProcessGracefully(proc);
@@ -370,34 +540,11 @@ export default function voiceInputExtension(pi: ExtensionAPI) {
 		setStatus(undefined);
 	};
 
-	const showStatus = () => {
-		const configuredModel = normalizeOptional(process.env.PI_VOICE_WHISPER_MODEL);
-		const modelPath = configuredModel ?? resolveWhisperModelPath();
-		const recorderBins = parseCandidateList(process.env.PI_VOICE_RECORDER_BIN, DEFAULT_RECORDER_BINS);
-		const whisperBins = parseCandidateList(process.env.PI_VOICE_WHISPER_BIN, DEFAULT_WHISPER_BINS);
-
-		pi.sendMessage({
-			customType: VOICE_MESSAGE_TYPE,
-			content: [
-				"[voice-input]",
-				`state: ${stateLabel()}`,
-				`active recorder: ${recorderBin || "(none)"}`,
-				`shortcut: ${VOICE_SHORTCUT}`,
-				`recorder bins: ${recorderBins.join(", ")}`,
-				`whisper bins: ${whisperBins.join(", ")}`,
-				`language: ${whisperLanguage()}`,
-				`model: ${modelPath ?? "(not found)"}`,
-				"env overrides: PI_VOICE_WHISPER_MODEL, PI_VOICE_WHISPER_BIN, PI_VOICE_RECORDER_BIN, PI_VOICE_WHISPER_LANG",
-			].join("\n"),
-			display: true,
-		});
-	};
-
 	const startRecording = async (ctx: ExtensionContext) => {
 		latestCtx = ctx;
 
 		if (recorderProc) {
-			notify("이미 녹음 중이야. Option+V 또는 /voice stop 으로 종료해줘.", "warning");
+			notify("이미 녹음 중이야. Option+V 로 종료해줘.", "warning");
 			return;
 		}
 
@@ -422,7 +569,6 @@ export default function voiceInputExtension(pi: ExtensionAPI) {
 			recorderProc = proc;
 			recordingPath = wavPath;
 			recordingStartedAt = Date.now();
-			recorderBin = bin;
 			recorderStderr = "";
 
 			proc.stderr?.on("data", (chunk: Buffer | string) => {
@@ -434,11 +580,10 @@ export default function voiceInputExtension(pi: ExtensionAPI) {
 				recorderProc = null;
 				recordingPath = null;
 				recordingStartedAt = 0;
-				recorderBin = "";
 				recorderStderr = "";
 				setStatus(undefined);
 				if (!transcribing) {
-					notify("녹음 프로세스가 종료됐어. /voice start 로 다시 시작해줘.", "warning");
+					notify("녹음 프로세스가 종료됐어. Option+V 로 다시 시작해줘.", "warning");
 				}
 			});
 
@@ -455,7 +600,7 @@ export default function voiceInputExtension(pi: ExtensionAPI) {
 		latestCtx = ctx;
 
 		if (!recorderProc || !recordingPath) {
-			notify("지금은 녹음 중이 아니야. /voice start 로 시작해줘.", "info");
+			notify("지금은 녹음 중이 아니야. Option+V 로 시작해줘.", "info");
 			return;
 		}
 
@@ -471,7 +616,6 @@ export default function voiceInputExtension(pi: ExtensionAPI) {
 		recorderProc = null;
 		recordingPath = null;
 		recordingStartedAt = 0;
-		recorderBin = "";
 		transcribing = true;
 
 		setStatus(TRANSCRIBING_STATUS);
@@ -492,12 +636,7 @@ export default function voiceInputExtension(pi: ExtensionAPI) {
 				return;
 			}
 
-			if (agentRunning) {
-				pi.sendUserMessage(transcript.text, { deliverAs: "followUp" });
-			} else {
-				pi.sendUserMessage(transcript.text);
-			}
-
+			queueVoiceInput(transcript.text);
 			notify(`✅ 음성 인식 완료 (${transcript.bin}, ${basename(transcript.modelPath)})`, "info");
 		} catch (error) {
 			const message = error instanceof Error ? error.message : String(error);
@@ -527,56 +666,61 @@ export default function voiceInputExtension(pi: ExtensionAPI) {
 		},
 	});
 
-	pi.registerCommand(VOICE_COMMAND, {
-		description: "Voice input controls: /voice [start|stop|toggle|status]",
-		handler: async (args, ctx) => {
-			latestCtx = ctx;
-			const action = args.trim().toLowerCase();
+	pi.on("input", async (event, ctx) => {
+		latestCtx = ctx;
+		if (event.source !== "extension") return { action: "continue" as const };
 
-			if (!action || action === "toggle") {
-				await toggleRecording(ctx);
-				return;
-			}
+		const normalized = normalizeTranscript(event.text);
+		if (!normalized) return { action: "continue" as const };
 
-			if (action === "start") {
-				await startRecording(ctx);
-				return;
-			}
+		const pendingIndex = pendingVoiceInputs.indexOf(normalized);
+		if (pendingIndex >= 0) {
+			pendingVoiceInputs.splice(pendingIndex, 1);
+			queuedVoiceRuns += 1;
+		}
 
-			if (action === "stop") {
-				await stopRecordingAndTranscribe(ctx);
-				return;
-			}
-
-			if (action === "status") {
-				showStatus();
-				notify(`voice 상태: ${stateLabel()}`, "info");
-				return;
-			}
-
-			notify("Usage: /voice [start|stop|toggle|status]", "info");
-		},
+		return { action: "continue" as const };
 	});
 
 	pi.on("agent_start", async (_event, ctx) => {
 		agentRunning = true;
 		latestCtx = ctx;
+		activeVoiceRun = queuedVoiceRuns > 0;
+		if (activeVoiceRun) {
+			queuedVoiceRuns -= 1;
+		}
 	});
 
-	pi.on("agent_end", async (_event, ctx) => {
+	pi.on("agent_end", async (event, ctx) => {
 		agentRunning = false;
 		latestCtx = ctx;
+
+		if (!activeVoiceRun) return;
+		activeVoiceRun = false;
+
+		const latestAssistantText = extractLatestAssistantText(event.messages);
+		if (!latestAssistantText) return;
+
+		await speakResponseSummary(latestAssistantText);
 	});
 
 	pi.on("session_start", async (_event, ctx) => {
 		agentRunning = false;
 		latestCtx = ctx;
+		speaking = false;
+		pendingVoiceInputs = [];
+		queuedVoiceRuns = 0;
+		activeVoiceRun = false;
 		setStatus(undefined);
 	});
 
 	pi.on("session_switch", async (_event, ctx) => {
 		agentRunning = false;
 		latestCtx = ctx;
+		speaking = false;
+		pendingVoiceInputs = [];
+		queuedVoiceRuns = 0;
+		activeVoiceRun = false;
 		await stopAndDiscardRecording();
 	});
 
@@ -592,6 +736,10 @@ export default function voiceInputExtension(pi: ExtensionAPI) {
 
 	pi.on("session_shutdown", async (_event, ctx) => {
 		latestCtx = ctx;
+		speaking = false;
+		pendingVoiceInputs = [];
+		queuedVoiceRuns = 0;
+		activeVoiceRun = false;
 		await stopAndDiscardRecording();
 		setStatus(undefined);
 	});
