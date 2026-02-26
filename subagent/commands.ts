@@ -40,6 +40,7 @@ import {
 	RUN_OUTPUT_MESSAGE_MAX_CHARS,
 	RUN_TICK_INTERVAL_MS,
 	STALE_PENDING_COMPLETION_MS,
+	STATUS_LOG_FOOTER,
 	SUBVIEW_OVERLAY_MAX_HEIGHT,
 	SUBVIEW_OVERLAY_WIDTH,
 	formatSymbolHints,
@@ -199,6 +200,16 @@ function compactPath(raw: unknown): string | null {
 	if (!raw || typeof raw !== "string") return null;
 	const cleaned = raw.replace(/\s+/g, "").trim();
 	return cleaned || null;
+}
+
+function stripStatusLogFooter(text: string): string {
+	if (!text) return text;
+	const doubleBreakSuffix = `\n\n${STATUS_LOG_FOOTER}`;
+	if (text.endsWith(doubleBreakSuffix)) return text.slice(0, -doubleBreakSuffix.length);
+	const singleBreakSuffix = `\n${STATUS_LOG_FOOTER}`;
+	if (text.endsWith(singleBreakSuffix)) return text.slice(0, -singleBreakSuffix.length);
+	if (text.endsWith(STATUS_LOG_FOOTER)) return text.slice(0, -STATUS_LOG_FOOTER.length).trimEnd();
+	return text;
 }
 
 /**
@@ -384,7 +395,7 @@ function restoreRunsFromSession(store: SubagentStore, ctx: any, pi?: ExtensionAP
 				}
 				const bodyStart = lines.findIndex((l: string) => l === "") + 1;
 				if (bodyStart > 0 && bodyStart < lines.length) {
-					run.lastOutput = lines.slice(bodyStart).join("\n");
+					run.lastOutput = stripStatusLogFooter(lines.slice(bodyStart).join("\n"));
 					run.lastLine = getLastNonEmptyLine(run.lastOutput);
 				}
 				restoredRuns.set(runId, run);
@@ -776,7 +787,8 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 					content:
 						`[sub:${selectedAgent}#${runId}] ${startedState}` +
 						`\n${truncateLines(taskForDisplay, 2)}` +
-						`\nContext: ${contextLabel} · turn ${runState.turnCount}`,
+						`\nContext: ${contextLabel} · turn ${runState.turnCount}` +
+						`\n\n${STATUS_LOG_FOOTER}`,
 					display: true,
 					details: {
 						runId,
@@ -860,7 +872,8 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 							`\n${truncateLines(taskForDisplay, 2)}` +
 							(usage ? `\nUsage: ${usage}` : "") +
 							(runState.progressText ? `\nProgress: ${runState.progressText}` : "") +
-							`\n\n${output}`,
+							`\n\n${output}` +
+							`\n\n${STATUS_LOG_FOOTER}`,
 						display: true,
 						details: {
 							runId,
@@ -923,7 +936,8 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 						content:
 							`[sub:${selectedAgent}#${runId}] failed` +
 							`\n${truncateLines(taskForDisplay, 2)}` +
-							`\n\n${runState.lastLine}`,
+							`\n\n${runState.lastLine}` +
+							`\n\n${STATUS_LOG_FOOTER}`,
 						display: true,
 						details: {
 							runId,
