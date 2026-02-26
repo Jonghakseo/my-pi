@@ -1,11 +1,11 @@
 {
-  "name": "pi-claude-mcp-bridge",
-  "version": "0.1.0",
-  "type": "module",
-  "description": "Use Claude Code MCP server configs inside pi via extension bridge",
-  "main": "index.ts",
-  "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.27.0",
-    "@sinclair/typebox": "^0.34.41"
-  }
+	"name": "pi-claude-mcp-bridge",
+	"version": "0.1.0",
+	"type": "module",
+	"description": "Use Claude Code MCP server configs inside pi via extension bridge",
+	"main": "index.ts",
+	"dependencies": {
+		"@modelcontextprotocol/sdk": "^1.27.0",
+		"@sinclair/typebox": "^0.34.41"
+	}
 }
