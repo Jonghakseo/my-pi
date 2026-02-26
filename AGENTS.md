@@ -36,6 +36,7 @@ Custom extensions for the pi coding agent. All extensions are written in TypeScr
 ├── last-input-widget.ts   # Footer status showing the user's last input
 ├── pipi-footer.ts         # Custom footer UI (model, branch, context bar)
 ├── progress-widget-enforcer.ts  # set_progress tool injection (agent mode aware)
+├── purpose.ts             # Session purpose top-overlay + purpose guard/tool/command
 ├── session-replay.ts      # Session replay overlay UI
 ├── status-overlay.ts      # /status — skills, tools & extensions list overlay
 ├── theme-cycler.ts        # Ctrl+X to cycle through themes
