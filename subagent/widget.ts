@@ -63,7 +63,7 @@ export function updateCommandRunsWidget(store: SubagentStore, ctx?: any): void {
 	}
 
 	const statusPriority = (status: "running" | "done" | "error") =>
-		status === "running" ? 0 : status === "error" ? 1 : 2;
+		status === "running" ? 0 : status === "done" ? 1 : 2;
 	const runs = Array.from(store.commandRuns.values()).sort((a, b) => {
 		const priorityDiff = statusPriority(a.status) - statusPriority(b.status);
 		if (priorityDiff !== 0) return priorityDiff;
