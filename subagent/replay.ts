@@ -4,7 +4,8 @@
  */
 
 import * as fs from "node:fs";
-import { Container, Key, Spacer, Text, matchesKey, truncateToWidth, wrapTextWithAnsi } from "@mariozechner/pi-tui";
+import { Container, Key, matchesKey, Spacer, Text, truncateToWidth, wrapTextWithAnsi } from "@mariozechner/pi-tui";
+import { formatDuration, formatDurationBetween } from "../utils/time-utils.js";
 import {
 	DEFAULT_TURN_COUNT,
 	DETAIL_LINE_PADDING,
@@ -37,7 +38,6 @@ import {
 	USAGE_EXTRA_ROWS,
 } from "./constants.js";
 import { formatUsageStats } from "./format.js";
-import { formatDuration, formatDurationBetween } from "../utils/time-utils.js";
 import type { CommandRunState, SessionReplayItem } from "./types.js";
 
 // ─── Replay Helpers ──────────────────────────────────────────────────────────
@@ -163,7 +163,13 @@ export function readSessionReplayItems(sessionFile: string): SessionReplayItem[]
 				if (detailPreview) content = `details: ${detailPreview}`;
 			}
 			if (!content) content = "(no output)";
-			items.push({ type: "tool", title: `Tool: ${toolName}`, content: truncateReplayContent(content), timestamp: ts, elapsed });
+			items.push({
+				type: "tool",
+				title: `Tool: ${toolName}`,
+				content: truncateReplayContent(content),
+				timestamp: ts,
+				elapsed,
+			});
 		}
 	}
 
@@ -312,7 +318,10 @@ export class SubagentSessionReplayOverlay {
 		const innerWidth = Math.max(MIN_INNER_WIDTH, width - OVERLAY_HORIZONTAL_MARGIN);
 		const elapsedLabel = formatDuration(this.run.elapsedMs);
 		const usageLine = this.run.usage ? formatUsageStats(this.run.usage, this.run.model) : "";
-		const task = this.run.task.replace(/\s*\n+\s*/g, " ").replace(/\s{2,}/g, " ").trim();
+		const task = this.run.task
+			.replace(/\s*\n+\s*/g, " ")
+			.replace(/\s{2,}/g, " ")
+			.trim();
 		const hasDetailOpen = this.expandedIndex !== null;
 		const { list: listViewport, detail: detailViewport } = this.getViewportSizes(hasDetailOpen, Boolean(usageLine));
 
@@ -367,7 +376,11 @@ export class SubagentSessionReplayOverlay {
 
 			const timeLabel = `[${formatReplayTime(item.timestamp)}${item.elapsed ? ` +${item.elapsed}` : ""}]`;
 			const marker = isSelected ? "▸" : " ";
-			const preview = item.content.replace(/\s*\n+\s*/g, " ").replace(/\s{2,}/g, " ").trim() || "(empty)";
+			const preview =
+				item.content
+					.replace(/\s*\n+\s*/g, " ")
+					.replace(/\s{2,}/g, " ")
+					.trim() || "(empty)";
 			let line =
 				`${marker} ${theme.fg(color, icon)} ${theme.bold(item.title)} ` +
 				theme.fg("dim", timeLabel) +
@@ -382,18 +395,21 @@ export class SubagentSessionReplayOverlay {
 		}
 
 		if (hasDetailOpen) {
-			container.addChild(new Text(pad + theme.fg("muted", "─".repeat(Math.max(MIN_SEPARATOR_WIDTH, innerWidth))), 0, 0));
+			container.addChild(
+				new Text(pad + theme.fg("muted", "─".repeat(Math.max(MIN_SEPARATOR_WIDTH, innerWidth))), 0, 0),
+			);
 			const detailIndex = this.expandedIndex ?? this.selectedIndex;
 			const detailItem = this.items[detailIndex];
-			const detailLines = this.getDetailLines(detailIndex, Math.max(MIN_DETAIL_WIDTH, innerWidth - DETAIL_WIDTH_PADDING));
+			const detailLines = this.getDetailLines(
+				detailIndex,
+				Math.max(MIN_DETAIL_WIDTH, innerWidth - DETAIL_WIDTH_PADDING),
+			);
 			const maxDetailOffset = Math.max(0, detailLines.length - detailViewport);
 			if (this.detailScrollOffset > maxDetailOffset) this.detailScrollOffset = maxDetailOffset;
 			const start = this.detailScrollOffset;
 			const end = Math.min(detailLines.length, start + detailViewport);
 			const range =
-				detailLines.length === 0
-					? "0-0/0"
-					: `${start + 1}-${Math.max(start + 1, end)}/${detailLines.length}`;
+				detailLines.length === 0 ? "0-0/0" : `${start + 1}-${Math.max(start + 1, end)}/${detailLines.length}`;
 			container.addChild(
 				new Text(
 					pad +
@@ -408,7 +424,11 @@ export class SubagentSessionReplayOverlay {
 				const line = detailLines[i] ?? "";
 				container.addChild(
 					new Text(
-						pad + theme.fg("toolOutput", `  ${truncateToWidth(line, Math.max(MIN_DETAIL_WIDTH, innerWidth - DETAIL_LINE_PADDING))}`),
+						pad +
+							theme.fg(
+								"toolOutput",
+								`  ${truncateToWidth(line, Math.max(MIN_DETAIL_WIDTH, innerWidth - DETAIL_LINE_PADDING))}`,
+							),
 						0,
 						0,
 					),
@@ -425,11 +445,7 @@ export class SubagentSessionReplayOverlay {
 			: "↑↓/jk navigate · Enter open detail · PgUp/Dn page · g/G top/end · Esc close";
 		container.addChild(
 			new Text(
-				pad +
-					truncateToWidth(
-						theme.fg("dim", helpText) + "  " + theme.fg("accent", listRange),
-						innerWidth,
-					),
+				pad + truncateToWidth(theme.fg("dim", helpText) + "  " + theme.fg("accent", listRange), innerWidth),
 				0,
 				0,
 			),

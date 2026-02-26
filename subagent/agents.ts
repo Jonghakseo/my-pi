@@ -201,9 +201,7 @@ export function discoverAgents(cwd: string, scope: AgentScope): AgentDiscoveryRe
 	const userAgents = scope === "project" ? [] : loadAgentsFromDir(userDir, "user", { format: "pi" });
 
 	const projectPiAgents =
-		scope === "user" || !projectAgentsDir
-			? []
-			: loadAgentsFromDir(projectAgentsDir, "project", { format: "pi" });
+		scope === "user" || !projectAgentsDir ? [] : loadAgentsFromDir(projectAgentsDir, "project", { format: "pi" });
 
 	const projectClaudeAgents =
 		scope === "user" || !claudeAgentsDir

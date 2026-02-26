@@ -7,11 +7,11 @@
  *   agents/*.md    → listed as @name (discovery only)
  */
 
-import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
-import { readdirSync, readFileSync, existsSync, statSync } from "node:fs";
-import { join, basename } from "node:path";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { homedir } from "node:os";
-import { wrapTextWithAnsi, visibleWidth } from "@mariozechner/pi-tui";
+import { basename, join } from "node:path";
+import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
+import { visibleWidth, wrapTextWithAnsi } from "@mariozechner/pi-tui";
 
 // --- Synthwave palette ---
 function bg(s: string): string {
@@ -83,7 +83,13 @@ function scanCommands(dir: string): Discovered[] {
 			const { description, body } = parseFrontmatter(raw);
 			items.push({
 				name: basename(file, ".md"),
-				description: description || body.split("\n").find((l) => l.trim())?.trim() || "",
+				description:
+					description ||
+					body
+						.split("\n")
+						.find((l) => l.trim())
+						?.trim() ||
+					"",
 				content: body,
 			});
 		}
@@ -192,30 +198,33 @@ export default function (pi: ExtensionAPI) {
 				const g = groups[i];
 
 				const counts: string[] = [];
-				if (g.skills.length) counts.push(yellow("(") + green(`${g.skills.length}`) + dim(` skill${g.skills.length > 1 ? "s" : ""}`) + yellow(")"));
-				if (g.commands.length) counts.push(yellow("(") + green(`${g.commands.length}`) + dim(` command${g.commands.length > 1 ? "s" : ""}`) + yellow(")"));
-				if (g.agents.length) counts.push(yellow("(") + green(`${g.agents.length}`) + dim(` agent${g.agents.length > 1 ? "s" : ""}`) + yellow(")"));
+				if (g.skills.length)
+					counts.push(
+						yellow("(") + green(`${g.skills.length}`) + dim(` skill${g.skills.length > 1 ? "s" : ""}`) + yellow(")"),
+					);
+				if (g.commands.length)
+					counts.push(
+						yellow("(") +
+							green(`${g.commands.length}`) +
+							dim(` command${g.commands.length > 1 ? "s" : ""}`) +
+							yellow(")"),
+					);
+				if (g.agents.length)
+					counts.push(
+						yellow("(") + green(`${g.agents.length}`) + dim(` agent${g.agents.length > 1 ? "s" : ""}`) + yellow(")"),
+					);
 				const countStr = counts.length ? "  " + counts.join(" ") : "";
 				lines.push(pink(bold(`  ${g.source}`)) + countStr);
 
 				const items: string[] = [];
 				if (g.commands.length) {
-					items.push(
-						yellow("/") +
-						g.commands.map((c) => cyan(c.name)).join(yellow(", /"))
-					);
+					items.push(yellow("/") + g.commands.map((c) => cyan(c.name)).join(yellow(", /")));
 				}
 				if (g.skills.length) {
-					items.push(
-						yellow("/skill:") +
-						g.skills.map((s) => cyan(s)).join(yellow(", /skill:"))
-					);
+					items.push(yellow("/skill:") + g.skills.map((s) => cyan(s)).join(yellow(", /skill:")));
 				}
 				if (g.agents.length) {
-					items.push(
-						yellow("@") +
-						g.agents.map((a) => green(a.name)).join(yellow(", @"))
-					);
+					items.push(yellow("@") + g.agents.map((a) => green(a.name)).join(yellow(", @")));
 				}
 
 				const body = items.join("\n");

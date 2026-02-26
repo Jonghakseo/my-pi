@@ -1,14 +1,13 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-
+import type { ExtensionAPI, ExtensionContext, Theme } from "@mariozechner/pi-coding-agent";
+import type { TUI } from "@mariozechner/pi-tui";
+import { matchesKey, truncateToWidth, visibleWidth } from "@mariozechner/pi-tui";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { SSEClientTransport } from "@modelcontextprotocol/sdk/client/sse.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
-import type { ExtensionAPI, ExtensionContext, Theme } from "@mariozechner/pi-coding-agent";
-import type { TUI } from "@mariozechner/pi-tui";
-import { matchesKey, truncateToWidth, visibleWidth } from "@mariozechner/pi-tui";
 import { Type } from "@sinclair/typebox";
 
 type RawMcpServer = {
@@ -261,7 +260,7 @@ class McpConnection {
 		}
 
 		const delay = Math.min(
-			McpConnection.INITIAL_RECONNECT_DELAY_MS * Math.pow(2, this.reconnectAttempts),
+			McpConnection.INITIAL_RECONNECT_DELAY_MS * 2 ** this.reconnectAttempts,
 			McpConnection.MAX_RECONNECT_DELAY_MS,
 		);
 		this.reconnectAttempts++;
@@ -1043,7 +1042,7 @@ export default async function claudeMcpBridge(pi: ExtensionAPI) {
 				if (!serverName) break;
 
 				// Action menu for selected server
-				actionMenu: while (true) {
+				while (true) {
 					const serverState = manager.getStates().find((s) => s.name === serverName);
 					if (!serverState) break;
 
@@ -1058,7 +1057,7 @@ export default async function claudeMcpBridge(pi: ExtensionAPI) {
 							(tui, theme, _kb, done) => new McpToolListOverlay(tui, theme, () => done(null), serverName, tools),
 							{ overlay: true, overlayOptions: { anchor: "center", width: "80%", minWidth: 50, maxHeight: "80%" } },
 						);
-						continue actionMenu;
+						continue;
 					}
 
 					if (action === "reconnect") {

@@ -10,7 +10,7 @@
 
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import { DynamicBorder } from "@mariozechner/pi-coding-agent";
-import { Container, Spacer, Text, matchesKey, Key, truncateToWidth } from "@mariozechner/pi-tui";
+import { Container, Key, matchesKey, Spacer, Text, truncateToWidth } from "@mariozechner/pi-tui";
 
 interface Section {
 	title: string;
@@ -32,24 +32,15 @@ class StatusOverlayUI {
 		if (matchesKey(data, Key.up)) {
 			this.scrollOffset = Math.max(0, this.scrollOffset - 1);
 		} else if (matchesKey(data, Key.down)) {
-			this.scrollOffset = Math.min(
-				Math.max(0, this.totalLines.length - 5),
-				this.scrollOffset + 1,
-			);
+			this.scrollOffset = Math.min(Math.max(0, this.totalLines.length - 5), this.scrollOffset + 1);
 		} else if (data === "k") {
 			this.scrollOffset = Math.max(0, this.scrollOffset - 1);
 		} else if (data === "j") {
-			this.scrollOffset = Math.min(
-				Math.max(0, this.totalLines.length - 5),
-				this.scrollOffset + 1,
-			);
+			this.scrollOffset = Math.min(Math.max(0, this.totalLines.length - 5), this.scrollOffset + 1);
 		} else if (matchesKey(data, Key.pageUp)) {
 			this.scrollOffset = Math.max(0, this.scrollOffset - 10);
 		} else if (matchesKey(data, Key.pageDown)) {
-			this.scrollOffset = Math.min(
-				Math.max(0, this.totalLines.length - 5),
-				this.scrollOffset + 10,
-			);
+			this.scrollOffset = Math.min(Math.max(0, this.totalLines.length - 5), this.scrollOffset + 10);
 		} else if (matchesKey(data, Key.escape) || data === "q") {
 			this.onDone();
 			return;
@@ -107,9 +98,7 @@ class StatusOverlayUI {
 		// Scrollbar indicator
 		const visibleHeight = height - 6; // header(3) + footer(3)
 		const canScroll = contentLines.length > visibleHeight;
-		const scrollPct = canScroll && maxScroll > 0
-			? Math.round((this.scrollOffset / maxScroll) * 100)
-			: 0;
+		const scrollPct = canScroll && maxScroll > 0 ? Math.round((this.scrollOffset / maxScroll) * 100) : 0;
 
 		// Visible content slice
 		const visible = contentLines.slice(this.scrollOffset, this.scrollOffset + visibleHeight);
@@ -118,7 +107,11 @@ class StatusOverlayUI {
 		const footer: string[] = [];
 		footer.push("");
 		const scrollHint = canScroll
-			? theme.fg("success", ` ${scrollPct}%`) + theme.fg("dim", ` (${this.scrollOffset + 1}–${Math.min(this.scrollOffset + visibleHeight, contentLines.length)}/${contentLines.length})`)
+			? theme.fg("success", ` ${scrollPct}%`) +
+				theme.fg(
+					"dim",
+					` (${this.scrollOffset + 1}–${Math.min(this.scrollOffset + visibleHeight, contentLines.length)}/${contentLines.length})`,
+				)
 			: "";
 		footer.push(theme.fg("dim", "  ↑/↓/j/k Scroll  •  PgUp/PgDn  •  Esc Close") + scrollHint);
 		footer.push(...new DynamicBorder((s: string) => theme.fg("accent", s)).render(width));

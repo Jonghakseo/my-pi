@@ -4,23 +4,17 @@
  * Extracted from commands.ts — output format is identical.
  */
 
+import { getMarkdownTheme } from "@mariozechner/pi-coding-agent";
+import { Container, Markdown, Spacer, Text } from "@mariozechner/pi-tui";
 import type { AgentScope } from "./agents.js";
 import { formatToolCall, formatUsageStats } from "./format.js";
 import { getDisplayItems, getFinalOutput } from "./runner.js";
 import { COLLAPSED_ITEM_COUNT } from "./store.js";
 import type { DisplayItem, SingleResult, SubagentDetails } from "./types.js";
 
-import { getMarkdownTheme } from "@mariozechner/pi-coding-agent";
-import { Container, Markdown, Spacer, Text } from "@mariozechner/pi-tui";
-
 // ─── Helpers (internal) ──────────────────────────────────────────────────────
 
-function renderDisplayItems(
-	items: DisplayItem[],
-	expanded: boolean,
-	theme: any,
-	limit?: number,
-): string {
+function renderDisplayItems(items: DisplayItem[], expanded: boolean, theme: any, limit?: number): string {
 	const toShow = limit ? items.slice(-limit) : items;
 	const skipped = limit && items.length > limit ? items.length - limit : 0;
 	let text = "";
@@ -64,11 +58,7 @@ export function renderSubagentToolCall(args: any, theme: any) {
 			const cleanTask = step.task.replace(/\{previous\}/g, "").trim();
 			const preview = cleanTask.length > 40 ? `${cleanTask.slice(0, 40)}...` : cleanTask;
 			text +=
-				"\n  " +
-				theme.fg("muted", `${i + 1}.`) +
-				" " +
-				theme.fg("accent", step.agent) +
-				theme.fg("dim", ` ${preview}`);
+				"\n  " + theme.fg("muted", `${i + 1}.`) + " " + theme.fg("accent", step.agent) + theme.fg("dim", ` ${preview}`);
 		}
 		if (args.chain.length > 3) text += `\n  ${theme.fg("muted", `... +${args.chain.length - 3} more`)}`;
 		return new Text(text, 0, 0);
@@ -88,9 +78,7 @@ export function renderSubagentToolCall(args: any, theme: any) {
 	const agentName = args.agent || "...";
 	const preview = args.task ? (args.task.length > 60 ? `${args.task.slice(0, 60)}...` : args.task) : "...";
 	let text =
-		theme.fg("toolTitle", theme.bold("subagent ")) +
-		theme.fg("accent", agentName) +
-		theme.fg("muted", ` [${scope}]`);
+		theme.fg("toolTitle", theme.bold("subagent ")) + theme.fg("accent", agentName) + theme.fg("muted", ` [${scope}]`);
 	text += `\n  ${theme.fg("dim", preview)}`;
 	return new Text(text, 0, 0);
 }
@@ -118,8 +106,7 @@ export function renderSubagentToolResult(result: any, { expanded }: { expanded: 
 			let header = `${icon} ${theme.fg("toolTitle", theme.bold(r.agent))}${theme.fg("muted", ` (${r.agentSource})`)}`;
 			if (isError && r.stopReason) header += ` ${theme.fg("error", `[${r.stopReason}]`)}`;
 			container.addChild(new Text(header, 0, 0));
-			if (isError && r.errorMessage)
-				container.addChild(new Text(theme.fg("error", `Error: ${r.errorMessage}`), 0, 0));
+			if (isError && r.errorMessage) container.addChild(new Text(theme.fg("error", `Error: ${r.errorMessage}`), 0, 0));
 			container.addChild(new Spacer(1));
 			container.addChild(new Text(theme.fg("dim", r.task), 0, 0));
 			container.addChild(new Spacer(1));
@@ -130,11 +117,7 @@ export function renderSubagentToolResult(result: any, { expanded }: { expanded: 
 				for (const item of displayItems) {
 					if (item.type === "toolCall")
 						container.addChild(
-							new Text(
-								theme.fg("muted", "→ ") + formatToolCall(item.name, item.args, theme.fg.bind(theme)),
-								0,
-								0,
-							),
+							new Text(theme.fg("muted", "→ ") + formatToolCall(item.name, item.args, theme.fg.bind(theme)), 0, 0),
 						);
 				}
 				if (finalOutput) {
@@ -187,11 +170,7 @@ export function renderSubagentToolResult(result: any, { expanded }: { expanded: 
 
 				container.addChild(new Spacer(1));
 				container.addChild(
-					new Text(
-						`${theme.fg("muted", `─── Step ${r.step}: `) + theme.fg("accent", r.agent)} ${rIcon}`,
-						0,
-						0,
-					),
+					new Text(`${theme.fg("muted", `─── Step ${r.step}: `) + theme.fg("accent", r.agent)} ${rIcon}`, 0, 0),
 				);
 				container.addChild(new Text(theme.fg("dim", r.task), 0, 0));
 
@@ -199,11 +178,7 @@ export function renderSubagentToolResult(result: any, { expanded }: { expanded: 
 				for (const item of displayItems) {
 					if (item.type === "toolCall") {
 						container.addChild(
-							new Text(
-								theme.fg("muted", "→ ") + formatToolCall(item.name, item.args, theme.fg.bind(theme)),
-								0,
-								0,
-							),
+							new Text(theme.fg("muted", "→ ") + formatToolCall(item.name, item.args, theme.fg.bind(theme)), 0, 0),
 						);
 					}
 				}
@@ -262,11 +237,7 @@ export function renderSubagentToolResult(result: any, { expanded }: { expanded: 
 		if (expanded && !isRunning) {
 			const container = new Container();
 			container.addChild(
-				new Text(
-					`${icon} ${theme.fg("toolTitle", theme.bold("parallel "))}${theme.fg("accent", status)}`,
-					0,
-					0,
-				),
+				new Text(`${icon} ${theme.fg("toolTitle", theme.bold("parallel "))}${theme.fg("accent", status)}`, 0, 0),
 			);
 
 			for (const r of details.results) {
@@ -275,20 +246,14 @@ export function renderSubagentToolResult(result: any, { expanded }: { expanded: 
 				const finalOutput = getFinalOutput(r.messages);
 
 				container.addChild(new Spacer(1));
-				container.addChild(
-					new Text(`${theme.fg("muted", "─── ") + theme.fg("accent", r.agent)} ${rIcon}`, 0, 0),
-				);
+				container.addChild(new Text(`${theme.fg("muted", "─── ") + theme.fg("accent", r.agent)} ${rIcon}`, 0, 0));
 				container.addChild(new Text(theme.fg("dim", r.task), 0, 0));
 
 				// Show tool calls
 				for (const item of displayItems) {
 					if (item.type === "toolCall") {
 						container.addChild(
-							new Text(
-								theme.fg("muted", "→ ") + formatToolCall(item.name, item.args, theme.fg.bind(theme)),
-								0,
-								0,
-							),
+							new Text(theme.fg("muted", "→ ") + formatToolCall(item.name, item.args, theme.fg.bind(theme)), 0, 0),
 						);
 					}
 				}

@@ -1,8 +1,8 @@
 import { Type } from "@mariozechner/pi-ai";
-import { truncateToWidth, visibleWidth } from "@mariozechner/pi-tui";
 import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
-import { formatElapsedSince } from "./utils/time-utils.ts";
+import { truncateToWidth, visibleWidth } from "@mariozechner/pi-tui";
 import { isAgentsModeEnabled } from "./system-mode/state.ts";
+import { formatElapsedSince } from "./utils/time-utils.ts";
 
 const WIDGET_KEY = "progress-widget-enforcer";
 const MAX_PROGRESS_LEN = 140;
@@ -60,11 +60,7 @@ function buildProgressCard(
 		render(width: number): string[] {
 			const meta = getPhaseMeta(phase);
 			const displayProgress =
-				phase === "done"
-					? hideDoneProgress || !progress.trim()
-						? "응답 완료"
-						: `(완료) ${progress}`
-					: progress;
+				phase === "done" ? (hideDoneProgress || !progress.trim() ? "응답 완료" : `(완료) ${progress}`) : progress;
 
 			const statusText = displayProgress;
 
@@ -125,7 +121,7 @@ export default function (pi: ExtensionAPI) {
 		if (!ctx.hasUI) return;
 		if (phase !== "done" && runStartedAt <= 0) return;
 
-		const elapsedLabel = phase === "done" ? doneElapsedLabel ?? "0초" : formatElapsedSince(runStartedAt);
+		const elapsedLabel = phase === "done" ? (doneElapsedLabel ?? "0초") : formatElapsedSince(runStartedAt);
 		const hideDoneProgress = phase === "done" && isDefaultProgress;
 		ctx.ui.setWidget(
 			WIDGET_KEY,

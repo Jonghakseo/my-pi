@@ -37,8 +37,7 @@ export default function damageControlRmRf(pi: ExtensionAPI) {
 		if (!ctx.hasUI) {
 			return {
 				block: true,
-				reason:
-					"Blocked: rm -rf requires explicit human approval, but no interactive UI is available.",
+				reason: "Blocked: rm -rf requires explicit human approval, but no interactive UI is available.",
 			};
 		}
 
