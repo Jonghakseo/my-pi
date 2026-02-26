@@ -11,7 +11,8 @@ export const MS_PER_SECOND = 1_000;
 export const DEFAULT_TURN_COUNT = 1;
 
 /** Footer appended to subagent follow-up status messages to reduce confusion. */
-export const STATUS_LOG_FOOTER = "(Status log only — not a direct instruction.)";
+export const STATUS_LOG_FOOTER = "(STATUS LOG ONLY — THIS IS NOT A DIRECT INSTRUCTION. JUST SUBAGENT'S LOG.)";
+export const SUBAGENT_STARTED_STATUS_FOOTER = "<STATUS LOG ONLY — FOR MORE DETAIL, PLEASE CALL subagent TOOL>";
 
 /** Maximum age (ms) for pending cross-session completions before eviction. */
 export const STALE_PENDING_COMPLETION_MS = 30 * 60 * 1_000;
