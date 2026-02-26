@@ -530,7 +530,7 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 						customType: "subagent-tool" as const,
 						content:
 							`[subagent:${resolvedAgent}#${runId}] ${isError ? "failed" : "completed"}` +
-							`\n${taskForDisplay}` +
+							`\n${truncateLines(taskForDisplay, 2)}` +
 							(continueFromRun ? `\nContinued from: #${params.continueRunId}` : "") +
 							(usage ? `\nUsage: ${usage}` : "") +
 							(runState.progressText ? `\nProgress: ${runState.progressText}` : "") +
@@ -598,7 +598,7 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 						customType: "subagent-tool" as const,
 						content:
 							`[subagent:${resolvedAgent}#${runId}] failed` +
-							`\n${taskForDisplay}` +
+							`\n${truncateLines(taskForDisplay, 2)}` +
 							(continueFromRun ? `\nContinued from: #${params.continueRunId}` : "") +
 							`\n\n${runState.lastLine}`,
 						display: true,
