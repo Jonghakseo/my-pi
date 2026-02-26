@@ -32,6 +32,7 @@ import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import {
 	DEFAULT_TURN_COUNT,
 	PLACEHOLDER_RUNNING_EXIT_CODE,
+	STATUS_LOG_FOOTER,
 	STATUS_OUTPUT_PREVIEW_MAX_CHARS,
 } from "./constants.js";
 
@@ -482,7 +483,8 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 					content:
 						`[subagent:${resolvedAgent}#${runId}] ${startedState}` +
 						`\n${truncateLines(taskForDisplay, 2)}` +
-						`\nContext: ${contextLabel} · turn ${runState.turnCount}`,
+						`\nContext: ${contextLabel} · turn ${runState.turnCount}` +
+						`\n\n${STATUS_LOG_FOOTER}`,
 					display: true,
 					details: {
 						runId,
@@ -544,7 +546,8 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 							`\n${truncateLines(taskForDisplay, 2)}` +
 							(usage ? `\nUsage: ${usage}` : "") +
 							(runState.progressText ? `\nProgress: ${runState.progressText}` : "") +
-							`\n\n${rawOutput}`,
+							`\n\n${rawOutput}` +
+							`\n\n${STATUS_LOG_FOOTER}`,
 						display: true,
 						details: {
 							runId,
@@ -609,7 +612,8 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 						content:
 							`[subagent:${resolvedAgent}#${runId}] failed` +
 							`\n${truncateLines(taskForDisplay, 2)}` +
-							`\n\n${runState.lastLine}`,
+							`\n\n${runState.lastLine}` +
+							`\n\n${STATUS_LOG_FOOTER}`,
 						display: true,
 						details: {
 							runId,
