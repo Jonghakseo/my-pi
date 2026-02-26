@@ -828,10 +828,9 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 					customType: "subagent-command",
 					content:
 						`[subagent:${selectedAgent}#${runId}] ${startedState}` +
-						`\n${truncateLines(taskForDisplay, 2)}` +
 						`\nContext: ${contextLabel} · turn ${runState.turnCount}` +
-						`\n\n${STATUS_LOG_FOOTER}`,
-					display: true,
+						``,
+					display: false,
 					details: {
 						runId,
 						agent: selectedAgent,
