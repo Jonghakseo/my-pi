@@ -1,18 +1,15 @@
+import { execFileSync } from "node:child_process";
+import { randomUUID } from "node:crypto";
+import * as fs from "node:fs";
+import * as path from "node:path";
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import { Type } from "@sinclair/typebox";
-import { randomUUID } from "crypto";
-import * as path from "path";
-import * as fs from "fs";
-import * as os from "os";
-import { execSync } from "child_process";
 
 const STORAGE_OWNER = "creatrip";
 const STORAGE_REPO = "agent-storage";
 const STORAGE_BRANCH = "main";
 
-const ALLOWED_EXTENSIONS = new Set([
-	".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".bmp", ".ico",
-]);
+const ALLOWED_EXTENSIONS = new Set([".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".bmp", ".ico"]);
 
 const MIME_TO_EXT: Record<string, string> = {
 	"image/png": ".png",
@@ -24,9 +21,14 @@ const MIME_TO_EXT: Record<string, string> = {
 	"image/x-icon": ".ico",
 };
 
+/** Strip path separators and shell-unsafe characters to prevent traversal / injection. */
+function sanitizeFilename(raw: string): string {
+	return raw.replace(/[/\\:*?"<>|`$!&;#{}()'\s]/g, "_").replace(/\.{2,}/g, "_");
+}
+
 function getRepoContext(): { owner: string; repo: string } | null {
 	try {
-		const nameWithOwner = execSync("gh repo view --json nameWithOwner --jq .nameWithOwner", {
+		const nameWithOwner = execFileSync("gh", ["repo", "view", "--json", "nameWithOwner", "--jq", ".nameWithOwner"], {
 			encoding: "utf-8",
 			stdio: ["pipe", "pipe", "pipe"],
 		}).trim();
@@ -39,7 +41,7 @@ function getRepoContext(): { owner: string; repo: string } | null {
 
 function getPrNumber(): number | null {
 	try {
-		const pr = execSync("gh pr view --json number --jq .number", {
+		const pr = execFileSync("gh", ["pr", "view", "--json", "number", "--jq", ".number"], {
 			encoding: "utf-8",
 			stdio: ["pipe", "pipe", "pipe"],
 		}).trim();
@@ -52,9 +54,12 @@ function getPrNumber(): number | null {
 
 function inferExtension(url: string, contentType?: string): string {
 	try {
-		const ext = path.extname(new URL(url).pathname).toLowerCase().split("?")[0]!;
+		const parts = path.extname(new URL(url).pathname).toLowerCase().split("?");
+		const ext = parts[0] ?? "";
 		if (ext && ALLOWED_EXTENSIONS.has(ext)) return ext;
-	} catch { /* ignore */ }
+	} catch {
+		/* ignore */
+	}
 
 	if (contentType) {
 		for (const [mime, ext] of Object.entries(MIME_TO_EXT)) {
@@ -79,8 +84,8 @@ export default function uploadImageUrl(pi: ExtensionAPI) {
 				Type.String({ description: "Optional custom filename without extension. Defaults to a UUID." }),
 			),
 		}),
-		async execute(_toolCallId, params) {
-			const { url, filename } = params as { url: string; filename?: string };
+		async execute(_toolCallId, params, _signal, _onUpdate, _ctx) {
+			const { url, filename } = params;
 			const isLocal = !url.startsWith("http://") && !url.startsWith("https://");
 
 			try {
@@ -92,6 +97,7 @@ export default function uploadImageUrl(pi: ExtensionAPI) {
 					if (!fs.existsSync(resolved)) {
 						return {
 							content: [{ type: "text", text: `File not found: ${resolved}` }],
+							details: undefined,
 							isError: true,
 						};
 					}
@@ -99,6 +105,7 @@ export default function uploadImageUrl(pi: ExtensionAPI) {
 					if (!ALLOWED_EXTENSIONS.has(ext)) {
 						return {
 							content: [{ type: "text", text: `Unsupported image type: ${ext}` }],
+							details: undefined,
 							isError: true,
 						};
 					}
@@ -108,6 +115,7 @@ export default function uploadImageUrl(pi: ExtensionAPI) {
 					if (!res.ok) {
 						return {
 							content: [{ type: "text", text: `Download failed: HTTP ${res.status} from ${url}` }],
+							details: undefined,
 							isError: true,
 						};
 					}
@@ -116,14 +124,15 @@ export default function uploadImageUrl(pi: ExtensionAPI) {
 					if (!ALLOWED_EXTENSIONS.has(ext)) {
 						return {
 							content: [{ type: "text", text: `Unsupported image type: ${ext}` }],
+							details: undefined,
 							isError: true,
 						};
 					}
 					buffer = Buffer.from(await res.arrayBuffer());
 				}
 
-				// 2. Build storage path: {owner}/{repo}/{prNumber}/{file} or {owner}/{repo}/general/{file}
-				const name = (filename || randomUUID()) + ext;
+				// Build storage path: {owner}/{repo}/{prNumber}/{file} or general/{file}
+				const name = sanitizeFilename(filename || randomUUID()) + ext;
 				const repoCtx = getRepoContext();
 				const prNumber = repoCtx ? getPrNumber() : null;
 				const folder = repoCtx
@@ -133,36 +142,36 @@ export default function uploadImageUrl(pi: ExtensionAPI) {
 					: "general";
 				const storagePath = `${folder}/${name}`;
 
-				const tmpFile = path.join(os.tmpdir(), `upload-${name}`);
-				fs.writeFileSync(tmpFile, buffer);
-				const base64Content = buffer.toString("base64");
+				// Upload via gh api — JSON body piped through stdin to avoid argv size limit (E2BIG)
+				const payload = JSON.stringify({
+					message: `upload: ${storagePath}`,
+					content: buffer.toString("base64"),
+					branch: STORAGE_BRANCH,
+				});
 
-				// 3. Upload via gh api
-				try {
-					execSync(
-						`gh api --method PUT "repos/${STORAGE_OWNER}/${STORAGE_REPO}/contents/${storagePath}" ` +
-						`-f message="upload: ${storagePath}" ` +
-						`-f content="${base64Content}" ` +
-						`-f branch="${STORAGE_BRANCH}"`,
-						{ encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"], maxBuffer: 50 * 1024 * 1024 },
-					);
-				} finally {
-					try { fs.unlinkSync(tmpFile); } catch { /* ignore */ }
-				}
+				execFileSync(
+					"gh",
+					["api", "--method", "PUT", `repos/${STORAGE_OWNER}/${STORAGE_REPO}/contents/${storagePath}`, "--input", "-"],
+					{ encoding: "utf-8", input: payload, stdio: ["pipe", "pipe", "pipe"], maxBuffer: 50 * 1024 * 1024 },
+				);
 
 				const rawUrl = `https://github.com/${STORAGE_OWNER}/${STORAGE_REPO}/blob/${STORAGE_BRANCH}/${storagePath}?raw=true`;
 				const markdown = `![${name}](${rawUrl})`;
 
 				return {
-					content: [{
-						type: "text",
-						text: JSON.stringify({ success: true, url: rawUrl, storagePath, markdown }, null, 2),
-					}],
+					content: [
+						{
+							type: "text",
+							text: JSON.stringify({ success: true, url: rawUrl, storagePath, markdown }, null, 2),
+						},
+					],
+					details: undefined,
 				};
 			} catch (error) {
 				const msg = error instanceof Error ? error.message : String(error);
 				return {
 					content: [{ type: "text", text: JSON.stringify({ success: false, error: msg }) }],
+					details: undefined,
 					isError: true,
 				};
 			}
