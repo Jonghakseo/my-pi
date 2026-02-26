@@ -9,7 +9,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import type { AgentScope } from "./agents.js";
 import { discoverAgents } from "./agents.js";
-import { formatUsageStats } from "./format.js";
+import { formatUsageStats, truncateLines } from "./format.js";
 import { SubagentSessionReplayOverlay, readSessionReplayItems } from "./replay.js";
 import {
 	getFinalOutput,
@@ -775,7 +775,7 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 					customType: "subagent-command",
 					content:
 						`[sub:${selectedAgent}#${runId}] ${startedState}` +
-						`\n${taskForDisplay}` +
+						`\n${truncateLines(taskForDisplay, 2)}` +
 						(continuedFromRunId !== undefined ? `\nContinued from: #${continuedFromRunId}` : "") +
 						`\nContext: ${contextLabel} · turn ${runState.turnCount}`,
 					display: true,
@@ -858,7 +858,7 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 						customType: "subagent-command" as const,
 						content:
 							`[sub:${selectedAgent}#${runId}] ${isError ? "failed" : "completed"}` +
-							`\n${taskForDisplay}` +
+							`\n${truncateLines(taskForDisplay, 2)}` +
 							(continuedFromRunId !== undefined ? `\nContinued from: #${continuedFromRunId}` : "") +
 							(usage ? `\nUsage: ${usage}` : "") +
 							(runState.progressText ? `\nProgress: ${runState.progressText}` : "") +
@@ -924,7 +924,7 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 						customType: "subagent-command" as const,
 						content:
 							`[sub:${selectedAgent}#${runId}] failed` +
-							`\n${taskForDisplay}` +
+							`\n${truncateLines(taskForDisplay, 2)}` +
 							(continuedFromRunId !== undefined ? `\nContinued from: #${continuedFromRunId}` : "") +
 							`\n\n${runState.lastLine}`,
 						display: true,
