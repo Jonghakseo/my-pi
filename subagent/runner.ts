@@ -317,6 +317,9 @@ export async function runSingleAgent(
 			const proc = spawn("pi", args, { cwd: cwd ?? defaultCwd, shell: false, stdio: ["ignore", "pipe", "pipe"] });
 			let buffer = "";
 			let procExited = false;
+			let settled = false;
+			let exitFallbackTimer: ReturnType<typeof setTimeout> | undefined;
+			let lastExitCode = 0;
 
 			const processLine = (line: string) => {
 				if (!line.trim()) return;
@@ -385,6 +388,17 @@ export async function runSingleAgent(
 				}
 			};
 
+			const resolveOnce = (code: number) => {
+				if (settled) return;
+				settled = true;
+				if (exitFallbackTimer) {
+					clearTimeout(exitFallbackTimer);
+					exitFallbackTimer = undefined;
+				}
+				if (buffer.trim()) processLine(buffer);
+				resolve(code);
+			};
+
 			proc.stdout.on("data", (data) => {
 				buffer += data.toString();
 				const lines = buffer.split("\n");
@@ -396,15 +410,22 @@ export async function runSingleAgent(
 				currentResult.stderr += data.toString();
 			});
 
+			proc.on("exit", (code) => {
+				procExited = true;
+				lastExitCode = code ?? 0;
+				// In rare cases stdout/stderr pipes may stay open after process exit.
+				// Use a short fallback so runs cannot stay "running" forever.
+				exitFallbackTimer = setTimeout(() => resolveOnce(lastExitCode), 1500);
+			});
+
 			proc.on("close", (code) => {
 				procExited = true;
-				if (buffer.trim()) processLine(buffer);
-				resolve(code ?? 0);
+				resolveOnce(code ?? lastExitCode ?? 0);
 			});
 
 			proc.on("error", () => {
 				procExited = true;
-				resolve(1);
+				resolveOnce(1);
 			});
 
 			if (signal) {
