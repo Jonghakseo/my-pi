@@ -470,7 +470,6 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 					content:
 						`[subagent:${resolvedAgent}#${runId}] ${startedState}` +
 						`\n${truncateLines(taskForDisplay, 2)}` +
-						(continueFromRun ? `\nContinued from: #${params.continueRunId}` : "") +
 						`\nContext: ${contextLabel} · turn ${runState.turnCount}`,
 					display: true,
 					details: {
@@ -531,7 +530,6 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 						content:
 							`[subagent:${resolvedAgent}#${runId}] ${isError ? "failed" : "completed"}` +
 							`\n${truncateLines(taskForDisplay, 2)}` +
-							(continueFromRun ? `\nContinued from: #${params.continueRunId}` : "") +
 							(usage ? `\nUsage: ${usage}` : "") +
 							(runState.progressText ? `\nProgress: ${runState.progressText}` : "") +
 							`\n\n${rawOutput}`,
@@ -599,7 +597,6 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 						content:
 							`[subagent:${resolvedAgent}#${runId}] failed` +
 							`\n${truncateLines(taskForDisplay, 2)}` +
-							(continueFromRun ? `\nContinued from: #${params.continueRunId}` : "") +
 							`\n\n${runState.lastLine}`,
 						display: true,
 						details: {
