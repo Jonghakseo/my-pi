@@ -300,8 +300,28 @@ async function subBackHandler(ctx: any, store: SubagentStore): Promise<void> {
  * the user was in a different session.
  */
 function restoreRunsFromSession(store: SubagentStore, ctx: any, pi?: ExtensionAPI): void {
+	let currentSessionFile: string | null = null;
+	try {
+		currentSessionFile = normalizePath(ctx.sessionManager.getSessionFile());
+	} catch {
+		currentSessionFile = null;
+	}
+
+	// Snapshot previous session view before switching away so we can recover
+	// transient runs when JSONL persistence lags behind session switching.
+	if (store.currentSessionFile && store.currentSessionFile !== currentSessionFile) {
+		const snapshot = Array.from(store.commandRuns.values())
+			.filter((run) => !run.removed)
+			.map((run) => ({ ...run }));
+		if (snapshot.length > 0) {
+			store.sessionRunCache.set(store.currentSessionFile, snapshot);
+		}
+	}
+	store.currentSessionFile = currentSessionFile;
+
 	store.commandRuns.clear();
 	store.commandWidgetCtx = ctx;
+	let sawSubagentMarkers = false;
 
 	try {
 		const entries = ctx.sessionManager.getEntries();
@@ -314,9 +334,12 @@ function restoreRunsFromSession(store: SubagentStore, ctx: any, pi?: ExtensionAP
 		for (const entry of entries) {
 			if (entry.type === "custom") {
 				const ce = entry as any;
-				if (ce.customType === PARENT_ENTRY_TYPE && ce.data?.parentSessionFile) {
-					const cleaned = normalizePath(ce.data.parentSessionFile);
-					if (cleaned) latestParentSessionFile = cleaned;
+				if (ce.customType === PARENT_ENTRY_TYPE) {
+					sawSubagentMarkers = true;
+					if (ce.data?.parentSessionFile) {
+						const cleaned = normalizePath(ce.data.parentSessionFile);
+						if (cleaned) latestParentSessionFile = cleaned;
+					}
 				}
 			}
 		}
@@ -326,8 +349,11 @@ function restoreRunsFromSession(store: SubagentStore, ctx: any, pi?: ExtensionAP
 		for (const entry of entries) {
 			if (entry.type === "custom") {
 				const ce = entry as any;
-				if (ce.customType === "subagent-removed" && ce.data?.runId != null) {
-					removedRunIds.add(ce.data.runId);
+				if (ce.customType === "subagent-removed") {
+					sawSubagentMarkers = true;
+					if (ce.data?.runId != null) {
+						removedRunIds.add(ce.data.runId);
+					}
 				}
 			}
 		}
@@ -336,6 +362,7 @@ function restoreRunsFromSession(store: SubagentStore, ctx: any, pi?: ExtensionAP
 			if (entry.type !== "custom_message") continue;
 			const cm = entry as any;
 			if (cm.customType !== "subagent-command" && cm.customType !== "subagent-tool") continue;
+			sawSubagentMarkers = true;
 			const d = cm.details;
 			if (!d || typeof d.runId !== "number") continue;
 
@@ -390,8 +417,8 @@ function restoreRunsFromSession(store: SubagentStore, ctx: any, pi?: ExtensionAP
 				// Extract progress and output from content payload
 				const lines = content.split("\n");
 				if (!run.progressText) {
-					const progressLine = lines.find((l: string) => l.startsWith("Progress: "));
-					if (progressLine) run.progressText = progressLine.slice("Progress: ".length).trim();
+					const progressLine = lines.find((l: string) => l.startsWith("Result: ") || l.startsWith("Progress: "));
+					if (progressLine) run.progressText = progressLine.replace(/^(Result|Progress): /, "").trim();
 				}
 				const bodyStart = lines.findIndex((l: string) => l === "") + 1;
 				if (bodyStart > 0 && bodyStart < lines.length) {
@@ -439,11 +466,7 @@ function restoreRunsFromSession(store: SubagentStore, ctx: any, pi?: ExtensionAP
 	// Only re-integrate runs that originated from the current session.
 	// Runs from other sessions stay hidden — they will appear when the
 	// user switches back to their origin session.
-	let mergeSessionFile: string | null = null;
-	try {
-		mergeSessionFile = normalizePath(ctx.sessionManager.getSessionFile());
-	} catch { /* ignore */ }
-
+	const mergeSessionFile = currentSessionFile;
 	if (mergeSessionFile) {
 		for (const [runId, entry] of store.globalLiveRuns) {
 			if (entry.originSessionFile !== mergeSessionFile) continue;
@@ -457,23 +480,16 @@ function restoreRunsFromSession(store: SubagentStore, ctx: any, pi?: ExtensionAP
 	// If a run finished while the user was in a different session and the
 	// user has now switched back to the origin session, deliver the stored
 	// completion message via pi.sendMessage().
-	if (pi) {
-		let currentSessionFile: string | null = null;
-		try {
-			currentSessionFile = normalizePath(ctx.sessionManager.getSessionFile());
-		} catch { /* ignore */ }
-
-		if (currentSessionFile) {
-			for (const [runId, entry] of store.globalLiveRuns) {
-				if (!entry.pendingCompletion) continue;
-				if (entry.originSessionFile === currentSessionFile) {
-					try {
-						pi.sendMessage(entry.pendingCompletion.message, entry.pendingCompletion.options);
-					} catch { /* ignore delivery errors */ }
-					// Restore the completed run state into commandRuns for display.
-					store.commandRuns.set(runId, entry.runState);
-					store.globalLiveRuns.delete(runId);
-				}
+	if (pi && currentSessionFile) {
+		for (const [runId, entry] of store.globalLiveRuns) {
+			if (!entry.pendingCompletion) continue;
+			if (entry.originSessionFile === currentSessionFile) {
+				try {
+					pi.sendMessage(entry.pendingCompletion.message, entry.pendingCompletion.options);
+				} catch { /* ignore delivery errors */ }
+				// Restore the completed run state into commandRuns for display.
+				store.commandRuns.set(runId, entry.runState);
+				store.globalLiveRuns.delete(runId);
 			}
 		}
 	}

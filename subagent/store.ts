@@ -28,6 +28,13 @@ export interface SubagentStore {
 	switchSessionFn: ((sessionPath: string) => Promise<{ cancelled: boolean }>) | null;
 	/** Persistent parent session file path, restored from session entries. Null when at root. */
 	currentParentSessionFile: string | null;
+	/**
+	 * Per-session in-memory run snapshots used as a fallback when a session switch
+	 * happens before subagent status logs are fully persisted to JSONL.
+	 */
+	sessionRunCache: Map<string, CommandRunState[]>;
+	/** Last active session file path for snapshot bookkeeping. */
+	currentSessionFile: string | null;
 }
 
 export function createStore(): SubagentStore {
@@ -40,6 +47,8 @@ export function createStore(): SubagentStore {
 		sessionStack: [],
 		switchSessionFn: null,
 		currentParentSessionFile: null,
+		sessionRunCache: new Map(),
+		currentSessionFile: null,
 	};
 }
 
