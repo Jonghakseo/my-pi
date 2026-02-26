@@ -32,7 +32,6 @@ import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import {
 	DEFAULT_TURN_COUNT,
 	PLACEHOLDER_RUNNING_EXIT_CODE,
-	STATUS_LOG_FOOTER,
 	STATUS_OUTPUT_PREVIEW_MAX_CHARS,
 } from "./constants.js";
 
@@ -143,10 +142,10 @@ function formatRunDetailOutput(run: CommandRunState): string {
 	const sessionOutput = sessionSummary.finalOutput?.trim() ? sessionSummary.finalOutput : "";
 	const lineOutput = run.lastLine?.trim() ? run.lastLine : "";
 	const output = runOutput || sessionOutput || lineOutput || "(no output)";
-	const lines: string[] = [formatCommandRunSummary(run), run.task];
+	const lines: string[] = [formatCommandRunSummary(run), `Prompt: ${run.task}`];
 
 	if (run.sessionFile) lines.push(`Session: ${run.sessionFile}`);
-	if (run.progressText) lines.push(`Progress: ${run.progressText}`);
+	if (run.progressText) lines.push(`Result: ${run.progressText}`);
 
 	lines.push("", "Result:", output, "", "Tool calls by turn:");
 
@@ -543,11 +542,10 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 						customType: "subagent-tool" as const,
 						content:
 							`[subagent:${resolvedAgent}#${runId}] ${isError ? "failed" : "completed"}` +
-							`\n${truncateLines(taskForDisplay, 2)}` +
+							`\nPrompt: ${truncateLines(taskForDisplay, 2)}` +
 							(usage ? `\nUsage: ${usage}` : "") +
-							(runState.progressText ? `\nProgress: ${runState.progressText}` : "") +
-							`\n\n${rawOutput}` +
-							`\n\n${STATUS_LOG_FOOTER}`,
+							(runState.progressText ? `\nResult: ${runState.progressText}` : "") +
+							`\n\n${rawOutput}`,
 						display: true,
 						details: {
 							runId,
@@ -611,9 +609,8 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 						customType: "subagent-tool" as const,
 						content:
 							`[subagent:${resolvedAgent}#${runId}] failed` +
-							`\n${truncateLines(taskForDisplay, 2)}` +
-							`\n\n${runState.lastLine}` +
-							`\n\n${STATUS_LOG_FOOTER}`,
+							`\nPrompt: ${truncateLines(taskForDisplay, 2)}` +
+							`\n\n${runState.lastLine}`,
 						display: true,
 						details: {
 							runId,

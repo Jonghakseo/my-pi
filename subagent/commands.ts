@@ -911,11 +911,10 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 						customType: "subagent-command" as const,
 						content:
 							`[subagent:${selectedAgent}#${runId}] ${isError ? "failed" : "completed"}` +
-							`\n${truncateLines(taskForDisplay, 2)}` +
+							`\nPrompt: ${truncateLines(taskForDisplay, 2)}` +
 							(usage ? `\nUsage: ${usage}` : "") +
-							(runState.progressText ? `\nProgress: ${runState.progressText}` : "") +
-							`\n\n${output}` +
-							`\n\n${STATUS_LOG_FOOTER}`,
+							(runState.progressText ? `\nResult: ${runState.progressText}` : "") +
+							`\n\n${output}`,
 						display: true,
 						details: {
 							runId,
@@ -979,9 +978,8 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 						customType: "subagent-command" as const,
 						content:
 							`[subagent:${selectedAgent}#${runId}] failed` +
-							`\n${truncateLines(taskForDisplay, 2)}` +
-							`\n\n${runState.lastLine}` +
-							`\n\n${STATUS_LOG_FOOTER}`,
+							`\nPrompt: ${truncateLines(taskForDisplay, 2)}` +
+							`\n\n${runState.lastLine}`,
 						display: true,
 						details: {
 							runId,
