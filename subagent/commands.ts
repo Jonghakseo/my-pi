@@ -1069,8 +1069,9 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 				run.status === "running"
 					? "(still running; no final output yet)"
 					: run.lastLine || "(no output captured)";
+			const contextLabel = run.contextMode === "main" ? "main" : "isolated";
 			const content =
-				`Subagent #${run.id} [${run.status}] ${run.agent} ctx:${run.contextMode ?? "sub"} turn:${run.turnCount ?? DEFAULT_TURN_COUNT} ${elapsedSec}s tools:${run.toolCalls}` +
+				`Subagent #${run.id} [${run.status}] ${run.agent} ctx:${contextLabel} turn:${run.turnCount ?? DEFAULT_TURN_COUNT} ${elapsedSec}s tools:${run.toolCalls}` +
 				`\n${run.task}` +
 				usageLine +
 				`\n\n${output || fallback}`;

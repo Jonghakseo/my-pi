@@ -9,7 +9,13 @@ import * as fs from "node:fs";
 
 import type { AgentConfig, AgentScope } from "./agents.js";
 import { discoverAgents } from "./agents.js";
-import { formatUsageStats, truncateLines } from "./format.js";
+import {
+	formatContextUsageBar,
+	formatUsageStats,
+	getUsedContextPercent,
+	resolveContextWindow,
+	truncateLines,
+} from "./format.js";
 import {
 	getFinalOutput,
 	getLastNonEmptyLine,
@@ -221,7 +227,13 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 						details: makeDetails("single")([]),
 					};
 				}
-				const lines = runs.map((run) => `${formatCommandRunSummary(run)}\n  ${run.task}`);
+				const lines = runs.map((run) => {
+					const contextWindow = resolveContextWindow(ctx, run.model);
+					const usedPercent = getUsedContextPercent(run.usage?.contextTokens, contextWindow);
+					const usageSuffix = usedPercent === undefined ? "" : ` usage:${formatContextUsageBar(usedPercent)}`;
+					const taskPreview = truncateLines(run.task, 2).replace(/\n/g, "\n  ");
+					return `${formatCommandRunSummary(run)}${usageSuffix}\n  ${taskPreview}`;
+				});
 				return {
 					content: [{ type: "text", text: `Subagent runs\n\n${lines.join("\n\n")}` }],
 					details: makeDetails("single")([]),
