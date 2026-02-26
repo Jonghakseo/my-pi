@@ -1,14 +1,5 @@
 import { DynamicBorder, type ExtensionAPI, getMarkdownTheme as getPiMdTheme } from "@mariozechner/pi-coding-agent";
-import {
-	Box,
-	Container,
-	Key,
-	Markdown,
-	matchesKey,
-	Spacer,
-	Text,
-	truncateToWidth,
-} from "@mariozechner/pi-tui";
+import { Box, Container, Key, Markdown, matchesKey, Spacer, Text, truncateToWidth } from "@mariozechner/pi-tui";
 import { applyExtensionDefaults } from "./themeMap.ts";
 import { formatDurationBetween } from "./utils/time-utils.ts";
 

@@ -3,7 +3,7 @@
  */
 
 import { Box, Text, truncateToWidth, visibleWidth } from "@mariozechner/pi-tui";
-import { PARENT_HINT } from "./constants.js";
+import { HANG_WARNING_IDLE_MS, PARENT_HINT } from "./constants.js";
 import {
 	AGENT_NAME_PALETTE,
 	agentBgIndex,
@@ -126,12 +126,24 @@ export function updateCommandRunsWidget(store: SubagentStore, ctx?: any): void {
 						const turnLabel = run.turnCount > 1 ? theme.fg("dim", ` · Turn ${run.turnCount}`) : "";
 						const modeLabel = run.contextMode === "main" ? theme.fg("warning", " · MainCtx") : "";
 
+						// Idle indicator for running runs
+						let idleLabel = "";
+						if (run.status === "running" && run.lastActivityAt) {
+							const idleMs = Date.now() - run.lastActivityAt;
+							const idleSec = Math.round(idleMs / 1000);
+							if (idleSec >= 5) {
+								const idleColor = idleMs >= HANG_WARNING_IDLE_MS ? "error" : "dim";
+								idleLabel = theme.fg(idleColor, ` idle:${idleSec}s`);
+							}
+						}
+
 						const statusLeft =
 							theme.fg(statusColor, `${statusIcon} #${run.id}`) +
 							modeLabel +
 							`\x1b[38;5;${AGENT_NAME_PALETTE[agentBgIndex(run.agent)]}m ${run.agent}\x1b[39m` +
 							theme.fg("dim", `  (${elapsedSec}s)`) +
-							turnLabel;
+							turnLabel +
+							idleLabel;
 
 						if (contextShort) {
 							const contextWidth = visibleWidth(contextShort);

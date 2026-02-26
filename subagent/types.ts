@@ -64,6 +64,8 @@ export interface CommandRunState {
 	removed?: boolean;
 	contextMode?: "main" | "sub";
 	progressText?: string;
+	/** Timestamp of last detected activity (tool call / turn / liveText change). Used for hang detection. */
+	lastActivityAt: number;
 }
 
 export interface SessionReplayItem {
