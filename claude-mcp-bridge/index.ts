@@ -3,7 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import type { ExtensionAPI, ExtensionContext, Theme } from "@mariozechner/pi-coding-agent";
 import type { TUI } from "@mariozechner/pi-tui";
-import { matchesKey, truncateToWidth, visibleWidth } from "@mariozechner/pi-tui";
+import { Text, matchesKey, truncateToWidth, visibleWidth } from "@mariozechner/pi-tui";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { SSEClientTransport } from "@modelcontextprotocol/sdk/client/sse.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
@@ -949,6 +949,43 @@ export default async function claudeMcpBridge(pi: ExtensionAPI) {
 				label: `MCP ${serverName}/${tool.name}`,
 				description: tool.description ?? `MCP tool ${serverName}/${tool.name}`,
 				parameters: createParameterSchema(tool.inputSchema),
+
+				renderCall(args, theme) {
+					const label = `${serverName}/${tool.name}`;
+					const params = args as Record<string, unknown>;
+					const entries = Object.entries(params).filter(([, v]) => v !== undefined && v !== null);
+
+					let argText = "";
+					if (entries.length > 0) {
+						const [, firstVal] = entries[0]!;
+						const str = typeof firstVal === "string" ? firstVal : JSON.stringify(firstVal);
+						const display = str.length > 80 ? `${str.slice(0, 77)}…` : str;
+						argText = ` ${theme.fg("accent", display)}`;
+						if (entries.length > 1) {
+							argText += theme.fg("muted", ` +${entries.length - 1}`);
+						}
+					}
+					return new Text(`${theme.fg("toolTitle", theme.bold(label))}${argText}`, 0, 0);
+				},
+
+				renderResult(result, { expanded }, theme) {
+					const tc = result.content.find((c) => c.type === "text");
+					if (!expanded) {
+						if (tc?.type === "text") {
+							const count = tc.text.trim().split("\n").filter(Boolean).length;
+							if (count > 0) return new Text(theme.fg("muted", ` → ${count} lines`), 0, 0);
+						}
+						return new Text("", 0, 0);
+					}
+					if (!tc || tc.type !== "text") return new Text("", 0, 0);
+					const output = tc.text
+						.trim()
+						.split("\n")
+						.map((line) => theme.fg("toolOutput", line))
+						.join("\n");
+					return output ? new Text(`\n${output}`, 0, 0) : new Text("", 0, 0);
+				},
+
 				async execute(_toolCallId, params, signal, onUpdate, _ctx) {
 					if (signal?.aborted) {
 						return {

@@ -7,6 +7,7 @@ import { formatElapsedSince } from "./utils/time-utils.ts";
 const WIDGET_KEY = "progress-widget-enforcer";
 const MAX_PROGRESS_LEN = 140;
 const DEFAULT_PROGRESS = "요청 해석 중...";
+const ALLOWED_TOOLS_BEFORE_INITIAL_PROGRESS = new Set<string>(["set_session_purpose"]);
 
 const FUNNY_PROGRESS_MESSAGES = {
 	byTool: {
@@ -194,6 +195,9 @@ export default function (pi: ExtensionAPI) {
 		if (!requireInitialProgress) return undefined;
 		if (event.toolName === "set_progress") {
 			requireInitialProgress = false;
+			return undefined;
+		}
+		if (ALLOWED_TOOLS_BEFORE_INITIAL_PROGRESS.has(event.toolName)) {
 			return undefined;
 		}
 
