@@ -20,12 +20,46 @@ import {
 	createReadTool,
 	createWriteTool,
 } from "@mariozechner/pi-coding-agent";
-import { Text } from "@mariozechner/pi-tui";
+import { matchesKey, Text } from "@mariozechner/pi-tui";
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
 /** Current working directory — updated on session events. */
 let currentCwd = process.cwd();
+
+/**
+ * Auto-collapse thinking blocks.
+ *
+ * The extension API exposes setToolsExpanded() but NOT setHideThinkingBlock().
+ * Workaround: inject Ctrl+T (the toggleThinking keybinding) into process.stdin
+ * so the InteractiveMode's own handler fires.
+ *
+ * State: settings.json has hideThinkingBlock: true (default collapsed).
+ *   agent_start → inject Ctrl+T → show thinking while streaming
+ *   agent_end   → inject Ctrl+T → collapse thinking when done
+ */
+const CTRL_T = "\x14";
+let thinkingHidden = true; // mirrors settings.json hideThinkingBlock: true
+let hasUI = false;
+
+function injectToggleThinking() {
+	if (!hasUI) return;
+	process.stdin.emit("data", CTRL_T);
+}
+
+function showThinking() {
+	if (thinkingHidden) {
+		injectToggleThinking();
+		thinkingHidden = false;
+	}
+}
+
+function hideThinking() {
+	if (!thinkingHidden) {
+		injectToggleThinking();
+		thinkingHidden = true;
+	}
+}
 
 /**
  * Shorten a path for display:
@@ -89,14 +123,40 @@ function renderFullOutput(text: string, theme: any): Text {
 // ── Extension ──────────────────────────────────────────────────────────────
 
 export default function (pi: ExtensionAPI) {
-	// ─── Track CWD ─────────────────────────────────────────────────────────
-	const syncCwd = async (_e: unknown, ctx: { sessionManager: { getCwd(): string } }) => {
+	// ─── Track CWD & UI state ──────────────────────────────────────────────
+	let inputUnsub: (() => void) | undefined;
+
+	pi.on("session_start", async (_e, ctx) => {
 		currentCwd = ctx.sessionManager.getCwd();
-	};
-	pi.on("session_start", syncCwd);
-	pi.on("session_switch", syncCwd);
-	pi.on("session_fork", syncCwd);
-	pi.on("session_tree", syncCwd);
+		hasUI = ctx.hasUI;
+		inputUnsub?.();
+		if (ctx.hasUI) {
+			inputUnsub = ctx.ui.onTerminalInput((data: string) => {
+				if (matchesKey(data, "ctrl+t")) thinkingHidden = !thinkingHidden;
+				return undefined;
+			});
+		}
+	});
+	pi.on("session_switch", async (_e, ctx) => {
+		currentCwd = ctx.sessionManager.getCwd();
+		hasUI = ctx.hasUI;
+	});
+	pi.on("session_fork", async (_e, ctx) => {
+		currentCwd = ctx.sessionManager.getCwd();
+		hasUI = ctx.hasUI;
+	});
+	pi.on("session_tree", async (_e, ctx) => {
+		currentCwd = ctx.sessionManager.getCwd();
+		hasUI = ctx.hasUI;
+	});
+
+	// ─── Auto show/hide thinking ───────────────────────────────────────────
+	pi.on("agent_start", async () => {
+		showThinking();
+	});
+	pi.on("agent_end", async () => {
+		hideThinking();
+	});
 
 	// ─── Read ──────────────────────────────────────────────────────────────
 	pi.registerTool({
