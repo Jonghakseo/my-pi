@@ -1397,6 +1397,44 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 		return { action: "handled" as const };
 	});
 
+	// #<runId> shortcut: resume a subagent run (e.g. #42 keep going)
+	pi.registerShortcut("#<runId>", {
+		description: "Resume subagent run: #<runId> <task>",
+		handler: async () => {
+			// Documentation-only entry.
+		},
+	});
+
+	pi.on("input", async (event, ctx) => {
+		if (event.source === "extension") {
+			return { action: "continue" as const };
+		}
+
+		const text = event.text ?? "";
+
+		// Match #<digits> pattern (e.g. #42 task, #7 keep going)
+		const match = /^#(\d+)\s(.+)/.exec(text);
+		if (!match) {
+			return { action: "continue" as const };
+		}
+
+		const runId = match[1];
+		const task = match[2].trim();
+
+		if (!task) {
+			ctx.ui.notify("Usage: #<runId> <task>", "info");
+			return { action: "handled" as const };
+		}
+
+		if (!store.commandRuns.has(Number(runId))) {
+			ctx.ui.notify(`Unknown subagent run #${runId}.`, "error");
+			return { action: "handled" as const };
+		}
+
+		await subCommand.handler(`${runId} ${task}`, ctx, true);
+		return { action: "handled" as const };
+	});
+
 	// <> shortcut: switch to subagent session (equivalent to /sub:trans)
 	pi.registerShortcut("<>", {
 		description: "Switch to subagent session",
