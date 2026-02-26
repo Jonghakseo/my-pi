@@ -31,6 +31,7 @@ Custom extensions for the pi coding agent. All extensions are written in TypeScr
 ├── context.ts             # /context — context window usage & session stats overlay
 ├── cross-agent.ts         # Load commands/skills from .claude/.gemini/.codex dirs
 ├── damage-control-rmrf.ts # Safety guard against rm -rf
+├── dynamic-agents-md.ts   # Dynamic AGENTS.md loading per directory scope
 ├── delayed-action.ts      # Delayed action scheduling ("do this later" style)
 ├── files.ts               # File picker / diff viewer UI
 ├── last-input-widget.ts   # Footer status showing the user's last input
