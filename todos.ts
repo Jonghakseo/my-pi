@@ -1,5 +1,5 @@
 /**
- * This extension stores todo items as files under <todo-dir> (defaults to .pi/todos,
+ * This extension stores todo items as files under <todo-dir> (defaults to ~/.pi/todos,
  * or the path in PI_TODO_PATH).  Each todo is a standalone markdown file named
  * <id>.md and an optional <id>.lock file is used while a session is editing it.
  *
@@ -36,6 +36,7 @@ import { DynamicBorder, copyToClipboard, getMarkdownTheme, keyHint, type Extensi
 import { StringEnum } from "@mariozechner/pi-ai";
 import { Type } from "@sinclair/typebox";
 import path from "node:path";
+import os from "node:os";
 import fs from "node:fs/promises";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import crypto from "node:crypto";
@@ -57,7 +58,6 @@ import {
 	visibleWidth,
 } from "@mariozechner/pi-tui";
 
-const TODO_DIR_NAME = ".pi/todos";
 const TODO_PATH_ENV = "PI_TODO_PATH";
 const TODO_SETTINGS_NAME = "settings.json";
 const TODO_ID_PREFIX = "TODO-";
@@ -1126,12 +1126,16 @@ class TodoDetailOverlayComponent {
 	}
 }
 
+function getDefaultTodosDir(): string {
+	return path.join(os.homedir(), ".pi", "todos");
+}
+
 function getTodosDir(cwd: string): string {
 	const overridePath = process.env[TODO_PATH_ENV];
 	if (overridePath && overridePath.trim()) {
 		return path.resolve(cwd, overridePath.trim());
 	}
-	return path.resolve(cwd, TODO_DIR_NAME);
+	return getDefaultTodosDir();
 }
 
 function getTodosDirLabel(cwd: string): string {
@@ -1139,7 +1143,7 @@ function getTodosDirLabel(cwd: string): string {
 	if (overridePath && overridePath.trim()) {
 		return path.resolve(cwd, overridePath.trim());
 	}
-	return TODO_DIR_NAME;
+	return getDefaultTodosDir();
 }
 
 function getTodoSettingsPath(todosDir: string): string {
