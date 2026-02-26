@@ -18,17 +18,18 @@ export const STALE_PENDING_COMPLETION_MS = 30 * 60 * 1_000;
 
 /**
  * Special-character shortcuts for the >> prefix input.
- * `>>? task` → researcher, `>>@ task` → fast-finder, etc.
+ * `>>? task` → researcher, `>>@ task` → browser, `>>/ task` → fast-finder, etc.
  */
 export const AGENT_SYMBOL_MAP: Record<string, string> = {
 	"*": "deep-reviewer",
 	"+": "verifier",
 	"/": "fast-finder",
+	"@": "browser",
 	"?": "researcher",
 	"!": "decider",
 };
 
-/** Format symbol hints for display, e.g. ">>? researcher  >>@ fast-finder ..." */
+/** Format symbol hints for display, e.g. ">>? researcher  >>@ browser  >>/ fast-finder ..." */
 export function formatSymbolHints(prefix = ">>"): string {
 	return Object.entries(AGENT_SYMBOL_MAP)
 		.map(([sym, agent]) => `${prefix}${sym} ${agent}`)
