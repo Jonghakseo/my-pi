@@ -49,10 +49,10 @@ export const PARENT_ENTRY_TYPE = "subagent-parent";
 export const HANG_CHECK_INTERVAL_MS = 15_000;
 
 /** A running subagent with no activity for this duration (ms) is auto-aborted. */
-export const HANG_TIMEOUT_MS = 60_000;
+export const HANG_TIMEOUT_MS = 240_000;
 
 /** Idle duration (ms) after which the widget shows a warning color. */
-export const HANG_WARNING_IDLE_MS = 30_000;
+export const HANG_WARNING_IDLE_MS = 120_000;
 
 // ─── commands.ts ───────────────────────────────────────────────────────────
 
