@@ -319,7 +319,10 @@ export async function runSingleAgent(
 			let procExited = false;
 			let settled = false;
 			let exitFallbackTimer: ReturnType<typeof setTimeout> | undefined;
+			let agentEndFallbackTimer: ReturnType<typeof setTimeout> | undefined;
 			let lastExitCode = 0;
+			let lastEventAt = Date.now();
+			let sawAgentEnd = false;
 
 			const processLine = (line: string) => {
 				if (!line.trim()) return;
@@ -327,6 +330,18 @@ export async function runSingleAgent(
 				try {
 					event = JSON.parse(line);
 				} catch {
+					return;
+				}
+				lastEventAt = Date.now();
+
+				if (event.type === "agent_start" || event.type === "turn_start") {
+					sawAgentEnd = false;
+					return;
+				}
+
+				if (event.type === "agent_end") {
+					sawAgentEnd = true;
+					scheduleAgentEndForceResolve();
 					return;
 				}
 
@@ -379,13 +394,18 @@ export async function runSingleAgent(
 						}
 					}
 					emitUpdate();
+					if (sawAgentEnd) scheduleAgentEndForceResolve();
 					return;
 				}
 
 				if (event.type === "tool_result_end" && event.message) {
 					currentResult.messages.push(event.message as Message);
 					emitUpdate();
+					if (sawAgentEnd) scheduleAgentEndForceResolve();
+					return;
 				}
+
+				if (sawAgentEnd) scheduleAgentEndForceResolve();
 			};
 
 			const resolveOnce = (code: number) => {
@@ -395,9 +415,37 @@ export async function runSingleAgent(
 					clearTimeout(exitFallbackTimer);
 					exitFallbackTimer = undefined;
 				}
+				if (agentEndFallbackTimer) {
+					clearTimeout(agentEndFallbackTimer);
+					agentEndFallbackTimer = undefined;
+				}
 				if (buffer.trim()) processLine(buffer);
 				resolve(code);
 			};
+
+			// print-mode sometimes keeps the Node process alive after agent_end
+			// (e.g. lingering extension timers/transports). In that case, force
+			// resolve after a short quiet period so runs do not remain "running" forever.
+			function scheduleAgentEndForceResolve() {
+				if (!sawAgentEnd || settled || procExited) return;
+				if (agentEndFallbackTimer) clearTimeout(agentEndFallbackTimer);
+
+				const marker = lastEventAt;
+				agentEndFallbackTimer = setTimeout(() => {
+					if (settled || procExited || wasAborted) return;
+					if (lastEventAt !== marker) return;
+
+					const forcedCode =
+						currentResult.stopReason === "error" || currentResult.stopReason === "aborted" ? 1 : 0;
+
+					proc.kill("SIGTERM");
+					setTimeout(() => {
+						if (!procExited && proc.exitCode === null) proc.kill("SIGKILL");
+					}, 5000);
+
+					resolveOnce(forcedCode);
+				}, 1500);
+			}
 
 			proc.stdout.on("data", (data) => {
 				buffer += data.toString();
