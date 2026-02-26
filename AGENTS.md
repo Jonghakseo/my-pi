@@ -20,6 +20,7 @@ Custom extensions for the pi coding agent. All extensions are written in TypeScr
 │   ├── constants.ts       #   Constants
 │   ├── format.ts          #   Formatting utilities
 │   └── run-utils.ts       #   Run management utilities
+├── claude-hooks-bridge.ts  # Bridge to run Claude Code hooks in pi
 ├── claude-mcp-bridge/     # Bridge to reuse Claude Code MCP config in pi
 │   └── index.ts           #   Merge-load MCP settings & register servers
 ├── system-mode/           # System mode toggle (agent mode on/off)
@@ -34,7 +35,8 @@ Custom extensions for the pi coding agent. All extensions are written in TypeScr
 ├── dynamic-agents-md.ts   # Dynamic AGENTS.md loading per directory scope
 ├── delayed-action.ts      # Delayed action scheduling ("do this later" style)
 ├── files.ts               # File picker / diff viewer UI
-├── last-input-widget.ts   # Footer status showing the user's last input
+├── github-overlay.ts      # GitHub PR view overlay (gh CLI integration)
+├── minimal-mode.ts        # Compact tool output rendering (collapsed/expanded toggle)
 ├── pipi-footer.ts         # Custom footer UI (model, branch, context bar)
 ├── progress-widget-enforcer.ts  # set_progress tool injection (agent mode aware)
 ├── purpose.ts             # Session purpose top-overlay + purpose guard/tool/command
