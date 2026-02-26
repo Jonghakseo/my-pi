@@ -3,7 +3,7 @@
  * or the path in PI_TODO_PATH).  Each todo is a standalone markdown file named
  * <id>.md and an optional <id>.lock file is used while a session is editing it.
  *
- * File format in .pi/todos:
+ * File format in <todo-dir>:
  * - The file starts with a JSON object (not YAML) containing the front matter:
  *   { id, title, tags, status, created_at, assigned_to_session, priority, due_date, estimate }
  * - After the JSON block comes optional markdown body text separated by a blank line.
@@ -1130,10 +1130,18 @@ function getDefaultTodosDir(): string {
 	return path.join(os.homedir(), ".pi", "todos");
 }
 
+function resolveTodosDirOverride(cwd: string, overridePath: string): string {
+	const trimmed = overridePath.trim();
+	if (!trimmed) return getDefaultTodosDir();
+	if (trimmed === "~") return os.homedir();
+	if (trimmed.startsWith("~/")) return path.join(os.homedir(), trimmed.slice(2));
+	return path.resolve(cwd, trimmed);
+}
+
 function getTodosDir(cwd: string): string {
 	const overridePath = process.env[TODO_PATH_ENV];
 	if (overridePath && overridePath.trim()) {
-		return path.resolve(cwd, overridePath.trim());
+		return resolveTodosDirOverride(cwd, overridePath);
 	}
 	return getDefaultTodosDir();
 }
@@ -1141,7 +1149,7 @@ function getTodosDir(cwd: string): string {
 function getTodosDirLabel(cwd: string): string {
 	const overridePath = process.env[TODO_PATH_ENV];
 	if (overridePath && overridePath.trim()) {
-		return path.resolve(cwd, overridePath.trim());
+		return resolveTodosDirOverride(cwd, overridePath);
 	}
 	return getDefaultTodosDir();
 }
