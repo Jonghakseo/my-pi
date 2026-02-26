@@ -24,6 +24,11 @@ export interface AgentDiscoveryResult {
 	projectAgentsDir: string | null;
 }
 
+interface LoadAgentsOptions {
+	recursive?: boolean;
+	format?: "pi" | "claude";
+}
+
 const COMMON_SUBAGENT_NO_RECURSION_RULE = [
 	"Global Runtime Rule (subagent):",
 	"- Never invoke the `subagent` tool.",
@@ -31,31 +36,104 @@ const COMMON_SUBAGENT_NO_RECURSION_RULE = [
 	"- If delegation is requested, explain that recursive subagent invocation is disabled and continue with available tools.",
 ].join("\n");
 
+const CLAUDE_TOOL_MAP: Record<string, string | undefined> = {
+	bash: "bash",
+	read: "read",
+	edit: "edit",
+	write: "write",
+	grep: "grep",
+	glob: "find",
+	ls: "ls",
+	todowrite: "todo",
+	todoread: "todo",
+	skill: undefined,
+};
+
+const CLAUDE_MODEL_ALIAS_MAP: Record<string, string> = {
+	opus: "claude-opus-4-6",
+	sonnet: "claude-sonnet-4-5",
+	haiku: "claude-haiku-4-5",
+};
+
 function attachCommonSubagentRule(systemPrompt: string): string {
 	const trimmed = systemPrompt.trimEnd();
 	if (trimmed.includes("Global Runtime Rule (subagent):")) return trimmed;
 	return trimmed ? `${trimmed}\n\n${COMMON_SUBAGENT_NO_RECURSION_RULE}` : COMMON_SUBAGENT_NO_RECURSION_RULE;
 }
 
-function loadAgentsFromDir(dir: string, source: "user" | "project"): AgentConfig[] {
+function listMarkdownFiles(dir: string, recursive: boolean): string[] {
+	const files: string[] = [];
+	const stack: string[] = [dir];
+
+	while (stack.length > 0) {
+		const currentDir = stack.pop() as string;
+		let entries: fs.Dirent[];
+		try {
+			entries = fs.readdirSync(currentDir, { withFileTypes: true });
+		} catch {
+			continue;
+		}
+
+		for (const entry of entries) {
+			const fullPath = path.join(currentDir, entry.name);
+			if (entry.isDirectory()) {
+				if (recursive) stack.push(fullPath);
+				continue;
+			}
+
+			if (!entry.name.endsWith(".md")) continue;
+			if (!entry.isFile() && !entry.isSymbolicLink()) continue;
+			files.push(fullPath);
+		}
+	}
+
+	files.sort((a, b) => a.localeCompare(b));
+	return files;
+}
+
+function normalizeTools(rawTools: string | undefined, format: "pi" | "claude"): string[] | undefined {
+	if (!rawTools) return undefined;
+
+	const parsed = rawTools
+		.split(",")
+		.map((t) => t.trim())
+		.filter(Boolean);
+
+	if (parsed.length === 0) return undefined;
+	if (format === "pi") return parsed;
+
+	const mapped = parsed
+		.map((tool) => CLAUDE_TOOL_MAP[tool.toLowerCase()] ?? undefined)
+		.filter((tool): tool is string => Boolean(tool));
+
+	if (mapped.length === 0) return undefined;
+	return Array.from(new Set(mapped));
+}
+
+function normalizeModel(rawModel: string | undefined, format: "pi" | "claude"): string | undefined {
+	if (!rawModel) return undefined;
+	const model = rawModel.trim();
+	if (!model) return undefined;
+
+	if (format === "claude") {
+		if (model.includes("/")) return model;
+		return CLAUDE_MODEL_ALIAS_MAP[model.toLowerCase()] ?? model;
+	}
+
+	return model;
+}
+
+function loadAgentsFromDir(dir: string, source: "user" | "project", options: LoadAgentsOptions = {}): AgentConfig[] {
 	const agents: AgentConfig[] = [];
+	const recursive = options.recursive ?? false;
+	const format = options.format ?? "pi";
 
 	if (!fs.existsSync(dir)) {
 		return agents;
 	}
 
-	let entries: fs.Dirent[];
-	try {
-		entries = fs.readdirSync(dir, { withFileTypes: true });
-	} catch {
-		return agents;
-	}
-
-	for (const entry of entries) {
-		if (!entry.name.endsWith(".md")) continue;
-		if (!entry.isFile() && !entry.isSymbolicLink()) continue;
-
-		const filePath = path.join(dir, entry.name);
+	const files = listMarkdownFiles(dir, recursive);
+	for (const filePath of files) {
 		let content: string;
 		try {
 			content = fs.readFileSync(filePath, "utf-8");
@@ -64,21 +142,16 @@ function loadAgentsFromDir(dir: string, source: "user" | "project"): AgentConfig
 		}
 
 		const { frontmatter, body } = parseFrontmatter<Record<string, string>>(content);
+		if (!frontmatter.name || !frontmatter.description) continue;
 
-		if (!frontmatter.name || !frontmatter.description) {
-			continue;
-		}
-
-		const tools = frontmatter.tools
-			?.split(",")
-			.map((t: string) => t.trim())
-			.filter(Boolean);
+		const tools = normalizeTools(frontmatter.tools, format);
+		const model = normalizeModel(frontmatter.model, format);
 
 		agents.push({
 			name: frontmatter.name,
 			description: frontmatter.description,
-			tools: tools && tools.length > 0 ? tools : undefined,
-			model: frontmatter.model,
+			tools,
+			model,
 			systemPrompt: attachCommonSubagentRule(body),
 			source,
 			filePath,
@@ -108,12 +181,37 @@ function findNearestProjectAgentsDir(cwd: string): string | null {
 	}
 }
 
+function findNearestClaudeAgentsDir(cwd: string): string | null {
+	let currentDir = cwd;
+	while (true) {
+		const candidate = path.join(currentDir, ".claude", "agents");
+		if (isDirectory(candidate)) return candidate;
+
+		const parentDir = path.dirname(currentDir);
+		if (parentDir === currentDir) return null;
+		currentDir = parentDir;
+	}
+}
+
 export function discoverAgents(cwd: string, scope: AgentScope): AgentDiscoveryResult {
 	const userDir = path.join(os.homedir(), ".pi", "agent", "agents");
 	const projectAgentsDir = findNearestProjectAgentsDir(cwd);
+	const claudeAgentsDir = findNearestClaudeAgentsDir(cwd);
 
-	const userAgents = scope === "project" ? [] : loadAgentsFromDir(userDir, "user");
-	const projectAgents = scope === "user" || !projectAgentsDir ? [] : loadAgentsFromDir(projectAgentsDir, "project");
+	const userAgents = scope === "project" ? [] : loadAgentsFromDir(userDir, "user", { format: "pi" });
+
+	const projectPiAgents =
+		scope === "user" || !projectAgentsDir
+			? []
+			: loadAgentsFromDir(projectAgentsDir, "project", { format: "pi" });
+
+	const projectClaudeAgents =
+		scope === "user" || !claudeAgentsDir
+			? []
+			: loadAgentsFromDir(claudeAgentsDir, "project", { format: "claude", recursive: true });
+
+	// 우선순위: user < .claude/agents < .pi/agents
+	const projectAgents = [...projectClaudeAgents, ...projectPiAgents];
 
 	const agentMap = new Map<string, AgentConfig>();
 
@@ -126,7 +224,12 @@ export function discoverAgents(cwd: string, scope: AgentScope): AgentDiscoveryRe
 		for (const agent of projectAgents) agentMap.set(agent.name, agent);
 	}
 
-	return { agents: Array.from(agentMap.values()), projectAgentsDir };
+	const projectSources = [projectAgentsDir, claudeAgentsDir].filter((dir): dir is string => Boolean(dir));
+
+	return {
+		agents: Array.from(agentMap.values()),
+		projectAgentsDir: projectSources.length > 0 ? projectSources.join(", ") : null,
+	};
 }
 
 export function formatAgentList(agents: AgentConfig[], maxItems: number): { text: string; remaining: number } {
