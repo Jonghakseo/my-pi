@@ -154,7 +154,7 @@ export default function (pi: ExtensionAPI) {
 		},
 
 		renderCall(args, theme) {
-			const cmd = truncateLines((args.command as string) || "...", 4);
+			const cmd = truncateLines(String(args.command ?? "..."), 2);
 			const timeout = args.timeout as number | undefined;
 			const suffix = timeout ? theme.fg("muted", ` (${timeout}s)`) : "";
 			return new Text(theme.fg("toolTitle", theme.bold(`$ ${cmd}`)) + suffix, 0, 0);
