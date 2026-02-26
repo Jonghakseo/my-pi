@@ -894,6 +894,8 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 							status: runState.status,
 						},
 					};
+					// Intentionally keep triggerTurn off for subagent status logs.
+					// These are telemetry follow-ups, not user-facing turn triggers.
 					const completionOptions = { deliverAs: "followUp" as const };
 
 					// Check if the user is still in the origin session.
@@ -967,6 +969,7 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 						|| !cmdErrGlobalEntry.originSessionFile
 						|| cmdErrCurrentSession === cmdErrGlobalEntry.originSessionFile;
 
+					// Keep triggerTurn disabled for error telemetry as well.
 					if (cmdErrInOrigin) {
 						pi.sendMessage(cmdErrorMessage, { deliverAs: "followUp" });
 						store.globalLiveRuns.delete(runId);
