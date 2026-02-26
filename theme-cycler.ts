@@ -48,7 +48,7 @@ export default function (pi: ExtensionAPI) {
 						theme.fg("dim", block) +
 						" " +
 						theme.fg("muted", block);
-					const label = theme.fg("accent", " 🎨 ") + theme.fg("muted", ctx.ui.theme.name) + "  " + swatch;
+					const label = theme.fg("accent", " 🎨 ") + theme.fg("muted", ctx.ui.theme.name ?? "") + "  " + swatch;
 					const border = theme.fg("borderMuted", "─".repeat(Math.max(0, width)));
 					return [border, truncateToWidth("  " + label, width), border];
 				},

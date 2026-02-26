@@ -7,7 +7,7 @@
 
 import * as fs from "node:fs";
 import * as path from "node:path";
-import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
+import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
 import { matchesKey } from "@mariozechner/pi-tui";
 import type { AgentScope } from "./agents.js";
 import { discoverAgents } from "./agents.js";
@@ -563,7 +563,7 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 	const subCommand = {
 		description:
 			"Run a subagent in a dedicated sub-session: /sub:new <agent|alias> <task>, /sub:new <runId> <task>, /sub:new <task> (defaults to worker)",
-		getArgumentCompletions: (argumentPrefix) => {
+		getArgumentCompletions: (argumentPrefix: string) => {
 			const trimmedStart = argumentPrefix.trimStart();
 			if (trimmedStart.includes(" ")) return null;
 
@@ -583,7 +583,7 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 			const merged = [...runItems, ...agentItems];
 			return merged.length > 0 ? merged : null;
 		},
-		handler: async (args, ctx, forceMainContextFromWrapper = false) => {
+		handler: async (args: string, ctx: ExtensionContext, forceMainContextFromWrapper = false) => {
 			captureSwitchSession(store, ctx);
 			const input = (args ?? "").trim();
 			const usageText =
@@ -1351,14 +1351,14 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 
 	// /hotkeys "Extensions" 섹션에 >> shorthand 사용법을 노출한다.
 	// 실제 입력 처리는 아래 input 핸들러에서 수행된다.
-	pi.registerShortcut(">>", {
+	pi.registerShortcut(">>" as any, {
 		description: "Run subagent task",
 		handler: async () => {
 			// Documentation-only entry.
 		},
 	});
 
-	pi.registerShortcut(">>>", {
+	pi.registerShortcut(">>>" as any, {
 		description: "Run subagent in dedicated sub-session (= /sub:new, supports symbols)",
 		handler: async () => {
 			// Documentation-only entry.
@@ -1447,7 +1447,7 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 	});
 
 	// #<runId> shortcut: resume a subagent run (e.g. #42 keep going)
-	pi.registerShortcut("#<runId>", {
+	pi.registerShortcut("#<runId>" as any, {
 		description: "Resume subagent run: #<runId> <task>",
 		handler: async () => {
 			// Documentation-only entry.
@@ -1485,7 +1485,7 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 	});
 
 	// <> shortcut: switch to subagent session (equivalent to /sub:trans)
-	pi.registerShortcut("<>", {
+	pi.registerShortcut("<>" as any, {
 		description: "Switch to subagent session",
 		handler: async () => {
 			// Documentation-only entry.
@@ -1529,7 +1529,7 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 	});
 
 	// >< shortcut: back to parent session (pop from session stack)
-	pi.registerShortcut("><", {
+	pi.registerShortcut("><" as any, {
 		description: "Back to parent session",
 		handler: async () => {
 			// Documentation-only entry.
@@ -1551,7 +1551,7 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 	});
 
 	// << shortcut: abort running jobs or clear finished jobs
-	pi.registerShortcut("<<", {
+	pi.registerShortcut("<<" as any, {
 		description: "Abort or clear subagent runs",
 		handler: async () => {
 			// Documentation-only entry.

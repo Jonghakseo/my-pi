@@ -77,6 +77,13 @@ function countLines(text: string): number {
 	return text.trim().split("\n").filter(Boolean).length;
 }
 
+function truncateLines(text: string, maxLines: number): string {
+	const lines = text.split("\n");
+	if (lines.length <= maxLines) return text;
+	const visible = lines.slice(0, maxLines).join("\n");
+	return `${visible}\n… (+${lines.length - maxLines} lines)`;
+}
+
 function renderFullOutput(text: string, theme: any): Text {
 	const output = text
 		.trim()
@@ -147,7 +154,7 @@ export default function (pi: ExtensionAPI) {
 		},
 
 		renderCall(args, theme) {
-			const cmd = args.command || "...";
+			const cmd = truncateLines((args.command as string) || "...", 4);
 			const timeout = args.timeout as number | undefined;
 			const suffix = timeout ? theme.fg("muted", ` (${timeout}s)`) : "";
 			return new Text(theme.fg("toolTitle", theme.bold(`$ ${cmd}`)) + suffix, 0, 0);

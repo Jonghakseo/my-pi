@@ -165,7 +165,7 @@ export default function (pi: ExtensionAPI) {
 				(tui, theme, _kb, done) => {
 					const component = new StatusOverlayUI(sections, () => done(undefined));
 					return {
-						render: (w) => component.render(w, tui.height ?? 40, theme),
+						render: (w) => component.render(w, tui.terminal.rows ?? 40, theme),
 						handleInput: (data) => component.handleInput(data, tui),
 						invalidate: () => {},
 					};
