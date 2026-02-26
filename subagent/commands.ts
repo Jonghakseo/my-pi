@@ -776,7 +776,6 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 					content:
 						`[sub:${selectedAgent}#${runId}] ${startedState}` +
 						`\n${truncateLines(taskForDisplay, 2)}` +
-						(continuedFromRunId !== undefined ? `\nContinued from: #${continuedFromRunId}` : "") +
 						`\nContext: ${contextLabel} · turn ${runState.turnCount}`,
 					display: true,
 					details: {
@@ -859,7 +858,6 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 						content:
 							`[sub:${selectedAgent}#${runId}] ${isError ? "failed" : "completed"}` +
 							`\n${truncateLines(taskForDisplay, 2)}` +
-							(continuedFromRunId !== undefined ? `\nContinued from: #${continuedFromRunId}` : "") +
 							(usage ? `\nUsage: ${usage}` : "") +
 							(runState.progressText ? `\nProgress: ${runState.progressText}` : "") +
 							`\n\n${output}`,
@@ -925,7 +923,6 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 						content:
 							`[sub:${selectedAgent}#${runId}] failed` +
 							`\n${truncateLines(taskForDisplay, 2)}` +
-							(continuedFromRunId !== undefined ? `\nContinued from: #${continuedFromRunId}` : "") +
 							`\n\n${runState.lastLine}`,
 						display: true,
 						details: {
