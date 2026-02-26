@@ -22,6 +22,50 @@ const PR_VIEW_FIELDS = [
 
 const COMMENTS_PER_PAGE = 100;
 const MAX_COMMENT_PAGES = 50;
+const MAX_THREAD_PAGES = 20;
+
+const REVIEW_THREADS_GQL = `
+query($owner: String!, $repo: String!, $number: Int!, $cursor: String) {
+  repository(owner: $owner, name: $repo) {
+    pullRequest(number: $number) {
+      reviews(last: 100) {
+        nodes {
+          author { login }
+          state
+          submittedAt
+          body
+          url
+        }
+      }
+      reviewThreads(first: 100, after: $cursor) {
+        nodes {
+          id
+          isResolved
+          isOutdated
+          path
+          line
+          startLine
+          diffSide
+          originalLine
+          originalStartLine
+          comments(first: 100) {
+            nodes {
+              id
+              author { login }
+              body
+              createdAt
+              url
+            }
+          }
+        }
+        pageInfo {
+          hasNextPage
+          endCursor
+        }
+      }
+    }
+  }
+}`;
 
 type CheckState = "success" | "failed" | "pending" | "neutral";
 
@@ -1252,6 +1296,225 @@ function renderPlainSummary(result: OverlayFetchResult): string {
 	return lines.join("\n");
 }
 
+async function fetchAndFormatReviewThreads(pi: ExtensionAPI, cwd: string): Promise<string> {
+	const repoNameWithOwner = await getRepoNameWithOwner(pi, cwd);
+	if (!repoNameWithOwner) {
+		return "❌ GitHub 저장소를 찾지 못했습니다. gh 로그인/저장소 설정을 확인해주세요.";
+	}
+
+	const [owner, repo] = repoNameWithOwner.split("/");
+	if (!owner || !repo) {
+		return `❌ 저장소 식별자를 해석하지 못했습니다: ${repoNameWithOwner}`;
+	}
+
+	const prBasic = await runGhJson<Record<string, unknown>>(pi, cwd, ["pr", "view", "--json", "number,title,url"]);
+	if (!prBasic.ok) {
+		const isNoPR = prBasic.error.toLowerCase().includes("no pull requests found");
+		if (isNoPR) {
+			const branch = await getCurrentBranch(pi, cwd);
+			return `❌ 현재 브랜치에 연결된 PR이 없습니다${branch ? ` (branch: ${branch})` : ""}.`;
+		}
+		return `❌ PR 정보를 가져오지 못했습니다: ${prBasic.error}`;
+	}
+
+	const prNumber = asNumber(prBasic.data.number);
+	const prTitle = asString(prBasic.data.title) ?? "(untitled)";
+	const prUrl = asString(prBasic.data.url) ?? "";
+	if (prNumber === null) {
+		return "❌ PR 번호를 읽지 못했습니다.";
+	}
+
+	interface ParsedThreadComment {
+		author: string;
+		body: string;
+		createdAt: string | null;
+		url: string | null;
+	}
+
+	interface ParsedThread {
+		id: string;
+		isResolved: boolean;
+		isOutdated: boolean;
+		path: string;
+		line: number | null;
+		startLine: number | null;
+		diffSide: string | null;
+		originalLine: number | null;
+		originalStartLine: number | null;
+		comments: ParsedThreadComment[];
+	}
+
+	interface ParsedReview {
+		author: string;
+		state: string;
+		submittedAt: string | null;
+		body: string | null;
+		url: string | null;
+	}
+
+	const allThreads: ParsedThread[] = [];
+	const reviews: ParsedReview[] = [];
+	let cursor: string | null = null;
+	let page = 0;
+
+	while (page < MAX_THREAD_PAGES) {
+		const args = [
+			"api",
+			"graphql",
+			"-f",
+			`query=${REVIEW_THREADS_GQL}`,
+			"-f",
+			`owner=${owner}`,
+			"-f",
+			`repo=${repo}`,
+			"-F",
+			`number=${prNumber}`,
+		];
+		if (cursor) {
+			args.push("-f", `cursor=${cursor}`);
+		}
+
+		const result = await runGhJson<Record<string, unknown>>(pi, cwd, args);
+		if (!result.ok) {
+			return `❌ GraphQL 요청 실패: ${result.error}`;
+		}
+
+		const gqlErrors = asArray(result.data.errors);
+		if (gqlErrors.length > 0) {
+			const errorMessages = gqlErrors.map((e) => asString(asRecord(e)?.message) ?? "unknown error").join(", ");
+			return `❌ GraphQL 에러: ${errorMessages}`;
+		}
+
+		const dataRoot = asRecord(result.data.data);
+		const repository = asRecord(dataRoot?.repository);
+		const pullRequest = asRecord(repository?.pullRequest);
+		if (!pullRequest) {
+			return "❌ GraphQL 응답에서 PR 데이터를 찾지 못했습니다.";
+		}
+
+		if (page === 0) {
+			const reviewsNode = asRecord(pullRequest.reviews);
+			for (const rawReview of asArray(reviewsNode?.nodes)) {
+				const rec = asRecord(rawReview);
+				if (!rec) continue;
+				const authorRec = asRecord(rec.author);
+				reviews.push({
+					author: asString(authorRec?.login) ?? "unknown",
+					state: asString(rec.state) ?? "UNKNOWN",
+					submittedAt: asString(rec.submittedAt),
+					body: asString(rec.body),
+					url: asString(rec.url),
+				});
+			}
+		}
+
+		const threadsNode = asRecord(pullRequest.reviewThreads);
+		for (const rawThread of asArray(threadsNode?.nodes)) {
+			const rec = asRecord(rawThread);
+			if (!rec) continue;
+
+			const comments: ParsedThreadComment[] = [];
+			const commentsNode = asRecord(rec.comments);
+			for (const rawComment of asArray(commentsNode?.nodes)) {
+				const commentRec = asRecord(rawComment);
+				if (!commentRec) continue;
+				const authorRec = asRecord(commentRec.author);
+				comments.push({
+					author: asString(authorRec?.login) ?? "unknown",
+					body: asString(commentRec.body) ?? "",
+					createdAt: asString(commentRec.createdAt),
+					url: asString(commentRec.url),
+				});
+			}
+
+			allThreads.push({
+				id: asString(rec.id) ?? "",
+				isResolved: rec.isResolved === true,
+				isOutdated: rec.isOutdated === true,
+				path: asString(rec.path) ?? "(unknown)",
+				line: asNumber(rec.line),
+				startLine: asNumber(rec.startLine),
+				diffSide: asString(rec.diffSide),
+				originalLine: asNumber(rec.originalLine),
+				originalStartLine: asNumber(rec.originalStartLine),
+				comments,
+			});
+		}
+
+		const pageInfo = asRecord(threadsNode?.pageInfo);
+		if (pageInfo?.hasNextPage !== true) break;
+		cursor = asString(pageInfo?.endCursor);
+		if (!cursor) break;
+		page += 1;
+	}
+
+	const unresolvedThreads = allThreads.filter((t) => !t.isResolved);
+
+	const reviewByAuthor = new Map<string, ParsedReview>();
+	for (const review of reviews) {
+		const existing = reviewByAuthor.get(review.author);
+		if (!existing || toEpochMs(review.submittedAt) >= toEpochMs(existing.submittedAt)) {
+			reviewByAuthor.set(review.author, review);
+		}
+	}
+	const latestReviews = Array.from(reviewByAuthor.values()).sort((a, b) => a.author.localeCompare(b.author));
+
+	const out: string[] = [];
+	out.push(`## PR #${prNumber} Reviews — ${repoNameWithOwner}`);
+	out.push(`**${prTitle}**`);
+	if (prUrl) out.push(prUrl);
+	out.push("");
+
+	out.push("### Review Status");
+	if (latestReviews.length === 0) {
+		out.push("(아직 리뷰 없음)");
+	} else {
+		for (const review of latestReviews) {
+			const date = review.submittedAt ? formatIso(review.submittedAt) : "?";
+			out.push(`- **@${review.author}**: ${review.state} (${date})`);
+			if (review.body) {
+				out.push(`  > ${review.body.replace(/\n/g, "\n  > ")}`);
+			}
+		}
+	}
+	out.push("");
+
+	out.push(`### Unresolved Review Threads (${unresolvedThreads.length} / ${allThreads.length} total)`);
+	out.push("");
+
+	if (unresolvedThreads.length === 0) {
+		out.push("✅ 모든 리뷰 스레드가 resolve 되었습니다!");
+		return out.join("\n");
+	}
+
+	for (let i = 0; i < unresolvedThreads.length; i++) {
+		const thread = unresolvedThreads[i];
+		const lineRef = thread.line ?? thread.originalLine;
+		const startRef = thread.startLine ?? thread.originalStartLine;
+		const location =
+			startRef && lineRef && startRef !== lineRef ? `L${startRef}–L${lineRef}` : lineRef ? `L${lineRef}` : "line ?";
+		const sideTag = thread.diffSide ? ` (${thread.diffSide})` : "";
+		const outdatedTag = thread.isOutdated ? " ⚠️outdated" : "";
+
+		out.push(`#### ${i + 1}. \`${thread.path}\` ${location}${sideTag}${outdatedTag}`);
+
+		for (const comment of thread.comments) {
+			const date = comment.createdAt ? formatIso(comment.createdAt) : "";
+			out.push(`**@${comment.author}** ${date}`);
+			out.push(comment.body || "(empty)");
+			if (comment.url) out.push(`🔗 ${comment.url}`);
+			out.push("");
+		}
+
+		if (i < unresolvedThreads.length - 1) {
+			out.push("---");
+			out.push("");
+		}
+	}
+
+	return out.join("\n");
+}
+
 export default function githubOverlay(pi: ExtensionAPI) {
 	pi.registerCommand("github", {
 		description: "Show current-branch PR with CI, labels, reviewers, general+inline comments (collapsible)",
@@ -1330,6 +1593,13 @@ export default function githubOverlay(pi: ExtensionAPI) {
 					overlayOptions: { width: "92%", maxHeight: "90%", anchor: "center" },
 				},
 			);
+		},
+	});
+
+	pi.registerCommand("get-pr-reviews", {
+		description: "Fetch unresolved PR review threads with review status (review comments only, no general comments)",
+		handler: async (_args, ctx) => {
+			console.log(await fetchAndFormatReviewThreads(pi, ctx.cwd));
 		},
 	});
 }
