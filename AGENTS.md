@@ -42,7 +42,8 @@ Custom extensions for the pi coding agent. All extensions are written in TypeScr
 ├── theme-cycler.ts        # Ctrl+X to cycle through themes
 ├── themeMap.ts            # Default theme mapping per extension
 ├── todos.ts               # Todo management UI & tool
-└── upload-image-url.ts    # Upload images to GitHub storage and return URLs
+├── upload-image-url.ts    # Upload images to GitHub storage and return URLs
+└── voice-input.ts         # Option+V voice dictation (sox + whisper.cpp)
 ```
 
 ## Key Patterns
