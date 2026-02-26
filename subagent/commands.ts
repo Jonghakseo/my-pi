@@ -785,7 +785,7 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 				{
 					customType: "subagent-command",
 					content:
-						`[sub:${selectedAgent}#${runId}] ${startedState}` +
+						`[subagent:${selectedAgent}#${runId}] ${startedState}` +
 						`\n${truncateLines(taskForDisplay, 2)}` +
 						`\nContext: ${contextLabel} · turn ${runState.turnCount}` +
 						`\n\n${STATUS_LOG_FOOTER}`,
@@ -868,7 +868,7 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 					const completionMessage = {
 						customType: "subagent-command" as const,
 						content:
-							`[sub:${selectedAgent}#${runId}] ${isError ? "failed" : "completed"}` +
+							`[subagent:${selectedAgent}#${runId}] ${isError ? "failed" : "completed"}` +
 							`\n${truncateLines(taskForDisplay, 2)}` +
 							(usage ? `\nUsage: ${usage}` : "") +
 							(runState.progressText ? `\nProgress: ${runState.progressText}` : "") +
@@ -934,7 +934,7 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 					const cmdErrorMessage = {
 						customType: "subagent-command" as const,
 						content:
-							`[sub:${selectedAgent}#${runId}] failed` +
+							`[subagent:${selectedAgent}#${runId}] failed` +
 							`\n${truncateLines(taskForDisplay, 2)}` +
 							`\n\n${runState.lastLine}` +
 							`\n\n${STATUS_LOG_FOOTER}`,
