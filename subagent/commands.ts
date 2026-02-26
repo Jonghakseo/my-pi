@@ -504,7 +504,7 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 			"Supports background async jobs via runAsync + asyncAction (list/status/detail/abort/remove).",
 			"Use contextMode: \"main\" to inherit current main-session context, or \"isolated\" for dedicated sub-session.",
 			"Default agent scope is \"user\" (from ~/.pi/agent/agents).",
-			"To enable project-local agents in .pi/agents, set agentScope: \"both\" (or \"project\").",
+			"To enable project-local agents in .pi/agents or .claude/agents, set agentScope: \"both\" (or \"project\").",
 			"Important: Do NOT keep calling subagent for polling. Async runs push completion/failure/error updates automatically as follow-up messages; status/detail/list is for occasional manual checks only.",
 		].join(" "),
 		parameters: SubagentParams,
@@ -561,7 +561,10 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 			const agents = discovery.agents;
 
 			if (agents.length === 0) {
-				ctx.ui.notify("No agents found in ~/.pi/agent/agents", "error");
+				ctx.ui.notify(
+					"No agents found in ~/.pi/agent/agents (sub:new/sub:run uses user scope). Use /subagents both to inspect project agents.",
+					"error",
+				);
 				return;
 			}
 
@@ -1005,11 +1008,14 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 	});
 
 	pi.registerCommand("subagents", {
-		description: "List available subagents and their model/tool settings",
+		description: "List available subagents and their model/tool settings (default scope: both)",
 		handler: async (args, ctx) => {
 			captureSwitchSession(store, ctx);
 			const scopeArg = (args ?? "").trim().toLowerCase();
-			const scope: AgentScope = scopeArg === "project" || scopeArg === "both" ? (scopeArg as AgentScope) : "user";
+			const scope: AgentScope =
+				scopeArg === "user" || scopeArg === "project" || scopeArg === "both"
+					? (scopeArg as AgentScope)
+					: "both";
 			const discovery = discoverAgents(ctx.cwd, scope);
 			const agents = discovery.agents;
 			if (agents.length === 0) {
