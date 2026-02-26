@@ -318,6 +318,8 @@ export class SubagentSessionReplayOverlay {
 
 		this.ensureListVisible(listViewport);
 
+		const contextLabel = this.run.contextMode === "main" ? "main" : "isolated";
+
 		container.addChild(new Spacer(1));
 		container.addChild(
 			new Text(
@@ -325,7 +327,7 @@ export class SubagentSessionReplayOverlay {
 					theme.fg("toolTitle", theme.bold(`#${this.run.id} ${this.run.agent}`)) +
 					theme.fg(
 						"dim",
-						`  [${this.run.status}] ctx:${this.run.contextMode ?? "sub"} turn:${this.run.turnCount ?? DEFAULT_TURN_COUNT}  ${elapsedLabel}  tools:${this.run.toolCalls}`,
+						`  [${this.run.status}] ctx:${contextLabel} turn:${this.run.turnCount ?? DEFAULT_TURN_COUNT}  ${elapsedLabel}  tools:${this.run.toolCalls}`,
 					),
 				0,
 				0,

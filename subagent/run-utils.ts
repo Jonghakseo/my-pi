@@ -41,7 +41,8 @@ export interface TrimCommandRunHistoryOptions {
  */
 export function formatCommandRunSummary(run: CommandRunState): string {
 	const elapsedSec = Math.max(0, Math.round(run.elapsedMs / 1000));
-	return `#${run.id} [${run.status}] ${run.agent} ctx:${run.contextMode ?? "sub"} turn:${run.turnCount ?? 1} ${elapsedSec}s tools:${run.toolCalls}`;
+	const contextLabel = run.contextMode === "main" ? "main" : "isolated";
+	return `#${run.id} [${run.status}] ${run.agent} ctx:${contextLabel} turn:${run.turnCount ?? 1} ${elapsedSec}s tools:${run.toolCalls}`;
 }
 
 /**
