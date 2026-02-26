@@ -11,9 +11,9 @@
  *   synthwave        · tokyo-night
  */
 
-import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
 import * as fs from "node:fs";
 import * as os from "node:os";
+import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
 import { basename, join } from "path";
 import { fileURLToPath } from "url";
 
@@ -23,21 +23,21 @@ import { fileURLToPath } from "url";
 // Value = theme name from .pi/themes/<value>.json
 //
 export const THEME_MAP: Record<string, string> = {
-	"agent-chain":        "midnight-ocean",   // deep sequential pipeline
-	"agent-team":         "dracula",          // rich orchestration palette
-	"cross-agent":        "ocean-breeze",     // cross-boundary, connecting
-	"damage-control":     "gruvbox",          // grounded, earthy safety
-	"minimal":            "synthwave",        // synthwave by default now!
-	"pi-pi":              "rose-pine",        // warm creative meta-agent
-	"pure-focus":         "everforest",       // calm, distraction-free
-	"purpose-gate":       "tokyo-night",      // intentional, sharp focus
-	"session-replay":     "catppuccin-mocha", // soft, reflective history
-	"subagent-widget":    "cyberpunk",        // multi-agent futuristic
-	"system-select":      "catppuccin-mocha", // soft selection UI
-	"theme-cycler":       "synthwave",        // neon, it's a theme tool
-	"tilldone":           "everforest",       // task-focused calm
-	"tool-counter":       "synthwave",        // techy metrics
-	"tool-counter-widget":"synthwave",        // same family
+	"agent-chain": "midnight-ocean", // deep sequential pipeline
+	"agent-team": "dracula", // rich orchestration palette
+	"cross-agent": "ocean-breeze", // cross-boundary, connecting
+	"damage-control": "gruvbox", // grounded, earthy safety
+	minimal: "synthwave", // synthwave by default now!
+	"pi-pi": "rose-pine", // warm creative meta-agent
+	"pure-focus": "everforest", // calm, distraction-free
+	"purpose-gate": "tokyo-night", // intentional, sharp focus
+	"session-replay": "catppuccin-mocha", // soft, reflective history
+	"subagent-widget": "cyberpunk", // multi-agent futuristic
+	"system-select": "catppuccin-mocha", // soft selection UI
+	"theme-cycler": "synthwave", // neon, it's a theme tool
+	tilldone: "everforest", // task-focused calm
+	"tool-counter": "synthwave", // techy metrics
+	"tool-counter-widget": "synthwave", // same family
 };
 
 // ── Helpers ───────────────────────────────────────────────────────────────
@@ -73,11 +73,11 @@ export function applyExtensionTheme(fileUrl: string, ctx: ExtensionContext): boo
 	if (!ctx.hasUI) return false;
 
 	const name = extensionName(fileUrl);
-	
+
 	// If there are multiple extensions stacked in 'ipi', they each fire session_start
 	// and try to apply their own mapped theme. The LAST one to fire wins.
 	// Since system-select is last in the ipi alias array, it was setting 'catppuccin-mocha'.
-	
+
 	// We want to skip theme application for all secondary extensions if they are stacked,
 	// so the primary extension (first in the array) dictates the theme.
 	const primaryExt = primaryExtensionName();
@@ -86,17 +86,17 @@ export function applyExtensionTheme(fileUrl: string, ctx: ExtensionContext): boo
 	}
 
 	let themeName = configuredThemeFromSettings() ?? THEME_MAP[name];
-	
+
 	if (!themeName) {
 		themeName = "synthwave";
 	}
 
 	const result = ctx.ui.setTheme(themeName);
-	
+
 	if (!result.success && themeName !== "synthwave") {
 		return ctx.ui.setTheme("synthwave").success;
 	}
-	
+
 	return result.success;
 }
 // ── Title ──────────────────────────────────────────────────────────────────

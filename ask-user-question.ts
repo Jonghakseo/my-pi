@@ -367,9 +367,7 @@ export default function askUserQuestionExtension(pi: ExtensionAPI) {
 			}
 
 			return new Text(
-				theme.fg("success", "✓ ") +
-					theme.fg("muted", "answered ") +
-					theme.fg("accent", answerText || "(empty answer)"),
+				theme.fg("success", "✓ ") + theme.fg("muted", "answered ") + theme.fg("accent", answerText || "(empty answer)"),
 				0,
 				0,
 			);

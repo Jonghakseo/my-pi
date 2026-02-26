@@ -13,11 +13,13 @@ import type { AgentAliasMatch, DisplayItem, OnUpdateCallback, SingleResult, Suba
 // ─── Result Helpers ──────────────────────────────────────────────────────────
 
 export function getLastNonEmptyLine(text: string): string {
-	return text
-		.split("\n")
-		.map((line) => line.trim())
-		.filter(Boolean)
-		.pop() ?? "";
+	return (
+		text
+			.split("\n")
+			.map((line) => line.trim())
+			.filter(Boolean)
+			.pop() ?? ""
+	);
 }
 
 export function getFinalOutput(messages: Message[]): string {
@@ -296,7 +298,9 @@ export async function runSingleAgent(
 	const emitUpdate = () => {
 		if (onUpdate) {
 			onUpdate({
-				content: [{ type: "text", text: getFinalOutput(currentResult.messages) || currentResult.liveText || "(running...)" }],
+				content: [
+					{ type: "text", text: getFinalOutput(currentResult.messages) || currentResult.liveText || "(running...)" },
+				],
 				details: makeDetails([currentResult]),
 			});
 		}
@@ -435,8 +439,7 @@ export async function runSingleAgent(
 					if (settled || procExited || wasAborted) return;
 					if (lastEventAt !== marker) return;
 
-					const forcedCode =
-						currentResult.stopReason === "error" || currentResult.stopReason === "aborted" ? 1 : 0;
+					const forcedCode = currentResult.stopReason === "error" || currentResult.stopReason === "aborted" ? 1 : 0;
 
 					proc.kill("SIGTERM");
 					setTimeout(() => {

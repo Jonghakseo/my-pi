@@ -3,6 +3,7 @@
  */
 
 import { Box, Text, truncateToWidth, visibleWidth } from "@mariozechner/pi-tui";
+import { PARENT_HINT } from "./constants.js";
 import {
 	AGENT_NAME_PALETTE,
 	agentBgIndex,
@@ -12,11 +13,11 @@ import {
 	getUsedContextPercent,
 	resolveContextWindow,
 } from "./format.js";
-import { PARENT_HINT } from "./constants.js";
 
 const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"] as const;
 const SPINNER_INTERVAL_MS = 120;
 const SPINNER_REFRESH_MS = 150;
+
 import { type SubagentStore, truncateText } from "./store.js";
 
 /** Fast timer that drives spinner animation while any run is active. */
@@ -114,7 +115,9 @@ export function updateCommandRunsWidget(store: SubagentStore, ctx?: any): void {
 						const remainingContextPercent = getRemainingContextPercent(usedContextPercent);
 						const contextBar = usedContextPercent !== undefined ? formatContextUsageBar(usedContextPercent) : undefined;
 						const contextBarColor =
-							remainingContextPercent !== undefined ? getContextBarColorByRemaining(remainingContextPercent) : undefined;
+							remainingContextPercent !== undefined
+								? getContextBarColorByRemaining(remainingContextPercent)
+								: undefined;
 						const contextShort = contextBar
 							? contextBarColor
 								? theme.fg(contextBarColor, contextBar)
@@ -144,7 +147,10 @@ export function updateCommandRunsWidget(store: SubagentStore, ctx?: any): void {
 							lines.push(truncateToWidth(statusLeft, innerWidth));
 						}
 
-						const normalizedTask = run.task.replace(/\s*\n+\s*/g, " ").replace(/\s{2,}/g, " ").trim();
+						const normalizedTask = run.task
+							.replace(/\s*\n+\s*/g, " ")
+							.replace(/\s{2,}/g, " ")
+							.trim();
 						const taskLine = truncateText(normalizedTask, Math.max(1, innerWidth - 4));
 						lines.push(theme.fg("dim", `  ${taskLine}`));
 
@@ -154,7 +160,10 @@ export function updateCommandRunsWidget(store: SubagentStore, ctx?: any): void {
 						}
 
 						if (run.status !== "done" && run.lastLine) {
-							const normalized = run.lastLine.replace(/\s*\n+\s*/g, " ").replace(/\s{2,}/g, " ").trim();
+							const normalized = run.lastLine
+								.replace(/\s*\n+\s*/g, " ")
+								.replace(/\s{2,}/g, " ")
+								.trim();
 							const outputLine = truncateText(normalized, Math.max(1, innerWidth - 4));
 							lines.push(theme.fg("muted", `  ↳ ${outputLine}`));
 						}

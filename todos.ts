@@ -32,31 +32,40 @@
  * Use `/todos` to bring up the visual todo manager or just let the LLM use them
  * naturally.
  */
-import { DynamicBorder, copyToClipboard, getMarkdownTheme, keyHint, type ExtensionAPI, type ExtensionContext, type Theme } from "@mariozechner/pi-coding-agent";
-import { StringEnum } from "@mariozechner/pi-ai";
-import { Type } from "@sinclair/typebox";
-import path from "node:path";
-import os from "node:os";
-import fs from "node:fs/promises";
-import { existsSync, readFileSync, readdirSync } from "node:fs";
+
 import crypto from "node:crypto";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
+import fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+import { StringEnum } from "@mariozechner/pi-ai";
+import {
+	copyToClipboard,
+	DynamicBorder,
+	type ExtensionAPI,
+	type ExtensionContext,
+	getMarkdownTheme,
+	keyHint,
+	type Theme,
+} from "@mariozechner/pi-coding-agent";
 import {
 	Container,
 	type Focusable,
+	fuzzyMatch,
+	getEditorKeybindings,
 	Input,
 	Key,
 	Markdown,
+	matchesKey,
+	type SelectItem,
 	SelectList,
 	Spacer,
-	type SelectItem,
 	Text,
-	TUI,
-	fuzzyMatch,
-	getEditorKeybindings,
-	matchesKey,
+	type TUI,
 	truncateToWidth,
 	visibleWidth,
 } from "@mariozechner/pi-tui";
+import { Type } from "@sinclair/typebox";
 
 const TODO_PATH_ENV = "PI_TODO_PATH";
 const TODO_SETTINGS_NAME = "settings.json";
@@ -105,67 +114,29 @@ const TODO_PRIORITY_LABEL: Record<TodoPriority, string> = {
 };
 
 const TodoParams = Type.Object({
-	action: StringEnum([
-		"list",
-		"list-all",
-		"get",
-		"create",
-		"update",
-		"append",
-		"delete",
-		"claim",
-		"release",
-	] as const),
-	id: Type.Optional(
-		Type.String({ description: "Todo id (TODO-<hex> or raw hex filename)" }),
-	),
+	action: StringEnum(["list", "list-all", "get", "create", "update", "append", "delete", "claim", "release"] as const),
+	id: Type.Optional(Type.String({ description: "Todo id (TODO-<hex> or raw hex filename)" })),
 	title: Type.Optional(Type.String({ description: "Short summary shown in lists" })),
 	status: Type.Optional(Type.String({ description: "Todo status" })),
 	tags: Type.Optional(Type.Array(Type.String({ description: "Todo tag" }))),
 	priority: Type.Optional(
 		Type.String({ description: "Priority (high|medium|low or 상|중|하). Empty string clears it." }),
 	),
-	dueDate: Type.Optional(
-		Type.String({ description: "Due date (YYYY-MM-DD). Empty string clears it." }),
-	),
-	due_date: Type.Optional(
-		Type.String({ description: "Alias of dueDate (YYYY-MM-DD). Empty string clears it." }),
-	),
-	duedate: Type.Optional(
-		Type.String({ description: "Alias of dueDate (YYYY-MM-DD). Empty string clears it." }),
-	),
+	dueDate: Type.Optional(Type.String({ description: "Due date (YYYY-MM-DD). Empty string clears it." })),
+	due_date: Type.Optional(Type.String({ description: "Alias of dueDate (YYYY-MM-DD). Empty string clears it." })),
+	duedate: Type.Optional(Type.String({ description: "Alias of dueDate (YYYY-MM-DD). Empty string clears it." })),
 	estimate: Type.Optional(
 		Type.String({ description: "Estimated effort (e.g. 2h, 반나절, 하루). Empty string clears it." }),
 	),
-	body: Type.Optional(
-		Type.String({ description: "Long-form details (markdown). Update replaces; append adds." }),
-	),
+	body: Type.Optional(Type.String({ description: "Long-form details (markdown). Update replaces; append adds." })),
 	force: Type.Optional(Type.Boolean({ description: "Override another session's assignment" })),
 });
 
-type TodoAction =
-	| "list"
-	| "list-all"
-	| "get"
-	| "create"
-	| "update"
-	| "append"
-	| "delete"
-	| "claim"
-	| "release";
+type TodoAction = "list" | "list-all" | "get" | "create" | "update" | "append" | "delete" | "claim" | "release";
 
 type TodoOverlayAction = "back" | "work";
 
-type TodoMenuAction =
-	| "work"
-	| "refine"
-	| "close"
-	| "reopen"
-	| "release"
-	| "delete"
-	| "copyPath"
-	| "copyText"
-	| "view";
+type TodoMenuAction = "work" | "refine" | "close" | "reopen" | "release" | "delete" | "copyPath" | "copyText" | "view";
 
 type TodoToolDetails =
 	| { action: "list" | "list-all"; todos: TodoFrontMatter[]; currentSessionId?: string; error?: string }
@@ -173,7 +144,7 @@ type TodoToolDetails =
 			action: "get" | "create" | "update" | "append" | "delete" | "claim" | "release";
 			todo: TodoRecord;
 			error?: string;
-		};
+	  };
 
 function formatTodoId(id: string): string {
 	return `${TODO_ID_PREFIX}${id}`;
@@ -290,11 +261,7 @@ function normalizeDueDate(value: string | undefined): string | undefined {
 	}
 
 	const date = new Date(Date.UTC(year, month - 1, day));
-	if (
-		date.getUTCFullYear() !== year ||
-		date.getUTCMonth() !== month - 1 ||
-		date.getUTCDate() !== day
-	) {
+	if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) {
 		return undefined;
 	}
 
@@ -309,7 +276,9 @@ function normalizeEstimate(value: string | undefined): string | undefined {
 	return normalized || undefined;
 }
 
-function parseStructuredTag(tag: string):
+function parseStructuredTag(
+	tag: string,
+):
 	| { field: "priority"; value: string }
 	| { field: "due_date"; value: string }
 	| { field: "estimate"; value: string }
@@ -345,9 +314,7 @@ function parseStructuredTag(tag: string):
 function inferMetadataFromText(text: string): Partial<Pick<TodoFrontMatter, "priority" | "due_date" | "estimate">> {
 	const metadata: Partial<Pick<TodoFrontMatter, "priority" | "due_date" | "estimate">> = {};
 
-	const dueMatch = text.match(
-		/(?:마감(?:일)?|due(?:\s*date)?|deadline)\s*[:=]\s*(\d{4}[./-]\d{1,2}[./-]\d{1,2})/i,
-	);
+	const dueMatch = text.match(/(?:마감(?:일)?|due(?:\s*date)?|deadline)\s*[:=]\s*(\d{4}[./-]\d{1,2}[./-]\d{1,2})/i);
 	if (dueMatch) {
 		const normalized = normalizeDueDate(dueMatch[1]);
 		if (normalized) metadata.due_date = normalized;
@@ -367,9 +334,7 @@ function inferMetadataFromText(text: string): Partial<Pick<TodoFrontMatter, "pri
 		}
 	}
 
-	const estimateMatch = text.match(
-		/(?:예상\s*소요(?:시간)?|소요(?:시간)?|estimate|est)\s*[:=]\s*([^\n,;]+)/i,
-	);
+	const estimateMatch = text.match(/(?:예상\s*소요(?:시간)?|소요(?:시간)?|estimate|est)\s*[:=]\s*([^\n,;]+)/i);
 	if (estimateMatch) {
 		const normalized = normalizeEstimate(estimateMatch[1]);
 		if (normalized) metadata.estimate = normalized;
@@ -430,7 +395,6 @@ function normalizeTodoMetadata(
 			}
 			if (parsed.field === "estimate" && !extractedEstimate) {
 				extractedEstimate = normalizeEstimate(parsed.value);
-				continue;
 			}
 		}
 
@@ -479,7 +443,7 @@ function resolveTodoMetadataOverrides(params: Record<string, unknown>): TodoMeta
 		estimateProvided: false,
 	};
 
-	if (Object.prototype.hasOwnProperty.call(params, "priority")) {
+	if (Object.hasOwn(params, "priority")) {
 		overrides.priorityProvided = true;
 		if (typeof params.priority !== "string") {
 			return { ...overrides, error: "priority must be a string" };
@@ -496,7 +460,7 @@ function resolveTodoMetadataOverrides(params: Record<string, unknown>): TodoMeta
 	let dueDateProvided = false;
 	let dueDateRaw: unknown;
 	for (const key of ["dueDate", "due_date", "duedate"]) {
-		if (Object.prototype.hasOwnProperty.call(params, key)) {
+		if (Object.hasOwn(params, key)) {
 			dueDateProvided = true;
 			dueDateRaw = params[key];
 			break;
@@ -516,7 +480,7 @@ function resolveTodoMetadataOverrides(params: Record<string, unknown>): TodoMeta
 		}
 	}
 
-	if (Object.prototype.hasOwnProperty.call(params, "estimate")) {
+	if (Object.hasOwn(params, "estimate")) {
 		overrides.estimateProvided = true;
 		if (typeof params.estimate !== "string") {
 			return { ...overrides, error: "estimate must be a string" };
@@ -807,10 +771,7 @@ class TodoSelectorComponent extends Container implements Focusable {
 		}
 
 		if (startIndex > 0 || endIndex < this.filteredTodos.length) {
-			const scrollInfo = this.theme.fg(
-				"dim",
-				`  (${this.selectedIndex + 1}/${this.filteredTodos.length})`,
-			);
+			const scrollInfo = this.theme.fg("dim", `  (${this.selectedIndex + 1}/${this.filteredTodos.length})`);
 			this.listContainer.addChild(new Text(scrollInfo, 0, 0));
 		}
 	}
@@ -865,12 +826,7 @@ class TodoActionMenuComponent extends Container {
 	private onSelectCallback: (action: TodoMenuAction) => void;
 	private onCancelCallback: () => void;
 
-	constructor(
-		theme: Theme,
-		todo: TodoRecord,
-		onSelect: (action: TodoMenuAction) => void,
-		onCancel: () => void,
-	) {
+	constructor(theme: Theme, todo: TodoRecord, onSelect: (action: TodoMenuAction) => void, onCancel: () => void) {
 		super();
 		this.onSelectCallback = onSelect;
 		this.onCancelCallback = onCancel;
@@ -884,23 +840,14 @@ class TodoActionMenuComponent extends Container {
 			...(closed
 				? [{ value: "reopen", label: "reopen", description: "Reopen todo" }]
 				: [{ value: "close", label: "close", description: "Close todo" }]),
-			...(todo.assigned_to_session
-				? [{ value: "release", label: "release", description: "Release assignment" }]
-				: []),
+			...(todo.assigned_to_session ? [{ value: "release", label: "release", description: "Release assignment" }] : []),
 			{ value: "copyPath", label: "copy path", description: "Copy absolute path to clipboard" },
 			{ value: "copyText", label: "copy text", description: "Copy title and body to clipboard" },
 			{ value: "delete", label: "delete", description: "Delete todo" },
 		];
 
 		this.addChild(new DynamicBorder((s: string) => theme.fg("accent", s)));
-		this.addChild(
-			new Text(
-				theme.fg(
-					"accent",
-					theme.bold(`Actions for ${formatTodoId(todo.id)} "${title}"`),
-				),
-			),
-		);
+		this.addChild(new Text(theme.fg("accent", theme.bold(`Actions for ${formatTodoId(todo.id)} "${title}"`))));
 
 		this.selectList = new SelectList(options, options.length, {
 			selectedPrefix: (text) => theme.fg("accent", text),
@@ -1072,9 +1019,7 @@ class TodoDetailOverlayComponent {
 	}
 
 	private buildTitleLine(width: number): string {
-		const titleText = this.todo.title
-			? ` ${this.todo.title} `
-			: ` Todo ${formatTodoId(this.todo.id)} `;
+		const titleText = this.todo.title ? ` ${this.todo.title} ` : ` Todo ${formatTodoId(this.todo.id)} `;
 		const titleWidth = visibleWidth(titleText);
 		if (titleWidth >= width) {
 			return truncateToWidth(this.theme.fg("accent", titleText.trim()), width);
@@ -1286,13 +1231,13 @@ function findJsonObjectEnd(content: string): number {
 				escaped = true;
 				continue;
 			}
-			if (char === "\"") {
+			if (char === '"') {
 				inString = false;
 			}
 			continue;
 		}
 
-		if (char === "\"") {
+		if (char === '"') {
 			inString = true;
 			continue;
 		}
@@ -1441,10 +1386,7 @@ async function acquireLock(
 			if (!ctx.hasUI) {
 				return { error: `Todo ${displayTodoId(id)} lock is stale; rerun in interactive mode to steal it.` };
 			}
-			const ok = await ctx.ui.confirm(
-				"Todo locked",
-				`Todo ${displayTodoId(id)} appears locked. Steal the lock?`,
-			);
+			const ok = await ctx.ui.confirm("Todo locked", `Todo ${displayTodoId(id)} appears locked. Steal the lock?`);
 			if (!ok) {
 				return { error: `Todo ${displayTodoId(id)} remains locked.` };
 			}
@@ -1554,11 +1496,7 @@ function formatAssignmentSuffix(todo: TodoFrontMatter): string {
 	return todo.assigned_to_session ? ` (assigned: ${todo.assigned_to_session})` : "";
 }
 
-function renderAssignmentSuffix(
-	theme: Theme,
-	todo: TodoFrontMatter,
-	currentSessionId?: string,
-): string {
+function renderAssignmentSuffix(theme: Theme, todo: TodoFrontMatter, currentSessionId?: string): string {
 	if (!todo.assigned_to_session) return "";
 	const isCurrent = todo.assigned_to_session === currentSessionId;
 	const color = isCurrent ? "success" : "dim";
@@ -1660,12 +1598,7 @@ function renderTodoHeading(theme: Theme, todo: TodoFrontMatter, currentSessionId
 	);
 }
 
-function renderTodoList(
-	theme: Theme,
-	todos: TodoFrontMatter[],
-	expanded: boolean,
-	currentSessionId?: string,
-): string {
+function renderTodoList(theme: Theme, todos: TodoFrontMatter[], expanded: boolean, currentSessionId?: string): string {
 	if (!todos.length) return theme.fg("dim", "No todos");
 
 	const { assignedTodos, openTodos, closedTodos } = splitTodosByAssignment(todos);
@@ -1902,7 +1835,7 @@ export default function todosExtension(pi: ExtensionAPI) {
 			"Title is the short summary; body is long-form markdown notes (update replaces, append adds). " +
 			"Structured fields are supported: priority, dueDate, estimate. Legacy tags like P-상/due:YYYY-MM-DD/est:... are auto-migrated. " +
 			"Todo ids are shown as TODO-<hex>; id parameters accept TODO-<hex> or the raw hex filename. " +
-			"Claim tasks before working on them to avoid conflicts, and close them when complete.", 
+			"Claim tasks before working on them to avoid conflicts, and close them when complete.",
 		parameters: TodoParams,
 
 		async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
@@ -1983,10 +1916,7 @@ export default function todosExtension(pi: ExtensionAPI) {
 						id,
 						title: params.title,
 						tags: normalizeTodoTags(params.tags ?? []),
-						status:
-							typeof params.status === "string" && params.status.trim()
-								? params.status
-								: "open",
+						status: typeof params.status === "string" && params.status.trim() ? params.status : "open",
 						created_at: new Date().toISOString(),
 						priority: undefined,
 						due_date: undefined,
@@ -2132,12 +2062,7 @@ export default function todosExtension(pi: ExtensionAPI) {
 							details: { action: "claim", error: "id required" },
 						};
 					}
-					const result = await claimTodoAssignment(
-						todosDir,
-						params.id,
-						ctx,
-						Boolean(params.force),
-					);
+					const result = await claimTodoAssignment(todosDir, params.id, ctx, Boolean(params.force));
 					if (typeof result === "object" && "error" in result) {
 						return {
 							content: [{ type: "text", text: result.error }],
@@ -2158,12 +2083,7 @@ export default function todosExtension(pi: ExtensionAPI) {
 							details: { action: "release", error: "id required" },
 						};
 					}
-					const result = await releaseTodoAssignment(
-						todosDir,
-						params.id,
-						ctx,
-						Boolean(params.force),
-					);
+					const result = await releaseTodoAssignment(todosDir, params.id, ctx, Boolean(params.force));
 					if (typeof result === "object" && "error" in result) {
 						return {
 							content: [{ type: "text", text: result.error }],
@@ -2208,16 +2128,15 @@ export default function todosExtension(pi: ExtensionAPI) {
 			}
 		},
 
-
 		renderCall(args, theme) {
 			const action = typeof args.action === "string" ? args.action : "";
 			const id = typeof args.id === "string" ? args.id : "";
 			const normalizedId = id ? normalizeTodoId(id) : "";
 			const title = typeof args.title === "string" ? args.title : "";
 			const priority = typeof args.priority === "string" ? normalizePriority(args.priority) : undefined;
-			const dueDateRaw = [args.dueDate, args.due_date, args.duedate].find(
-				(value) => typeof value === "string",
-			) as string | undefined;
+			const dueDateRaw = [args.dueDate, args.due_date, args.duedate].find((value) => typeof value === "string") as
+				| string
+				| undefined;
 			const dueDate = normalizeDueDate(dueDateRaw);
 			const estimate = typeof args.estimate === "string" ? normalizeEstimate(args.estimate) : undefined;
 			let text = theme.fg("toolTitle", theme.bold("todo ")) + theme.fg("muted", action);
@@ -2336,25 +2255,21 @@ export default function todosExtension(pi: ExtensionAPI) {
 				let selector: TodoSelectorComponent | null = null;
 				let actionMenu: TodoActionMenuComponent | null = null;
 				let deleteConfirm: TodoDeleteConfirmComponent | null = null;
-				let activeComponent:
-					| {
-							render: (width: number) => string[];
-							invalidate: () => void;
-							handleInput?: (data: string) => void;
-							focused?: boolean;
-						}
-					| null = null;
+				let activeComponent: {
+					render: (width: number) => string[];
+					invalidate: () => void;
+					handleInput?: (data: string) => void;
+					focused?: boolean;
+				} | null = null;
 				let wrapperFocused = false;
 
 				const setActiveComponent = (
-					component:
-						| {
-								render: (width: number) => string[];
-								invalidate: () => void;
-								handleInput?: (data: string) => void;
-								focused?: boolean;
-							}
-						| null,
+					component: {
+						render: (width: number) => string[];
+						invalidate: () => void;
+						handleInput?: (data: string) => void;
+						focused?: boolean;
+					} | null,
 				) => {
 					if (activeComponent && "focused" in activeComponent) {
 						activeComponent.focused = false;
@@ -2385,9 +2300,7 @@ export default function todosExtension(pi: ExtensionAPI) {
 					const metadataText = metadata.length
 						? `\n\n- Status: ${getTodoStatus(record)}\n- ${metadata.join("\n- ")}`
 						: `\n\n- Status: ${getTodoStatus(record)}`;
-					const text = body
-						? `# ${title}${metadataText}\n\n${body}`
-						: `# ${title}${metadataText}`;
+					const text = body ? `# ${title}${metadataText}\n\n${body}` : `# ${title}${metadataText}`;
 					try {
 						copyToClipboard(text);
 						ctx.ui.notify("Copied todo text to clipboard", "info");
@@ -2420,10 +2333,7 @@ export default function todosExtension(pi: ExtensionAPI) {
 					return action ?? "back";
 				};
 
-				const applyTodoAction = async (
-					record: TodoRecord,
-					action: TodoMenuAction,
-				): Promise<"stay" | "exit"> => {
+				const applyTodoAction = async (record: TodoRecord, action: TodoMenuAction): Promise<"stay" | "exit"> => {
 					if (action === "refine") {
 						const title = record.title || "(untitled)";
 						nextPrompt = buildRefinePrompt(record.id, title);
@@ -2481,10 +2391,7 @@ export default function todosExtension(pi: ExtensionAPI) {
 
 					const updatedTodos = await listTodos(todosDir);
 					selector?.setTodos(updatedTodos);
-					ctx.ui.notify(
-						`${action === "close" ? "Closed" : "Reopened"} todo ${formatTodoId(record.id)}`,
-						"info",
-					);
+					ctx.ui.notify(`${action === "close" ? "Closed" : "Reopened"} todo ${formatTodoId(record.id)}`, "info");
 					return "stay";
 				};
 
@@ -2595,5 +2502,4 @@ export default function todosExtension(pi: ExtensionAPI) {
 			}
 		},
 	});
-
 }

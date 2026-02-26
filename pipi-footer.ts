@@ -32,7 +32,10 @@ function getFolderName(cwd: string): string {
 }
 
 function sanitizeStatusText(text: string): string {
-	return text.replace(/[\r\n\t]/g, " ").replace(/ +/g, " ").trim();
+	return text
+		.replace(/[\r\n\t]/g, " ")
+		.replace(/ +/g, " ")
+		.trim();
 }
 
 function styleStatus(theme: any, key: string, text: string): string {

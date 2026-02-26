@@ -74,7 +74,9 @@ export interface SessionReplayItem {
 	elapsed?: string;
 }
 
-export type DisplayItem = { type: "text"; text: string } | { type: "toolCall"; name: string; args: Record<string, any> };
+export type DisplayItem =
+	| { type: "text"; text: string }
+	| { type: "toolCall"; name: string; args: Record<string, any> };
 
 export interface AgentAliasMatch {
 	matchedAgent?: AgentConfig;
@@ -142,17 +144,20 @@ export interface ChainItemFields {
 }
 
 export const AgentScopeSchema = StringEnum(["user", "project", "both"] as const, {
-	description: 'Which agent directories to use. Default: "user". Use "both" to include project-local agents (.pi/agents, .claude/agents).',
+	description:
+		'Which agent directories to use. Default: "user". Use "both" to include project-local agents (.pi/agents, .claude/agents).',
 	default: "user",
 });
 
 export const ContextModeSchema = StringEnum(["isolated", "main"] as const, {
-	description: 'Subagent context mode. "isolated" starts a dedicated sub-session, "main" inherits current main session context.',
+	description:
+		'Subagent context mode. "isolated" starts a dedicated sub-session, "main" inherits current main session context.',
 	default: "isolated",
 });
 
 export const AsyncActionSchema = StringEnum(["run", "list", "status", "detail", "abort", "remove"] as const, {
-	description: 'Async control action for tool-managed jobs. "run" starts a new job; others (list/status/detail/abort/remove) are for occasional manual inspection/control only. Do NOT call subagent repeatedly for polling — completion/failure/error updates are delivered automatically as follow-up messages.',
+	description:
+		'Async control action for tool-managed jobs. "run" starts a new job; others (list/status/detail/abort/remove) are for occasional manual inspection/control only. Do NOT call subagent repeatedly for polling — completion/failure/error updates are delivered automatically as follow-up messages.',
 	default: "run",
 });
 
@@ -169,11 +174,22 @@ export const SubagentParams = Type.Object({
 	contextMode: Type.Optional(ContextModeSchema),
 	runAsync: Type.Optional(
 		Type.Boolean({
-			description: "If true, start the subagent in background and return immediately. Do NOT keep calling subagent to poll status — completion/failure/error results are delivered automatically as follow-up messages. Use asyncAction only for occasional manual inspection or control (e.g. abort).",
+			description:
+				"If true, start the subagent in background and return immediately. Do NOT keep calling subagent to poll status — completion/failure/error results are delivered automatically as follow-up messages. Use asyncAction only for occasional manual inspection or control (e.g. abort).",
 			default: true,
 		}),
 	),
 	asyncAction: Type.Optional(AsyncActionSchema),
-	runId: Type.Optional(Type.Number({ description: "Run ID for asyncAction=status|detail|abort|remove. Use only for occasional manual checks/control; do not repeatedly poll, because completion/failure/error updates are delivered automatically." })),
-	continueRunId: Type.Optional(Type.Number({ description: "Run ID of an existing completed/error run to continue. Reuses the run's session file for context continuity. The original run's agent is reused if 'agent' is not specified." })),
+	runId: Type.Optional(
+		Type.Number({
+			description:
+				"Run ID for asyncAction=status|detail|abort|remove. Use only for occasional manual checks/control; do not repeatedly poll, because completion/failure/error updates are delivered automatically.",
+		}),
+	),
+	continueRunId: Type.Optional(
+		Type.Number({
+			description:
+				"Run ID of an existing completed/error run to continue. Reuses the run's session file for context continuity. The original run's agent is reused if 'agent' is not specified.",
+		}),
+	),
 });

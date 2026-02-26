@@ -7,10 +7,29 @@
 
 import * as fs from "node:fs";
 import * as path from "node:path";
+import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
+import { matchesKey } from "@mariozechner/pi-tui";
 import type { AgentScope } from "./agents.js";
 import { discoverAgents } from "./agents.js";
+import {
+	AGENT_SYMBOL_MAP,
+	COMMAND_COMPLETION_LIMIT,
+	COMMAND_TASK_PREVIEW_CHARS,
+	CONTINUATION_OUTPUT_CONTEXT_MAX_CHARS,
+	DEFAULT_TURN_COUNT,
+	formatSymbolHints,
+	MS_PER_SECOND,
+	PARENT_ENTRY_TYPE,
+	RUN_OUTPUT_MESSAGE_MAX_CHARS,
+	RUN_TICK_INTERVAL_MS,
+	STALE_PENDING_COMPLETION_MS,
+	STATUS_LOG_FOOTER,
+	SUBVIEW_OVERLAY_MAX_HEIGHT,
+	SUBVIEW_OVERLAY_WIDTH,
+} from "./constants.js";
 import { formatUsageStats, truncateLines } from "./format.js";
-import { SubagentSessionReplayOverlay, readSessionReplayItems } from "./replay.js";
+import { readSessionReplayItems, SubagentSessionReplayOverlay } from "./replay.js";
+import { getLatestRun, removeRun, trimCommandRunHistory } from "./run-utils.js";
 import {
 	getFinalOutput,
 	getLastNonEmptyLine,
@@ -20,31 +39,11 @@ import {
 } from "./runner.js";
 import { buildMainContextText, makeSubagentSessionFile, wrapTaskWithMainContext } from "./session.js";
 import { type SubagentStore, truncateText, updateRunFromResult } from "./store.js";
+import { createSubagentToolExecute } from "./tool-execute.js";
+import { renderSubagentToolCall, renderSubagentToolResult } from "./tool-render.js";
 import type { CommandRunState, SingleResult, SubagentDetails } from "./types.js";
 import { SubagentParams } from "./types.js";
-import { getLatestRun, removeRun, trimCommandRunHistory } from "./run-utils.js";
 import { updateCommandRunsWidget } from "./widget.js";
-
-import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
-import { matchesKey } from "@mariozechner/pi-tui";
-import { renderSubagentToolCall, renderSubagentToolResult } from "./tool-render.js";
-import { createSubagentToolExecute } from "./tool-execute.js";
-import {
-	AGENT_SYMBOL_MAP,
-	COMMAND_COMPLETION_LIMIT,
-	COMMAND_TASK_PREVIEW_CHARS,
-	CONTINUATION_OUTPUT_CONTEXT_MAX_CHARS,
-	DEFAULT_TURN_COUNT,
-	MS_PER_SECOND,
-	PARENT_ENTRY_TYPE,
-	RUN_OUTPUT_MESSAGE_MAX_CHARS,
-	RUN_TICK_INTERVAL_MS,
-	STALE_PENDING_COMPLETION_MS,
-	STATUS_LOG_FOOTER,
-	SUBVIEW_OVERLAY_MAX_HEIGHT,
-	SUBVIEW_OVERLAY_WIDTH,
-	formatSymbolHints,
-} from "./constants.js";
 
 /**
  * Capture switchSession from an ExtensionCommandContext into the shared store.
@@ -62,7 +61,10 @@ function captureSwitchSession(store: SubagentStore, ctx: any): void {
  * Resolve a working switchSession function from either the context or the store.
  * Returns null if neither is available (no command has been run yet).
  */
-function resolveSwitchSession(ctx: any, store: SubagentStore): ((sessionPath: string) => Promise<{ cancelled: boolean }>) | null {
+function resolveSwitchSession(
+	ctx: any,
+	store: SubagentStore,
+): ((sessionPath: string) => Promise<{ cancelled: boolean }>) | null {
 	if (typeof ctx?.switchSession === "function") return ctx.switchSession.bind(ctx);
 	return store.switchSessionFn;
 }
@@ -88,12 +90,12 @@ function ensureSessionFileMaterialized(ctx: any, sessionFile: string | null): vo
 			rawHeader && rawHeader.type === "session"
 				? rawHeader
 				: {
-					type: "session",
-					version: 3,
-					id: ctx.sessionManager?.getSessionId?.() ?? `fallback-${Date.now()}`,
-					timestamp: new Date().toISOString(),
-					cwd: ctx.sessionManager?.getCwd?.() ?? ctx.cwd ?? process.cwd(),
-				};
+						type: "session",
+						version: 3,
+						id: ctx.sessionManager?.getSessionId?.() ?? `fallback-${Date.now()}`,
+						timestamp: new Date().toISOString(),
+						cwd: ctx.sessionManager?.getCwd?.() ?? ctx.cwd ?? process.cwd(),
+					};
 		const entries = ctx.sessionManager?.getEntries?.();
 		const fileEntries = [header, ...(Array.isArray(entries) ? entries : [])];
 
@@ -487,7 +489,9 @@ function restoreRunsFromSession(store: SubagentStore, ctx: any, pi?: ExtensionAP
 			if (entry.originSessionFile === currentSessionFile) {
 				try {
 					pi.sendMessage(entry.pendingCompletion.message, entry.pendingCompletion.options);
-				} catch { /* ignore delivery errors */ }
+				} catch {
+					/* ignore delivery errors */
+				}
 				// Restore the completed run state into commandRuns for display.
 				store.commandRuns.set(runId, entry.runState);
 				store.globalLiveRuns.delete(runId);
@@ -542,9 +546,9 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 			"Delegate tasks to specialized subagents with isolated context.",
 			"Modes: single (agent + task), parallel (tasks array), chain (sequential with {previous} placeholder).",
 			"Supports background async jobs via runAsync + asyncAction (list/status/detail/abort/remove).",
-			"Use contextMode: \"main\" to inherit current main-session context, or \"isolated\" for dedicated sub-session.",
-			"Default agent scope is \"user\" (from ~/.pi/agent/agents).",
-			"To enable project-local agents in .pi/agents or .claude/agents, set agentScope: \"both\" (or \"project\").",
+			'Use contextMode: "main" to inherit current main-session context, or "isolated" for dedicated sub-session.',
+			'Default agent scope is "user" (from ~/.pi/agent/agents).',
+			'To enable project-local agents in .pi/agents or .claude/agents, set agentScope: "both" (or "project").',
 			"Important: Do NOT keep calling subagent for polling. Async runs push completion/failure/error updates automatically as follow-up messages; status/detail/list is for occasional manual checks only.",
 		].join(" "),
 		parameters: SubagentParams,
@@ -581,13 +585,16 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 		},
 		handler: async (args, ctx, forceMainContextFromWrapper = false) => {
 			captureSwitchSession(store, ctx);
-			let input = (args ?? "").trim();
+			const input = (args ?? "").trim();
 			const usageText =
 				"Usage: /sub:run <agent|alias> <task> | /sub:run <runId> <task> | /sub:run <task> | /sub:new <agent|alias> <task> | /sub:new <runId> <task> | /sub:new <task>";
 			let forceMainContext = forceMainContextFromWrapper;
 
 			if (input === "--main" || input.startsWith("--main ")) {
-				ctx.ui.notify("'--main' 접두어는 사용할 수 없습니다. /sub:run 또는 /sub:new 명령 자체로 컨텍스트를 선택하세요.", "warning");
+				ctx.ui.notify(
+					"'--main' 접두어는 사용할 수 없습니다. /sub:run 또는 /sub:new 명령 자체로 컨텍스트를 선택하세요.",
+					"warning",
+				);
 				return;
 			}
 
@@ -803,7 +810,9 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 			let originSessionFile = "";
 			try {
 				originSessionFile = normalizePath(ctx.sessionManager.getSessionFile()) ?? "";
-			} catch { /* ignore */ }
+			} catch {
+				/* ignore */
+			}
 			store.globalLiveRuns.set(runId, {
 				runState,
 				abortController,
@@ -850,8 +859,7 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 			ctx.ui.notify(
 				(continuedFromRunId !== undefined
 					? `Resumed subagent #${runId}: ${selectedAgent}`
-					: `Started subagent #${runId}: ${selectedAgent}`) +
-					` (${contextLabel} · turn ${runState.turnCount})`,
+					: `Started subagent #${runId}: ${selectedAgent}`) + ` (${contextLabel} · turn ${runState.turnCount})`,
 				"info",
 			);
 
@@ -889,8 +897,7 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 					if (runState.removed) return;
 
 					updateRunFromResult(runState, result);
-					const isError =
-						result.exitCode !== 0 || result.stopReason === "error" || result.stopReason === "aborted";
+					const isError = result.exitCode !== 0 || result.stopReason === "error" || result.stopReason === "aborted";
 					runState.status = isError ? "error" : "done";
 					runState.elapsedMs = Date.now() - runState.startedAt;
 					updateCommandRunsWidget(store);
@@ -941,12 +948,15 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 					let currentSessionFile: string | null = null;
 					try {
 						currentSessionFile = normalizePath(ctx.sessionManager.getSessionFile());
-					} catch { /* ignore */ }
+					} catch {
+						/* ignore */
+					}
 
-					const inOriginSession = !globalEntry
-						|| !currentSessionFile
-						|| !globalEntry.originSessionFile
-						|| currentSessionFile === globalEntry.originSessionFile;
+					const inOriginSession =
+						!globalEntry ||
+						!currentSessionFile ||
+						!globalEntry.originSessionFile ||
+						currentSessionFile === globalEntry.originSessionFile;
 
 					if (inOriginSession) {
 						pi.sendMessage(completionMessage, completionOptions);
@@ -999,12 +1009,15 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 					let cmdErrCurrentSession: string | null = null;
 					try {
 						cmdErrCurrentSession = normalizePath(ctx.sessionManager.getSessionFile());
-					} catch { /* ignore */ }
+					} catch {
+						/* ignore */
+					}
 
-					const cmdErrInOrigin = !cmdErrGlobalEntry
-						|| !cmdErrCurrentSession
-						|| !cmdErrGlobalEntry.originSessionFile
-						|| cmdErrCurrentSession === cmdErrGlobalEntry.originSessionFile;
+					const cmdErrInOrigin =
+						!cmdErrGlobalEntry ||
+						!cmdErrCurrentSession ||
+						!cmdErrGlobalEntry.originSessionFile ||
+						cmdErrCurrentSession === cmdErrGlobalEntry.originSessionFile;
 
 					// Keep triggerTurn disabled for error telemetry as well.
 					if (cmdErrInOrigin) {
@@ -1053,9 +1066,7 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 			captureSwitchSession(store, ctx);
 			const scopeArg = (args ?? "").trim().toLowerCase();
 			const scope: AgentScope =
-				scopeArg === "user" || scopeArg === "project" || scopeArg === "both"
-					? (scopeArg as AgentScope)
-					: "both";
+				scopeArg === "user" || scopeArg === "project" || scopeArg === "both" ? (scopeArg as AgentScope) : "both";
 			const discovery = discoverAgents(ctx.cwd, scope);
 			const agents = discovery.agents;
 			if (agents.length === 0) {
@@ -1126,9 +1137,7 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 			const usageLine = run.usage ? `\nUsage: ${formatUsageStats(run.usage, run.model)}` : "";
 			const output = (run.lastOutput ?? "").trim();
 			const fallback =
-				run.status === "running"
-					? "(still running; no final output yet)"
-					: run.lastLine || "(no output captured)";
+				run.status === "running" ? "(still running; no final output yet)" : run.lastLine || "(no output captured)";
 			const contextLabel = run.contextMode === "main" ? "main" : "isolated";
 			const content =
 				`Subagent #${run.id} [${run.status}] ${run.agent} ctx:${contextLabel} turn:${run.turnCount ?? DEFAULT_TURN_COUNT} ${elapsedSec}s tools:${run.toolCalls}` +
@@ -1210,9 +1219,7 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 				removalReason: "sub-rm",
 			});
 			ctx.ui.notify(
-				aborted
-					? `Removed subagent #${id} (aborting in background).`
-					: `Removed subagent #${id}.`,
+				aborted ? `Removed subagent #${id} (aborting in background).` : `Removed subagent #${id}.`,
 				aborted ? "warning" : "info",
 			);
 		},
@@ -1342,7 +1349,6 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 		},
 	});
 
-
 	// /hotkeys "Extensions" 섹션에 >> shorthand 사용법을 노출한다.
 	// 실제 입력 처리는 아래 input 핸들러에서 수행된다.
 	pi.registerShortcut(">>", {
@@ -1425,10 +1431,7 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 
 		const forwardedArgs = text.slice(3).trim();
 		if (!forwardedArgs) {
-			ctx.ui.notify(
-				`>> [agent] <task> | >> <runId> <task> | >><symbol> <task>\n${formatSymbolHints()}`,
-				"info",
-			);
+			ctx.ui.notify(`>> [agent] <task> | >> <runId> <task> | >><symbol> <task>\n${formatSymbolHints()}`, "info");
 			return { action: "handled" as const };
 		}
 
@@ -1571,7 +1574,10 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 		// << 1 — single run ID
 		// << (no args) — latest running or latest finished
 		const ids = raw
-			? raw.split(",").map((s) => s.trim()).filter(Boolean)
+			? raw
+					.split(",")
+					.map((s) => s.trim())
+					.filter(Boolean)
 			: [];
 
 		if (ids.length === 0) {
@@ -1706,9 +1712,7 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 
 		// Discover agents and find exact match
 		const discovery = discoverAgents(ctx.cwd, "both");
-		const agentConfig = discovery.agents.find(
-			(a) => a.name.toLowerCase() === agentName!.toLowerCase(),
-		);
+		const agentConfig = discovery.agents.find((a) => a.name.toLowerCase() === agentName!.toLowerCase());
 		if (!agentConfig?.systemPrompt?.trim()) return;
 
 		// Prepend persona block with marker
@@ -1727,5 +1731,4 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 		restoreRunsFromSession(store, ctx, pi);
 		registerTerminalInputRedirect(ctx);
 	});
-
 }

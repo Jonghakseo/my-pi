@@ -121,7 +121,7 @@ export function trimCommandRunHistory(
 	store: SubagentStore,
 	options: number | TrimCommandRunHistoryOptions = 10,
 ): number[] {
-	const maxRuns = typeof options === "number" ? options : options.maxRuns ?? 10;
+	const maxRuns = typeof options === "number" ? options : (options.maxRuns ?? 10);
 	const shouldUpdateWidget = typeof options === "number" ? false : (options.updateWidget ?? false);
 
 	const completed = Array.from(store.commandRuns.values())

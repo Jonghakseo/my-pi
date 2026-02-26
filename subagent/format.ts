@@ -163,9 +163,7 @@ export function formatToolCall(
 			const pattern = (args.pattern || "") as string;
 			const rawPath = (args.path || ".") as string;
 			return (
-				themeFg("muted", "grep ") +
-				themeFg("accent", `/${pattern}/`) +
-				themeFg("dim", ` in ${shortenPath(rawPath)}`)
+				themeFg("muted", "grep ") + themeFg("accent", `/${pattern}/`) + themeFg("dim", ` in ${shortenPath(rawPath)}`)
 			);
 		}
 		default: {

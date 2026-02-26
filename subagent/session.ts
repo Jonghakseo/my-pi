@@ -110,9 +110,7 @@ export function buildMainContextText(ctx: any): string {
 							const toolName = typeof (part as any).name === "string" ? (part as any).name : "tool";
 							const argsText = truncateToolCallContext(stringifyToolCallArguments((part as any).arguments));
 							messageParts.push(
-								argsText
-									? `Assistant ToolCall (${toolName}): ${argsText}`
-									: `Assistant ToolCall (${toolName})`,
+								argsText ? `Assistant ToolCall (${toolName}): ${argsText}` : `Assistant ToolCall (${toolName})`,
 							);
 						}
 					}

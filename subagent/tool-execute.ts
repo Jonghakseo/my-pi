@@ -6,9 +6,10 @@
  */
 
 import * as fs from "node:fs";
-
+import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import type { AgentConfig, AgentScope } from "./agents.js";
 import { discoverAgents } from "./agents.js";
+import { DEFAULT_TURN_COUNT, PLACEHOLDER_RUNNING_EXIT_CODE, STATUS_OUTPUT_PREVIEW_MAX_CHARS } from "./constants.js";
 import {
 	formatContextUsageBar,
 	formatUsageStats,
@@ -16,24 +17,19 @@ import {
 	resolveContextWindow,
 	truncateLines,
 } from "./format.js";
-import {
-	getFinalOutput,
-	getLastNonEmptyLine,
-	mapWithConcurrencyLimit,
-	runSingleAgent,
-} from "./runner.js";
+import { formatCommandRunSummary, removeRun, trimCommandRunHistory } from "./run-utils.js";
+import { getFinalOutput, getLastNonEmptyLine, mapWithConcurrencyLimit, runSingleAgent } from "./runner.js";
 import { buildMainContextText, makeSubagentSessionFile, wrapTaskWithMainContext } from "./session.js";
 import { MAX_CONCURRENCY, MAX_PARALLEL_TASKS, type SubagentStore, updateRunFromResult } from "./store.js";
-import type { ChainItemFields, CommandRunState, OnUpdateCallback, SingleResult, SubagentDetails, TaskItemFields } from "./types.js";
-import { formatCommandRunSummary, removeRun, trimCommandRunHistory } from "./run-utils.js";
+import type {
+	ChainItemFields,
+	CommandRunState,
+	OnUpdateCallback,
+	SingleResult,
+	SubagentDetails,
+	TaskItemFields,
+} from "./types.js";
 import { updateCommandRunsWidget } from "./widget.js";
-
-import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
-import {
-	DEFAULT_TURN_COUNT,
-	PLACEHOLDER_RUNNING_EXIT_CODE,
-	STATUS_OUTPUT_PREVIEW_MAX_CHARS,
-} from "./constants.js";
 
 type SessionToolCall = {
 	name: string;
@@ -168,10 +164,16 @@ function formatRunDetailOutput(run: CommandRunState): string {
 }
 
 export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore) {
-	return async (_toolCallId: string, params: Record<string, any>, signal: AbortSignal, onUpdate: OnUpdateCallback | undefined, ctx: any) => {
+	return async (
+		_toolCallId: string,
+		params: Record<string, any>,
+		signal: AbortSignal,
+		onUpdate: OnUpdateCallback | undefined,
+		ctx: any,
+	) => {
 		const agentScope: AgentScope = params.agentScope ?? "user";
 		const contextMode = params.contextMode ?? "isolated";
-		let inheritMainContext = contextMode === "main";
+		const inheritMainContext = contextMode === "main";
 		const discovery = discoverAgents(ctx.cwd, agentScope);
 		const agents = discovery.agents;
 		const confirmProjectAgents = params.confirmProjectAgents ?? true;
@@ -277,7 +279,9 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 			if (asyncAction === "detail") {
 				if (run.status === "running") {
 					return {
-						content: [{ type: "text", text: `Subagent run #${run.id} is still running. detail is available after completion.` }],
+						content: [
+							{ type: "text", text: `Subagent run #${run.id} is still running. detail is available after completion.` },
+						],
 						details: makeDetails("single")([]),
 						isError: true,
 					};
@@ -389,14 +393,24 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 				continueFromRun = store.commandRuns.get(params.continueRunId);
 				if (!continueFromRun) {
 					return {
-						content: [{ type: "text", text: `Unknown subagent run #${params.continueRunId}. Use asyncAction:"list" to see available runs.` }],
+						content: [
+							{
+								type: "text",
+								text: `Unknown subagent run #${params.continueRunId}. Use asyncAction:"list" to see available runs.`,
+							},
+						],
 						details: makeDetails("single")([]),
 						isError: true,
 					};
 				}
 				if (continueFromRun.status === "running") {
 					return {
-						content: [{ type: "text", text: `Subagent #${params.continueRunId} is still running. Wait for it to finish or abort it first.` }],
+						content: [
+							{
+								type: "text",
+								text: `Subagent #${params.continueRunId} is still running. Wait for it to finish or abort it first.`,
+							},
+						],
 						details: makeDetails("single")([]),
 						isError: true,
 					};
@@ -463,7 +477,9 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 			try {
 				const raw = ctx.sessionManager.getSessionFile() ?? "";
 				originSessionFile = raw.replace(/[\r\n\t]+/g, "").trim();
-			} catch { /* ignore */ }
+			} catch {
+				/* ignore */
+			}
 			store.globalLiveRuns.set(runId, {
 				runState,
 				abortController,
@@ -503,8 +519,7 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 				ctx.ui.notify(
 					(continueFromRun
 						? `Resumed subagent #${runId}: ${resolvedAgent}`
-						: `Started subagent #${runId}: ${resolvedAgent}`) +
-						` (${contextLabel} · turn ${runState.turnCount})`,
+						: `Started subagent #${runId}: ${resolvedAgent}`) + ` (${contextLabel} · turn ${runState.turnCount})`,
 					"info",
 				);
 			}
@@ -533,8 +548,7 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 					if (runState.removed) return;
 
 					updateRunFromResult(runState, result);
-					const isError =
-						result.exitCode !== 0 || result.stopReason === "error" || result.stopReason === "aborted";
+					const isError = result.exitCode !== 0 || result.stopReason === "error" || result.stopReason === "aborted";
 					runState.status = isError ? "error" : "done";
 					runState.elapsedMs = Date.now() - runState.startedAt;
 					updateCommandRunsWidget(store);
@@ -580,12 +594,15 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 					try {
 						const rawSession = ctx.sessionManager.getSessionFile() ?? null;
 						toolCurrentSession = rawSession ? rawSession.replace(/[\r\n\t]+/g, "").trim() : null;
-					} catch { /* ignore */ }
+					} catch {
+						/* ignore */
+					}
 
-					const toolInOrigin = !toolGlobalEntry
-						|| !toolCurrentSession
-						|| !toolGlobalEntry.originSessionFile
-						|| toolCurrentSession === toolGlobalEntry.originSessionFile;
+					const toolInOrigin =
+						!toolGlobalEntry ||
+						!toolCurrentSession ||
+						!toolGlobalEntry.originSessionFile ||
+						toolCurrentSession === toolGlobalEntry.originSessionFile;
 
 					if (toolInOrigin) {
 						pi.sendMessage(completionMessage, completionOptions);
@@ -641,12 +658,15 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 					try {
 						const rawErrSession = ctx.sessionManager.getSessionFile() ?? null;
 						errCurrentSession = rawErrSession ? rawErrSession.replace(/[\r\n\t]+/g, "").trim() : null;
-					} catch { /* ignore */ }
+					} catch {
+						/* ignore */
+					}
 
-					const errInOrigin = !errGlobalEntry
-						|| !errCurrentSession
-						|| !errGlobalEntry.originSessionFile
-						|| errCurrentSession === errGlobalEntry.originSessionFile;
+					const errInOrigin =
+						!errGlobalEntry ||
+						!errCurrentSession ||
+						!errGlobalEntry.originSessionFile ||
+						errCurrentSession === errGlobalEntry.originSessionFile;
 
 					if (errInOrigin) {
 						pi.sendMessage(errorMessage, { deliverAs: "followUp", triggerTurn: true });
@@ -680,9 +700,9 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 						type: "text",
 						text: continueFromRun
 							? `Resumed async subagent run #${runId} (${resolvedAgent}) turn ${runState.turnCount}. ` +
-							  `Use asyncAction=status/detail/list/abort/remove to monitor/control it.`
+								`Use asyncAction=status/detail/list/abort/remove to monitor/control it.`
 							: `Started async subagent run #${runId} (${resolvedAgent}). ` +
-							  `Use asyncAction=status/detail/list/abort/remove to monitor/control it.`,
+								`Use asyncAction=status/detail/list/abort/remove to monitor/control it.`,
 					},
 				],
 				details: makeDetails("single")([]),
@@ -727,11 +747,9 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 				);
 				results.push(result);
 
-				const isError =
-					result.exitCode !== 0 || result.stopReason === "error" || result.stopReason === "aborted";
+				const isError = result.exitCode !== 0 || result.stopReason === "error" || result.stopReason === "aborted";
 				if (isError) {
-					const errorMsg =
-						result.errorMessage || result.stderr || getFinalOutput(result.messages) || "(no output)";
+					const errorMsg = result.errorMessage || result.stderr || getFinalOutput(result.messages) || "(no output)";
 					return {
 						content: [{ type: "text", text: `Chain stopped at step ${i + 1} (${step.agent}): ${errorMsg}` }],
 						details: makeDetails("chain")(results),
@@ -780,9 +798,7 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 					const running = allResults.filter((r) => r.exitCode === PLACEHOLDER_RUNNING_EXIT_CODE).length;
 					const done = allResults.filter((r) => r.exitCode !== PLACEHOLDER_RUNNING_EXIT_CODE).length;
 					onUpdate({
-						content: [
-							{ type: "text", text: `Parallel: ${done}/${allResults.length} done, ${running} running...` },
-						],
+						content: [{ type: "text", text: `Parallel: ${done}/${allResults.length} done, ${running} running...` }],
 						details: makeDetails("parallel")([...allResults]),
 					});
 				}
@@ -843,8 +859,7 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 			);
 			const isError = result.exitCode !== 0 || result.stopReason === "error" || result.stopReason === "aborted";
 			if (isError) {
-				const errorMsg =
-					result.errorMessage || result.stderr || getFinalOutput(result.messages) || "(no output)";
+				const errorMsg = result.errorMessage || result.stderr || getFinalOutput(result.messages) || "(no output)";
 				return {
 					content: [{ type: "text", text: `Agent ${result.stopReason || "failed"}: ${errorMsg}` }],
 					details: makeDetails("single")([result]),
