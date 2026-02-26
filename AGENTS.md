@@ -51,5 +51,16 @@ Custom extensions for the pi coding agent. All extensions are written in TypeScr
 - **Themes**: `themeMap.ts` maps default themes per extension; `theme-cycler.ts` for runtime switching.
 - **Shared state**: `system-mode/state.ts` exposes an agent-mode flag referenced by multiple extensions.
 
+## Tooling Standards
+- **Package manager**: pnpm
+- **Quality checks**: `pnpm run typecheck` / `pnpm run lint` / `pnpm run format`
+- **Formatter**: Biome 2.x
+
+## Type Contract Guide
+- `registerTool.execute` must follow the latest callback signature (include all required parameters).
+- `AgentToolResult` must always include the `details` field — never omit it.
+- Keep `content.type` as the string literal `"text"` (no widened `string` type).
+- Prefer discriminated-union narrowing for `SessionEntry` / `AgentMessage` over forced type casts (`as`).
+
 ## Known Issues
 - **CJK width overflow in built-in footer**: Pi's built-in `FooterComponent` uses `pwd.length` instead of `visibleWidth()` to check terminal width, causing crashes when the session name contains CJK (Korean/Japanese/Chinese) characters. This surfaces during `/reload` when the custom footer is briefly removed. Workaround: avoid CJK characters in session names (`/name`). Root fix requires a pi core change.
