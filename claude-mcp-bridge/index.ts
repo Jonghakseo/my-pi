@@ -153,10 +153,7 @@ class McpConnection {
 		this.tools = [];
 
 		try {
-			this.client = new Client(
-				{ name: "pi-claude-mcp-bridge", version: "0.1.0" },
-				{ capabilities: {} },
-			);
+			this.client = new Client({ name: "pi-claude-mcp-bridge", version: "0.1.0" }, { capabilities: {} });
 
 			if (this.server.type === "stdio") {
 				this.transport = new StdioClientTransport({
@@ -169,10 +166,21 @@ class McpConnection {
 					stderr: process.env.PI_MCP_STDERR === "inherit" ? "inherit" : "ignore",
 				});
 			} else if (this.server.type === "sse") {
+				const sseHeaders = this.server.headers;
 				this.transport = new SSEClientTransport(new URL(this.server.url), {
-					// Some servers expect headers during initial SSE handshake.
-					eventSourceInit: { headers: this.server.headers },
-					requestInit: { headers: this.server.headers },
+					// EventSourceInit does not support a headers property directly.
+					// Inject custom headers into the SSE stream via a fetch wrapper.
+					eventSourceInit:
+						Object.keys(sseHeaders).length > 0
+							? {
+									fetch: (url, init) =>
+										fetch(url, {
+											...init,
+											headers: { ...init.headers, ...sseHeaders },
+										}),
+								}
+							: undefined,
+					requestInit: { headers: sseHeaders },
 				});
 			} else {
 				this.transport = new StreamableHTTPClientTransport(new URL(this.server.url), {
@@ -215,11 +223,19 @@ class McpConnection {
 
 	private async cleanupConnection(): Promise<void> {
 		if (this.client) {
-			try { await this.client.close(); } catch { /* ignore */ }
+			try {
+				await this.client.close();
+			} catch {
+				/* ignore */
+			}
 			this.client = null;
 		}
 		if (this.transport) {
-			try { await this.transport.close(); } catch { /* ignore */ }
+			try {
+				await this.transport.close();
+			} catch {
+				/* ignore */
+			}
 			this.transport = null;
 		}
 	}
@@ -412,13 +428,7 @@ function normalizeServer(name: string, raw: RawMcpServer): NormalizedMcpServer |
 		const expandedUrl = expandEnvVars(raw.url);
 		const headers = expandRecord(raw.headers);
 		const inferred =
-			type === "sse"
-				? "sse"
-				: type === "http"
-					? "http"
-					: /\/sse(?:\/)?(?:\?|$)/i.test(expandedUrl)
-						? "sse"
-						: "http";
+			type === "sse" ? "sse" : type === "http" ? "http" : /\/sse(?:\/)?(?:\?|$)/i.test(expandedUrl) ? "sse" : "http";
 
 		return {
 			name,
@@ -469,9 +479,7 @@ function loadConfig(cwd: string): LoadedConfig {
 	const warnings: string[] = [];
 
 	const explicitPath = process.env.PI_MCP_CONFIG;
-	const candidates = explicitPath
-		? [path.resolve(expandEnvVars(explicitPath))]
-		: collectScopedConfigCandidates(cwd);
+	const candidates = explicitPath ? [path.resolve(expandEnvVars(explicitPath))] : collectScopedConfigCandidates(cwd);
 
 	const loadedSources: string[] = [];
 	const serversByName = new Map<string, NormalizedMcpServer>();
@@ -519,12 +527,18 @@ function buildPiToolName(serverName: string, toolName: string): string {
 
 function mimeToExt(mimeType: string): string {
 	switch (mimeType) {
-		case "image/png": return "png";
-		case "image/jpeg": return "jpg";
-		case "image/gif": return "gif";
-		case "image/webp": return "webp";
-		case "image/svg+xml": return "svg";
-		default: return "png";
+		case "image/png":
+			return "png";
+		case "image/jpeg":
+			return "jpg";
+		case "image/gif":
+			return "gif";
+		case "image/webp":
+			return "webp";
+		case "image/svg+xml":
+			return "svg";
+		default:
+			return "png";
 	}
 }
 
@@ -547,7 +561,10 @@ function formatToolResult(result: unknown): FormattedToolResult {
 					if (item?.type === "text") return item.text ?? "";
 					if (item?.type === "image" && item.data) {
 						const ext = mimeToExt(item.mimeType ?? "image/png");
-						const tmpFile = path.join(os.tmpdir(), `mcp-image-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`);
+						const tmpFile = path.join(
+							os.tmpdir(),
+							`mcp-image-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`,
+						);
 						try {
 							fs.writeFileSync(tmpFile, Buffer.from(item.data, "base64"));
 							imagePaths.push(tmpFile);
@@ -589,7 +606,10 @@ function mapPropertyType(prop: JsonSchemaProp): ReturnType<typeof Type.Any> {
 	switch (prop.type) {
 		case "string":
 			if (Array.isArray(prop.enum) && prop.enum.every((v): v is string => typeof v === "string")) {
-				return Type.Union(prop.enum.map((v) => Type.Literal(v)), opts) as unknown as ReturnType<typeof Type.Any>;
+				return Type.Union(
+					prop.enum.map((v) => Type.Literal(v)),
+					opts,
+				) as unknown as ReturnType<typeof Type.Any>;
 			}
 			return Type.String(opts) as unknown as ReturnType<typeof Type.Any>;
 		case "boolean":
@@ -646,19 +666,27 @@ type ServerAction = "viewTools" | "reconnect";
 
 function sColor(status: ServerStatus): "success" | "error" | "warning" | "muted" {
 	switch (status) {
-		case "connected": return "success";
-		case "error": return "error";
-		case "disconnected": return "warning";
-		default: return "muted";
+		case "connected":
+			return "success";
+		case "error":
+			return "error";
+		case "disconnected":
+			return "warning";
+		default:
+			return "muted";
 	}
 }
 
 function sIcon(status: ServerStatus): string {
 	switch (status) {
-		case "connected": return "●";
-		case "error": return "✗";
-		case "disconnected": return "○";
-		default: return "◐";
+		case "connected":
+			return "●";
+		case "error":
+			return "✗";
+		case "disconnected":
+			return "○";
+		default:
+			return "◐";
 	}
 }
 
@@ -922,39 +950,40 @@ export default async function claudeMcpBridge(pi: ExtensionAPI) {
 				label: `MCP ${serverName}/${tool.name}`,
 				description: tool.description ?? `MCP tool ${serverName}/${tool.name}`,
 				parameters: createParameterSchema(tool.inputSchema),
-				async execute(_toolCallId, params, signal, onUpdate) {
+				async execute(_toolCallId, params, signal, onUpdate, _ctx) {
 					if (signal?.aborted) {
 						return {
-							content: [{ type: "text", text: "Cancelled" }],
+							content: [{ type: "text" as const, text: "Cancelled" }],
 							details: { server: serverName, tool: tool.name, cancelled: true },
 						};
 					}
 
 					onUpdate?.({
-						content: [{ type: "text", text: `Calling MCP ${serverName}/${tool.name}...` }],
+						content: [{ type: "text" as const, text: `Calling MCP ${serverName}/${tool.name}...` }],
 						details: { server: serverName, tool: tool.name, status: "running" },
 					});
 
 					try {
 						const result = await manager.callTool(serverName, tool.name, params as Record<string, unknown>);
 						const formatted = formatToolResult(result);
-						const content: Array<{ type: string; text?: string; path?: string }> = [
-							{ type: "text", text: formatted.text },
-						];
+						const content: Array<{ type: "text"; text: string }> = [{ type: "text", text: formatted.text }];
 						for (const imgPath of formatted.imagePaths) {
 							content.push({ type: "text", text: `📎 Use Read tool to view: ${imgPath}` });
 						}
 						return {
 							content,
-							details: { server: serverName, tool: tool.name, raw: result },
-							isError: Boolean((result as { isError?: boolean })?.isError),
+							details: {
+								server: serverName,
+								tool: tool.name,
+								raw: result,
+								isError: Boolean((result as { isError?: boolean })?.isError),
+							},
 						};
 					} catch (error) {
 						const message = error instanceof Error ? error.message : String(error);
 						return {
-							content: [{ type: "text", text: `MCP error: ${message}` }],
-							details: { server: serverName, tool: tool.name, error: message },
-							isError: true,
+							content: [{ type: "text" as const, text: `MCP error: ${message}` }],
+							details: { server: serverName, tool: tool.name, error: message, isError: true },
 						};
 					}
 				},
@@ -1026,8 +1055,7 @@ export default async function claudeMcpBridge(pi: ExtensionAPI) {
 					if (action === "viewTools") {
 						const tools = manager.getServerTools(serverName);
 						await ctx.ui.custom<null>(
-							(tui, theme, _kb, done) =>
-								new McpToolListOverlay(tui, theme, () => done(null), serverName, tools),
+							(tui, theme, _kb, done) => new McpToolListOverlay(tui, theme, () => done(null), serverName, tools),
 							{ overlay: true, overlayOptions: { anchor: "center", width: "80%", minWidth: 50, maxHeight: "80%" } },
 						);
 						continue actionMenu;
@@ -1041,7 +1069,10 @@ export default async function claudeMcpBridge(pi: ExtensionAPI) {
 						if (updated?.status === "connected") {
 							ctx.ui.notify(`${serverName}: reconnected (${updated.toolCount} tools)`, "info");
 						} else {
-							ctx.ui.notify(`${serverName}: ${updated?.status ?? "unknown"}${updated?.error ? ` – ${updated.error}` : ""}`, "warning");
+							ctx.ui.notify(
+								`${serverName}: ${updated?.status ?? "unknown"}${updated?.error ? ` – ${updated.error}` : ""}`,
+								"warning",
+							);
 						}
 						continue serverList;
 					}

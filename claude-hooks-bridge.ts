@@ -130,12 +130,7 @@ function getClaudeToolName(toolName: string): string {
 
 function getMatcherCandidates(toolName: string): string[] {
 	const canonical = getClaudeToolName(toolName);
-	const set = new Set<string>([
-		toolName,
-		toolName.toLowerCase(),
-		canonical,
-		canonical.toLowerCase(),
-	]);
+	const set = new Set<string>([toolName, toolName.toLowerCase(), canonical, canonical.toLowerCase()]);
 	return Array.from(set);
 }
 
@@ -157,7 +152,9 @@ function matcherMatches(matcher: string | undefined, toolName: string): boolean 
 		.filter(Boolean);
 
 	if (tokens.length === 0) return false;
-	return tokens.some((token) => candidates.some((name) => name === token || name.toLowerCase() === token.toLowerCase()));
+	return tokens.some((token) =>
+		candidates.some((name) => name === token || name.toLowerCase() === token.toLowerCase()),
+	);
 }
 
 function getCommandHooks(
@@ -189,8 +186,7 @@ function resolveMaybePath(inputPath: string, cwd: string): string {
 }
 
 function normalizeToolInput(toolName: string, rawInput: unknown, cwd: string): JsonRecord {
-	const input: JsonRecord =
-		rawInput && typeof rawInput === "object" ? { ...(rawInput as JsonRecord) } : {};
+	const input: JsonRecord = rawInput && typeof rawInput === "object" ? { ...(rawInput as JsonRecord) } : {};
 
 	const pathCandidate =
 		typeof input.path === "string"
@@ -233,32 +229,25 @@ function toClaudeTranscriptLines(ctx: ExtensionContext): string[] {
 	const entries = ctx.sessionManager.getEntries();
 
 	for (const entry of entries) {
-		if (!entry || (entry as JsonRecord).type !== "message") continue;
-		const message = (entry as JsonRecord).message as JsonRecord | undefined;
-		if (!message) continue;
+		// SessionEntry is a discriminated union on `type`; narrowing to "message"
+		// gives SessionMessageEntry whose `message` field is AgentMessage.
+		if (!entry || entry.type !== "message") continue;
+		const { message } = entry;
 
-		const role = message.role;
-		const content = message.content;
-
-		if (role === "assistant") {
+		if (message.role === "assistant") {
 			const mapped: JsonRecord[] = [];
-			if (Array.isArray(content)) {
-				for (const block of content) {
-					if (!block || typeof block !== "object") continue;
-					const b = block as JsonRecord;
-					if (b.type === "text" && typeof b.text === "string") {
-						mapped.push({ type: "text", text: b.text });
-						continue;
-					}
-					if (b.type === "toolCall") {
-						mapped.push({
-							type: "tool_use",
-							id: typeof b.id === "string" ? b.id : "",
-							name: typeof b.name === "string" ? b.name : "",
-							input:
-								typeof b.arguments === "object" && b.arguments ? (b.arguments as JsonRecord) : {},
-						});
-					}
+			for (const block of message.content) {
+				if (block.type === "text") {
+					mapped.push({ type: "text", text: block.text });
+					continue;
+				}
+				if (block.type === "toolCall") {
+					mapped.push({
+						type: "tool_use",
+						id: block.id,
+						name: block.name,
+						input: block.arguments,
+					});
 				}
 			}
 
@@ -268,14 +257,12 @@ function toClaudeTranscriptLines(ctx: ExtensionContext): string[] {
 			continue;
 		}
 
-		if (role === "user") {
+		if (message.role === "user") {
 			const mapped: JsonRecord[] = [];
-			if (Array.isArray(content)) {
-				for (const block of content) {
-					if (!block || typeof block !== "object") continue;
-					const b = block as JsonRecord;
-					if (b.type === "text" && typeof b.text === "string") {
-						mapped.push({ type: "text", text: b.text });
+			if (Array.isArray(message.content)) {
+				for (const block of message.content) {
+					if (block.type === "text") {
+						mapped.push({ type: "text", text: block.text });
 					}
 				}
 			}
@@ -285,9 +272,9 @@ function toClaudeTranscriptLines(ctx: ExtensionContext): string[] {
 			continue;
 		}
 
-		if (role === "toolResult") {
-			const toolUseId = typeof message.toolCallId === "string" ? message.toolCallId : "";
-			const text = extractTextFromBlocks(content);
+		if (message.role === "toolResult") {
+			const toolUseId = message.toolCallId;
+			const text = extractTextFromBlocks(message.content);
 			lines.push(
 				JSON.stringify({
 					type: "user",
@@ -358,8 +345,7 @@ function extractDecision(result: HookExecResult): HookDecision {
 	const payload = result.json;
 	const asObj = payload && typeof payload === "object" ? (payload as JsonRecord) : undefined;
 	const hookSpecific = asObj?.hookSpecificOutput;
-	const hookSpecificObj =
-		hookSpecific && typeof hookSpecific === "object" ? (hookSpecific as JsonRecord) : undefined;
+	const hookSpecificObj = hookSpecific && typeof hookSpecific === "object" ? (hookSpecific as JsonRecord) : undefined;
 
 	const decisionRaw =
 		(typeof hookSpecificObj?.permissionDecision === "string" && hookSpecificObj.permissionDecision) ||
@@ -369,8 +355,7 @@ function extractDecision(result: HookExecResult): HookDecision {
 		"";
 
 	const reason =
-		(typeof hookSpecificObj?.permissionDecisionReason === "string" &&
-			hookSpecificObj.permissionDecisionReason) ||
+		(typeof hookSpecificObj?.permissionDecisionReason === "string" && hookSpecificObj.permissionDecisionReason) ||
 		(typeof asObj?.permissionDecisionReason === "string" && asObj.permissionDecisionReason) ||
 		(typeof hookSpecificObj?.reason === "string" && hookSpecificObj.reason) ||
 		(typeof asObj?.reason === "string" && asObj.reason) ||
@@ -621,18 +606,11 @@ export default function claudeHooksBridge(pi: ExtensionAPI) {
 					return { block: true, reason: `Blocked (no UI): ${reason}` };
 				}
 
-				const ok = await ctx.ui.confirm(
-					"Claude hook permission",
-					reason,
-					{ timeout: 30_000 },
-				);
+				const ok = await ctx.ui.confirm("Claude hook permission", reason, { timeout: 30_000 });
 				if (!ok) {
 					return {
 						block: true,
-						reason: toBlockReason(
-							decision.reason,
-							"Blocked by user confirmation from .claude hook.",
-						),
+						reason: toBlockReason(decision.reason, "Blocked by user confirmation from .claude hook."),
 					};
 				}
 				continue;
@@ -706,10 +684,7 @@ export default function claudeHooksBridge(pi: ExtensionAPI) {
 		// 무한 루프 보호: 이미 stop_hook_active=true 인 상태에서 다시 block이면 자동 재시도하지 않는다.
 		stopHookActiveBySession.set(sessionId, false);
 		if (ctx.hasUI) {
-			ctx.ui.notify(
-				`[claude-hooks-bridge] Stop hook blocked again (loop guard): ${blockedReason}`,
-				"warning",
-			);
+			ctx.ui.notify(`[claude-hooks-bridge] Stop hook blocked again (loop guard): ${blockedReason}`, "warning");
 		}
 	});
 }

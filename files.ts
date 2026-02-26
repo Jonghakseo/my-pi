@@ -7,15 +7,7 @@
  */
 
 import { spawnSync } from "node:child_process";
-import {
-	existsSync,
-	mkdtempSync,
-	readFileSync,
-	realpathSync,
-	statSync,
-	unlinkSync,
-	writeFileSync,
-} from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, realpathSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -160,7 +152,10 @@ const extractFileReferencesFromContent = (content: unknown): string[] => {
 
 const extractFileReferencesFromEntry = (entry: SessionEntry): string[] => {
 	if (entry.type === "message") {
-		return extractFileReferencesFromContent(entry.message.content);
+		if ("content" in entry.message) {
+			return extractFileReferencesFromContent(entry.message.content);
+		}
+		return [];
 	}
 
 	if (entry.type === "custom_message") {
@@ -348,9 +343,7 @@ const collectSessionFileChanges = (entries: SessionEntry[], cwd: string): Map<st
 			const toolCall = toolCalls.get(msg.toolCallId);
 			if (!toolCall) continue;
 
-			const resolvedPath = path.isAbsolute(toolCall.path)
-				? toolCall.path
-				: path.resolve(cwd, toolCall.path);
+			const resolvedPath = path.isAbsolute(toolCall.path) ? toolCall.path : path.resolve(cwd, toolCall.path);
 			const canonical = toCanonicalPath(resolvedPath);
 			if (!canonical) {
 				continue;
@@ -450,7 +443,10 @@ const getGitFiles = async (
 	return { tracked, files };
 };
 
-const buildFileEntries = async (pi: ExtensionAPI, ctx: ExtensionContext): Promise<{ files: FileEntry[]; gitRoot: string | null }> => {
+const buildFileEntries = async (
+	pi: ExtensionAPI,
+	ctx: ExtensionContext,
+): Promise<{ files: FileEntry[]; gitRoot: string | null }> => {
 	const entries = ctx.sessionManager.getBranch();
 	const sessionChanges = collectSessionFileChanges(entries, ctx.cwd);
 	const gitRoot = await getGitRoot(pi, ctx.cwd);
@@ -643,39 +639,42 @@ const showActionSelector = async (
 		...(options.canEdit ? [{ value: "edit", label: "Edit" }] : []),
 	];
 
-	return ctx.ui.custom<"reveal" | "quicklook" | "open" | "edit" | "addToPrompt" | "diff" | null>((tui, theme, _kb, done) => {
-		const container = new Container();
-		container.addChild(new DynamicBorder((str) => theme.fg("accent", str)));
-		container.addChild(new Text(theme.fg("accent", theme.bold("Choose action"))));
+	return ctx.ui.custom<"reveal" | "quicklook" | "open" | "edit" | "addToPrompt" | "diff" | null>(
+		(tui, theme, _kb, done) => {
+			const container = new Container();
+			container.addChild(new DynamicBorder((str) => theme.fg("accent", str)));
+			container.addChild(new Text(theme.fg("accent", theme.bold("Choose action"))));
 
-		const selectList = new SelectList(actions, actions.length, {
-			selectedPrefix: (text) => theme.fg("accent", text),
-			selectedText: (text) => theme.fg("accent", text),
-			description: (text) => theme.fg("muted", text),
-			scrollInfo: (text) => theme.fg("dim", text),
-			noMatch: (text) => theme.fg("warning", text),
-		});
+			const selectList = new SelectList(actions, actions.length, {
+				selectedPrefix: (text) => theme.fg("accent", text),
+				selectedText: (text) => theme.fg("accent", text),
+				description: (text) => theme.fg("muted", text),
+				scrollInfo: (text) => theme.fg("dim", text),
+				noMatch: (text) => theme.fg("warning", text),
+			});
 
-		selectList.onSelect = (item) => done(item.value as "reveal" | "quicklook" | "open" | "edit" | "addToPrompt" | "diff");
-		selectList.onCancel = () => done(null);
+			selectList.onSelect = (item) =>
+				done(item.value as "reveal" | "quicklook" | "open" | "edit" | "addToPrompt" | "diff");
+			selectList.onCancel = () => done(null);
 
-		container.addChild(selectList);
-		container.addChild(new Text(theme.fg("dim", "Press enter to confirm or esc to cancel")));
-		container.addChild(new DynamicBorder((str) => theme.fg("accent", str)));
+			container.addChild(selectList);
+			container.addChild(new Text(theme.fg("dim", "Press enter to confirm or esc to cancel")));
+			container.addChild(new DynamicBorder((str) => theme.fg("accent", str)));
 
-		return {
-			render(width: number) {
-				return container.render(width);
-			},
-			invalidate() {
-				container.invalidate();
-			},
-			handleInput(data: string) {
-				selectList.handleInput(data);
-				tui.requestRender();
-			},
-		};
-	});
+			return {
+				render(width: number) {
+					return container.render(width);
+				},
+				invalidate() {
+					container.invalidate();
+				},
+				handleInput(data: string) {
+					selectList.handleInput(data);
+					tui.requestRender();
+				},
+			};
+		},
+	);
 };
 
 const openPath = async (pi: ExtensionAPI, ctx: ExtensionContext, target: FileEntry): Promise<void> => {
@@ -710,8 +709,7 @@ const openExternalEditor = (tui: TUI, editorCmd: string, content: string): strin
 	} finally {
 		try {
 			unlinkSync(tmpFile);
-		} catch {
-		}
+		} catch {}
 		tui.start();
 		tui.requestRender(true);
 	}
@@ -795,7 +793,12 @@ const quickLookPath = async (pi: ExtensionAPI, ctx: ExtensionContext, target: Fi
 	}
 };
 
-const openDiff = async (pi: ExtensionAPI, ctx: ExtensionContext, target: FileEntry, gitRoot: string | null): Promise<void> => {
+const openDiff = async (
+	pi: ExtensionAPI,
+	ctx: ExtensionContext,
+	target: FileEntry,
+	gitRoot: string | null,
+): Promise<void> => {
 	if (!gitRoot) {
 		ctx.ui.notify("Git repository not found", "warning");
 		return;
@@ -960,7 +963,7 @@ const showFileSelector = async (
 		};
 	});
 
-	const selected = selection ? files.find((file) => file.canonicalPath === selection) ?? null : null;
+	const selected = selection ? (files.find((file) => file.canonicalPath === selection) ?? null) : null;
 	return { selected, quickAction };
 };
 

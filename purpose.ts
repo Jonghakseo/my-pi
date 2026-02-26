@@ -127,10 +127,11 @@ export default function purposeExtension(pi: ExtensionAPI) {
 				return {
 					content: [
 						{
-							type: "text",
+							type: "text" as const,
 							text: "purpose가 비어 있습니다. `purpose`를 채우거나 `clear=true`를 사용하세요.",
 						},
 					],
+					details: undefined,
 					isError: true,
 				};
 			}
@@ -141,10 +142,11 @@ export default function purposeExtension(pi: ExtensionAPI) {
 			return {
 				content: [
 					{
-						type: "text",
+						type: "text" as const,
 						text: nextPurpose ? `Session purpose set: ${nextPurpose}` : "Session purpose cleared.",
 					},
 				],
+				details: undefined,
 			};
 		},
 	});
