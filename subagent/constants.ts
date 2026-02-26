@@ -43,6 +43,17 @@ export const PARENT_HINT = "↩ parent (><)";
 /** Custom entry type for persisting parent session links across session switches. */
 export const PARENT_ENTRY_TYPE = "subagent-parent";
 
+// ─── Hang detection ────────────────────────────────────────────────────────
+
+/** Interval (ms) between hang-detection sweeps. */
+export const HANG_CHECK_INTERVAL_MS = 15_000;
+
+/** A running subagent with no activity for this duration (ms) is auto-aborted. */
+export const HANG_TIMEOUT_MS = 60_000;
+
+/** Idle duration (ms) after which the widget shows a warning color. */
+export const HANG_WARNING_IDLE_MS = 30_000;
+
 // ─── commands.ts ───────────────────────────────────────────────────────────
 
 export const STATUS_OUTPUT_PREVIEW_MAX_CHARS = 2_000;

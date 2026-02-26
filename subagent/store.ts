@@ -86,10 +86,15 @@ export function collectToolCallCount(messages: Message[]): number {
 }
 
 export function updateRunFromResult(state: CommandRunState, result: SingleResult): void {
+	const prevToolCalls = state.toolCalls;
+	const prevTurnCount = state.turnCount;
+	const prevLastLine = state.lastLine;
+
 	state.elapsedMs = Date.now() - state.startedAt;
 	state.toolCalls = Math.max(collectToolCallCount(result.messages), result.liveToolCalls ?? 0);
 	state.usage = result.usage;
 	state.model = result.model ?? state.model;
+	if (result.usage?.turns != null) state.turnCount = result.usage.turns;
 	if (result.progressText) state.progressText = result.progressText;
 
 	const output = getFinalOutput(result.messages);
@@ -98,16 +103,19 @@ export function updateRunFromResult(state: CommandRunState, result: SingleResult
 	const previewLine = getLatestActivityPreview(result.messages);
 	if (previewLine) {
 		state.lastLine = previewLine;
-		return;
-	}
-
-	if (result.liveText) {
+	} else if (result.liveText) {
 		const liveLine = getLastNonEmptyLine(result.liveText);
 		if (liveLine) {
 			state.lastLine = liveLine;
-			return;
+		} else if (output) {
+			state.lastLine = getLastNonEmptyLine(output);
 		}
+	} else if (output) {
+		state.lastLine = getLastNonEmptyLine(output);
 	}
 
-	if (output) state.lastLine = getLastNonEmptyLine(output);
+	// Update lastActivityAt when observable state changes
+	if (state.toolCalls !== prevToolCalls || state.turnCount !== prevTurnCount || state.lastLine !== prevLastLine) {
+		state.lastActivityAt = Date.now();
+	}
 }

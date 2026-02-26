@@ -405,6 +405,7 @@ function restoreRunsFromSession(store: SubagentStore, ctx: any, pi?: ExtensionAP
 					task: d.task ?? existing?.task ?? "",
 					status: finalStatus,
 					startedAt: existing?.startedAt ?? Date.now(),
+					lastActivityAt: existing?.lastActivityAt ?? Date.now(),
 					elapsedMs: existing?.elapsedMs ?? 0,
 					toolCalls: existing?.toolCalls ?? 0,
 					lastLine: "",
@@ -439,6 +440,7 @@ function restoreRunsFromSession(store: SubagentStore, ctx: any, pi?: ExtensionAP
 					task: d.task ?? existing?.task ?? "",
 					status: "error",
 					startedAt: existing?.startedAt ?? Date.now(),
+					lastActivityAt: existing?.lastActivityAt ?? Date.now(),
 					elapsedMs: existing?.elapsedMs ?? 0,
 					toolCalls: existing?.toolCalls ?? 0,
 					lastLine: "(interrupted — started but no completion found)",
@@ -750,6 +752,7 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 				runState.task = taskForDisplay;
 				runState.status = "running";
 				runState.startedAt = Date.now();
+				runState.lastActivityAt = Date.now();
 				runState.elapsedMs = 0;
 				runState.toolCalls = 0;
 				runState.lastLine = "";
@@ -790,6 +793,7 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 					task: taskForDisplay,
 					status: "running",
 					startedAt: Date.now(),
+					lastActivityAt: Date.now(),
 					elapsedMs: 0,
 					toolCalls: 0,
 					lastLine: "",

@@ -441,6 +441,7 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 				runState.task = taskForDisplay;
 				runState.status = "running";
 				runState.startedAt = Date.now();
+				runState.lastActivityAt = Date.now();
 				runState.elapsedMs = 0;
 				runState.toolCalls = 0;
 				runState.lastLine = "";
@@ -464,6 +465,7 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 					task: taskForDisplay,
 					status: "running",
 					startedAt: Date.now(),
+					lastActivityAt: Date.now(),
 					elapsedMs: 0,
 					toolCalls: 0,
 					lastLine: "",
