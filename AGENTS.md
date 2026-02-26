@@ -1,44 +1,54 @@
-# Pi Extensions 코드베이스 구조
+# Pi Extensions Codebase
 
-pi 코딩 에이전트의 **커스텀 확장(extension)** 모음. 모든 확장은 TypeScript로 작성되며 `@mariozechner/pi-coding-agent` API를 사용한다.
+Custom extensions for the pi coding agent. All extensions are written in TypeScript using the `@mariozechner/pi-coding-agent` API.
 
-## 디렉터리 레이아웃
+## Directory Layout
 
 ```
-├── subagent/          # 🔑 핵심 — 서브에이전트 위임 시스템 (가장 큰 모듈)
-│   ├── index.ts       #   진입점 & 확장 등록
-│   ├── commands.ts    #   슬래시 커맨드 & 툴 핸들러
-│   ├── tool-execute.ts#   툴 실행 로직
-│   ├── tool-render.ts #   툴 호출/결과 렌더링
-│   ├── runner.ts      #   프로세스 실행 & 결과 처리
-│   ├── session.ts     #   세션 파일 관리 & 컨텍스트
-│   ├── replay.ts      #   세션 리플레이 TUI 뷰어
-│   ├── agents.ts      #   에이전트 탐색 & 설정
-│   ├── widget.ts      #   실행 상태 위젯
-│   ├── store.ts       #   공유 상태 저장소
-│   ├── types.ts       #   타입 정의 & Typebox 스키마
-│   ├── constants.ts   #   상수
-│   ├── format.ts      #   포맷팅 유틸
-│   └── run-utils.ts   #   실행 관리 유틸
-├── claude-mcp-bridge/ # Claude Code MCP 설정을 pi에서 재사용하는 브릿지
-│   └── index.ts       #   MCP 설정 병합 로드 & 서버 등록
-├── system-mode/       # 시스템 모드 토글 (에이전트 모드 on/off)
-│   ├── index.ts       #   모드 전환 로직
-│   └── state.ts       #   전역 상태 관리
-├── cross-agent.ts     # .claude/.gemini/.codex 디렉터리에서 커맨드/스킬 로드
-├── progress-widget-enforcer.ts  # set_progress 툴 강제 주입 (에이전트 모드 연동)
-├── delayed-action.ts  # 시간 지연 액션 예약 ("좀 있다가" 스타일)
-├── session-replay.ts  # 세션 리플레이 오버레이 UI
-├── status-overlay.ts  # /status — 스킬·툴·확장 목록 오버레이
-├── pipi-footer.ts     # 커스텀 푸터 UI
-├── last-input-widget.ts # 마지막 입력 표시 위젯
-├── theme-cycler.ts    # Ctrl+X로 테마 순환
-├── themeMap.ts        # 확장별 기본 테마 매핑
-└── damage-control-rmrf.ts # rm -rf 안전장치
+├── subagent/              # Core — subagent delegation system (largest module)
+│   ├── index.ts           #   Entry point & extension registration
+│   ├── commands.ts        #   Slash commands & tool handlers
+│   ├── tool-execute.ts    #   Tool execution logic
+│   ├── tool-render.ts     #   Tool call/result rendering
+│   ├── runner.ts          #   Process execution & result handling
+│   ├── session.ts         #   Session file management & context
+│   ├── replay.ts          #   Session replay TUI viewer
+│   ├── agents.ts          #   Agent discovery & configuration
+│   ├── widget.ts          #   Run status widget (below-editor)
+│   ├── store.ts           #   Shared state store
+│   ├── types.ts           #   Type definitions & Typebox schemas
+│   ├── constants.ts       #   Constants
+│   ├── format.ts          #   Formatting utilities
+│   └── run-utils.ts       #   Run management utilities
+├── claude-mcp-bridge/     # Bridge to reuse Claude Code MCP config in pi
+│   └── index.ts           #   Merge-load MCP settings & register servers
+├── system-mode/           # System mode toggle (agent mode on/off)
+│   ├── index.ts           #   Mode switching logic
+│   └── state.ts           #   Global state management
+├── utils/                 # Shared utility functions
+│   └── time-utils.ts      #   Time/duration formatting helpers
+├── ask-user-question.ts   # AskUserQuestion tool with options & free-text input
+├── context.ts             # /context — context window usage & session stats overlay
+├── cross-agent.ts         # Load commands/skills from .claude/.gemini/.codex dirs
+├── damage-control-rmrf.ts # Safety guard against rm -rf
+├── delayed-action.ts      # Delayed action scheduling ("do this later" style)
+├── files.ts               # File picker / diff viewer UI
+├── last-input-widget.ts   # Footer status showing the user's last input
+├── pipi-footer.ts         # Custom footer UI (model, branch, context bar)
+├── progress-widget-enforcer.ts  # set_progress tool injection (agent mode aware)
+├── session-replay.ts      # Session replay overlay UI
+├── status-overlay.ts      # /status — skills, tools & extensions list overlay
+├── theme-cycler.ts        # Ctrl+X to cycle through themes
+├── themeMap.ts            # Default theme mapping per extension
+├── todos.ts               # Todo management UI & tool
+└── upload-image-url.ts    # Upload images to GitHub storage and return URLs
 ```
 
-## 핵심 패턴
-- **확장 진입점**: 각 `.ts` 파일 또는 `디렉터리/index.ts`가 pi에 자동 로드됨
-- **의존성**: `@mariozechner/pi-coding-agent`, `@mariozechner/pi-ai`, `@mariozechner/pi-tui`
-- **테마**: `themeMap.ts`에서 확장별 테마를 매핑, `theme-cycler.ts`로 런타임 전환
-- **상태 공유**: `system-mode/state.ts`의 에이전트 모드 플래그를 여러 확장이 참조
+## Key Patterns
+- **Extension entry point**: Each `.ts` file or `directory/index.ts` is auto-loaded by pi.
+- **Dependencies**: `@mariozechner/pi-coding-agent`, `@mariozechner/pi-ai`, `@mariozechner/pi-tui`.
+- **Themes**: `themeMap.ts` maps default themes per extension; `theme-cycler.ts` for runtime switching.
+- **Shared state**: `system-mode/state.ts` exposes an agent-mode flag referenced by multiple extensions.
+
+## Known Issues
+- **CJK width overflow in built-in footer**: Pi's built-in `FooterComponent` uses `pwd.length` instead of `visibleWidth()` to check terminal width, causing crashes when the session name contains CJK (Korean/Japanese/Chinese) characters. This surfaces during `/reload` when the custom footer is briefly removed. Workaround: avoid CJK characters in session names (`/name`). Root fix requires a pi core change.
