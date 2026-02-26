@@ -142,7 +142,7 @@ export interface ChainItemFields {
 }
 
 export const AgentScopeSchema = StringEnum(["user", "project", "both"] as const, {
-	description: 'Which agent directories to use. Default: "user". Use "both" to include project-local agents.',
+	description: 'Which agent directories to use. Default: "user". Use "both" to include project-local agents (.pi/agents, .claude/agents).',
 	default: "user",
 });
 
