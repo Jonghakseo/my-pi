@@ -481,10 +481,9 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 					customType: "subagent-tool",
 					content:
 						`[subagent:${resolvedAgent}#${runId}] ${startedState}` +
-						`\n${truncateLines(taskForDisplay, 2)}` +
 						`\nContext: ${contextLabel} · turn ${runState.turnCount}` +
-						`\n\n${STATUS_LOG_FOOTER}`,
-					display: true,
+						``,
+					display: false,
 					details: {
 						runId,
 						agent: resolvedAgent,
@@ -499,6 +498,16 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 				},
 				{ deliverAs: "followUp", triggerTurn: false },
 			);
+
+			if (ctx.hasUI) {
+				ctx.ui.notify(
+					(continueFromRun
+						? `Resumed subagent #${runId}: ${resolvedAgent}`
+						: `Started subagent #${runId}: ${resolvedAgent}`) +
+						` (${contextLabel} · turn ${runState.turnCount})`,
+					"info",
+				);
+			}
 
 			void (async () => {
 				try {
