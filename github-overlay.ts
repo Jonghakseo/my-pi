@@ -1,3 +1,4 @@
+import { writeFileSync } from "node:fs";
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import { DynamicBorder } from "@mariozechner/pi-coding-agent";
 import { Key, matchesKey, truncateToWidth, visibleWidth } from "@mariozechner/pi-tui";
@@ -1597,9 +1598,31 @@ export default function githubOverlay(pi: ExtensionAPI) {
 	});
 
 	pi.registerCommand("get-pr-reviews", {
-		description: "Fetch unresolved PR review threads with review status (review comments only, no general comments)",
+		description: "Fetch unresolved PR review threads, save to tmp file, and add path to editor",
 		handler: async (_args, ctx) => {
-			console.log(await fetchAndFormatReviewThreads(pi, ctx.cwd));
+			const result = await fetchAndFormatReviewThreads(pi, ctx.cwd);
+
+			if (result.startsWith("❌")) {
+				if (ctx.hasUI) {
+					ctx.ui.notify(result, "error");
+				} else {
+					console.log(result);
+				}
+				return;
+			}
+
+			const timestamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+			const filePath = `/tmp/pr-reviews-${timestamp}.md`;
+			writeFileSync(filePath, result, "utf-8");
+
+			if (ctx.hasUI) {
+				const current = ctx.ui.getEditorText();
+				const separator = current && !current.endsWith(" ") ? " " : "";
+				ctx.ui.setEditorText(`${current}${separator}@${filePath}`);
+				ctx.ui.notify(`Reviews saved → ${filePath}`, "info");
+			} else {
+				console.log(`Reviews saved → ${filePath}`);
+			}
 		},
 	});
 }
