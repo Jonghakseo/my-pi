@@ -75,6 +75,26 @@ function getSessionId(ctx: ExtensionContext): string {
 	}
 }
 
+/**
+ * Pinned session ID for CC hook payloads.
+ *
+ * Pi's sessionManager.getSessionId() can change mid-session (e.g. fork,
+ * navigateTree, or internal resets). CC hooks use session_id as the filename,
+ * so an unstable ID creates a new file per turn instead of accumulating
+ * within a single session file.
+ *
+ * We pin the ID on the first event and only reset on explicit session_switch
+ * or session_shutdown.
+ */
+let pinnedHookSessionId: string | null = null;
+
+function getHookSessionId(ctx: ExtensionContext): string {
+	if (!pinnedHookSessionId) {
+		pinnedHookSessionId = getSessionId(ctx);
+	}
+	return pinnedHookSessionId;
+}
+
 function getSettingsPath(cwd: string): string {
 	return path.join(cwd, SETTINGS_REL_PATH);
 }
@@ -443,7 +463,7 @@ async function execCommandHook(
 function makeBasePayload(eventName: ClaudeHookEventName, ctx: ExtensionContext): JsonRecord {
 	return {
 		hook_event_name: eventName,
-		session_id: getSessionId(ctx),
+		session_id: getHookSessionId(ctx),
 		cwd: ctx.cwd,
 	};
 }
@@ -531,7 +551,8 @@ export default function claudeHooksBridge(pi: ExtensionAPI) {
 		notifyOnceForParseError(ctx, loaded);
 		const settings = loaded.settings;
 
-		const sessionId = getSessionId(ctx);
+		pinnedHookSessionId = getSessionId(ctx);
+		const sessionId = pinnedHookSessionId;
 		stopHookActiveBySession.set(sessionId, false);
 
 		if (settings && ctx.hasUI) {
@@ -566,11 +587,13 @@ export default function claudeHooksBridge(pi: ExtensionAPI) {
 	});
 
 	pi.on("session_switch", async (_event, ctx) => {
-		const sessionId = getSessionId(ctx);
+		pinnedHookSessionId = getSessionId(ctx);
+		const sessionId = pinnedHookSessionId;
 		stopHookActiveBySession.set(sessionId, false);
 	});
 
 	pi.on("session_shutdown", async () => {
+		pinnedHookSessionId = null;
 		stopHookActiveBySession.clear();
 	});
 
