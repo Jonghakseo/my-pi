@@ -8,8 +8,18 @@
 
 import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
 import { truncateToWidth, visibleWidth } from "@mariozechner/pi-tui";
+import { PURPOSE_STATUS_KEY } from "./utils/status-keys.ts";
 
 const BAR_WIDTH = 10;
+
+type StatusStyler = (theme: any, text: string) => string;
+
+const STATUS_STYLE_MAP: Record<string, StatusStyler> = {
+	[PURPOSE_STATUS_KEY]: (theme, text) => {
+		const chip = ` ${theme.fg("text", text)} `;
+		return theme.bg("selectedBg", chip);
+	},
+};
 
 function clamp(n: number, min: number, max: number): number {
 	return Math.max(min, Math.min(max, n));
@@ -18,6 +28,15 @@ function clamp(n: number, min: number, max: number): number {
 function getFolderName(cwd: string): string {
 	const parts = cwd.split(/[\\/]/).filter(Boolean);
 	return parts.length > 0 ? parts[parts.length - 1] : cwd || "unknown";
+}
+
+function sanitizeStatusText(text: string): string {
+	return text.replace(/[\r\n\t]/g, " ").replace(/ +/g, " ").trim();
+}
+
+function styleStatus(theme: any, key: string, text: string): string {
+	const style = STATUS_STYLE_MAP[key];
+	return style ? style(theme, text) : text;
 }
 
 function installFooter(ctx: ExtensionContext) {
@@ -33,9 +52,13 @@ function installFooter(ctx: ExtensionContext) {
 			const filled = Math.round((pct / 100) * BAR_WIDTH);
 			const bar = "#".repeat(filled) + "-".repeat(BAR_WIDTH - filled);
 
-			const statuses = Array.from(footerData.getExtensionStatuses().values()).filter(Boolean);
-			const active = statuses.filter((s) => /research(ing)?/i.test(s)).length;
-			const done = statuses.filter((s) => /(^|\s)(done|✓)(\s|$)/i.test(s)).length;
+			const statusEntries = Array.from(footerData.getExtensionStatuses().entries())
+				.map(([key, text]) => [key, sanitizeStatusText(text)] as const)
+				.filter(([, text]) => Boolean(text));
+			const statusTexts = statusEntries.map(([, text]) => text);
+
+			const active = statusTexts.filter((s) => /research(ing)?/i.test(s)).length;
+			const done = statusTexts.filter((s) => /(^|\s)(done|✓)(\s|$)/i.test(s)).length;
 
 			const folder = getFolderName(ctx.sessionManager.getCwd());
 			const branch = footerData.getGitBranch();
@@ -60,8 +83,10 @@ function installFooter(ctx: ExtensionContext) {
 
 			const lines = [truncateToWidth(left + mid + pad + right, width)];
 
-			if (statuses.length > 0) {
-				const statusLine = truncateToWidth(` ${statuses.join(" · ")}`, width);
+			if (statusEntries.length > 0) {
+				const delimiter = theme.fg("dim", " · ");
+				const renderedStatuses = statusEntries.map(([key, text]) => styleStatus(theme, key, text));
+				const statusLine = truncateToWidth(` ${renderedStatuses.join(delimiter)}`, width);
 				lines.push(statusLine);
 			}
 
