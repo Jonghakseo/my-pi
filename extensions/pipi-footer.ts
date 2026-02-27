@@ -8,7 +8,7 @@
 
 import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
 import { truncateToWidth, visibleWidth } from "@mariozechner/pi-tui";
-import { PURPOSE_STATUS_KEY } from "./utils/status-keys.ts";
+import { ELAPSED_STATUS_KEY, PURPOSE_STATUS_KEY } from "./utils/status-keys.ts";
 
 const BAR_WIDTH = 10;
 const DIRTY_CHECK_INTERVAL_MS = 3000;
@@ -20,6 +20,7 @@ const STATUS_STYLE_MAP: Record<string, StatusStyler> = {
 		const chip = ` ${theme.fg("text", text)} `;
 		return theme.bg("selectedBg", chip);
 	},
+	[ELAPSED_STATUS_KEY]: (theme, text) => theme.fg("success", text),
 };
 
 function clamp(n: number, min: number, max: number): number {
