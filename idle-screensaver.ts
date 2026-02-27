@@ -1,13 +1,9 @@
 /**
- * Idle screensaver — shows session context after 30 min of inactivity.
+ * Idle screensaver — shows session context after 10 min of inactivity.
  *
- * Displays (in priority order):
- *   1. Session purpose
- *   2. Session name (from file path)
- *   3. folder / branch
- *
- * Plus the last 3 progress entries at the bottom.
- * Any keypress dismisses the overlay.
+ * Displays (priority): purpose || session name || folder/branch.
+ * Shows recent 3 progress entries at the bottom.
+ * Any key dismisses the overlay.
  */
 
 import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
@@ -16,9 +12,11 @@ import { truncateToWidth, visibleWidth } from "@mariozechner/pi-tui";
 
 // ─── Config ────────────────────────────────────────────────────────────────
 
-const IDLE_MS = 30 * 60 * 1000; // 30 minutes
+const IDLE_MS = 10 * 60 * 1000; // 10 minutes
 const PURPOSE_ENTRY_TYPE = "purpose:set";
-const MAX_PROGRESS_HISTORY = 20;
+const MAX_PROGRESS_HISTORY = 30;
+
+type ProgressSnapshot = { text: string; at: number };
 
 // ─── State ─────────────────────────────────────────────────────────────────
 
@@ -26,11 +24,27 @@ let idleTimer: ReturnType<typeof setTimeout> | null = null;
 let latestCtx: ExtensionContext | null = null;
 let agentRunning = false;
 let overlayActive = false;
+let globalPi: ExtensionAPI;
 
-/** Ring buffer for progress texts set during this session. */
-const progressHistory: { text: string; at: number }[] = [];
+const progressHistory: ProgressSnapshot[] = [];
 
-// ─── Data extraction ───────────────────────────────────────────────────────
+// ─── Helpers ───────────────────────────────────────────────────────────────
+
+function normalizeLine(raw: unknown): string {
+	if (typeof raw !== "string") return "";
+	return raw.replace(/\s+/g, " ").trim();
+}
+
+function isLikelySessionId(text: string): boolean {
+	const s = normalizeLine(text);
+	if (!s) return true;
+
+	const compact = s.replace(/[-_]/g, "");
+	if (/^[0-9a-f]{16,}$/i.test(compact)) return true;
+	if (/^session[-_]?\d+$/i.test(s)) return true;
+	if (/^session[-_]?[0-9a-f-]{8,}$/i.test(s)) return true;
+	return false;
+}
 
 function readPurpose(ctx: ExtensionContext): string {
 	try {
@@ -38,38 +52,44 @@ function readPurpose(ctx: ExtensionContext): string {
 		for (let i = branch.length - 1; i >= 0; i--) {
 			const e = branch[i] as any;
 			if (e?.type !== "custom" || e?.customType !== PURPOSE_ENTRY_TYPE) continue;
-			const raw = e?.data?.purpose;
-			if (typeof raw === "string" && raw.trim()) return raw.trim();
+			const purpose = normalizeLine(e?.data?.purpose);
+			if (purpose) return purpose;
 		}
-	} catch { /* ignore */ }
+	} catch {
+		// ignore
+	}
 	return "";
 }
 
 function readSessionName(ctx: ExtensionContext): string {
 	try {
+		const header = (ctx.sessionManager as any)?.getHeader?.();
+		const headerName = normalizeLine(header?.name);
+		if (headerName && !isLikelySessionId(headerName)) return headerName;
+	} catch {
+		// ignore
+	}
+
+	try {
 		const file = ctx.sessionManager.getSessionFile() ?? "";
 		if (!file) return "";
-		// e.g. /Users/x/.pi/sessions/my-session.jsonl → "my-session"
 		const base = file.split(/[\\/]/).pop() ?? "";
-		const name = base.replace(/\.[^.]+$/, ""); // strip extension
-		if (!name || /^[0-9a-f-]+$/i.test(name)) return ""; // skip UUID-like names
+		const name = normalizeLine(base.replace(/\.[^.]+$/, ""));
+		if (!name || isLikelySessionId(name)) return "";
 		return name;
-	} catch { /* ignore */ }
+	} catch {
+		// ignore
+	}
 	return "";
 }
 
-function readFolderBranch(pi: ExtensionAPI, ctx: ExtensionContext): { folder: string; branch: string | null } {
+function readFolder(ctx: ExtensionContext): string {
 	const cwd = ctx.sessionManager.getCwd();
 	const parts = cwd.split(/[\\/]/).filter(Boolean);
-	const folder = parts.length > 0 ? parts[parts.length - 1] : cwd || "unknown";
-	return { folder, branch: null }; // branch resolved async later
+	return parts.length > 0 ? parts[parts.length - 1] : cwd || "unknown";
 }
 
-function recentProgress(count: number): string[] {
-	return progressHistory.slice(-count).map((p) => p.text);
-}
-
-function formatTime(ts: number): string {
+function formatShortTime(ts: number): string {
 	return new Date(ts).toLocaleTimeString("ko-KR", {
 		hour: "2-digit",
 		minute: "2-digit",
@@ -77,22 +97,42 @@ function formatTime(ts: number): string {
 	});
 }
 
-function currentTimeString(): string {
-	return new Date().toLocaleTimeString("ko-KR", {
-		hour: "2-digit",
-		minute: "2-digit",
-		second: "2-digit",
-		hour12: false,
-	});
+function recentProgress(count: number): ProgressSnapshot[] {
+	return progressHistory.slice(-count);
 }
-
-// ─── Rendering ─────────────────────────────────────────────────────────────
 
 function centerPad(text: string, width: number): string {
 	const vis = visibleWidth(text);
 	if (vis >= width) return truncateToWidth(text, width);
-	const left = Math.floor((width - vis) / 2);
-	return " ".repeat(left) + text;
+	return `${" ".repeat(Math.floor((width - vis) / 2))}${text}`;
+}
+
+function wrapText(text: string, maxWidth: number): string[] {
+	const input = normalizeLine(text);
+	if (!input) return [""];
+	const words = input.split(" ");
+	const lines: string[] = [];
+	let current = "";
+
+	for (const w of words) {
+		const next = current ? `${current} ${w}` : w;
+		if (visibleWidth(next) > maxWidth && current) {
+			lines.push(current);
+			current = w;
+		} else {
+			current = next;
+		}
+	}
+	if (current) lines.push(current);
+	return lines;
+}
+
+function stylizeTitleLine(text: string, maxWidth: number): string {
+	const compact = normalizeLine(text);
+	if (!compact) return "";
+	const spread = compact.split("").join(" ");
+	if (compact.length <= 24 && visibleWidth(spread) <= maxWidth) return spread;
+	return compact;
 }
 
 function renderScreensaver(
@@ -100,108 +140,85 @@ function renderScreensaver(
 	height: number,
 	theme: any,
 	title: string,
-	subtitle: string,
-	progress: string[],
-	time: string,
+	progress: ProgressSnapshot[],
 ): string[] {
 	const fg = (c: string, t: string) => theme.fg(c, t);
 	const bold = (t: string) => theme.bold(t);
 	const border = new DynamicBorder((s: string) => fg("accent", s));
 
 	const innerW = Math.max(20, width - 4);
-	const lines: string[] = [];
+	const out: string[] = [];
 
-	// Top border
-	lines.push(...border.render(width));
-	lines.push("");
+	// Stronger frame
+	out.push(...border.render(width));
+	out.push(centerPad(fg("accent", bold(" IDLE MODE ")), width));
+	out.push(centerPad(fg("dim", "─".repeat(Math.min(innerW, 52))), width));
+	out.push("");
 
-	// Clock
-	const clockLine = fg("dim", time);
-	lines.push(centerPad(clockLine, width));
-	lines.push("");
+	// Main title box (larger emphasis)
+	const titleLinesRaw = wrapText(title || "(untitled session)", Math.max(16, innerW - 14));
+	const titleLines = titleLinesRaw.slice(0, 3).map((l) => stylizeTitleLine(l, Math.max(16, innerW - 20)));
 
-	// Main title — big and centered
-	const titleLines = title.length > innerW - 8
-		? wrapText(title, innerW - 8)
-		: [title];
+	const boxInner = Math.max(24, Math.min(innerW - 10, Math.floor(innerW * 0.78)));
+	const boxTop = `╔${"═".repeat(boxInner + 2)}╗`;
+	const boxBottom = `╚${"═".repeat(boxInner + 2)}╝`;
+	const blankRow = `║ ${" ".repeat(boxInner)} ║`;
 
-	lines.push("");
-	for (const tl of titleLines) {
-		lines.push(centerPad(fg("accent", bold(tl)), width));
+	out.push(centerPad(fg("accent", boxTop), width));
+	out.push(centerPad(fg("accent", blankRow), width));
+	for (const raw of titleLines) {
+		const clipped = truncateToWidth(raw, boxInner);
+		const pad = " ".repeat(Math.max(0, boxInner - visibleWidth(clipped)));
+		const row = `║ ${bold(clipped)}${pad} ║`;
+		out.push(centerPad(fg("accent", row), width));
 	}
-	lines.push("");
+	out.push(centerPad(fg("accent", blankRow), width));
+	out.push(centerPad(fg("accent", boxBottom), width));
+	out.push("");
 
-	// Subtitle
-	if (subtitle) {
-		lines.push(centerPad(fg("muted", subtitle), width));
-		lines.push("");
-	}
+	// Progress section
+	out.push(centerPad(fg("warning", bold(" RECENT PROGRESS ")), width));
+	out.push(centerPad(fg("dim", "─".repeat(Math.min(innerW, 42))), width));
+	out.push("");
 
-	// Separator
-	const sepW = Math.min(40, innerW);
-	lines.push(centerPad(fg("dim", "─".repeat(sepW)), width));
-	lines.push("");
-
-	// Recent progress
-	if (progress.length > 0) {
-		lines.push(centerPad(fg("dim", "Recent Progress"), width));
-		lines.push("");
-		for (const p of progress) {
-			lines.push(centerPad(fg("muted", `  ${p}`), width));
-		}
+	const recent = progress.slice(-3).reverse();
+	if (recent.length === 0) {
+		out.push(centerPad(fg("dim", "No recent progress"), width));
 	} else {
-		lines.push(centerPad(fg("dim", "No recent progress"), width));
+		const rowMaxText = Math.max(20, Math.min(innerW - 22, 90));
+		for (const p of recent) {
+			const time = formatShortTime(p.at);
+			const text = truncateToWidth(normalizeLine(p.text), rowMaxText);
+			out.push(centerPad(`${fg("dim", `[${time}]`)} ${fg("muted", text)}`, width));
+		}
 	}
 
-	lines.push("");
+	out.push("");
+	out.push(centerPad(fg("dim", "Press any key to dismiss"), width));
+	out.push("");
+	out.push(...border.render(width));
 
-	// Bottom hint
-	lines.push(centerPad(fg("dim", "Press any key to dismiss"), width));
-
-	lines.push("");
-	lines.push(...border.render(width));
-
-	// Vertically center within available height
-	const totalLines = lines.length;
-	if (totalLines < height) {
-		const topPad = Math.floor((height - totalLines) / 2);
-		const padded = [...Array(topPad).fill(""), ...lines];
+	// vertical center
+	if (out.length < height) {
+		const topPad = Math.floor((height - out.length) / 2);
+		const padded = [...Array(topPad).fill(""), ...out];
 		while (padded.length < height) padded.push("");
 		return padded;
 	}
 
-	return lines;
+	return out;
 }
 
-function wrapText(text: string, maxWidth: number): string[] {
-	const words = text.split(/\s+/);
-	const lines: string[] = [];
-	let current = "";
+// ─── Timer control ─────────────────────────────────────────────────────────
 
-	for (const word of words) {
-		const test = current ? `${current} ${word}` : word;
-		if (visibleWidth(test) > maxWidth && current) {
-			lines.push(current);
-			current = word;
-		} else {
-			current = test;
-		}
-	}
-	if (current) lines.push(current);
-	return lines;
+function clearIdleTimer() {
+	if (!idleTimer) return;
+	clearTimeout(idleTimer);
+	idleTimer = null;
 }
 
-// ─── Timer management ──────────────────────────────────────────────────────
-
-function clearIdle() {
-	if (idleTimer) {
-		clearTimeout(idleTimer);
-		idleTimer = null;
-	}
-}
-
-function resetIdle() {
-	clearIdle();
+function scheduleIdleTimer() {
+	clearIdleTimer();
 	if (agentRunning || overlayActive || !latestCtx?.hasUI) return;
 	idleTimer = setTimeout(() => void showScreensaver(), IDLE_MS);
 }
@@ -213,82 +230,60 @@ async function showScreensaver(): Promise<void> {
 
 	const purpose = readPurpose(ctx);
 	const sessionName = readSessionName(ctx);
-	const { folder } = readFolderBranch(undefined as unknown as ExtensionAPI, ctx);
+	const folder = readFolder(ctx);
 
-	// Resolve branch
 	let branchName = "";
 	try {
 		const cwd = ctx.sessionManager.getCwd();
-		const r = await (globalPi as ExtensionAPI).exec("git", ["branch", "--show-current"], { cwd });
-		if (r.code === 0) branchName = (r.stdout ?? "").trim();
-	} catch { /* ignore */ }
+		const r = await globalPi.exec("git", ["branch", "--show-current"], { cwd });
+		if (r.code === 0) branchName = normalizeLine(r.stdout);
+	} catch {
+		// ignore git errors
+	}
 
-	// Priority: purpose > session name > folder/branch
-	const title = purpose || sessionName || folder;
-	const subtitle = purpose
-		? (sessionName || `${folder}${branchName ? ` / ${branchName}` : ""}`)
-		: (sessionName ? `${folder}${branchName ? ` / ${branchName}` : ""}` : (branchName || ""));
-
+	const folderBranch = branchName ? `${folder} / ${branchName}` : folder;
+	const title = purpose || sessionName || folderBranch;
 	const progress = recentProgress(3);
 
 	try {
 		await ctx.ui.custom<void>(
-			(tui, theme, _kb, done) => {
-				let clockTimer: ReturnType<typeof setInterval> | null = null;
-				let currentTime = currentTimeString();
-
-				clockTimer = setInterval(() => {
-					currentTime = currentTimeString();
-					(tui as any).requestRender?.();
-				}, 1000);
-
-				return {
-					render: (w: number) => {
-						const h = (tui as any).height ?? 30;
-						return renderScreensaver(w, h, theme, title, subtitle, progress, currentTime);
-					},
-					handleInput: (_data: string) => {
-						if (clockTimer) clearInterval(clockTimer);
-						done(undefined);
-					},
-					invalidate: () => {},
-				};
+			(tui, theme, _kb, done) => ({
+				render: (w: number) => {
+					const h = (tui as any).height ?? 32;
+					return renderScreensaver(w, h, theme, title, progress);
+				},
+				handleInput: () => done(undefined),
+				invalidate: () => {},
+			}),
+			{
+				overlay: true,
+				overlayOptions: { width: "92%", maxHeight: "86%", anchor: "center" },
 			},
-			{ overlay: true, overlayOptions: { width: "80%", maxHeight: "70%", anchor: "center" } },
 		);
-	} catch { /* overlay rejected — ignore */ }
-
-	overlayActive = false;
-	resetIdle();
+	} catch {
+		// ignore overlay errors
+	} finally {
+		overlayActive = false;
+		scheduleIdleTimer();
+	}
 }
-
-// ─── Module-level pi reference (needed in async callbacks) ─────────────────
-
-let globalPi: ExtensionAPI;
 
 // ─── Extension ─────────────────────────────────────────────────────────────
 
 export default function idleScreensaver(pi: ExtensionAPI) {
 	globalPi = pi;
 
-	// Track progress via tool_call interception
 	pi.on("tool_call", async (event) => {
 		if (event.toolName !== "set_progress") return undefined;
-		// Extract progress text from params
-		const params = (event as any).params ?? (event as any).arguments;
-		if (params) {
-			const text = typeof params === "string"
-				? params
-				: (params.progress ?? "");
-			if (text) {
-				progressHistory.push({ text, at: Date.now() });
-				if (progressHistory.length > MAX_PROGRESS_HISTORY) progressHistory.shift();
-			}
+		const raw = (event as any).params ?? (event as any).arguments;
+		const text = typeof raw === "string" ? normalizeLine(raw) : normalizeLine(raw?.progress);
+		if (text) {
+			progressHistory.push({ text, at: Date.now() });
+			while (progressHistory.length > MAX_PROGRESS_HISTORY) progressHistory.shift();
 		}
 		return undefined;
 	});
 
-	// Also scan entries on session start to recover history
 	const recoverProgressFromEntries = (ctx: ExtensionContext) => {
 		try {
 			const entries = ctx.sessionManager.getEntries();
@@ -299,66 +294,64 @@ export default function idleScreensaver(pi: ExtensionAPI) {
 				if (!msg || msg.role !== "assistant") continue;
 				const content = msg.content;
 				if (!Array.isArray(content)) continue;
+
 				for (const c of content) {
-					if (c?.type === "toolCall" && c?.name === "set_progress") {
-						const args = c?.arguments;
-						const text = typeof args === "string"
-							? args
-							: (args?.progress ?? "");
-						if (text && !progressHistory.some((p) => p.text === text)) {
-							progressHistory.push({ text, at: msg.timestamp ? new Date(msg.timestamp).getTime() : Date.now() });
-						}
-					}
+					if (c?.type !== "toolCall" || c?.name !== "set_progress") continue;
+					const args = c.arguments;
+					const text = typeof args === "string" ? normalizeLine(args) : normalizeLine(args?.progress);
+					if (!text) continue;
+					progressHistory.push({ text, at: msg.timestamp ? new Date(msg.timestamp).getTime() : Date.now() });
 				}
 			}
-			// Trim to max
 			while (progressHistory.length > MAX_PROGRESS_HISTORY) progressHistory.shift();
-		} catch { /* ignore */ }
+		} catch {
+			// ignore
+		}
 	};
 
-	// ── Event handlers ──
-
-	pi.on("input", async (_event, ctx) => {
+	pi.on("input", async (event, ctx) => {
 		latestCtx = ctx;
-		resetIdle();
+		if (event.source !== "extension") {
+			scheduleIdleTimer();
+		}
 		return { action: "continue" as const };
 	});
 
 	pi.on("agent_start", async (_event, ctx) => {
 		agentRunning = true;
 		latestCtx = ctx;
-		clearIdle();
+		clearIdleTimer();
 	});
 
 	pi.on("agent_end", async (_event, ctx) => {
 		agentRunning = false;
 		latestCtx = ctx;
-		resetIdle();
+		scheduleIdleTimer();
 	});
 
 	pi.on("session_start", async (_event, ctx) => {
 		agentRunning = false;
-		latestCtx = ctx;
 		overlayActive = false;
+		latestCtx = ctx;
 		progressHistory.length = 0;
 		recoverProgressFromEntries(ctx);
-		resetIdle();
+		scheduleIdleTimer();
 	});
 
 	pi.on("session_switch", async (_event, ctx) => {
 		agentRunning = false;
-		latestCtx = ctx;
 		overlayActive = false;
+		latestCtx = ctx;
 		progressHistory.length = 0;
 		recoverProgressFromEntries(ctx);
-		resetIdle();
+		scheduleIdleTimer();
 	});
 
 	pi.on("session_shutdown", async () => {
-		clearIdle();
+		clearIdleTimer();
 		agentRunning = false;
-		latestCtx = null;
 		overlayActive = false;
+		latestCtx = null;
 		progressHistory.length = 0;
 	});
 }
