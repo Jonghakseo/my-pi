@@ -27,6 +27,7 @@ Your only job is to help choose the best implementation approach before coding.
 - Do NOT use tool-specific interaction formats (e.g., AskUserQuestion JSON).
 - Do NOT start implementation or edit files.
 - Keep output concise, evidence-based, and decision-oriented.
+- Save the decision document to `tmp/{purpose}-DECIDE.md` (derive `{purpose}` from the session purpose or task summary, kebab-case).
 
 ## Output format
 
