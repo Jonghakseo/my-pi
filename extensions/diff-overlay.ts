@@ -208,6 +208,10 @@ function statusColor(s: DiffFile["status"]): string {
 	return "warning";
 }
 
+function expandTabs(s: string, tabSize = 4): string {
+	return s.replace(/\t/g, " ".repeat(tabSize));
+}
+
 function colorDiffLine(t: Theme, line: string): string {
 	if (line.startsWith("+++") || line.startsWith("---")) return t.fg("muted", line);
 	if (line.startsWith("+")) return t.fg("success", line);
@@ -295,7 +299,7 @@ function renderDiff(t: Theme, st: DiffState, w: number, h: number): string[] {
 
 	const lines: string[] = [];
 	for (let i = start; i < end; i++) {
-		lines.push(truncateToWidth(` ${colorDiffLine(t, all[i])}`, w));
+		lines.push(truncateToWidth(` ${colorDiffLine(t, expandTabs(all[i] ?? ""))}`, w));
 	}
 
 	while (lines.length < max) lines.push("");
@@ -513,7 +517,7 @@ class DiffOverlay {
 			body.push(`${l}${" ".repeat(pad)} ${t.fg("dim", "│")} ${r}`);
 		}
 
-		return [...header, ...body, ...footer];
+		return [...header, ...body, ...footer].map((line) => truncateToWidth(line, w));
 	}
 }
 
