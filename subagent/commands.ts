@@ -1229,50 +1229,54 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 		},
 	});
 
-	pi.registerCommand("sub:clear", {
-		description: "Clear /sub job widget entries. /sub:clear (finished only) or /sub:clear all",
-		handler: async (args, ctx) => {
-			captureSwitchSession(store, ctx);
-			const mode = (args ?? "").trim().toLowerCase();
-			if (mode === "all") {
-				let removed = 0;
-				let aborted = 0;
-				for (const id of Array.from(store.commandRuns.keys())) {
-					const result = removeRun(store, id, {
-						ctx,
-						pi,
-						updateWidget: false,
-						reason: "Aborting by /sub:clear all...",
-						removalReason: "sub-clear",
-					});
-					if (!result.removed) continue;
-					removed++;
-					if (result.aborted) aborted++;
-				}
-				updateCommandRunsWidget(store, ctx);
-				ctx.ui.notify(
-					aborted > 0
-						? `Cleared ${removed} subagent job(s), aborting ${aborted} running job(s).`
-						: `Cleared ${removed} subagent job(s).`,
-					aborted > 0 ? "warning" : "info",
-				);
-				return;
-			}
-
+	const handleSubClear = async (args: string, ctx: any) => {
+		captureSwitchSession(store, ctx);
+		const mode = (args ?? "").trim().toLowerCase();
+		if (mode === "all") {
 			let removed = 0;
-			for (const [id, run] of Array.from(store.commandRuns.entries())) {
-				if (run.status === "running") continue;
+			let aborted = 0;
+			for (const id of Array.from(store.commandRuns.keys())) {
 				const result = removeRun(store, id, {
 					ctx,
 					pi,
 					updateWidget: false,
-					abortIfRunning: false,
+					reason: "Aborting by /sub:clear all...",
 					removalReason: "sub-clear",
 				});
-				if (result.removed) removed++;
+				if (!result.removed) continue;
+				removed++;
+				if (result.aborted) aborted++;
 			}
 			updateCommandRunsWidget(store, ctx);
-			ctx.ui.notify(`Cleared ${removed} finished subagent job(s).`, "info");
+			ctx.ui.notify(
+				aborted > 0
+					? `Cleared ${removed} subagent job(s), aborting ${aborted} running job(s).`
+					: `Cleared ${removed} subagent job(s).`,
+				aborted > 0 ? "warning" : "info",
+			);
+			return;
+		}
+
+		let removed = 0;
+		for (const [id, run] of Array.from(store.commandRuns.entries())) {
+			if (run.status === "running") continue;
+			const result = removeRun(store, id, {
+				ctx,
+				pi,
+				updateWidget: false,
+				abortIfRunning: false,
+				removalReason: "sub-clear",
+			});
+			if (result.removed) removed++;
+		}
+		updateCommandRunsWidget(store, ctx);
+		ctx.ui.notify(`Cleared ${removed} finished subagent job(s).`, "info");
+	};
+
+	pi.registerCommand("sub:clear", {
+		description: "Clear /sub job widget entries. /sub:clear (finished only) or /sub:clear all",
+		handler: async (args, ctx) => {
+			await handleSubClear(args, ctx);
 		},
 	});
 
@@ -1562,6 +1566,13 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 		},
 	});
 
+	pi.registerShortcut("<<<" as any, {
+		description: "Clear finished subagent jobs (= /sub:clear). <<< all to clear all",
+		handler: async () => {
+			// Documentation-only entry.
+		},
+	});
+
 	pi.on("input", async (event, ctx) => {
 		if (event.source === "extension") {
 			return { action: "continue" as const };
@@ -1570,6 +1581,14 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 		const text = event.text ?? "";
 		if (!text.startsWith("<<")) {
 			return { action: "continue" as const };
+		}
+
+		// ── <<< shortcut: clear finished jobs (same as /sub:clear) ──
+		// Must be matched before << patterns.
+		if (text.startsWith("<<<")) {
+			const clearArgs = text.slice(3).trim();
+			await handleSubClear(clearArgs, ctx);
+			return { action: "handled" as const };
 		}
 
 		const raw = text.slice(2).trim();
