@@ -42,7 +42,7 @@ import { type SubagentStore, truncateText, updateRunFromResult } from "./store.j
 import { createSubagentToolExecute } from "./tool-execute.js";
 import { renderSubagentToolCall, renderSubagentToolResult } from "./tool-render.js";
 import type { CommandRunState, SingleResult, SubagentDetails } from "./types.js";
-import { SubagentParams } from "./types.js";
+import { ListAgentsParams, SubagentParams } from "./types.js";
 import { updateCommandRunsWidget } from "./widget.js";
 
 /**
@@ -544,6 +544,52 @@ function restoreRunsFromSession(store: SubagentStore, ctx: any, pi?: ExtensionAP
 }
 
 export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
+	pi.registerTool({
+		name: "list-agents",
+		label: "List Agents",
+		description:
+			"List available subagent definitions (name, source, model, tools, description). Useful before planning delegation.",
+		parameters: ListAgentsParams,
+		execute: async (_toolCallId, params: Record<string, any>, _signal, _onUpdate, ctx) => {
+			const agentScope: AgentScope = params.agentScope ?? "both";
+			const discovery = discoverAgents(ctx.cwd, agentScope);
+			const agents = discovery.agents;
+
+			if (agents.length === 0) {
+				return {
+					content: [{ type: "text", text: `No subagents found (scope: ${agentScope}).` }],
+					details: {
+						agentScope,
+						projectAgentsDir: discovery.projectAgentsDir,
+						agents: [],
+					},
+				};
+			}
+
+			const lines = agents.map((agent) => {
+				const model = agent.model ?? "(inherit current model)";
+				const tools = agent.tools && agent.tools.length > 0 ? agent.tools.join(",") : "default";
+				const description = agent.description ? ` · ${agent.description}` : "";
+				return `${agent.name} [${agent.source}] · model: ${model} · tools: ${tools}${description}`;
+			});
+
+			return {
+				content: [{ type: "text", text: `Available subagents (scope: ${agentScope})\n\n${lines.join("\n")}` }],
+				details: {
+					agentScope,
+					projectAgentsDir: discovery.projectAgentsDir,
+					agents: agents.map((agent) => ({
+						name: agent.name,
+						source: agent.source,
+						model: agent.model,
+						tools: agent.tools ?? [],
+						description: agent.description,
+					})),
+				},
+			};
+		},
+	});
+
 	pi.registerTool({
 		name: "subagent",
 		label: "Subagent",
