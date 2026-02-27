@@ -8,7 +8,6 @@ const PURPOSE_COMMAND_NAME = "purpose";
 const LEGACY_WIDGET_KEY = "purpose";
 // Backward-compat alias for old builds that referenced WIDGET_KEY directly.
 const WIDGET_KEY = LEGACY_WIDGET_KEY;
-const ALLOWED_TOOLS_WHEN_EMPTY = new Set<string>([PURPOSE_TOOL_NAME]);
 
 type PurposeEntryData = {
 	purpose: string;
@@ -43,10 +42,6 @@ function readPurposeFromSession(ctx: ExtensionContext): string {
 
 export default function purposeExtension(pi: ExtensionAPI) {
 	let currentPurpose = "";
-
-	// --- First-turn grace ---
-	let firstTurnGraceUsed = false;
-	let firstTurnRunning = false;
 
 	const hasPurpose = () => currentPurpose.length > 0;
 
@@ -169,7 +164,7 @@ export default function purposeExtension(pi: ExtensionAPI) {
 
 			if (/^(clear|reset|none|empty)$/i.test(raw)) {
 				persistPurpose(ctx, "", "command");
-				notify(ctx, "세션 목적을 비웠습니다. 이후 요청은 /purpose로 다시 설정하기 전까지 차단됩니다.", "warning");
+				notify(ctx, "세션 목적을 비웠습니다.", "warning");
 				return;
 			}
 
@@ -178,62 +173,22 @@ export default function purposeExtension(pi: ExtensionAPI) {
 		},
 	});
 
-	// ── Guards ────────────────────────────────────────────────────
-
-	pi.on("input", async (event) => {
-		if (event.source === "extension") return { action: "continue" as const };
-
-		if (!hasPurpose() && !firstTurnGraceUsed) {
-			firstTurnGraceUsed = true;
-			firstTurnRunning = true;
-		}
-
-		return { action: "continue" as const };
-	});
-
-	pi.on("tool_call", async (event) => {
-		if (hasPurpose()) return;
-		if (ALLOWED_TOOLS_WHEN_EMPTY.has(event.toolName)) return;
-		if (firstTurnRunning) return;
-
-		return {
-			block: true,
-			reason:
-				"Blocked: session purpose is empty. " +
-				`Set it with /${PURPOSE_COMMAND_NAME} <purpose> or call ${PURPOSE_TOOL_NAME} first.`,
-		};
-	});
-
 	// ── Lifecycle ─────────────────────────────────────────────────
 
-	pi.on("agent_end", async () => {
-		if (firstTurnRunning) {
-			firstTurnRunning = false;
-		}
-	});
-
 	pi.on("session_start", async (_event, ctx) => {
-		firstTurnGraceUsed = false;
-		firstTurnRunning = false;
 		syncPurpose(ctx);
-		if (hasPurpose()) firstTurnGraceUsed = true;
 	});
 
 	pi.on("session_switch", async (_event, ctx) => {
-		firstTurnGraceUsed = false;
-		firstTurnRunning = false;
 		syncPurpose(ctx);
-		if (hasPurpose()) firstTurnGraceUsed = true;
 	});
 
 	pi.on("session_fork", async (_event, ctx) => {
 		syncPurpose(ctx);
-		if (hasPurpose()) firstTurnGraceUsed = true;
 	});
 
 	pi.on("session_tree", async (_event, ctx) => {
 		syncPurpose(ctx);
-		if (hasPurpose()) firstTurnGraceUsed = true;
 	});
 
 	pi.on("session_shutdown", async (_event, ctx) => {
