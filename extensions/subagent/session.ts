@@ -40,8 +40,7 @@ export function extractTextFromContent(content: any): string {
 	return "";
 }
 
-const TOOL_CALL_CONTEXT_MAX_CHARS = 500;
-const SUBAGENT_RESULT_MAX_CHARS = 1500;
+const SUBAGENT_RESULT_MAX_CHARS = 500;
 
 function stringifyToolCallArguments(args: unknown): string {
 	if (args === undefined || args === null) return "";
@@ -53,10 +52,6 @@ function stringifyToolCallArguments(args: unknown): string {
 	}
 }
 
-function truncateToolCallContext(text: string): string {
-	if (text.length <= TOOL_CALL_CONTEXT_MAX_CHARS) return text;
-	return `${text.slice(0, TOOL_CALL_CONTEXT_MAX_CHARS)}...`;
-}
 
 /**
  * Build a text representation of the main session context for injection into subagent tasks.
@@ -109,7 +104,7 @@ export function buildMainContextText(ctx: any): string {
 						}
 						if (part.type === "toolCall") {
 							const toolName = typeof (part as any).name === "string" ? (part as any).name : "tool";
-							const argsText = truncateToolCallContext(stringifyToolCallArguments((part as any).arguments));
+							const argsText = stringifyToolCallArguments((part as any).arguments);
 							messageParts.push(
 								argsText ? `Assistant ToolCall (${toolName}): ${argsText}` : `Assistant ToolCall (${toolName})`,
 							);
