@@ -115,6 +115,9 @@ export default function (pi: ExtensionAPI) {
 	let doneElapsedLabel: string | null = null;
 	let timer: ReturnType<typeof setInterval> | null = null;
 	let latestCtx: ExtensionContext | undefined;
+	let currentFunnyMessage = "";
+	let lastFunnyRotateAt = 0;
+	const FUNNY_ROTATE_MS = 8000;
 
 	const renderWidget = (ctx: ExtensionContext) => {
 		if (!ctx.hasUI) return;
@@ -142,7 +145,13 @@ export default function (pi: ExtensionAPI) {
 		timer = setInterval(() => {
 			if (!latestCtx) return;
 			if (latestCtx.hasUI && runStartedAt > 0) {
-				latestCtx.ui.setWorkingMessage(`${formatElapsedSince(runStartedAt)}...`);
+				const now = Date.now();
+				if (now - lastFunnyRotateAt >= FUNNY_ROTATE_MS) {
+					currentFunnyMessage = pickRandomMessage(INITIAL_LOADING_MESSAGES);
+					lastFunnyRotateAt = now;
+				}
+				const elapsed = formatElapsedSince(runStartedAt);
+				latestCtx.ui.setWorkingMessage(`${currentFunnyMessage} · ${elapsed}`);
 			}
 			renderWidget(latestCtx);
 		}, 1000);
@@ -176,9 +185,11 @@ export default function (pi: ExtensionAPI) {
 		latestCtx = ctx;
 		runStartedAt = Date.now();
 		doneElapsedLabel = null;
-		currentProgress = pickRandomMessage(INITIAL_LOADING_MESSAGES);
+		currentProgress = DEFAULT_PROGRESS;
 		isDefaultProgress = true;
 		phase = "pending";
+		currentFunnyMessage = pickRandomMessage(INITIAL_LOADING_MESSAGES);
+		lastFunnyRotateAt = Date.now();
 		startTimer(ctx);
 	});
 
