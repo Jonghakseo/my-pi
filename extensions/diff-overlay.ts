@@ -4,10 +4,11 @@
  * Split-pane view: file list (left) + diff viewer (right).
  * Two focus modes — arrow keys work naturally in whichever panel is active.
  *
- *   FILE LIST mode  │  ↑/↓ select file · Enter → open diff · s stage · q close
- *   DIFF VIEW mode  │  ↑/↓ scroll diff · PgUp/PgDn fast scroll · Esc → back to files
+ *   FILE LIST mode  │  ↑/↓ select file · Enter → open diff · o open file · q close
+ *   DIFF VIEW mode  │  ↑/↓ scroll diff · PgUp/PgDn fast scroll · o open file · Esc → back to files
  */
 
+import path from "node:path";
 import type { ExtensionAPI, ExtensionCommandContext } from "@mariozechner/pi-coding-agent";
 import { DynamicBorder } from "@mariozechner/pi-coding-agent";
 import { Key, matchesKey, truncateToWidth, visibleWidth } from "@mariozechner/pi-tui";
@@ -18,7 +19,6 @@ interface DiffFile {
 	path: string;
 	status: "added" | "deleted" | "modified" | "renamed" | "copied" | "untracked";
 	rawStatus: string;
-	staged: boolean;
 }
 
 type FocusPane = "files" | "diff";
@@ -107,11 +107,6 @@ function parseStatus(code: string): DiffFile["status"] {
 	return "modified";
 }
 
-function isStaged(code: string): boolean {
-	const c = code.charAt(0);
-	return c !== " " && c !== "?" && c !== "!";
-}
-
 async function changedFiles(pi: ExtensionAPI, cwd: string, mergeBase: string | null): Promise<DiffFile[]> {
 	const files: DiffFile[] = [];
 	const seen = new Set<string>();
@@ -127,12 +122,12 @@ async function changedFiles(pi: ExtensionAPI, cwd: string, mergeBase: string | n
 				const fp = parts[parts.length - 1]; // For renames, take new path
 				if (!fp || seen.has(fp)) continue;
 				seen.add(fp);
-				files.push({ path: fp, status: mapDiffStatusCode(code), rawStatus: code, staged: true });
+				files.push({ path: fp, status: mapDiffStatusCode(code), rawStatus: code });
 			}
 		}
 	}
 
-	// Always include git status for uncommitted/untracked changes & staging info
+	// Always include git status for uncommitted/untracked changes
 	const r = await pi.exec("git", ["status", "--porcelain=1", "-z"], { cwd });
 	if (r.code === 0 && r.stdout) {
 		const statusParts = r.stdout.split("\0").filter(Boolean);
@@ -145,18 +140,9 @@ async function changedFiles(pi: ExtensionAPI, cwd: string, mergeBase: string | n
 				fp = statusParts[i + 1];
 				i += 1;
 			}
-			if (!fp) continue;
-
-			if (seen.has(fp)) {
-				// Update staged info for files already found via merge-base diff
-				if (mergeBase) {
-					const existing = files.find((f) => f.path === fp);
-					if (existing) existing.staged = isStaged(raw);
-				}
-				continue;
-			}
+			if (!fp || seen.has(fp)) continue;
 			seen.add(fp);
-			files.push({ path: fp, status: parseStatus(raw), rawStatus: raw.trim() || raw, staged: isStaged(raw) });
+			files.push({ path: fp, status: parseStatus(raw), rawStatus: raw.trim() || raw });
 		}
 	}
 
@@ -241,10 +227,9 @@ function renderFiles(t: Theme, st: DiffState, w: number, h: number): string[] {
 		const f = st.files[i];
 		const sel = i === st.selectedIndex;
 		const cursor = sel ? (active ? t.fg("accent", "▶") : t.fg("muted", "▸")) : " ";
-		const dot = f.staged ? t.fg("success", "●") : t.fg("dim", "○");
 		const ic = t.fg(statusColor(f.status), icon(f.status));
 
-		const prefixCols = 7;
+		const prefixCols = 5;
 		const nameW = Math.max(4, w - prefixCols);
 
 		let label: string;
@@ -264,7 +249,7 @@ function renderFiles(t: Theme, st: DiffState, w: number, h: number): string[] {
 			}
 		}
 
-		lines.push(truncateToWidth(`${cursor} ${dot} ${ic} ${label}`, w));
+		lines.push(truncateToWidth(`${cursor} ${ic} ${label}`, w));
 	}
 
 	if (st.files.length > max) {
@@ -342,10 +327,11 @@ class DiffOverlay {
 		tui.requestRender();
 	}
 
-	private async refreshFiles(tui: Tui): Promise<void> {
-		const files = await changedFiles(this.pi, this.cwd, this.st.mergeBase);
-		this.st.files = files;
-		if (this.st.selectedIndex >= files.length) this.st.selectedIndex = Math.max(0, files.length - 1);
+	private async openSelectedFile(file: DiffFile): Promise<void> {
+		const filePath = path.isAbsolute(file.path) ? file.path : path.resolve(this.cwd, file.path);
+		const command = process.platform === "darwin" ? "open" : "xdg-open";
+		const r = await this.pi.exec(command, [filePath], { cwd: this.cwd });
+		this.st.error = r.code === 0 ? null : (r.stderr?.trim() || `Failed to open ${file.path}`);
 	}
 
 	handleInput(data: string, tui: Tui): void {
@@ -392,21 +378,8 @@ class DiffOverlay {
 					st.diffScrollOffset = 0;
 					void this.ensureDiff(tui);
 				}
-			} else if (data === "s" && f) {
-				const args = f.staged ? ["reset", "HEAD", "--", f.path] : ["add", "--", f.path];
-				void this.pi.exec("git", args, { cwd: this.cwd }).then(async () => {
-					await this.refreshFiles(tui);
-					st.diffCache.delete(f.path);
-					void this.ensureDiff(tui);
-					tui.requestRender();
-				});
-			} else if (data === "S") {
-				void this.pi.exec("git", ["add", "-A"], { cwd: this.cwd }).then(async () => {
-					await this.refreshFiles(tui);
-					st.diffCache.clear();
-					void this.ensureDiff(tui);
-					tui.requestRender();
-				});
+			} else if (data === "o" && f) {
+				void this.openSelectedFile(f).then(() => tui.requestRender());
 			}
 
 			tui.requestRender();
@@ -435,14 +408,8 @@ class DiffOverlay {
 		} else if (matchesKey(data, Key.left)) {
 			// quick back to file list
 			st.focus = "files";
-		} else if (data === "s" && f) {
-			const args = f.staged ? ["reset", "HEAD", "--", f.path] : ["add", "--", f.path];
-			void this.pi.exec("git", args, { cwd: this.cwd }).then(async () => {
-				await this.refreshFiles(tui);
-				st.diffCache.delete(f.path);
-				void this.ensureDiff(tui);
-				tui.requestRender();
-			});
+		} else if (data === "o" && f) {
+			void this.openSelectedFile(f).then(() => tui.requestRender());
 		}
 
 		tui.requestRender();
@@ -458,18 +425,16 @@ class DiffOverlay {
 		const branch = st.branch ? t.fg("muted", st.branch) : t.fg("dim", "(detached)");
 		const baseInfo = st.baseBranch ? ` ${t.fg("dim", "vs")} ${t.fg("muted", st.baseBranch)}` : "";
 		const cnt = t.fg("muted", `${st.files.length} file${st.files.length !== 1 ? "s" : ""}`);
-		const staged = st.files.filter((f) => f.staged).length;
-		const stInfo = staged > 0 ? t.fg("success", ` · ${staged} staged`) : "";
-		header.push(`  ${t.fg("accent", t.bold("DIFF"))} ${t.fg("dim", "|")} ${branch}${baseInfo} ${t.fg("dim", "·")} ${cnt}${stInfo}`);
+		header.push(`  ${t.fg("accent", t.bold("DIFF"))} ${t.fg("dim", "|")} ${branch}${baseInfo} ${t.fg("dim", "·")} ${cnt}`);
 		header.push("");
 
 		// ── Footer (3 lines) ──
 		const footer: string[] = [];
-		footer.push("");
+		footer.push(st.error ? t.fg("error", `  ${st.error}`) : "");
 		const hint =
 			st.focus === "files"
-				? "  ↑/↓ Select  ·  Enter → Diff  ·  s Stage  ·  S All  ·  q/Esc Close"
-				: "  ↑/↓ Scroll  ·  PgUp/PgDn Fast  ·  ←/Esc → Files  ·  s Stage  ·  q Close";
+				? "  ↑/↓ Select  ·  Enter → Diff  ·  o Open  ·  q/Esc Close"
+				: "  ↑/↓ Scroll  ·  PgUp/PgDn Fast  ·  o Open  ·  ←/Esc → Files  ·  q Close";
 		footer.push(t.fg("dim", hint));
 		footer.push(...new DynamicBorder((s: string) => t.fg("accent", s)).render(w));
 
