@@ -935,8 +935,7 @@ export default async function claudeMcpBridge(pi: ExtensionAPI) {
 			return;
 		}
 		const connected = states.filter((s) => s.status === "connected").length;
-		const icon = connected === total ? "●" : connected > 0 ? "◐" : "○";
-		ctx.ui.setStatus("mcp", `${icon} MCP ${connected}/${total}`);
+		ctx.ui.setStatus("mcp", `MCP ${connected}/${total}`);
 	}
 
 	function registerDiscoveredTools(): void {
