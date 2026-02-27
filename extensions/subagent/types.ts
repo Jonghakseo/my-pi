@@ -163,6 +163,16 @@ export const AsyncActionSchema = StringEnum(["run", "list", "status", "detail", 
 	default: "run",
 });
 
+export const ListAgentsParams = Type.Object({
+	agentScope: Type.Optional(
+		StringEnum(["user", "project", "both"] as const, {
+			description:
+				'Which agent directories to list. Default: "both" (includes user + project-local agents when available).',
+			default: "both",
+		}),
+	),
+});
+
 export const SubagentParams = Type.Object({
 	agent: Type.Optional(Type.String({ description: "Name of the agent to invoke (for single mode)" })),
 	task: Type.Optional(Type.String({ description: "Task to delegate (for single mode)" })),
