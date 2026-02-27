@@ -30,6 +30,8 @@ interface DiffState {
 	diffCache: Map<string, string>;
 	diffScrollOffset: number;
 	branch: string;
+	mergeBase: string | null;
+	baseBranch: string | null;
 	focus: FocusPane;
 	error: string | null;
 }
@@ -56,6 +58,44 @@ async function currentBranch(pi: ExtensionAPI, cwd: string): Promise<string> {
 	return r.code === 0 ? (r.stdout ?? "").trim() || "HEAD" : "HEAD";
 }
 
+interface MergeBaseInfo {
+	commit: string;
+	baseBranch: string;
+}
+
+async function findMergeBase(pi: ExtensionAPI, cwd: string, branch: string): Promise<MergeBaseInfo | null> {
+	const defaults = ["main", "master", "develop"];
+	if (defaults.includes(branch) || branch === "HEAD") return null;
+
+	// Try to detect default branch from remote
+	const symRef = await pi.exec("git", ["symbolic-ref", "refs/remotes/origin/HEAD", "--short"], { cwd });
+	if (symRef.code === 0 && symRef.stdout?.trim()) {
+		const defaultBranch = symRef.stdout.trim().replace(/^origin\//, "");
+		if (defaultBranch !== branch) {
+			const r = await pi.exec("git", ["merge-base", branch, defaultBranch], { cwd });
+			if (r.code === 0 && r.stdout?.trim()) {
+				return { commit: r.stdout.trim(), baseBranch: defaultBranch };
+			}
+		}
+	}
+
+	for (const base of defaults) {
+		if (base === branch) continue;
+		const r = await pi.exec("git", ["merge-base", branch, base], { cwd });
+		if (r.code === 0 && r.stdout?.trim()) return { commit: r.stdout.trim(), baseBranch: base };
+	}
+	return null;
+}
+
+function mapDiffStatusCode(code: string): DiffFile["status"] {
+	const c = code.charAt(0);
+	if (c === "A") return "added";
+	if (c === "D") return "deleted";
+	if (c === "R") return "renamed";
+	if (c === "C") return "copied";
+	return "modified";
+}
+
 function parseStatus(code: string): DiffFile["status"] {
 	const second = code.charAt(1);
 	const effective = second !== " " && second !== "?" ? second : code.charAt(0);
@@ -72,26 +112,52 @@ function isStaged(code: string): boolean {
 	return c !== " " && c !== "?" && c !== "!";
 }
 
-async function changedFiles(pi: ExtensionAPI, cwd: string): Promise<DiffFile[]> {
-	const r = await pi.exec("git", ["status", "--porcelain=1", "-z"], { cwd });
-	if (r.code !== 0 || !r.stdout) return [];
-
-	const parts = r.stdout.split("\0").filter(Boolean);
+async function changedFiles(pi: ExtensionAPI, cwd: string, mergeBase: string | null): Promise<DiffFile[]> {
 	const files: DiffFile[] = [];
 	const seen = new Set<string>();
 
-	for (let i = 0; i < parts.length; i++) {
-		const entry = parts[i];
-		if (!entry || entry.length < 4) continue;
-		const raw = entry.slice(0, 2);
-		let fp = entry.slice(3);
-		if ((raw.startsWith("R") || raw.startsWith("C")) && parts[i + 1]) {
-			fp = parts[i + 1];
-			i += 1;
+	// When on a feature branch, include all changes since merge-base
+	if (mergeBase) {
+		const diffR = await pi.exec("git", ["diff", "--name-status", mergeBase], { cwd });
+		if (diffR.code === 0 && diffR.stdout) {
+			for (const line of diffR.stdout.trim().split("\n").filter(Boolean)) {
+				const parts = line.split("\t");
+				if (parts.length < 2) continue;
+				const code = parts[0];
+				const fp = parts[parts.length - 1]; // For renames, take new path
+				if (!fp || seen.has(fp)) continue;
+				seen.add(fp);
+				files.push({ path: fp, status: mapDiffStatusCode(code), rawStatus: code, staged: true });
+			}
 		}
-		if (!fp || seen.has(fp)) continue;
-		seen.add(fp);
-		files.push({ path: fp, status: parseStatus(raw), rawStatus: raw.trim() || raw, staged: isStaged(raw) });
+	}
+
+	// Always include git status for uncommitted/untracked changes & staging info
+	const r = await pi.exec("git", ["status", "--porcelain=1", "-z"], { cwd });
+	if (r.code === 0 && r.stdout) {
+		const statusParts = r.stdout.split("\0").filter(Boolean);
+		for (let i = 0; i < statusParts.length; i++) {
+			const entry = statusParts[i];
+			if (!entry || entry.length < 4) continue;
+			const raw = entry.slice(0, 2);
+			let fp = entry.slice(3);
+			if ((raw.startsWith("R") || raw.startsWith("C")) && statusParts[i + 1]) {
+				fp = statusParts[i + 1];
+				i += 1;
+			}
+			if (!fp) continue;
+
+			if (seen.has(fp)) {
+				// Update staged info for files already found via merge-base diff
+				if (mergeBase) {
+					const existing = files.find((f) => f.path === fp);
+					if (existing) existing.staged = isStaged(raw);
+				}
+				continue;
+			}
+			seen.add(fp);
+			files.push({ path: fp, status: parseStatus(raw), rawStatus: raw.trim() || raw, staged: isStaged(raw) });
+		}
 	}
 
 	const order: Record<string, number> = { modified: 0, added: 1, untracked: 2, renamed: 3, deleted: 4, copied: 5 };
@@ -99,11 +165,17 @@ async function changedFiles(pi: ExtensionAPI, cwd: string): Promise<DiffFile[]> 
 	return files;
 }
 
-async function fileDiff(pi: ExtensionAPI, cwd: string, file: DiffFile): Promise<string> {
+async function fileDiff(pi: ExtensionAPI, cwd: string, file: DiffFile, mergeBase: string | null): Promise<string> {
 	if (file.status === "untracked") {
 		const r = await pi.exec("cat", [file.path], { cwd });
 		if (r.code !== 0) return "(cannot read file)";
 		return (r.stdout ?? "").split("\n").map((l) => `+ ${l}`).join("\n");
+	}
+
+	// When on a feature branch, diff from merge-base to working tree
+	if (mergeBase) {
+		const r = await pi.exec("git", ["diff", "--no-color", mergeBase, "--", file.path], { cwd });
+		if (r.code === 0 && (r.stdout ?? "").trim()) return (r.stdout ?? "").trim();
 	}
 
 	const working = await pi.exec("git", ["diff", "--no-color", "--", file.path], { cwd });
@@ -202,7 +274,7 @@ function renderFiles(t: Theme, st: DiffState, w: number, h: number): string[] {
 }
 
 function renderDiff(t: Theme, st: DiffState, w: number, h: number): string[] {
-	if (st.files.length === 0) return [t.fg("muted", "  Working tree clean")];
+	if (st.files.length === 0) return [t.fg("muted", "  No changes")];
 
 	const f = st.files[st.selectedIndex];
 	if (!f) return [];
@@ -259,7 +331,7 @@ class DiffOverlay {
 		if (!f || this.st.diffCache.has(f.path) || this.loading) return;
 		this.loading = true;
 		try {
-			this.st.diffCache.set(f.path, await fileDiff(this.pi, this.cwd, f));
+			this.st.diffCache.set(f.path, await fileDiff(this.pi, this.cwd, f, this.st.mergeBase));
 		} finally {
 			this.loading = false;
 		}
@@ -267,7 +339,7 @@ class DiffOverlay {
 	}
 
 	private async refreshFiles(tui: Tui): Promise<void> {
-		const files = await changedFiles(this.pi, this.cwd);
+		const files = await changedFiles(this.pi, this.cwd, this.st.mergeBase);
 		this.st.files = files;
 		if (this.st.selectedIndex >= files.length) this.st.selectedIndex = Math.max(0, files.length - 1);
 	}
@@ -380,10 +452,11 @@ class DiffOverlay {
 		header.push(...new DynamicBorder((s: string) => t.fg("accent", s)).render(w));
 
 		const branch = st.branch ? t.fg("muted", st.branch) : t.fg("dim", "(detached)");
+		const baseInfo = st.baseBranch ? ` ${t.fg("dim", "vs")} ${t.fg("muted", st.baseBranch)}` : "";
 		const cnt = t.fg("muted", `${st.files.length} file${st.files.length !== 1 ? "s" : ""}`);
 		const staged = st.files.filter((f) => f.staged).length;
 		const stInfo = staged > 0 ? t.fg("success", ` · ${staged} staged`) : "";
-		header.push(`  ${t.fg("accent", t.bold("DIFF"))} ${t.fg("dim", "|")} ${branch} ${t.fg("dim", "·")} ${cnt}${stInfo}`);
+		header.push(`  ${t.fg("accent", t.bold("DIFF"))} ${t.fg("dim", "|")} ${branch}${baseInfo} ${t.fg("dim", "·")} ${cnt}${stInfo}`);
 		header.push("");
 
 		// ── Footer (3 lines) ──
@@ -455,10 +528,10 @@ export default function diffOverlayExtension(pi: ExtensionAPI) {
 			return;
 		}
 
-		const [branch, files] = await Promise.all([
-			currentBranch(pi, root),
-			changedFiles(pi, root),
-		]);
+		const branch = await currentBranch(pi, root);
+		const mergeBaseInfo = await findMergeBase(pi, root, branch);
+		const mergeBase = mergeBaseInfo?.commit ?? null;
+		const files = await changedFiles(pi, root, mergeBase);
 
 		const st: DiffState = {
 			files,
@@ -467,19 +540,21 @@ export default function diffOverlayExtension(pi: ExtensionAPI) {
 			diffCache: new Map(),
 			diffScrollOffset: 0,
 			branch,
+			mergeBase,
+			baseBranch: mergeBaseInfo?.baseBranch ?? null,
 			focus: "files",
 			error: null,
 		};
 
 		if (!ctx.hasUI) {
-			if (files.length === 0) { console.log("Working tree clean."); return; }
+			if (files.length === 0) { console.log("No changes."); return; }
 			for (const f of files) console.log(`${icon(f.status)} ${f.path}`);
 			return;
 		}
 
 		// Pre-load first diff
 		if (files.length > 0) {
-			st.diffCache.set(files[0].path, await fileDiff(pi, root, files[0]));
+			st.diffCache.set(files[0].path, await fileDiff(pi, root, files[0], mergeBase));
 		}
 
 		await ctx.ui.custom<void>(

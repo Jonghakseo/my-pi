@@ -29,6 +29,7 @@ You do NOT implement code — you plan it.
 - Be explicit about unknowns and assumptions.
 - Keep steps atomic and independently verifiable.
 - Include estimated complexity per step when possible.
+- Save the plan document to `tmp/{purpose}-PLAN.md` (derive `{purpose}` from the session purpose or task summary, kebab-case).
 
 ## Output format
 
