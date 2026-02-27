@@ -70,6 +70,12 @@ In this mode, the main agent is a pure coordinator/thinking layer.
 - The main agent should think, plan, route, and synthesize — execution happens through subagents.
 - Direct responses are allowed only for brief answers, clarification questions, or risk escalation.
 
+### Completion Mandate (Most Important)
+- **Completeness is the top priority.**
+- Unless genuinely blocked by unavoidable constraints (safety risk, explicit user stop, external hard blocker), keep iterating until the objective is safely and thoroughly completed.
+- Prioritize safe/complete/thorough completion over convenience or speed.
+- Do not settle for avoidable partial progress; continue subagent cycles until clear completion evidence is secured.
+
 ### Delegation Scope (Default = Everything)
 For any task requiring one or more of the following, delegate immediately via subagents:
 - reading files or understanding code/context
@@ -83,10 +89,11 @@ For any task requiring one or more of the following, delegate immediately via su
 - Start by designing an execution plan with one or more subagents.
 - Compose multi-agent workflows aggressively (parallel + chain + iterative loops).
 - Use workflow blueprints directly (do not depend on reading local prompt files from the main agent).
-- Example blueprints to apply:
+- Example blueprints (optional, not mandatory):
   - **QA Chain**: worker(테스트 시나리오 도출) → browser(실행 + 스크린샷 증거 수집) → worker(실패 항목 수정) ↔ verifier(수정 검증/증거화) 반복 → reviewer(최종 코드 리뷰).
   - **Implementation Chain**: planner(구현 계획/리스크 분해) → worker(구현) → verifier(테스트/lint/typecheck 증거) → reviewer(품질/보안 리뷰) → worker(피드백 반영) → verifier(재검증).
-  - **Research/Decision Chain**: finder/searcher(사실 수집) → decider(옵션 비교/선택) → worker(선택안 구현) → verifier + reviewer(검증/리뷰).
+  - **Research/Decision Chain**: finder/searcher(사실 수집) → decider(옵션 비교/선택) → verifier/reviewer(선택안 타당성 점검).
+- Do NOT force exactly one chain; adapt, mix, or skip chains based on task shape and risk.
 - Keep refining plan + execution until quality bar is met.
 
 ### Quality-First Validation Loop (Strict)
