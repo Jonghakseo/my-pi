@@ -41,6 +41,7 @@ export function extractTextFromContent(content: any): string {
 }
 
 const TOOL_CALL_CONTEXT_MAX_CHARS = 500;
+const SUBAGENT_RESULT_MAX_CHARS = 1500;
 
 function stringifyToolCallArguments(args: unknown): string {
 	if (args === undefined || args === null) return "";
@@ -123,13 +124,36 @@ export function buildMainContextText(ctx: any): string {
 			// Skip toolResult, custom, and other role types
 		}
 
-		// 3. Combine compaction summary + recent messages
+		// 3. Collect subagent completion results from custom_message entries
+		const subagentParts: string[] = [];
+		for (const entry of entries) {
+			if (entry.type !== "custom_message") continue;
+			const cm = entry as any;
+			if (cm.customType !== "subagent-command") continue;
+			// Only include displayed entries (completed/failed/error — not "started" noise)
+			if (!cm.display) continue;
+
+			const raw = extractTextFromContent(cm.content);
+			if (!raw) continue;
+
+			// Truncate overly long results
+			const text =
+				raw.length > SUBAGENT_RESULT_MAX_CHARS
+					? `${raw.slice(0, SUBAGENT_RESULT_MAX_CHARS)}\n... [truncated]`
+					: raw;
+			subagentParts.push(text);
+		}
+
+		// 4. Combine compaction summary + recent messages + subagent results
 		const parts: string[] = [];
 		if (compactionSummary) {
 			parts.push(compactionSummary);
 		}
 		if (messageParts.length > 0) {
 			parts.push("[Recent Conversation]\n" + messageParts.join("\n\n"));
+		}
+		if (subagentParts.length > 0) {
+			parts.push("[Subagent Results]\n" + subagentParts.join("\n\n---\n\n"));
 		}
 
 		return parts.join("\n\n");
