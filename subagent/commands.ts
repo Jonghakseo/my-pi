@@ -153,7 +153,7 @@ async function subTransHandler(args: string, ctx: any, store: SubagentStore, pi:
 
 	const switchFn = resolveSwitchSession(ctx, store);
 	if (!switchFn) {
-		ctx.ui.notify("Session switch not ready. Run /sub:enable-switch first.", "warning");
+		ctx.ui.notify("Session switch not ready. Run any /sub:* command first.", "warning");
 		return;
 	}
 
@@ -276,7 +276,7 @@ async function subBackHandler(ctx: any, store: SubagentStore): Promise<void> {
 
 	const switchFn = resolveSwitchSession(ctx, store);
 	if (!switchFn) {
-		ctx.ui.notify("Session switch not ready. Run /sub:enable-switch first.", "warning");
+		ctx.ui.notify("Session switch not ready. Run any /sub:* command first.", "warning");
 		return;
 	}
 
@@ -1521,18 +1521,6 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 		handler: async (_args, ctx) => {
 			captureSwitchSession(store, ctx);
 			await subBackHandler(ctx, store);
-		},
-	});
-
-	pi.registerCommand("sub:enable-switch", {
-		description: "Enable <> / >< session-switch shortcuts for the current runtime",
-		handler: async (_args, ctx) => {
-			captureSwitchSession(store, ctx);
-			if (store.switchSessionFn) {
-				ctx.ui.notify("Session switching enabled. Use <> and >< shortcuts.", "info");
-			} else {
-				ctx.ui.notify("Could not capture session switch function. Try running any /sub:* command instead.", "warning");
-			}
 		},
 	});
 
