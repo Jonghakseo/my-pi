@@ -171,7 +171,7 @@ export function updateCommandRunsWidget(store: SubagentStore, ctx?: any): void {
 							lines.push(theme.fg("accent", `  💭 ${thoughtLine}`));
 						}
 
-						if (run.status !== "done" && run.lastLine) {
+						if (!run.thoughtText && run.status !== "done" && run.lastLine) {
 							const normalized = run.lastLine
 								.replace(/\s*\n+\s*/g, " ")
 								.replace(/\s{2,}/g, " ")
