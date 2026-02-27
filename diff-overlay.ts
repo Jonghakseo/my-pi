@@ -1,11 +1,11 @@
 /**
  * /diff — Git diff overlay
  *
- * Shows changed files in the current branch with a split-pane view:
- * - Left: file list with +/-/~ status indicators
- * - Right: unified diff for the selected file
+ * Split-pane view: file list (left) + diff viewer (right).
+ * Two focus modes — arrow keys work naturally in whichever panel is active.
  *
- * Navigation: ↑/↓ j/k to select files, q/Esc to close, s to stage, S to stage all
+ *   FILE LIST mode  │  ↑/↓ select file · Enter → open diff · s stage · q close
+ *   DIFF VIEW mode  │  ↑/↓ scroll diff · PgUp/PgDn fast scroll · Esc → back to files
  */
 
 import type { ExtensionAPI, ExtensionCommandContext } from "@mariozechner/pi-coding-agent";
@@ -17,57 +17,48 @@ import { Key, matchesKey, truncateToWidth, visibleWidth } from "@mariozechner/pi
 interface DiffFile {
 	path: string;
 	status: "added" | "deleted" | "modified" | "renamed" | "copied" | "untracked";
-	/** Raw git status code (e.g. "M", "A", "D", "??") */
 	rawStatus: string;
 	staged: boolean;
 }
 
+type FocusPane = "files" | "diff";
+
 interface DiffState {
 	files: DiffFile[];
 	selectedIndex: number;
+	fileScrollOffset: number;
 	diffCache: Map<string, string>;
 	diffScrollOffset: number;
 	branch: string;
-	baseBranch: string;
+	focus: FocusPane;
 	error: string | null;
 }
 
-interface OverlayTheme {
+interface Theme {
 	fg: (color: string, text: string) => string;
 	bold: (text: string) => string;
 }
 
-interface OverlayTui {
+interface Tui {
 	requestRender: () => void;
 	height?: number;
 }
 
 // ─── Git helpers ───────────────────────────────────────────────────────────
 
-async function getGitRoot(pi: ExtensionAPI, cwd: string): Promise<string | null> {
-	const result = await pi.exec("git", ["rev-parse", "--show-toplevel"], { cwd });
-	return result.code === 0 ? (result.stdout ?? "").trim() || null : null;
+async function gitRoot(pi: ExtensionAPI, cwd: string): Promise<string | null> {
+	const r = await pi.exec("git", ["rev-parse", "--show-toplevel"], { cwd });
+	return r.code === 0 ? (r.stdout ?? "").trim() || null : null;
 }
 
-async function getCurrentBranch(pi: ExtensionAPI, cwd: string): Promise<string> {
-	const result = await pi.exec("git", ["branch", "--show-current"], { cwd });
-	return result.code === 0 ? (result.stdout ?? "").trim() || "HEAD" : "HEAD";
-}
-
-async function getBaseBranch(pi: ExtensionAPI, cwd: string): Promise<string> {
-	// Try to find the merge-base with common default branches
-	for (const candidate of ["main", "master", "develop"]) {
-		const result = await pi.exec("git", ["rev-parse", "--verify", candidate], { cwd });
-		if (result.code === 0) return candidate;
-	}
-	return "HEAD~1";
+async function currentBranch(pi: ExtensionAPI, cwd: string): Promise<string> {
+	const r = await pi.exec("git", ["branch", "--show-current"], { cwd });
+	return r.code === 0 ? (r.stdout ?? "").trim() || "HEAD" : "HEAD";
 }
 
 function parseStatus(code: string): DiffFile["status"] {
-	const first = code.charAt(0);
 	const second = code.charAt(1);
-	// Prefer working tree status over staged status
-	const effective = second !== " " && second !== "?" ? second : first;
+	const effective = second !== " " && second !== "?" ? second : code.charAt(0);
 	if (code === "??") return "untracked";
 	if (effective === "A") return "added";
 	if (effective === "D") return "deleted";
@@ -77,359 +68,303 @@ function parseStatus(code: string): DiffFile["status"] {
 }
 
 function isStaged(code: string): boolean {
-	const index = code.charAt(0);
-	return index !== " " && index !== "?" && index !== "!";
+	const c = code.charAt(0);
+	return c !== " " && c !== "?" && c !== "!";
 }
 
-async function getChangedFiles(pi: ExtensionAPI, cwd: string): Promise<DiffFile[]> {
-	const result = await pi.exec("git", ["status", "--porcelain=1", "-z"], { cwd });
-	if (result.code !== 0 || !result.stdout) return [];
+async function changedFiles(pi: ExtensionAPI, cwd: string): Promise<DiffFile[]> {
+	const r = await pi.exec("git", ["status", "--porcelain=1", "-z"], { cwd });
+	if (r.code !== 0 || !r.stdout) return [];
 
-	const entries = result.stdout.split("\0").filter(Boolean);
+	const parts = r.stdout.split("\0").filter(Boolean);
 	const files: DiffFile[] = [];
 	const seen = new Set<string>();
 
-	for (let i = 0; i < entries.length; i++) {
-		const entry = entries[i];
+	for (let i = 0; i < parts.length; i++) {
+		const entry = parts[i];
 		if (!entry || entry.length < 4) continue;
-
-		const rawStatus = entry.slice(0, 2);
-		let filePath = entry.slice(3);
-
-		// Renames/copies have an extra field
-		if ((rawStatus.startsWith("R") || rawStatus.startsWith("C")) && entries[i + 1]) {
-			filePath = entries[i + 1];
+		const raw = entry.slice(0, 2);
+		let fp = entry.slice(3);
+		if ((raw.startsWith("R") || raw.startsWith("C")) && parts[i + 1]) {
+			fp = parts[i + 1];
 			i += 1;
 		}
-
-		if (!filePath || seen.has(filePath)) continue;
-		seen.add(filePath);
-
-		files.push({
-			path: filePath,
-			status: parseStatus(rawStatus),
-			rawStatus: rawStatus.trim() || rawStatus,
-			staged: isStaged(rawStatus),
-		});
+		if (!fp || seen.has(fp)) continue;
+		seen.add(fp);
+		files.push({ path: fp, status: parseStatus(raw), rawStatus: raw.trim() || raw, staged: isStaged(raw) });
 	}
 
-	// Sort: modified/added first, then alphabetical
-	files.sort((a, b) => {
-		const order: Record<string, number> = { modified: 0, added: 1, untracked: 2, renamed: 3, deleted: 4, copied: 5 };
-		const diff = (order[a.status] ?? 9) - (order[b.status] ?? 9);
-		if (diff !== 0) return diff;
-		return a.path.localeCompare(b.path);
-	});
-
+	const order: Record<string, number> = { modified: 0, added: 1, untracked: 2, renamed: 3, deleted: 4, copied: 5 };
+	files.sort((a, b) => (order[a.status] ?? 9) - (order[b.status] ?? 9) || a.path.localeCompare(b.path));
 	return files;
 }
 
-async function getFileDiff(pi: ExtensionAPI, cwd: string, file: DiffFile): Promise<string> {
+async function fileDiff(pi: ExtensionAPI, cwd: string, file: DiffFile): Promise<string> {
 	if (file.status === "untracked") {
-		// Show file contents for untracked files
-		const result = await pi.exec("cat", [file.path], { cwd });
-		if (result.code !== 0) return "(cannot read file)";
-		const content = result.stdout ?? "";
-		return content
-			.split("\n")
-			.map((line) => `+ ${line}`)
-			.join("\n");
+		const r = await pi.exec("cat", [file.path], { cwd });
+		if (r.code !== 0) return "(cannot read file)";
+		return (r.stdout ?? "").split("\n").map((l) => `+ ${l}`).join("\n");
 	}
 
-	// Try working tree diff first
-	const result = await pi.exec("git", ["diff", "--no-color", "--", file.path], { cwd });
-	if (result.code === 0 && (result.stdout ?? "").trim()) {
-		return (result.stdout ?? "").trim();
-	}
+	const working = await pi.exec("git", ["diff", "--no-color", "--", file.path], { cwd });
+	if (working.code === 0 && (working.stdout ?? "").trim()) return (working.stdout ?? "").trim();
 
-	// Fallback to staged diff
-	const stagedResult = await pi.exec("git", ["diff", "--cached", "--no-color", "--", file.path], { cwd });
-	if (stagedResult.code === 0 && (stagedResult.stdout ?? "").trim()) {
-		return (stagedResult.stdout ?? "").trim();
-	}
+	const staged = await pi.exec("git", ["diff", "--cached", "--no-color", "--", file.path], { cwd });
+	if (staged.code === 0 && (staged.stdout ?? "").trim()) return (staged.stdout ?? "").trim();
 
-	// For newly added files
 	if (file.status === "added") {
-		const catResult = await pi.exec("cat", [file.path], { cwd });
-		if (catResult.code === 0) {
-			return (catResult.stdout ?? "")
-				.split("\n")
-				.map((line) => `+ ${line}`)
-				.join("\n");
-		}
+		const cat = await pi.exec("cat", [file.path], { cwd });
+		if (cat.code === 0) return (cat.stdout ?? "").split("\n").map((l) => `+ ${l}`).join("\n");
 	}
 
 	return "(no diff available)";
 }
 
-// ─── Rendering ─────────────────────────────────────────────────────────────
+// ─── Rendering helpers ─────────────────────────────────────────────────────
 
-function statusIcon(status: DiffFile["status"]): string {
-	switch (status) {
-		case "added":
-		case "untracked":
-			return "+";
-		case "deleted":
-			return "-";
-		case "renamed":
-			return "→";
-		case "copied":
-			return "©";
-		default:
-			return "~";
-	}
+function icon(s: DiffFile["status"]): string {
+	if (s === "added" || s === "untracked") return "+";
+	if (s === "deleted") return "-";
+	if (s === "renamed") return "→";
+	if (s === "copied") return "©";
+	return "~";
 }
 
-function statusColor(status: DiffFile["status"]): string {
-	switch (status) {
-		case "added":
-		case "untracked":
-			return "success";
-		case "deleted":
-			return "error";
-		default:
-			return "warning";
-	}
+function statusColor(s: DiffFile["status"]): string {
+	if (s === "added" || s === "untracked") return "success";
+	if (s === "deleted") return "error";
+	return "warning";
 }
 
-function renderFileList(
-	theme: OverlayTheme,
-	state: DiffState,
-	width: number,
-	height: number,
-): string[] {
-	const lines: string[] = [];
-
-	if (state.files.length === 0) {
-		lines.push(theme.fg("muted", " (no changes)"));
-		return lines;
-	}
-
-	// Calculate visible window for scrolling file list
-	const maxVisible = Math.max(1, height);
-	let startIdx = 0;
-	if (state.selectedIndex >= startIdx + maxVisible) {
-		startIdx = state.selectedIndex - maxVisible + 1;
-	}
-	if (state.selectedIndex < startIdx) {
-		startIdx = state.selectedIndex;
-	}
-
-	const endIdx = Math.min(state.files.length, startIdx + maxVisible);
-
-	for (let i = startIdx; i < endIdx; i++) {
-		const file = state.files[i];
-		const selected = i === state.selectedIndex;
-		const icon = statusIcon(file.status);
-		const color = statusColor(file.status);
-		const cursor = selected ? theme.fg("accent", "▶") : " ";
-		const stagedMark = file.staged ? theme.fg("success", "●") : theme.fg("dim", "○");
-		const fileName = file.path.includes("/")
-			? file.path.slice(file.path.lastIndexOf("/") + 1)
-			: file.path;
-		const dirPart = file.path.includes("/")
-			? file.path.slice(0, file.path.lastIndexOf("/") + 1)
-			: "";
-
-		const prefix = `${cursor} ${stagedMark} ${theme.fg(color, icon)} `;
-		const prefixWidth = 7; // cursor(1) + space(1) + staged(1) + space(1) + icon(1) + space(1) + extra
-		const nameWidth = Math.max(4, width - prefixWidth);
-
-		let label: string;
-		if (selected) {
-			label = theme.fg("accent", truncateToWidth(file.path, nameWidth));
-		} else {
-			const dirStr = dirPart ? theme.fg("dim", truncateToWidth(dirPart, Math.floor(nameWidth * 0.6))) : "";
-			const remainingWidth = Math.max(4, nameWidth - visibleWidth(dirPart));
-			label = `${dirStr}${theme.fg("text", truncateToWidth(fileName, remainingWidth))}`;
-		}
-
-		lines.push(truncateToWidth(`${prefix}${label}`, width));
-	}
-
-	// Scroll indicator
-	if (state.files.length > maxVisible) {
-		const scrollInfo = theme.fg("dim", ` ${startIdx + 1}-${endIdx}/${state.files.length}`);
-		if (lines.length > 0) {
-			lines.push(scrollInfo);
-		}
-	}
-
-	return lines;
-}
-
-function colorizeDiffLine(theme: OverlayTheme, line: string): string {
-	if (line.startsWith("+++") || line.startsWith("---")) {
-		return theme.fg("muted", line);
-	}
-	if (line.startsWith("+")) {
-		return theme.fg("success", line);
-	}
-	if (line.startsWith("-")) {
-		return theme.fg("error", line);
-	}
-	if (line.startsWith("@@")) {
-		return theme.fg("accent", line);
-	}
-	if (line.startsWith("diff ") || line.startsWith("index ")) {
-		return theme.fg("dim", line);
-	}
+function colorDiffLine(t: Theme, line: string): string {
+	if (line.startsWith("+++") || line.startsWith("---")) return t.fg("muted", line);
+	if (line.startsWith("+")) return t.fg("success", line);
+	if (line.startsWith("-")) return t.fg("error", line);
+	if (line.startsWith("@@")) return t.fg("accent", line);
+	if (line.startsWith("diff ") || line.startsWith("index ")) return t.fg("dim", line);
 	return line;
 }
 
-function renderDiffPanel(
-	theme: OverlayTheme,
-	state: DiffState,
-	width: number,
-	height: number,
-): string[] {
-	if (state.files.length === 0) {
-		return [theme.fg("muted", " Working tree clean")];
+// ─── Panel renderers ──────────────────────────────────────────────────────
+
+function renderFiles(t: Theme, st: DiffState, w: number, h: number): string[] {
+	if (st.files.length === 0) return [t.fg("muted", " (no changes)")];
+
+	const active = st.focus === "files";
+	const max = Math.max(1, h);
+
+	// keep selected row visible
+	if (st.selectedIndex < st.fileScrollOffset) st.fileScrollOffset = st.selectedIndex;
+	if (st.selectedIndex >= st.fileScrollOffset + max) st.fileScrollOffset = st.selectedIndex - max + 1;
+
+	const start = st.fileScrollOffset;
+	const end = Math.min(st.files.length, start + max);
+	const lines: string[] = [];
+
+	for (let i = start; i < end; i++) {
+		const f = st.files[i];
+		const sel = i === st.selectedIndex;
+		const cursor = sel ? (active ? t.fg("accent", "▶") : t.fg("muted", "▸")) : " ";
+		const dot = f.staged ? t.fg("success", "●") : t.fg("dim", "○");
+		const ic = t.fg(statusColor(f.status), icon(f.status));
+
+		const prefixCols = 7;
+		const nameW = Math.max(4, w - prefixCols);
+
+		let label: string;
+		if (sel && active) {
+			label = t.fg("accent", truncateToWidth(f.path, nameW));
+		} else if (sel) {
+			label = t.fg("muted", truncateToWidth(f.path, nameW));
+		} else {
+			const slash = f.path.lastIndexOf("/");
+			if (slash >= 0) {
+				const dir = f.path.slice(0, slash + 1);
+				const name = f.path.slice(slash + 1);
+				const dirW = Math.min(visibleWidth(dir), Math.floor(nameW * 0.55));
+				label = `${t.fg("dim", truncateToWidth(dir, dirW))}${t.fg("text", truncateToWidth(name, Math.max(4, nameW - dirW)))}`;
+			} else {
+				label = t.fg("text", truncateToWidth(f.path, nameW));
+			}
+		}
+
+		lines.push(truncateToWidth(`${cursor} ${dot} ${ic} ${label}`, w));
 	}
 
-	const file = state.files[state.selectedIndex];
-	if (!file) return [];
-
-	const diffContent = state.diffCache.get(file.path);
-	if (diffContent === undefined) {
-		return [theme.fg("muted", " Loading diff...")];
+	if (st.files.length > max) {
+		const info = t.fg("dim", ` ${start + 1}–${end}/${st.files.length}`);
+		while (lines.length < max) lines.push("");
+		lines[max - 1] = info;
 	}
 
-	const allLines = diffContent.split("\n");
-	if (allLines.length === 0) {
-		return [theme.fg("muted", " (empty diff)")];
-	}
+	while (lines.length < max) lines.push("");
+	return lines;
+}
 
-	const maxVisible = Math.max(1, height);
-	const startLine = Math.min(state.diffScrollOffset, Math.max(0, allLines.length - maxVisible));
-	const endLine = Math.min(allLines.length, startLine + maxVisible);
+function renderDiff(t: Theme, st: DiffState, w: number, h: number): string[] {
+	if (st.files.length === 0) return [t.fg("muted", "  Working tree clean")];
+
+	const f = st.files[st.selectedIndex];
+	if (!f) return [];
+
+	const raw = st.diffCache.get(f.path);
+	if (raw === undefined) return [t.fg("muted", "  Loading…")];
+
+	const all = raw.split("\n");
+	if (all.length === 0) return [t.fg("muted", "  (empty diff)")];
+
+	const max = Math.max(1, h);
+	// clamp scroll
+	const maxOffset = Math.max(0, all.length - max);
+	if (st.diffScrollOffset > maxOffset) st.diffScrollOffset = maxOffset;
+
+	const start = st.diffScrollOffset;
+	const end = Math.min(all.length, start + max);
 
 	const lines: string[] = [];
-	for (let i = startLine; i < endLine; i++) {
-		const raw = allLines[i];
-		const colored = colorizeDiffLine(theme, raw);
-		lines.push(truncateToWidth(` ${colored}`, width));
+	for (let i = start; i < end; i++) {
+		lines.push(truncateToWidth(` ${colorDiffLine(t, all[i])}`, w));
 	}
 
-	// Pad remaining height
-	while (lines.length < maxVisible) {
-		lines.push("");
+	while (lines.length < max) lines.push("");
+
+	// scroll percentage in bottom-right corner
+	if (all.length > max) {
+		const pct = maxOffset > 0 ? Math.round((st.diffScrollOffset / maxOffset) * 100) : 0;
+		const indicator = t.fg("dim", `${pct}% (${start + 1}–${end}/${all.length})`);
+		lines[max - 1] = truncateToWidth(` ${indicator}`, w);
 	}
 
 	return lines;
 }
 
-// ─── Overlay UI class ──────────────────────────────────────────────────────
+// ─── Overlay controller ────────────────────────────────────────────────────
 
-class DiffOverlayUI {
-	private state: DiffState;
+class DiffOverlay {
+	private st: DiffState;
 	private pi: ExtensionAPI;
 	private cwd: string;
-	private onDone: () => void;
-	private loadingDiff = false;
+	private done: () => void;
+	private loading = false;
 
-	constructor(
-		pi: ExtensionAPI,
-		cwd: string,
-		state: DiffState,
-		onDone: () => void,
-	) {
+	constructor(pi: ExtensionAPI, cwd: string, st: DiffState, done: () => void) {
 		this.pi = pi;
 		this.cwd = cwd;
-		this.state = state;
-		this.onDone = onDone;
+		this.st = st;
+		this.done = done;
 	}
 
-	async loadSelectedDiff(tui: OverlayTui): Promise<void> {
-		const file = this.state.files[this.state.selectedIndex];
-		if (!file || this.state.diffCache.has(file.path)) return;
-		if (this.loadingDiff) return;
-
-		this.loadingDiff = true;
+	private async ensureDiff(tui: Tui): Promise<void> {
+		const f = this.st.files[this.st.selectedIndex];
+		if (!f || this.st.diffCache.has(f.path) || this.loading) return;
+		this.loading = true;
 		try {
-			const diff = await getFileDiff(this.pi, this.cwd, file);
-			this.state.diffCache.set(file.path, diff);
+			this.st.diffCache.set(f.path, await fileDiff(this.pi, this.cwd, f));
 		} finally {
-			this.loadingDiff = false;
+			this.loading = false;
 		}
 		tui.requestRender();
 	}
 
-	handleInput(data: string, tui: OverlayTui): void {
-		const fileCount = this.state.files.length;
-		const file = this.state.files[this.state.selectedIndex];
-		const diffLines = file ? (this.state.diffCache.get(file.path) ?? "").split("\n").length : 0;
+	private async refreshFiles(tui: Tui): Promise<void> {
+		const files = await changedFiles(this.pi, this.cwd);
+		this.st.files = files;
+		if (this.st.selectedIndex >= files.length) this.st.selectedIndex = Math.max(0, files.length - 1);
+	}
 
-		if (matchesKey(data, Key.escape) || data === "q") {
-			this.onDone();
+	handleInput(data: string, tui: Tui): void {
+		const st = this.st;
+		const n = st.files.length;
+		const f = st.files[st.selectedIndex];
+		const diffLen = f ? (st.diffCache.get(f.path) ?? "").split("\n").length : 0;
+
+		// ── Global keys ──
+		if (data === "q") {
+			this.done();
+			return;
+		}
+
+		// ── FILE LIST focus ──
+		if (st.focus === "files") {
+			if (matchesKey(data, Key.escape)) {
+				this.done();
+				return;
+			}
+			if (matchesKey(data, Key.up) || data === "k") {
+				if (st.selectedIndex > 0) {
+					st.selectedIndex -= 1;
+					st.diffScrollOffset = 0;
+					void this.ensureDiff(tui);
+				}
+			} else if (matchesKey(data, Key.down) || data === "j") {
+				if (st.selectedIndex < n - 1) {
+					st.selectedIndex += 1;
+					st.diffScrollOffset = 0;
+					void this.ensureDiff(tui);
+				}
+			} else if (data === "g") {
+				st.selectedIndex = 0;
+				st.diffScrollOffset = 0;
+				void this.ensureDiff(tui);
+			} else if (data === "G") {
+				st.selectedIndex = Math.max(0, n - 1);
+				st.diffScrollOffset = 0;
+				void this.ensureDiff(tui);
+			} else if (matchesKey(data, Key.enter)) {
+				if (n > 0) {
+					st.focus = "diff";
+					st.diffScrollOffset = 0;
+					void this.ensureDiff(tui);
+				}
+			} else if (data === "s" && f) {
+				const args = f.staged ? ["reset", "HEAD", "--", f.path] : ["add", "--", f.path];
+				void this.pi.exec("git", args, { cwd: this.cwd }).then(async () => {
+					await this.refreshFiles(tui);
+					st.diffCache.delete(f.path);
+					void this.ensureDiff(tui);
+					tui.requestRender();
+				});
+			} else if (data === "S") {
+				void this.pi.exec("git", ["add", "-A"], { cwd: this.cwd }).then(async () => {
+					await this.refreshFiles(tui);
+					st.diffCache.clear();
+					void this.ensureDiff(tui);
+					tui.requestRender();
+				});
+			}
+
+			tui.requestRender();
+			return;
+		}
+
+		// ── DIFF VIEW focus ──
+		if (matchesKey(data, Key.escape)) {
+			st.focus = "files";
+			tui.requestRender();
 			return;
 		}
 
 		if (matchesKey(data, Key.up) || data === "k") {
-			if (this.state.selectedIndex > 0) {
-				this.state.selectedIndex -= 1;
-				this.state.diffScrollOffset = 0;
-				void this.loadSelectedDiff(tui);
-			}
+			st.diffScrollOffset = Math.max(0, st.diffScrollOffset - 1);
 		} else if (matchesKey(data, Key.down) || data === "j") {
-			if (this.state.selectedIndex < fileCount - 1) {
-				this.state.selectedIndex += 1;
-				this.state.diffScrollOffset = 0;
-				void this.loadSelectedDiff(tui);
-			}
-		} else if (data === "J" || matchesKey(data, Key.ctrl("d"))) {
-			// Scroll diff down
-			this.state.diffScrollOffset = Math.min(
-				this.state.diffScrollOffset + 5,
-				Math.max(0, diffLines - 5),
-			);
-		} else if (data === "K" || matchesKey(data, Key.ctrl("u"))) {
-			// Scroll diff up
-			this.state.diffScrollOffset = Math.max(0, this.state.diffScrollOffset - 5);
-		} else if (matchesKey(data, Key.pageDown)) {
-			this.state.diffScrollOffset = Math.min(
-				this.state.diffScrollOffset + 20,
-				Math.max(0, diffLines - 5),
-			);
-		} else if (matchesKey(data, Key.pageUp)) {
-			this.state.diffScrollOffset = Math.max(0, this.state.diffScrollOffset - 20);
+			st.diffScrollOffset = Math.min(st.diffScrollOffset + 1, Math.max(0, diffLen - 3));
+		} else if (matchesKey(data, Key.pageUp) || matchesKey(data, Key.ctrl("u"))) {
+			st.diffScrollOffset = Math.max(0, st.diffScrollOffset - 20);
+		} else if (matchesKey(data, Key.pageDown) || matchesKey(data, Key.ctrl("d"))) {
+			st.diffScrollOffset = Math.min(st.diffScrollOffset + 20, Math.max(0, diffLen - 3));
 		} else if (data === "g") {
-			this.state.selectedIndex = 0;
-			this.state.diffScrollOffset = 0;
-			void this.loadSelectedDiff(tui);
+			st.diffScrollOffset = 0;
 		} else if (data === "G") {
-			this.state.selectedIndex = Math.max(0, fileCount - 1);
-			this.state.diffScrollOffset = 0;
-			void this.loadSelectedDiff(tui);
-		} else if (data === "s") {
-			// Stage/unstage file
-			if (file) {
-				const args = file.staged
-					? ["reset", "HEAD", "--", file.path]
-					: ["add", "--", file.path];
-				void this.pi.exec("git", args, { cwd: this.cwd }).then(async () => {
-					// Refresh file list
-					const files = await getChangedFiles(this.pi, this.cwd);
-					this.state.files = files;
-					if (this.state.selectedIndex >= files.length) {
-						this.state.selectedIndex = Math.max(0, files.length - 1);
-					}
-					// Invalidate diff cache for the file
-					this.state.diffCache.delete(file.path);
-					void this.loadSelectedDiff(tui);
-					tui.requestRender();
-				});
-			}
-		} else if (data === "S") {
-			// Stage all
-			void this.pi.exec("git", ["add", "-A"], { cwd: this.cwd }).then(async () => {
-				const files = await getChangedFiles(this.pi, this.cwd);
-				this.state.files = files;
-				this.state.diffCache.clear();
-				if (this.state.selectedIndex >= files.length) {
-					this.state.selectedIndex = Math.max(0, files.length - 1);
-				}
-				void this.loadSelectedDiff(tui);
+			st.diffScrollOffset = Math.max(0, diffLen - 3);
+		} else if (matchesKey(data, Key.left)) {
+			// quick back to file list
+			st.focus = "files";
+		} else if (data === "s" && f) {
+			const args = f.staged ? ["reset", "HEAD", "--", f.path] : ["add", "--", f.path];
+			void this.pi.exec("git", args, { cwd: this.cwd }).then(async () => {
+				await this.refreshFiles(tui);
+				st.diffCache.delete(f.path);
+				void this.ensureDiff(tui);
 				tui.requestRender();
 			});
 		}
@@ -437,134 +372,131 @@ class DiffOverlayUI {
 		tui.requestRender();
 	}
 
-	render(width: number, height: number, theme: OverlayTheme): string[] {
-		const state = this.state;
+	render(w: number, h: number, t: Theme): string[] {
+		const st = this.st;
 
-		// ── Header ──
+		// ── Header (3 lines) ──
 		const header: string[] = [];
-		header.push(...new DynamicBorder((s: string) => theme.fg("accent", s)).render(width));
+		header.push(...new DynamicBorder((s: string) => t.fg("accent", s)).render(w));
 
-		const branchInfo = state.branch
-			? theme.fg("muted", state.branch)
-			: theme.fg("dim", "(detached)");
-		const fileCount = theme.fg("muted", `${state.files.length} file${state.files.length !== 1 ? "s" : ""}`);
-		const stagedCount = state.files.filter((f) => f.staged).length;
-		const stagedInfo = stagedCount > 0
-			? theme.fg("success", ` · ${stagedCount} staged`)
-			: "";
-
-		header.push(
-			`  ${theme.fg("accent", theme.bold("DIFF"))} ${theme.fg("dim", "|")} ${branchInfo} ${theme.fg("dim", "·")} ${fileCount}${stagedInfo}`,
-		);
+		const branch = st.branch ? t.fg("muted", st.branch) : t.fg("dim", "(detached)");
+		const cnt = t.fg("muted", `${st.files.length} file${st.files.length !== 1 ? "s" : ""}`);
+		const staged = st.files.filter((f) => f.staged).length;
+		const stInfo = staged > 0 ? t.fg("success", ` · ${staged} staged`) : "";
+		header.push(`  ${t.fg("accent", t.bold("DIFF"))} ${t.fg("dim", "|")} ${branch} ${t.fg("dim", "·")} ${cnt}${stInfo}`);
 		header.push("");
 
-		// ── Footer ──
+		// ── Footer (3 lines) ──
 		const footer: string[] = [];
 		footer.push("");
-		footer.push(
-			theme.fg("dim", "  ↑/↓ j/k Select  ·  J/K Ctrl+D/U Scroll diff  ·  s Stage  ·  S Stage all  ·  q Close"),
-		);
-		footer.push(...new DynamicBorder((s: string) => theme.fg("accent", s)).render(width));
+		const hint =
+			st.focus === "files"
+				? "  ↑/↓ Select  ·  Enter → Diff  ·  s Stage  ·  S All  ·  q/Esc Close"
+				: "  ↑/↓ Scroll  ·  PgUp/PgDn Fast  ·  ←/Esc → Files  ·  s Stage  ·  q Close";
+		footer.push(t.fg("dim", hint));
+		footer.push(...new DynamicBorder((s: string) => t.fg("accent", s)).render(w));
 
-		// ── Body layout ──
-		const bodyHeight = Math.max(3, height - header.length - footer.length);
-		const dividerWidth = 1;
-		const leftWidth = Math.max(16, Math.min(Math.floor(width * 0.35), 50));
-		const rightWidth = Math.max(10, width - leftWidth - dividerWidth - 2);
+		// ── Body split ──
+		const bodyH = Math.max(3, h - header.length - footer.length);
+		const leftW = Math.max(14, Math.min(Math.floor(w * 0.28), 44));
+		const rightW = Math.max(10, w - leftW - 3); // 3 = " │ "
 
-		// Render panels
-		const leftLines = renderFileList(theme, state, leftWidth, bodyHeight);
-		const rightLines = renderDiffPanel(theme, state, rightWidth, bodyHeight);
+		const leftTitle =
+			st.focus === "files"
+				? t.fg("accent", t.bold(" FILES"))
+				: t.fg("dim", " FILES");
+		const rightTitle =
+			st.focus === "diff"
+				? t.fg("accent", t.bold(" DIFF"))
+				: t.fg("dim", " DIFF");
 
-		// Pad to same height
-		while (leftLines.length < bodyHeight) leftLines.push("");
-		while (rightLines.length < bodyHeight) rightLines.push("");
+		// File header
+		const f = st.files[st.selectedIndex];
+		const fileLabel = f
+			? t.fg(statusColor(f.status), `${icon(f.status)} ${f.path}`)
+			: "";
+		const rightHeader = `${rightTitle} ${fileLabel}`;
 
-		// Compose body with divider
-		const divider = theme.fg("dim", "│");
+		const titleLine = `${truncateToWidth(leftTitle, leftW)}${" ".repeat(Math.max(0, leftW - visibleWidth(leftTitle)))} ${t.fg("dim", "│")} ${truncateToWidth(rightHeader, rightW)}`;
+
+		const sepLeft = t.fg("dim", "─".repeat(leftW));
+		const sepRight = t.fg("dim", "─".repeat(rightW));
+		const separatorLine = `${sepLeft} ${t.fg("dim", "┼")} ${sepRight}`;
+
+		const contentH = Math.max(1, bodyH - 2); // minus title + separator
+		const left = renderFiles(t, st, leftW, contentH);
+		const right = renderDiff(t, st, rightW, contentH);
+
+		while (left.length < contentH) left.push("");
+		while (right.length < contentH) right.push("");
+
 		const body: string[] = [];
-		for (let i = 0; i < bodyHeight; i++) {
-			const left = truncateToWidth(leftLines[i] ?? "", leftWidth);
-			const leftPad = Math.max(0, leftWidth - visibleWidth(left));
-			const right = truncateToWidth(rightLines[i] ?? "", rightWidth);
-			body.push(`${left}${" ".repeat(leftPad)} ${divider} ${right}`);
+		body.push(titleLine);
+		body.push(separatorLine);
+		for (let i = 0; i < contentH; i++) {
+			const l = truncateToWidth(left[i] ?? "", leftW);
+			const pad = Math.max(0, leftW - visibleWidth(l));
+			const r = truncateToWidth(right[i] ?? "", rightW);
+			body.push(`${l}${" ".repeat(pad)} ${t.fg("dim", "│")} ${r}`);
 		}
 
 		return [...header, ...body, ...footer];
 	}
 }
 
-// ─── Extension registration ────────────────────────────────────────────────
+// ─── Extension ─────────────────────────────────────────────────────────────
 
-export default function diffOverlay(pi: ExtensionAPI) {
+export default function diffOverlayExtension(pi: ExtensionAPI) {
 	const handler = async (_args: string, ctx: ExtensionCommandContext) => {
-		const gitRoot = await getGitRoot(pi, ctx.cwd);
-		if (!gitRoot) {
-			if (ctx.hasUI) {
-				ctx.ui.notify("Git repository not found", "error");
-			} else {
-				console.log("Git repository not found");
-			}
+		const root = await gitRoot(pi, ctx.cwd);
+		if (!root) {
+			if (ctx.hasUI) ctx.ui.notify("Not a git repository", "error");
+			else console.log("Not a git repository");
 			return;
 		}
 
 		const [branch, files] = await Promise.all([
-			getCurrentBranch(pi, gitRoot),
-			getChangedFiles(pi, gitRoot),
+			currentBranch(pi, root),
+			changedFiles(pi, root),
 		]);
 
-		const baseBranch = await getBaseBranch(pi, gitRoot);
-
-		const state: DiffState = {
+		const st: DiffState = {
 			files,
 			selectedIndex: 0,
+			fileScrollOffset: 0,
 			diffCache: new Map(),
 			diffScrollOffset: 0,
 			branch,
-			baseBranch,
+			focus: "files",
 			error: null,
 		};
 
 		if (!ctx.hasUI) {
-			// Plain text fallback
-			if (files.length === 0) {
-				console.log("Working tree clean — no changes.");
-				return;
-			}
-			for (const file of files) {
-				const icon = statusIcon(file.status);
-				console.log(`${icon} ${file.path}`);
-			}
+			if (files.length === 0) { console.log("Working tree clean."); return; }
+			for (const f of files) console.log(`${icon(f.status)} ${f.path}`);
 			return;
 		}
 
-		// Pre-load first file's diff
+		// Pre-load first diff
 		if (files.length > 0) {
-			const diff = await getFileDiff(pi, gitRoot, files[0]);
-			state.diffCache.set(files[0].path, diff);
+			st.diffCache.set(files[0].path, await fileDiff(pi, root, files[0]));
 		}
 
 		await ctx.ui.custom<void>(
 			(tui, theme, _kb, done) => {
-				const overlayTui = tui as unknown as OverlayTui;
-				const overlayTheme = theme as unknown as OverlayTheme;
-				const component = new DiffOverlayUI(pi, gitRoot, state, () => done(undefined));
-
+				const o = new DiffOverlay(pi, root, st, () => done(undefined));
 				return {
-					render: (w) => component.render(w, overlayTui.height ?? 40, overlayTheme),
-					handleInput: (data) => component.handleInput(data, overlayTui),
+					render: (w) => o.render(w, (tui as unknown as Tui).height ?? 40, theme as unknown as Theme),
+					handleInput: (data) => o.handleInput(data, tui as unknown as Tui),
 					invalidate: () => {},
 				};
 			},
-			{
-				overlay: true,
-				overlayOptions: { width: "95%", maxHeight: "90%", anchor: "center" },
-			},
+			{ overlay: true, overlayOptions: { width: "95%", maxHeight: "90%", anchor: "center" } },
 		);
 	};
 
 	pi.registerCommand("diff", {
-		description: "Git diff viewer — browse changed files with inline diff",
+		description: "Git diff viewer — split-pane file list + diff with focus switching",
 		handler,
 	});
 }
