@@ -15,9 +15,7 @@ import { truncateToWidth, visibleWidth } from "@mariozechner/pi-tui";
 const IDLE_MS = 5 * 60 * 1000; // 5 minutes
 const EDITOR_POLL_INTERVAL_MS = 300;
 const PURPOSE_ENTRY_TYPE = "purpose:set";
-const MAX_PROGRESS_HISTORY = 30;
 
-type ProgressSnapshot = { text: string; at: number };
 
 // ─── State ─────────────────────────────────────────────────────────────────
 
@@ -28,8 +26,6 @@ let latestCtx: ExtensionContext | null = null;
 let agentRunning = false;
 let overlayActive = false;
 let globalPi: ExtensionAPI;
-
-const progressHistory: ProgressSnapshot[] = [];
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
 
@@ -92,18 +88,6 @@ function readFolder(ctx: ExtensionContext): string {
 	return parts.length > 0 ? parts[parts.length - 1] : cwd || "unknown";
 }
 
-function formatShortTime(ts: number): string {
-	return new Date(ts).toLocaleTimeString("ko-KR", {
-		hour: "2-digit",
-		minute: "2-digit",
-		hour12: false,
-	});
-}
-
-function recentProgress(count: number): ProgressSnapshot[] {
-	return progressHistory.slice(-count);
-}
-
 function centerPad(text: string, width: number): string {
 	const vis = visibleWidth(text);
 	if (vis >= width) return truncateToWidth(text, width);
@@ -143,7 +127,6 @@ function renderScreensaver(
 	height: number,
 	theme: any,
 	title: string,
-	progress: ProgressSnapshot[],
 ): string[] {
 	const fg = (c: string, t: string) => theme.fg(c, t);
 	const bold = (t: string) => theme.bold(t);
@@ -184,24 +167,6 @@ function renderScreensaver(
 	out.push(centerPad(fg(boxColor, boxBottom), width));
 	out.push("");
 
-	// Progress section
-	out.push(centerPad(fg("muted", "Recent progress"), width));
-	out.push(centerPad(fg("dim", "─".repeat(Math.min(innerW, 42))), width));
-	out.push("");
-
-	const recent = progress.slice(-3).reverse();
-	if (recent.length === 0) {
-		out.push(centerPad(fg("dim", "No recent progress"), width));
-	} else {
-		const rowMaxText = Math.max(20, Math.min(innerW - 22, 90));
-		for (const p of recent) {
-			const time = formatShortTime(p.at);
-			const text = truncateToWidth(normalizeLine(p.text), rowMaxText);
-			out.push(centerPad(`${fg("dim", `[${time}]`)} ${fg("muted", text)}`, width));
-		}
-	}
-
-	out.push("");
 	out.push(centerPad(fg("dim", "Press any key to dismiss"), width));
 	out.push("");
 	out.push(...border.render(width));
@@ -288,14 +253,13 @@ async function showScreensaver(): Promise<void> {
 
 	const folderBranch = branchName ? `${folder} / ${branchName}` : folder;
 	const title = purpose || sessionName || folderBranch;
-	const progress = recentProgress(3);
 
 	try {
 		await ctx.ui.custom<void>(
 			(tui, theme, _kb, done) => ({
 				render: (w: number) => {
 					const h = (tui as any).height ?? 32;
-					return renderScreensaver(w, h, theme, title, progress);
+					return renderScreensaver(w, h, theme, title);
 				},
 				handleInput: () => done(undefined),
 				invalidate: () => {},
@@ -317,42 +281,6 @@ async function showScreensaver(): Promise<void> {
 
 export default function idleScreensaver(pi: ExtensionAPI) {
 	globalPi = pi;
-
-	pi.on("tool_call", async (event) => {
-		if (event.toolName !== "set_progress") return undefined;
-		const raw = (event as any).params ?? (event as any).arguments;
-		const text = typeof raw === "string" ? normalizeLine(raw) : normalizeLine(raw?.progress);
-		if (text) {
-			progressHistory.push({ text, at: Date.now() });
-			while (progressHistory.length > MAX_PROGRESS_HISTORY) progressHistory.shift();
-		}
-		return undefined;
-	});
-
-	const recoverProgressFromEntries = (ctx: ExtensionContext) => {
-		try {
-			const entries = ctx.sessionManager.getEntries();
-			for (const entry of entries) {
-				const e = entry as any;
-				if (e?.type !== "message") continue;
-				const msg = e?.message;
-				if (!msg || msg.role !== "assistant") continue;
-				const content = msg.content;
-				if (!Array.isArray(content)) continue;
-
-				for (const c of content) {
-					if (c?.type !== "toolCall" || c?.name !== "set_progress") continue;
-					const args = c.arguments;
-					const text = typeof args === "string" ? normalizeLine(args) : normalizeLine(args?.progress);
-					if (!text) continue;
-					progressHistory.push({ text, at: msg.timestamp ? new Date(msg.timestamp).getTime() : Date.now() });
-				}
-			}
-			while (progressHistory.length > MAX_PROGRESS_HISTORY) progressHistory.shift();
-		} catch {
-			// ignore
-		}
-	};
 
 	pi.on("input", async (event, ctx) => {
 		latestCtx = ctx;
@@ -380,8 +308,6 @@ export default function idleScreensaver(pi: ExtensionAPI) {
 		agentRunning = false;
 		overlayActive = false;
 		latestCtx = ctx;
-		progressHistory.length = 0;
-		recoverProgressFromEntries(ctx);
 		ensureEditorPoller(ctx, true);
 		scheduleIdleTimer();
 	});
@@ -390,8 +316,6 @@ export default function idleScreensaver(pi: ExtensionAPI) {
 		agentRunning = false;
 		overlayActive = false;
 		latestCtx = ctx;
-		progressHistory.length = 0;
-		recoverProgressFromEntries(ctx);
 		ensureEditorPoller(ctx, true);
 		scheduleIdleTimer();
 	});
@@ -403,6 +327,5 @@ export default function idleScreensaver(pi: ExtensionAPI) {
 		agentRunning = false;
 		overlayActive = false;
 		latestCtx = null;
-		progressHistory.length = 0;
 	});
 }
