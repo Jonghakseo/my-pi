@@ -34,7 +34,7 @@ export interface SingleResult {
 	step?: number;
 	liveText?: string;
 	liveToolCalls?: number;
-	progressText?: string;
+	thoughtText?: string;
 }
 
 export interface SubagentDetails {
@@ -63,7 +63,7 @@ export interface CommandRunState {
 	model?: string;
 	removed?: boolean;
 	contextMode?: "main" | "sub";
-	progressText?: string;
+	thoughtText?: string;
 	/** Timestamp of last detected activity (tool call / turn / liveText change). Used for hang detection. */
 	lastActivityAt: number;
 }

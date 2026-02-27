@@ -95,7 +95,7 @@ export function updateRunFromResult(state: CommandRunState, result: SingleResult
 	state.usage = result.usage;
 	state.model = result.model ?? state.model;
 	if (result.usage?.turns != null) state.turnCount = result.usage.turns;
-	if (result.progressText) state.progressText = result.progressText;
+	if (result.thoughtText) state.thoughtText = result.thoughtText;
 
 	const output = getFinalOutput(result.messages);
 	if (output) state.lastOutput = output;

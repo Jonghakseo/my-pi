@@ -416,13 +416,16 @@ function restoreRunsFromSession(store: SubagentStore, ctx: any, pi?: ExtensionAP
 					contextMode: d.contextMode ?? existing?.contextMode,
 					usage: d.usage ?? existing?.usage,
 					model: d.model ?? existing?.model,
-					progressText: d.progressText ?? existing?.progressText,
+					thoughtText: d.thoughtText ?? d.progressText ?? existing?.thoughtText,
 				};
-				// Extract progress and output from content payload
+				// Extract thought/progress and output from content payload
 				const lines = content.split("\n");
-				if (!run.progressText) {
-					const progressLine = lines.find((l: string) => l.startsWith("Result: ") || l.startsWith("Progress: "));
-					if (progressLine) run.progressText = progressLine.replace(/^(Result|Progress): /, "").trim();
+				if (!run.thoughtText) {
+					const thoughtLine = lines.find(
+						(l: string) =>
+							l.startsWith("Thought: ") || l.startsWith("Result: ") || l.startsWith("Progress: "),
+					);
+					if (thoughtLine) run.thoughtText = thoughtLine.replace(/^(Thought|Result|Progress): /, "").trim();
 				}
 				const bodyStart = lines.findIndex((l: string) => l === "") + 1;
 				if (bodyStart > 0 && bodyStart < lines.length) {
@@ -451,7 +454,7 @@ function restoreRunsFromSession(store: SubagentStore, ctx: any, pi?: ExtensionAP
 					contextMode: d.contextMode ?? existing?.contextMode,
 					usage: existing?.usage,
 					model: existing?.model,
-					progressText: d.progressText ?? existing?.progressText,
+					thoughtText: d.thoughtText ?? d.progressText ?? existing?.thoughtText,
 				});
 			}
 		}
@@ -854,7 +857,7 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 						contextMode: runState.contextMode,
 						sessionFile: runState.sessionFile,
 						status: startedState,
-						progressText: runState.progressText,
+						thoughtText: runState.thoughtText,
 					},
 				},
 				{ deliverAs: "followUp", triggerTurn: false },
@@ -924,7 +927,7 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 							`[subagent:${selectedAgent}#${runId}] ${isError ? "failed" : "completed"}` +
 							`\nPrompt: ${truncateLines(taskForDisplay, 2)}` +
 							(usage ? `\nUsage: ${usage}` : "") +
-							(runState.progressText ? `\nResult: ${runState.progressText}` : "") +
+							(runState.thoughtText ? `\nThought: ${runState.thoughtText}` : "") +
 							`\n\n${output}`,
 						display: true,
 						details: {
@@ -939,7 +942,7 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 							usage: result.usage,
 							model: result.model,
 							source: result.agentSource,
-							progressText: runState.progressText,
+							thoughtText: runState.thoughtText,
 							status: runState.status,
 						},
 					};
@@ -1004,7 +1007,7 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 							contextMode: runState.contextMode,
 							sessionFile: runState.sessionFile,
 							error: runState.lastLine,
-							progressText: runState.progressText,
+							thoughtText: runState.thoughtText,
 							status: runState.status,
 						},
 					};
