@@ -387,27 +387,15 @@ export async function runSingleAgent(
 						if (msg.stopReason) currentResult.stopReason = msg.stopReason;
 						if (msg.errorMessage) currentResult.errorMessage = msg.errorMessage;
 
-						// Extract thoughtText: thinking first line → tool call preview fallback
-						{
-							let latestThought: string | undefined;
-							let latestToolPreview: string | undefined;
-							for (const part of msg.content) {
-								if (part.type === "thinking") {
-									const raw = typeof (part as any).thinking === "string" ? (part as any).thinking : "";
-									const firstLine = raw
-										.split("\n")
-										.map((l: string) => l.trim())
-										.filter(Boolean)[0];
-									if (firstLine) latestThought = firstLine.slice(0, 80);
-								}
-								if (part.type === "toolCall") {
-									latestToolPreview = formatToolCallPlain(part.name, part.arguments).slice(0, 80);
-								}
-							}
-							if (latestThought) {
-								currentResult.thoughtText = latestThought;
-							} else if (latestToolPreview) {
-								currentResult.thoughtText = latestToolPreview;
+						// Extract thoughtText from thinking block first line only
+						for (const part of msg.content) {
+							if (part.type === "thinking") {
+								const raw = typeof (part as any).thinking === "string" ? (part as any).thinking : "";
+								const firstLine = raw
+									.split("\n")
+									.map((l: string) => l.trim())
+									.filter(Boolean)[0];
+								if (firstLine) currentResult.thoughtText = firstLine.slice(0, 80);
 							}
 						}
 					}
