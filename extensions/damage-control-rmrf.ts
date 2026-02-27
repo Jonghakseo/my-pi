@@ -24,12 +24,6 @@ function hasRmRf(command: string): boolean {
 }
 
 export default function damageControlRmRf(pi: ExtensionAPI) {
-	pi.on("session_start", async (_event, ctx) => {
-		if (ctx.hasUI) {
-			ctx.ui.notify("🛡️ Damage-Control 활성화: rm -rf 계열 명령은 항상 사용자 확인 필요", "info");
-		}
-	});
-
 	pi.on("tool_call", async (event, ctx) => {
 		if (!isToolCallEventType("bash", event)) return;
 		if (!hasRmRf(event.input.command)) return;
