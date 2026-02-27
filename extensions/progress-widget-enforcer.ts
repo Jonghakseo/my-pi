@@ -153,7 +153,7 @@ export default function (pi: ExtensionAPI) {
 		name: "set_progress",
 		label: "Set Progress",
 		description:
-			"Update one-line progress text shown in a persistent widget. Call this as the FIRST tool call of each agent run. Keep it under 50 characters.",
+			"Update one-line progress text shown in a persistent widget. Optional — call only when you want to communicate meaningful progress. Keep it under 50 characters.",
 		parameters: Type.Object({
 			progress: Type.String({ description: "One-line progress summary of what you are doing now (max 50 chars)" }),
 		}),
