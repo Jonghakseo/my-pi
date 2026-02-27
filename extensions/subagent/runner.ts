@@ -66,7 +66,7 @@ function normalizeAgentAlias(value: string): string {
 
 /**
  * Extract initials from agent name parts.
- * "finder" → "f", "reviewer" → "r", "worker" → "w"
+ * "finder" → "f", "reviewer" → "r", "verifier" → "v", "worker" → "w"
  */
 function getAgentInitials(name: string): string {
 	return name
@@ -117,7 +117,7 @@ export function matchSubCommandAgent(agents: AgentConfig[], token: string): Agen
 	if (prefix.length === 1) return { matchedAgent: prefix[0], ambiguousAgents: [] };
 	if (prefix.length > 1) return { ambiguousAgents: prefix };
 
-	// Initials match: "f" → finder, "r" → reviewer
+	// Initials match: "f" → finder, "r" → reviewer, "v" → verifier
 	const initialsMatch = uniqueAgentsByName(
 		agents.filter((agent) => {
 			const agentInitials = getAgentInitials(agent.name);
@@ -188,7 +188,7 @@ export function getSubCommandAgentCompletions(
 
 /**
  * Compute shortest usable alias for each agent and return a formatted hint string.
- * e.g. "f→finder  w→worker  s→searcher  p→planner  r→reviewer"
+ * e.g. "f→finder  w→worker  s→searcher  p→planner  r→reviewer  v→verifier"
  */
 export function computeAgentAliasHints(agents: AgentConfig[]): string {
 	const hints: string[] = [];

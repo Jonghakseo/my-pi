@@ -19,13 +19,15 @@ export const STALE_PENDING_COMPLETION_MS = 30 * 60 * 1_000;
 
 /**
  * Special-character shortcuts for the >> prefix input.
- * `>>/ task` → finder, `>>? task` → searcher, `>># task` → planner, `>>* task` → reviewer, etc.
+ * `>>/ task` → finder, `>>? task` → searcher, `>># task` → planner,
+ * `>>* task` → reviewer, `>>+ task` → verifier, etc.
  */
 export const AGENT_SYMBOL_MAP: Record<string, string> = {
 	"/": "finder",
 	"?": "searcher",
 	"#": "planner",
 	"*": "reviewer",
+	"+": "verifier",
 	"!": "decider",
 	"@": "browser",
 };
