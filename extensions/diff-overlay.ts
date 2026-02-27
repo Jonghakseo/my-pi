@@ -72,7 +72,7 @@ async function findMergeBase(pi: ExtensionAPI, cwd: string, branch: string): Pro
 	if (symRef.code === 0 && symRef.stdout?.trim()) {
 		const defaultBranch = symRef.stdout.trim().replace(/^origin\//, "");
 		if (defaultBranch !== branch) {
-			const r = await pi.exec("git", ["merge-base", branch, defaultBranch], { cwd });
+			const r = await pi.exec("git", ["merge-base", branch, `origin/${defaultBranch}`], { cwd });
 			if (r.code === 0 && r.stdout?.trim()) {
 				return { commit: r.stdout.trim(), baseBranch: defaultBranch };
 			}
@@ -81,7 +81,7 @@ async function findMergeBase(pi: ExtensionAPI, cwd: string, branch: string): Pro
 
 	for (const base of defaults) {
 		if (base === branch) continue;
-		const r = await pi.exec("git", ["merge-base", branch, base], { cwd });
+		const r = await pi.exec("git", ["merge-base", branch, `origin/${base}`], { cwd });
 		if (r.code === 0 && r.stdout?.trim()) return { commit: r.stdout.trim(), baseBranch: base };
 	}
 	return null;
