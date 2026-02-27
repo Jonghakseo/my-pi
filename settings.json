@@ -1,0 +1,20 @@
+{
+  "lastChangelogVersion": "0.55.1",
+  "defaultThinkingLevel": "xhigh",
+  "defaultProvider": "anthropic",
+  "defaultModel": "claude-opus-4-6",
+  "images": {
+    "blockImages": false
+  },
+  "showHardwareCursor": true,
+  "quietStartup": true,
+  "theme": "dark",
+  "shellPath": "/bin/zsh",
+  "enabledModels": [
+    "*opus-4-6*",
+    "openai-codex/gpt-5.3-codex"
+  ],
+  "hideThinkingBlock": true,
+  "editorPaddingX": 1,
+  "collapseChangelog": true
+}

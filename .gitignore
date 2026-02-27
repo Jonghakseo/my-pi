@@ -1,5 +1,27 @@
-node_modules/
-.DS_Store
-pi-session-*.html
+# Sensitive / credentials
+auth.json
+agents/.env.browser
 
-.context/
+# Session data (large)
+sessions/
+
+# Generated / logs
+daily-analysis/
+daily-retrospective*.log
+pi-crash.log
+.last-pi-retro-*
+
+# Internal pi data
+.pi/
+
+# OS / IDE
+.DS_Store
+
+# Dependencies
+node_modules/
+
+# Extension-specific ignores
+extensions/.context/
+extensions/.gw/
+extensions/pi-session-*.html
+extensions/pnpm-lock.yaml
