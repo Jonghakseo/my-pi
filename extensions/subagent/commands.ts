@@ -147,6 +147,13 @@ async function subTransHandler(args: string, ctx: any, store: SubagentStore, pi:
 		return;
 	}
 	if (!run.sessionFile) {
+		if (run.agent === "parallel") {
+			ctx.ui.notify(
+				`Run #${runId} is a parallel run. Session switching (<> / /sub:trans) is only supported for single-agent runs.`,
+				"warning",
+			);
+			return;
+		}
 		ctx.ui.notify(`Run #${runId} has no session file.`, "error");
 		return;
 	}
