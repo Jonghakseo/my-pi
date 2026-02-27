@@ -3,7 +3,7 @@
  *
  * /files command lists files in the current git tree (plus session-referenced files)
  * and offers quick actions like reveal, open, edit, or diff.
- * /diff is kept as an alias to the same picker.
+ * /diff is a separate extension (diff-overlay.ts) for git diff viewing.
  */
 
 import { spawnSync } from "node:child_process";
