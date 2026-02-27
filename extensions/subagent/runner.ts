@@ -395,7 +395,15 @@ export async function runSingleAgent(
 									.split("\n")
 									.map((l: string) => l.trim())
 									.filter(Boolean)[0];
-								if (firstLine) currentResult.thoughtText = firstLine.slice(0, 80);
+								if (firstLine) {
+									// Strip markdown: **bold**, *italic*, `code`, # headers
+									const clean = firstLine
+										.replace(/^#+\s*/, "")
+										.replace(/\*{1,3}([^*]+)\*{1,3}/g, "$1")
+										.replace(/`([^`]+)`/g, "$1")
+										.trim();
+									if (clean) currentResult.thoughtText = clean.slice(0, 80);
+								}
 							}
 						}
 					}
