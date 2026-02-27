@@ -491,7 +491,7 @@ export default function diffOverlayExtension(pi: ExtensionAPI) {
 					invalidate: () => {},
 				};
 			},
-			{ overlay: true, overlayOptions: { width: "95%", maxHeight: "90%", anchor: "center" } },
+			{ overlay: true, overlayOptions: { width: "95%", maxHeight: "80%", anchor: "center" } },
 		);
 	};
 
