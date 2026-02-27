@@ -358,6 +358,9 @@ export default function (pi: ExtensionAPI) {
 		firstAsyncLaunchAbortTriggeredInSession = true;
 		// Hard-stop only once per session (or after mode switch): immediately after the first async subagent launch.
 		// Applies only in delegation modes (agents/master), never in default mode.
+		if (ctx.hasUI) {
+			ctx.ui.notify("환각 방지: 첫 subagent 호출 이후 메인 응답을 강제 abort합니다.", "info");
+		}
 		ctx.abort();
 	});
 
