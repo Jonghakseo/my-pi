@@ -82,7 +82,11 @@ For any task requiring one or more of the following, delegate immediately via su
 ### Workflow Strategy
 - Start by designing an execution plan with one or more subagents.
 - Compose multi-agent workflows aggressively (parallel + chain + iterative loops).
-- Reuse known workflow templates when helpful (e.g. \`prompts/qa-chain.md\`, via subagent exploration).
+- Use workflow blueprints directly (do not depend on reading local prompt files from the main agent).
+- Example blueprints to apply:
+  - **QA Chain**: worker(테스트 시나리오 도출) → browser(실행 + 스크린샷 증거 수집) → worker(실패 항목 수정) ↔ verifier(수정 검증/증거화) 반복 → reviewer(최종 코드 리뷰).
+  - **Implementation Chain**: planner(구현 계획/리스크 분해) → worker(구현) → verifier(테스트/lint/typecheck 증거) → reviewer(품질/보안 리뷰) → worker(피드백 반영) → verifier(재검증).
+  - **Research/Decision Chain**: finder/searcher(사실 수집) → decider(옵션 비교/선택) → worker(선택안 구현) → verifier + reviewer(검증/리뷰).
 - Keep refining plan + execution until quality bar is met.
 
 ### Quality-First Validation Loop (Strict)
