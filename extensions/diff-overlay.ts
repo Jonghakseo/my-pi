@@ -4,8 +4,8 @@
  * Split-pane view: file list (left) + diff viewer (right).
  * Two focus modes — arrow keys work naturally in whichever panel is active.
  *
- *   FILE LIST mode  │  ↑/↓ select file · Enter → open diff · o open file · q close
- *   DIFF VIEW mode  │  ↑/↓ scroll diff · PgUp/PgDn fast scroll · o open file · Esc → back to files
+ *   FILE LIST mode  │  ↑/↓ select file · Enter → open diff · o open file · f reveal · S stash · q close
+ *   DIFF VIEW mode  │  ↑/↓ scroll diff · PgUp/PgDn fast scroll · o open file · f reveal · S stash · Esc → files
  */
 
 import path from "node:path";
@@ -334,6 +334,40 @@ class DiffOverlay {
 		this.st.error = r.code === 0 ? null : (r.stderr?.trim() || `Failed to open ${file.path}`);
 	}
 
+	private async revealSelectedFile(file: DiffFile): Promise<void> {
+		const filePath = path.isAbsolute(file.path) ? file.path : path.resolve(this.cwd, file.path);
+		const command = process.platform === "darwin" ? "open" : "xdg-open";
+		const args = process.platform === "darwin" ? ["-R", filePath] : [path.dirname(filePath)];
+		const r = await this.pi.exec(command, args, { cwd: this.cwd });
+		this.st.error = r.code === 0 ? null : (r.stderr?.trim() || `Failed to reveal ${file.path}`);
+	}
+
+	private async refreshFiles(): Promise<void> {
+		const files = await changedFiles(this.pi, this.cwd, this.st.mergeBase);
+		this.st.files = files;
+		if (files.length === 0) {
+			this.st.selectedIndex = 0;
+			this.st.fileScrollOffset = 0;
+			this.st.diffScrollOffset = 0;
+			this.st.focus = "files";
+			return;
+		}
+		this.st.selectedIndex = Math.min(this.st.selectedIndex, files.length - 1);
+	}
+
+	private async stashChanges(tui: Tui): Promise<void> {
+		const r = await this.pi.exec("git", ["stash", "push", "-u"], { cwd: this.cwd });
+		if (r.code !== 0) {
+			this.st.error = r.stderr?.trim() || "Failed to stash changes";
+			return;
+		}
+
+		this.st.error = null;
+		this.st.diffCache.clear();
+		await this.refreshFiles();
+		void this.ensureDiff(tui);
+	}
+
 	handleInput(data: string, tui: Tui): void {
 		const st = this.st;
 		const n = st.files.length;
@@ -343,6 +377,10 @@ class DiffOverlay {
 		// ── Global keys ──
 		if (data === "q") {
 			this.done();
+			return;
+		}
+		if (data === "S") {
+			void this.stashChanges(tui).then(() => tui.requestRender());
 			return;
 		}
 
@@ -380,6 +418,8 @@ class DiffOverlay {
 				}
 			} else if (data === "o" && f) {
 				void this.openSelectedFile(f).then(() => tui.requestRender());
+			} else if (data === "f" && f) {
+				void this.revealSelectedFile(f).then(() => tui.requestRender());
 			}
 
 			tui.requestRender();
@@ -410,6 +450,8 @@ class DiffOverlay {
 			st.focus = "files";
 		} else if (data === "o" && f) {
 			void this.openSelectedFile(f).then(() => tui.requestRender());
+		} else if (data === "f" && f) {
+			void this.revealSelectedFile(f).then(() => tui.requestRender());
 		}
 
 		tui.requestRender();
@@ -433,8 +475,8 @@ class DiffOverlay {
 		footer.push(st.error ? t.fg("error", `  ${st.error}`) : "");
 		const hint =
 			st.focus === "files"
-				? "  ↑/↓ Select  ·  Enter → Diff  ·  o Open  ·  q/Esc Close"
-				: "  ↑/↓ Scroll  ·  PgUp/PgDn Fast  ·  o Open  ·  ←/Esc → Files  ·  q Close";
+				? "  ↑/↓ Select  ·  Enter → Diff  ·  o Open  ·  f Finder  ·  S Stash  ·  q/Esc Close"
+				: "  ↑/↓ Scroll  ·  PgUp/PgDn Fast  ·  o Open  ·  f Finder  ·  S Stash  ·  ←/Esc → Files  ·  q Close";
 		footer.push(t.fg("dim", hint));
 		footer.push(...new DynamicBorder((s: string) => t.fg("accent", s)).render(w));
 
