@@ -38,7 +38,7 @@ Custom extensions for the pi coding agent. All extensions are written in TypeScr
 ├── github-overlay.ts      # GitHub PR view overlay (gh CLI integration)
 ├── minimal-mode.ts        # Compact tool output rendering (collapsed/expanded toggle)
 ├── pipi-footer.ts         # Custom footer UI (model, branch, context bar)
-├── progress-widget-enforcer.ts  # set_progress tool injection (agent mode aware)
+├── working-text.ts              # Spinner working message (funny text + elapsed time)
 ├── purpose.ts             # Session purpose top-overlay + purpose guard/tool/command
 ├── session-replay.ts      # Session replay overlay UI
 ├── status-overlay.ts      # /status — skills, tools & extensions list overlay

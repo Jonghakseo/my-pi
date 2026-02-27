@@ -8,7 +8,7 @@ const PURPOSE_COMMAND_NAME = "purpose";
 const LEGACY_WIDGET_KEY = "purpose";
 // Backward-compat alias for old builds that referenced WIDGET_KEY directly.
 const WIDGET_KEY = LEGACY_WIDGET_KEY;
-const ALLOWED_TOOLS_WHEN_EMPTY = new Set<string>([PURPOSE_TOOL_NAME, "set_progress"]);
+const ALLOWED_TOOLS_WHEN_EMPTY = new Set<string>([PURPOSE_TOOL_NAME]);
 
 type PurposeEntryData = {
 	purpose: string;

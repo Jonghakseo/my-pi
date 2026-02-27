@@ -3,8 +3,7 @@
  *
  * Each extension is loaded via a separate jiti instance (`moduleCache: false`),
  * so a plain module-level `let` variable creates isolated copies per extension.
- * `system-mode/index.ts` writes to one copy while `progress-widget-enforcer.ts`
- * reads from another — the badge never sees `true`.
+ * One extension writes while another reads — the flag never propagates.
  *
  * Fix: store the flag on `globalThis` behind a `Symbol.for()` key so every
  * module evaluation (regardless of jiti instance) shares the same object.

@@ -400,7 +400,7 @@ export async function runSingleAgent(
 										.filter(Boolean)[0];
 									if (firstLine) latestThought = firstLine.slice(0, 80);
 								}
-								if (part.type === "toolCall" && part.name !== "set_progress") {
+								if (part.type === "toolCall") {
 									latestToolPreview = formatToolCallPlain(part.name, part.arguments).slice(0, 80);
 								}
 							}
