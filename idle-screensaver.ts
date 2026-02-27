@@ -12,7 +12,8 @@ import { truncateToWidth, visibleWidth } from "@mariozechner/pi-tui";
 
 // ─── Config ────────────────────────────────────────────────────────────────
 
-const IDLE_MS = 10 * 60 * 1000; // 10 minutes
+const IDLE_MS = 5 * 60 * 1000; // 5 minutes
+const EDITOR_POLL_INTERVAL_MS = 300;
 const PURPOSE_ENTRY_TYPE = "purpose:set";
 const MAX_PROGRESS_HISTORY = 30;
 
@@ -21,6 +22,8 @@ type ProgressSnapshot = { text: string; at: number };
 // ─── State ─────────────────────────────────────────────────────────────────
 
 let idleTimer: ReturnType<typeof setTimeout> | null = null;
+let editorPollTimer: ReturnType<typeof setInterval> | null = null;
+let lastEditorText = "";
 let latestCtx: ExtensionContext | null = null;
 let agentRunning = false;
 let overlayActive = false;
@@ -163,21 +166,26 @@ function renderScreensaver(
 	const boxTop = `╔${"═".repeat(boxInner + 2)}╗`;
 	const boxBottom = `╚${"═".repeat(boxInner + 2)}╝`;
 	const blankRow = `║ ${" ".repeat(boxInner)} ║`;
+	const boxColor = "warning";
 
-	out.push(centerPad(fg("accent", boxTop), width));
-	out.push(centerPad(fg("accent", blankRow), width));
+	out.push(centerPad(fg(boxColor, boxTop), width));
+	out.push(centerPad(fg(boxColor, blankRow), width));
 	for (const raw of titleLines) {
 		const clipped = truncateToWidth(raw, boxInner);
-		const pad = " ".repeat(Math.max(0, boxInner - visibleWidth(clipped)));
-		const row = `║ ${bold(clipped)}${pad} ║`;
-		out.push(centerPad(fg("accent", row), width));
+		const textWidth = visibleWidth(clipped);
+		const leftPadLen = Math.max(0, Math.floor((boxInner - textWidth) / 2));
+		const rightPadLen = Math.max(0, boxInner - textWidth - leftPadLen);
+		const leftPad = " ".repeat(leftPadLen);
+		const rightPad = " ".repeat(rightPadLen);
+		const row = `${fg(boxColor, "║ ")}${leftPad}${fg("accent", bold(clipped))}${rightPad}${fg(boxColor, " ║")}`;
+		out.push(centerPad(row, width));
 	}
-	out.push(centerPad(fg("accent", blankRow), width));
-	out.push(centerPad(fg("accent", boxBottom), width));
+	out.push(centerPad(fg(boxColor, blankRow), width));
+	out.push(centerPad(fg(boxColor, boxBottom), width));
 	out.push("");
 
 	// Progress section
-	out.push(centerPad(fg("warning", bold(" RECENT PROGRESS ")), width));
+	out.push(centerPad(fg("muted", "Recent progress"), width));
 	out.push(centerPad(fg("dim", "─".repeat(Math.min(innerW, 42))), width));
 	out.push("");
 
@@ -198,10 +206,9 @@ function renderScreensaver(
 	out.push("");
 	out.push(...border.render(width));
 
-	// vertical center
+	// top-align content (avoid large blank area above header)
 	if (out.length < height) {
-		const topPad = Math.floor((height - out.length) / 2);
-		const padded = [...Array(topPad).fill(""), ...out];
+		const padded = [...out];
 		while (padded.length < height) padded.push("");
 		return padded;
 	}
@@ -210,6 +217,44 @@ function renderScreensaver(
 }
 
 // ─── Timer control ─────────────────────────────────────────────────────────
+
+function readEditorText(ctx: ExtensionContext): string {
+	if (!ctx.hasUI) return "";
+	try {
+		const text = ctx.ui.getEditorText();
+		return typeof text === "string" ? text : "";
+	} catch {
+		return "";
+	}
+}
+
+function clearEditorPoller() {
+	if (!editorPollTimer) return;
+	clearInterval(editorPollTimer);
+	editorPollTimer = null;
+}
+
+function ensureEditorPoller(ctx: ExtensionContext, forceRestart = false) {
+	if (!ctx.hasUI) {
+		clearEditorPoller();
+		lastEditorText = "";
+		return;
+	}
+	if (forceRestart) clearEditorPoller();
+	if (editorPollTimer) return;
+
+	lastEditorText = readEditorText(ctx);
+	editorPollTimer = setInterval(() => {
+		const activeCtx = latestCtx;
+		if (!activeCtx?.hasUI || overlayActive || agentRunning) return;
+
+		const currentEditorText = readEditorText(activeCtx);
+		if (currentEditorText === lastEditorText) return;
+
+		lastEditorText = currentEditorText;
+		scheduleIdleTimer();
+	}, EDITOR_POLL_INTERVAL_MS);
+}
 
 function clearIdleTimer() {
 	if (!idleTimer) return;
@@ -257,7 +302,7 @@ async function showScreensaver(): Promise<void> {
 			}),
 			{
 				overlay: true,
-				overlayOptions: { width: "92%", maxHeight: "86%", anchor: "center" },
+				overlayOptions: { width: "92%", maxHeight: "75%", anchor: "center" },
 			},
 		);
 	} catch {
@@ -311,6 +356,7 @@ export default function idleScreensaver(pi: ExtensionAPI) {
 
 	pi.on("input", async (event, ctx) => {
 		latestCtx = ctx;
+		ensureEditorPoller(ctx);
 		if (event.source !== "extension") {
 			scheduleIdleTimer();
 		}
@@ -326,6 +372,7 @@ export default function idleScreensaver(pi: ExtensionAPI) {
 	pi.on("agent_end", async (_event, ctx) => {
 		agentRunning = false;
 		latestCtx = ctx;
+		ensureEditorPoller(ctx);
 		scheduleIdleTimer();
 	});
 
@@ -335,6 +382,7 @@ export default function idleScreensaver(pi: ExtensionAPI) {
 		latestCtx = ctx;
 		progressHistory.length = 0;
 		recoverProgressFromEntries(ctx);
+		ensureEditorPoller(ctx, true);
 		scheduleIdleTimer();
 	});
 
@@ -344,11 +392,14 @@ export default function idleScreensaver(pi: ExtensionAPI) {
 		latestCtx = ctx;
 		progressHistory.length = 0;
 		recoverProgressFromEntries(ctx);
+		ensureEditorPoller(ctx, true);
 		scheduleIdleTimer();
 	});
 
 	pi.on("session_shutdown", async () => {
 		clearIdleTimer();
+		clearEditorPoller();
+		lastEditorText = "";
 		agentRunning = false;
 		overlayActive = false;
 		latestCtx = null;
