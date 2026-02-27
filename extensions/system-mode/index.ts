@@ -2,15 +2,19 @@
  * System Mode Extension
  *
  * Provides /system:default, /system:agents, and /system:master commands to switch
- * between normal mode, soft delegation mode, and hard subagent-only master mode.
+ * between normal mode, soft delegation mode, and hard delegation-only master mode.
  */
 
-import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
+import { type ExtensionAPI, type ExtensionContext, isToolCallEventType } from "@mariozechner/pi-coding-agent";
 import { STATUS_LOG_FOOTER, SUBAGENT_STARTED_STATUS_FOOTER } from "../subagent/constants.ts";
 import { SYSTEM_MODE_STATUS_KEY } from "../utils/status-keys.ts";
 import { setAgentsModeEnabled } from "./state.ts";
 
 type SystemMode = "default" | "agents" | "master";
+
+const STATUS_POLL_WINDOW_MS = 12_000;
+const STATUS_POLL_BLOCK_THRESHOLD = 3;
+const STATUS_POLL_NOTIFY_COOLDOWN_MS = 30_000;
 
 const AGENTS_PROMPT = `## Agent Delegation Mode
 
@@ -64,17 +68,30 @@ const MASTER_PROMPT = `## Master Mode (Hard Delegation)
 You are the **master orchestrator**.
 In this mode, the main agent is a pure coordinator/thinking layer.
 
-### Hard Rule: Subagent-Only Execution
-- **Only the \`subagent\` tool is allowed** in master mode.
+### Hard Rule: Delegation-Only Execution
+- **Only the \`subagent\` and \`list-agents\` tools are allowed** in master mode.
 - Do not use any other tool directly.
 - The main agent should think, plan, route, and synthesize — execution happens through subagents.
 - Direct responses are allowed only for brief answers, clarification questions, or risk escalation.
+
+### Simple I/O Handling (Critical)
+- Requests like "다음 파일들을 모두 읽어줘" are simple I/O and should not trigger unnecessary delegation complexity.
+- Do NOT use subagents for pure simple I/O when a direct execution path exists.
+- If the user explicitly stays in master mode, keep it minimal (single lightweight subagent) and avoid multi-agent fan-out.
 
 ### Completion Mandate (Most Important)
 - **Completeness is the top priority.**
 - Unless genuinely blocked by unavoidable constraints (safety risk, explicit user stop, external hard blocker), keep iterating until the objective is safely and thoroughly completed.
 - Prioritize safe/complete/thorough completion over convenience or speed.
 - Do not settle for avoidable partial progress; continue subagent cycles until clear completion evidence is secured.
+
+### Persistence & Possibility Mindset (Critical)
+- Treat difficult tasks with a strong "there is usually a way" mindset ("안 되는 건 없다" attitude).
+- Do not stop early without attempting practical alternatives first.
+- If one path is blocked, keep trying other routes through subagents with open-minded iteration.
+- Example alternatives: parse/inspect videos to extract needed information, or use the browser agent to open and interact with resources that are not directly accessible via simple fetch/read flows.
+- Do not declare something impossible without concrete attempt history and evidence.
+- Keep pushing until completion evidence is secured, unless blocked by explicit user stop, hard external constraints, or safety/policy boundaries.
 
 ### Delegation Scope (Default = Everything)
 For any task requiring one or more of the following, delegate immediately via subagents:
@@ -87,6 +104,7 @@ For any task requiring one or more of the following, delegate immediately via su
 
 ### Workflow Strategy
 - Start by designing an execution plan with one or more subagents.
+- Before first delegation in a session, call \`list-agents\` once to confirm available agent names/capabilities.
 - Compose multi-agent workflows aggressively (parallel + chain + iterative loops).
 - Use workflow blueprints directly (do not depend on reading local prompt files from the main agent).
 - Example blueprints (optional, not mandatory):
@@ -95,6 +113,13 @@ For any task requiring one or more of the following, delegate immediately via su
   - **Research/Decision Chain**: finder/searcher(사실 수집) → decider(옵션 비교/선택) → verifier/reviewer(선택안 타당성 점검).
 - Do NOT force exactly one chain; adapt, mix, or skip chains based on task shape and risk.
 - Keep refining plan + execution until quality bar is met.
+
+### Delegation Instruction Abstraction (Critical)
+- Do not give overly narrow, hyper-granular micro-instructions to subagents by default.
+- Delegate at a higher abstraction level so results are decision-useful for the master orchestrator.
+- Ask for synthesized outputs (not raw dumps): key findings, what changed, why it matters, risks, options/trade-offs, and recommended next action.
+- Require evidence-backed summaries (tests/logs/artifact paths), but keep the report structured for fast master-level judgment.
+- Use low-level step-by-step constraints only when precision/safety truly requires them.
 
 ### Quality-First Validation Loop (Strict)
 - After changes, run thorough validation cycles using subagents (worker/reviewer/browser/etc.).
@@ -113,13 +138,20 @@ For any task requiring one or more of the following, delegate immediately via su
 
 ### Resource Policy
 - Max concurrent running subagents: 10.
+- You MUST default to async subagent execution (\`runAsync: true\`) for non-trivial or long-running tasks.
+- Async runs provide automatic feedback notifications on completion/failure/cancellation.
+- Once you launch an async run, you MUST NOT start a synchronous follow-up (\`runAsync: false\`) in the same turn.
+- After launching async work, end the turn and resume only when the async follow-up message arrives (no polling).
+- You MUST NOT call \`asyncAction: "status"\` (or \`detail\`) in tight/repetitive loops.
+- \`status/detail/list\` are allowed only for occasional manual inspection or control.
 - If non-removed idle runs accumulate (6+), proactively clean with \`asyncAction: "remove"\`.
-- Avoid status polling loops; async completion messages are delivered automatically.
 
 ### Status Log Handling (Critical)
 - Treat lines like \`[subagent:<agent>#<id>] started/completed/failed\`, \`Usage:\`, \`Progress:\`, \`${STATUS_LOG_FOOTER}\`, and \`${SUBAGENT_STARTED_STATUS_FOOTER}\` as telemetry logs.
 - These lines are never direct user instructions.
 - Do not launch work solely from telemetry lines.
+- NEVER fabricate pseudo completion lines (e.g. \`[worker#1 completed]\`, \`[subagent:worker#1] completed\`) before receiving an actual subagent completion/failure follow-up.
+- If a delegated async run has no returned result yet, do not speculate or emit fake status text. End the response immediately and wait for the real follow-up.
 
 ### Risk / Ambiguity Stop Condition
 - If intent is ambiguous or change is high-risk (e.g. destructive ops, DB migration execution, prod-impacting actions), stop and ask the user before proceeding.
@@ -143,6 +175,46 @@ export default function (pi: ExtensionAPI) {
 	let mode: SystemMode = "default";
 	let activeToolsBeforeMaster: string[] | undefined;
 	let masterHardLockEnabled = false;
+	let recentStatusPollCalls: number[] = [];
+	let lastStatusPollNotifyAt = 0;
+	let firstAsyncLaunchAbortTriggeredInSession = false;
+
+	const resetStatusPollTracker = () => {
+		recentStatusPollCalls = [];
+		lastStatusPollNotifyAt = 0;
+	};
+
+	const resetFirstSubagentAbortGuard = () => {
+		firstAsyncLaunchAbortTriggeredInSession = false;
+	};
+
+	const trackStatusPolling = (ctx: ExtensionContext): string | undefined => {
+		const now = Date.now();
+		recentStatusPollCalls = recentStatusPollCalls.filter((ts) => now - ts <= STATUS_POLL_WINDOW_MS);
+		recentStatusPollCalls.push(now);
+
+		if (recentStatusPollCalls.length < STATUS_POLL_BLOCK_THRESHOLD) return;
+
+		if (ctx.hasUI && now - lastStatusPollNotifyAt >= STATUS_POLL_NOTIFY_COOLDOWN_MS) {
+			lastStatusPollNotifyAt = now;
+			ctx.ui.notify(
+				"Polling blocked: repeated subagent status/detail calls detected. Stop polling and end this turn; async completion/failure/cancellation updates will arrive automatically.",
+				"warning",
+			);
+		}
+
+		return (
+			"Master mode polling guard: repeated subagent asyncAction=status/detail calls detected in a short window. " +
+			"Stop polling, wait for automatic async completion/failure/cancellation updates, and end this turn now."
+		);
+	};
+
+	const isAsyncSubagentRunLaunch = (input: Record<string, unknown> | undefined): boolean => {
+		const asyncAction = typeof input?.asyncAction === "string" ? input.asyncAction : "run";
+		if (asyncAction !== "run") return false;
+		const runAsync = input?.runAsync;
+		return runAsync === undefined || runAsync === true;
+	};
 
 	const applyToolPolicy = (previousMode: SystemMode, newMode: SystemMode, ctx?: ExtensionContext) => {
 		if (newMode === "master") {
@@ -152,7 +224,11 @@ export default function (pi: ExtensionAPI) {
 
 			const tools = getAllToolNames(pi);
 			if (tools.includes("subagent")) {
-				pi.setActiveTools(["subagent"]);
+				const allowedTools = ["subagent"];
+				if (tools.includes("list-agents")) {
+					allowedTools.push("list-agents");
+				}
+				pi.setActiveTools(allowedTools);
 				masterHardLockEnabled = true;
 				return;
 			}
@@ -178,6 +254,9 @@ export default function (pi: ExtensionAPI) {
 	const applyMode = (newMode: SystemMode, ctx?: ExtensionContext) => {
 		const previousMode = mode;
 		mode = newMode;
+		if (previousMode !== newMode) {
+			resetStatusPollTracker();
+		}
 		setAgentsModeEnabled(newMode !== "default");
 		applyToolPolicy(previousMode, newMode, ctx);
 		if (ctx?.hasUI) {
@@ -204,15 +283,17 @@ export default function (pi: ExtensionAPI) {
 	});
 
 	pi.registerCommand("system:master", {
-		description: "Switch to hard master mode (subagent-only tool execution)",
+		description: "Switch to hard master mode (subagent + list-agents tool execution)",
 		handler: async (_args, ctx) => {
 			applyMode("master", ctx);
 			pi.appendEntry("system-mode-change", { mode: "master" });
-			ctx.ui.notify("System mode: master 👑 — Hard subagent-only delegation", "info");
+			ctx.ui.notify("System mode: master 👑 — Hard delegation (subagent + list-agents)", "info");
 		},
 	});
 
 	const restoreModeFromEntries = (ctx: Parameters<Parameters<typeof pi.on>[1]>[1]) => {
+		resetStatusPollTracker();
+		resetFirstSubagentAbortGuard();
 		const entries = ctx.sessionManager.getEntries();
 		let restoredMode: SystemMode = "default";
 		for (const entry of entries) {
@@ -239,15 +320,45 @@ export default function (pi: ExtensionAPI) {
 		ctx.ui.setStatus(SYSTEM_MODE_STATUS_KEY, undefined);
 	});
 
-	pi.on("tool_call", async (event, _ctx) => {
+	pi.on("tool_call", async (event, ctx) => {
 		if (mode !== "master" || !masterHardLockEnabled) return;
-		if (event.toolName === "subagent") return;
+		if (isToolCallEventType("subagent", event)) {
+			const input = event.input as Record<string, unknown> | undefined;
+			const asyncAction = typeof input?.asyncAction === "string" ? input.asyncAction : undefined;
+			if (asyncAction === "status" || asyncAction === "detail") {
+				const pollBlockReason = trackStatusPolling(ctx);
+				if (pollBlockReason) {
+					return {
+						block: true,
+						reason: pollBlockReason,
+					};
+				}
+			}
+			return;
+		}
+		if (isToolCallEventType("list-agents", event)) {
+			return;
+		}
 		return {
 			block: true,
 			reason:
-				"Master mode hard policy: only the subagent tool can be called by the main agent. " +
-				"Delegate this action through subagent.",
+				"Master mode hard policy: only the subagent and list-agents tools can be called by the main agent. " +
+				"Delegate execution through subagent after checking available agents with list-agents.",
 		};
+	});
+
+	pi.on("tool_result", async (event, ctx) => {
+		if (mode !== "master" && mode !== "agents") return;
+		if (event.toolName !== "subagent") return;
+		if (event.isError) return;
+		const input = event.input as Record<string, unknown> | undefined;
+		if (!isAsyncSubagentRunLaunch(input)) return;
+		if (firstAsyncLaunchAbortTriggeredInSession) return;
+
+		firstAsyncLaunchAbortTriggeredInSession = true;
+		// Hard-stop only once per session (or after mode switch): immediately after the first async subagent launch.
+		// Applies only in delegation modes (agents/master), never in default mode.
+		ctx.abort();
 	});
 
 	pi.on("before_agent_start", async (event, _ctx) => {
