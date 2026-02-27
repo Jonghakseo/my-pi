@@ -66,6 +66,12 @@ export const PLACEHOLDER_RUNNING_EXIT_CODE = -1;
 export const SUBVIEW_OVERLAY_WIDTH = "95%";
 export const SUBVIEW_OVERLAY_MAX_HEIGHT = "95%";
 
+/** Hard cap for simultaneously running async subagent runs. */
+export const MAX_CONCURRENT_ASYNC_SUBAGENT_RUNS = 10;
+
+/** Warn when non-removed idle runs (done/error) pile up to this count or more. */
+export const IDLE_RUN_WARNING_THRESHOLD = 6;
+
 // ─── replay.ts ─────────────────────────────────────────────────────────────
 
 export const ELLIPSIS_RESERVED_CHARS = 3;

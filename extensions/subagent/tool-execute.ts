@@ -9,7 +9,13 @@ import * as fs from "node:fs";
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import type { AgentConfig, AgentScope } from "./agents.js";
 import { discoverAgents } from "./agents.js";
-import { DEFAULT_TURN_COUNT, PLACEHOLDER_RUNNING_EXIT_CODE, STATUS_OUTPUT_PREVIEW_MAX_CHARS } from "./constants.js";
+import {
+	DEFAULT_TURN_COUNT,
+	IDLE_RUN_WARNING_THRESHOLD,
+	MAX_CONCURRENT_ASYNC_SUBAGENT_RUNS,
+	PLACEHOLDER_RUNNING_EXIT_CODE,
+	STATUS_OUTPUT_PREVIEW_MAX_CHARS,
+} from "./constants.js";
 import {
 	formatContextUsageBar,
 	formatUsageStats,
@@ -163,6 +169,32 @@ function formatRunDetailOutput(run: CommandRunState): string {
 	return lines.join("\n");
 }
 
+function getRunCounts(store: SubagentStore): { running: number; idle: number } {
+	const dedupedRunning = new Map<number, CommandRunState>();
+
+	for (const [runId, run] of store.commandRuns) {
+		if (run.removed) continue;
+		dedupedRunning.set(runId, run);
+	}
+
+	for (const [runId, entry] of store.globalLiveRuns) {
+		if (entry.runState.removed) continue;
+		dedupedRunning.set(runId, entry.runState);
+	}
+
+	const running = Array.from(dedupedRunning.values()).filter((run) => run.status === "running").length;
+	const idle = Array.from(store.commandRuns.values()).filter((run) => !run.removed && run.status !== "running").length;
+	return { running, idle };
+}
+
+function formatIdleRunWarning(idleRunCount: number): string {
+	return (
+		`⚠️ Idle subagent runs: ${idleRunCount}. ` +
+		`removed되지 않은 완료/오류 run이 ${IDLE_RUN_WARNING_THRESHOLD}개 이상입니다. ` +
+		`필요 없는 run은 asyncAction:"remove"로 정리하세요.`
+	);
+}
+
 /** Return type for the subagent execute function (extends AgentToolResult with optional isError). */
 type SubagentExecuteResult = {
 	content: { type: "text"; text: string }[];
@@ -225,6 +257,17 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 				results,
 			});
 
+		const runCounts = getRunCounts(store);
+		const idleRunWarning =
+			runCounts.idle >= IDLE_RUN_WARNING_THRESHOLD ? formatIdleRunWarning(runCounts.idle) : undefined;
+
+		if (idleRunWarning && ctx.hasUI) {
+			ctx.ui.notify(idleRunWarning, "warning");
+		}
+
+		const withIdleRunWarning = (text: string): string =>
+			idleRunWarning ? `${idleRunWarning}\n\n${text}` : text;
+
 		const asyncAction = asyncActionRequested;
 
 		if (asyncAction !== "run") {
@@ -232,7 +275,7 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 				const runs = Array.from(store.commandRuns.values()).sort((a, b) => b.id - a.id);
 				if (runs.length === 0) {
 					return {
-						content: [{ type: "text", text: "No subagent runs found." }],
+						content: [{ type: "text", text: withIdleRunWarning("No subagent runs found.") }],
 						details: makeDetails("single")([]),
 					};
 				}
@@ -244,7 +287,7 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 					return `${formatCommandRunSummary(run)}${usageSuffix}\n  ${taskPreview}`;
 				});
 				return {
-					content: [{ type: "text", text: `Subagent runs\n\n${lines.join("\n\n")}` }],
+					content: [{ type: "text", text: withIdleRunWarning(`Subagent runs\n\n${lines.join("\n\n")}`) }],
 					details: makeDetails("single")([]),
 				};
 			}
@@ -381,7 +424,23 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 		if (runAsync) {
 			if (!hasSingle || hasChain || hasTasks || !params.task) {
 				return {
-					content: [{ type: "text", text: "runAsync currently supports single mode only (agent + task)." }],
+					content: [{ type: "text", text: withIdleRunWarning("runAsync currently supports single mode only (agent + task).") }],
+					details: makeDetails("single")([]),
+					isError: true,
+				};
+			}
+
+			if (runCounts.running >= MAX_CONCURRENT_ASYNC_SUBAGENT_RUNS) {
+				return {
+					content: [
+						{
+							type: "text",
+							text: withIdleRunWarning(
+								`Too many running subagent runs (${runCounts.running}). Max is ${MAX_CONCURRENT_ASYNC_SUBAGENT_RUNS}. ` +
+									`Wait for completion, abort unnecessary runs, or remove stale runs before starting a new one.`,
+							),
+						},
+					],
 					details: makeDetails("single")([]),
 					isError: true,
 				};
@@ -403,7 +462,9 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 						content: [
 							{
 								type: "text",
-								text: `Unknown subagent run #${params.continueRunId}. Use asyncAction:"list" to see available runs.`,
+								text: withIdleRunWarning(
+									`Unknown subagent run #${params.continueRunId}. Use asyncAction:"list" to see available runs.`,
+								),
 							},
 						],
 						details: makeDetails("single")([]),
@@ -415,7 +476,9 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 						content: [
 							{
 								type: "text",
-								text: `Subagent #${params.continueRunId} is still running. Wait for it to finish or abort it first.`,
+								text: withIdleRunWarning(
+									`Subagent #${params.continueRunId} is still running. Wait for it to finish or abort it first.`,
+								),
 							},
 						],
 						details: makeDetails("single")([]),
@@ -707,11 +770,13 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 				content: [
 					{
 						type: "text",
-						text: continueFromRun
-							? `Resumed async subagent run #${runId} (${resolvedAgent}) turn ${runState.turnCount}. ` +
-								`Use asyncAction=status/detail/list/abort/remove to monitor/control it.`
-							: `Started async subagent run #${runId} (${resolvedAgent}). ` +
-								`Use asyncAction=status/detail/list/abort/remove to monitor/control it.`,
+						text: withIdleRunWarning(
+							continueFromRun
+								? `Resumed async subagent run #${runId} (${resolvedAgent}) turn ${runState.turnCount}. ` +
+									`Use asyncAction=status/detail/list/abort/remove to monitor/control it.`
+								: `Started async subagent run #${runId} (${resolvedAgent}). ` +
+									`Use asyncAction=status/detail/list/abort/remove to monitor/control it.`,
+						),
 					},
 				],
 				details: makeDetails("single")([]),
