@@ -166,9 +166,9 @@ export function updateCommandRunsWidget(store: SubagentStore, ctx?: any): void {
 						const taskLine = truncateText(normalizedTask, Math.max(1, innerWidth - 4));
 						lines.push(theme.fg("dim", `  ${taskLine}`));
 
-						if (run.progressText) {
-							const progressLine = truncateText(run.progressText, Math.max(1, innerWidth - 4));
-							lines.push(theme.fg("accent", `  ▸ ${progressLine}`));
+						if (run.thoughtText) {
+							const thoughtLine = truncateText(run.thoughtText, Math.max(1, innerWidth - 4));
+							lines.push(theme.fg("accent", `  💭 ${thoughtLine}`));
 						}
 
 						if (run.status !== "done" && run.lastLine) {

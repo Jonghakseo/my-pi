@@ -141,7 +141,7 @@ function formatRunDetailOutput(run: CommandRunState): string {
 	const lines: string[] = [formatCommandRunSummary(run), `Prompt: ${run.task}`];
 
 	if (run.sessionFile) lines.push(`Session: ${run.sessionFile}`);
-	if (run.progressText) lines.push(`Result: ${run.progressText}`);
+	if (run.thoughtText) lines.push(`Thought: ${run.thoughtText}`);
 
 	lines.push("", "Result:", output, "", "Tool calls by turn:");
 
@@ -518,7 +518,7 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 						contextMode: runState.contextMode,
 						sessionFile: runState.sessionFile,
 						status: startedState,
-						progressText: runState.progressText,
+						thoughtText: runState.thoughtText,
 					},
 				},
 				{ deliverAs: "followUp", triggerTurn: false },
@@ -576,7 +576,7 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 							`[subagent:${resolvedAgent}#${runId}] ${isError ? "failed" : "completed"}` +
 							`\nPrompt: ${truncateLines(taskForDisplay, 2)}` +
 							(usage ? `\nUsage: ${usage}` : "") +
-							(runState.progressText ? `\nResult: ${runState.progressText}` : "") +
+							(runState.thoughtText ? `\nThought: ${runState.thoughtText}` : "") +
 							`\n\n${rawOutput}`,
 						display: true,
 						details: {
@@ -591,7 +591,7 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 							usage: result.usage,
 							model: result.model,
 							source: result.agentSource,
-							progressText: runState.progressText,
+							thoughtText: runState.thoughtText,
 							status: runState.status,
 						},
 					};
@@ -656,7 +656,7 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 							contextMode: runState.contextMode,
 							sessionFile: runState.sessionFile,
 							error: runState.lastLine,
-							progressText: runState.progressText,
+							thoughtText: runState.thoughtText,
 							status: runState.status,
 						},
 					};

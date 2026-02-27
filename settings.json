@@ -14,7 +14,7 @@
     "*opus-4-6*",
     "openai-codex/gpt-5.3-codex"
   ],
-  "hideThinkingBlock": true,
+  "hideThinkingBlock": false,
   "editorPaddingX": 1,
   "collapseChangelog": true
 }

@@ -7,7 +7,6 @@ import { formatElapsedSince } from "./utils/time-utils.ts";
 const WIDGET_KEY = "progress-widget-enforcer";
 const MAX_PROGRESS_LEN = 140;
 const DEFAULT_PROGRESS = "요청 해석 중...";
-const ALLOWED_TOOLS_BEFORE_INITIAL_PROGRESS = new Set<string>(["set_session_purpose"]);
 
 const FUNNY_PROGRESS_MESSAGES = {
 	byTool: {
@@ -112,7 +111,6 @@ export default function (pi: ExtensionAPI) {
 	let runStartedAt = 0;
 	let currentProgress = DEFAULT_PROGRESS;
 	let isDefaultProgress = true;
-	let requireInitialProgress = false;
 	let phase: ProgressPhase = "pending";
 	let doneElapsedLabel: string | null = null;
 	let timer: ReturnType<typeof setInterval> | null = null;
@@ -143,6 +141,9 @@ export default function (pi: ExtensionAPI) {
 		stopTimer();
 		timer = setInterval(() => {
 			if (!latestCtx) return;
+			if (latestCtx.hasUI && runStartedAt > 0) {
+				latestCtx.ui.setWorkingMessage(`${formatElapsedSince(runStartedAt)}...`);
+			}
 			renderWidget(latestCtx);
 		}, 1000);
 		renderWidget(ctx);
@@ -160,7 +161,6 @@ export default function (pi: ExtensionAPI) {
 			const nextProgress = normalizeProgress((params as { progress?: string }).progress);
 			currentProgress = nextProgress;
 			isDefaultProgress = nextProgress === DEFAULT_PROGRESS;
-			requireInitialProgress = false;
 			phase = "running";
 			latestCtx = ctx;
 			renderWidget(ctx);
@@ -172,14 +172,6 @@ export default function (pi: ExtensionAPI) {
 		},
 	});
 
-	pi.on("before_agent_start", async (event) => {
-		return {
-			systemPrompt:
-				event.systemPrompt +
-				`\n\n[Progress Protocol]\n- At the start of EVERY agent run, call tool \`set_progress\` BEFORE any other tool call.\n- The progress text must be one concise line describing your immediate next action.\n- If your plan changes meaningfully, call \`set_progress\` again to refresh it.\n- Keep progress practical and specific.`,
-		};
-	});
-
 	pi.on("agent_start", async (_event, ctx) => {
 		latestCtx = ctx;
 		runStartedAt = Date.now();
@@ -187,32 +179,15 @@ export default function (pi: ExtensionAPI) {
 		currentProgress = pickRandomMessage(INITIAL_LOADING_MESSAGES);
 		isDefaultProgress = true;
 		phase = "pending";
-		requireInitialProgress = true;
 		startTimer(ctx);
 	});
 
-	pi.on("tool_call", async (event) => {
-		if (!requireInitialProgress) return undefined;
-		if (event.toolName === "set_progress") {
-			requireInitialProgress = false;
-			return undefined;
-		}
-		if (ALLOWED_TOOLS_BEFORE_INITIAL_PROGRESS.has(event.toolName)) {
-			return undefined;
-		}
-
-		return {
-			block: true,
-			reason: "Progress protocol: 먼저 set_progress 도구를 호출해 현재 진행 상황 한 줄을 설정하세요.",
-		};
-	});
-
 	pi.on("agent_end", async (_event, ctx) => {
-		requireInitialProgress = false;
 		phase = "done";
 		doneElapsedLabel = runStartedAt > 0 ? formatElapsedSince(runStartedAt) : "0초";
 		renderWidget(ctx);
 		stopTimer();
+		if (ctx.hasUI) ctx.ui.setWorkingMessage(); // 기본값 복구
 		runStartedAt = 0;
 	});
 
@@ -220,7 +195,6 @@ export default function (pi: ExtensionAPI) {
 		stopTimer();
 		runStartedAt = 0;
 		doneElapsedLabel = null;
-		requireInitialProgress = false;
 		phase = "pending";
 		currentProgress = DEFAULT_PROGRESS;
 		isDefaultProgress = true;
@@ -233,7 +207,6 @@ export default function (pi: ExtensionAPI) {
 		stopTimer();
 		runStartedAt = 0;
 		doneElapsedLabel = null;
-		requireInitialProgress = false;
 		phase = "pending";
 		currentProgress = DEFAULT_PROGRESS;
 		isDefaultProgress = true;
