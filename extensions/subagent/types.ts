@@ -195,8 +195,20 @@ export const SubagentParams = Type.Object({
 	runId: Type.Optional(
 		Type.Number({
 			description:
-				"Run ID for asyncAction=status|detail|abort|remove. Use only for occasional manual checks/control; do not repeatedly poll, because completion/failure/error updates are delivered automatically.",
+				"Run ID for asyncAction=status|detail|abort|remove. For abort/remove, you can use runIds instead for bulk control. Use only for occasional manual checks/control; do not repeatedly poll, because completion/failure/error updates are delivered automatically.",
 		}),
+	),
+	runIds: Type.Optional(
+		Type.Array(
+			Type.Number({
+				description: "Run ID to control in bulk mode.",
+			}),
+			{
+				description:
+					"Run IDs for asyncAction=abort|remove bulk control. Use either runId (single) or runIds (multiple), not both.",
+				minItems: 1,
+			},
+		),
 	),
 	continueRunId: Type.Optional(
 		Type.Number({

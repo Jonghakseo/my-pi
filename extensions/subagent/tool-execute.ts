@@ -405,41 +405,76 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 				};
 			}
 
-			if (params.runId === undefined) {
+			const rawRunIds = Array.isArray(params.runIds) ? params.runIds : undefined;
+			const invalidRunIds = (rawRunIds ?? []).filter((value) => !Number.isInteger(value));
+			if (invalidRunIds.length > 0) {
 				return {
-					content: [{ type: "text", text: `asyncAction=${asyncAction} requires runId.` }],
+					content: [{ type: "text", text: `runIds must be an array of integer run IDs.` }],
 					details: makeDetails("single")([]),
 					isError: true,
 				};
 			}
 
-			const run = store.commandRuns.get(params.runId);
-			if (!run) {
+			const runIdsFromArray = ((rawRunIds ?? []) as number[]).filter((value) => Number.isInteger(value));
+			const hasRunId = Number.isInteger(params.runId);
+			const hasRunIds = runIdsFromArray.length > 0;
+			const isBulkAction = asyncAction === "abort" || asyncAction === "remove";
+
+			if (!isBulkAction && rawRunIds !== undefined) {
 				return {
-					content: [{ type: "text", text: `Unknown subagent run #${params.runId}.` }],
+					content: [{ type: "text", text: `asyncAction=${asyncAction} does not support runIds. Use runId.` }],
 					details: makeDetails("single")([]),
 					isError: true,
 				};
 			}
 
-			if (asyncAction === "status") {
-				const output = run.lastOutput ?? run.lastLine ?? "(no output yet)";
-				const preview =
-					output.length > STATUS_OUTPUT_PREVIEW_MAX_CHARS
-						? `${output.slice(0, STATUS_OUTPUT_PREVIEW_MAX_CHARS)}\n\n... [truncated]`
-						: output;
+			if (hasRunId && hasRunIds) {
 				return {
-					content: [
-						{
-							type: "text",
-							text: `${formatCommandRunSummary(run)}\n${run.task}\n\n${preview}`,
-						},
-					],
+					content: [{ type: "text", text: `Use either runId or runIds, not both.` }],
 					details: makeDetails("single")([]),
+					isError: true,
 				};
 			}
 
-			if (asyncAction === "detail") {
+			if (!hasRunId && !hasRunIds) {
+				const required = isBulkAction ? "runId or runIds" : "runId";
+				return {
+					content: [{ type: "text", text: `asyncAction=${asyncAction} requires ${required}.` }],
+					details: makeDetails("single")([]),
+					isError: true,
+				};
+			}
+
+			const targetRunIds = hasRunIds ? Array.from(new Set(runIdsFromArray)) : [params.runId as number];
+			const firstRunId = targetRunIds[0];
+
+			if (asyncAction === "status" || asyncAction === "detail") {
+				const run = store.commandRuns.get(firstRunId);
+				if (!run) {
+					return {
+						content: [{ type: "text", text: `Unknown subagent run #${firstRunId}.` }],
+						details: makeDetails("single")([]),
+						isError: true,
+					};
+				}
+
+				if (asyncAction === "status") {
+					const output = run.lastOutput ?? run.lastLine ?? "(no output yet)";
+					const preview =
+						output.length > STATUS_OUTPUT_PREVIEW_MAX_CHARS
+							? `${output.slice(0, STATUS_OUTPUT_PREVIEW_MAX_CHARS)}\n\n... [truncated]`
+							: output;
+					return {
+						content: [
+							{
+								type: "text",
+								text: `${formatCommandRunSummary(run)}\n${run.task}\n\n${preview}`,
+							},
+						],
+						details: makeDetails("single")([]),
+					};
+				}
+
 				if (run.status === "running") {
 					return {
 						content: [
@@ -456,39 +491,108 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 			}
 
 			if (asyncAction === "abort") {
-				const abortCtrl = run.abortController ?? store.globalLiveRuns.get(run.id)?.abortController;
-				if (run.status !== "running" || !abortCtrl) {
+				const aborting: number[] = [];
+				const notRunning: number[] = [];
+				const unknown: number[] = [];
+
+				for (const runId of targetRunIds) {
+					const run = store.commandRuns.get(runId);
+					if (!run) {
+						unknown.push(runId);
+						continue;
+					}
+
+					const abortCtrl = run.abortController ?? store.globalLiveRuns.get(run.id)?.abortController;
+					if (run.status !== "running" || !abortCtrl) {
+						notRunning.push(runId);
+						continue;
+					}
+
+					run.lastLine = "Aborting by subagent tool...";
+					run.lastOutput = run.lastLine;
+					abortCtrl.abort();
+					aborting.push(runId);
+				}
+
+				if (aborting.length > 0) {
+					updateCommandRunsWidget(store, ctx);
+				}
+
+				if (targetRunIds.length === 1 && aborting.length === 1 && notRunning.length === 0 && unknown.length === 0) {
 					return {
-						content: [{ type: "text", text: `Subagent run #${run.id} is not running.` }],
+						content: [{ type: "text", text: `Aborting subagent run #${aborting[0]}...` }],
 						details: makeDetails("single")([]),
 					};
 				}
-				run.lastLine = "Aborting by subagent tool...";
-				run.lastOutput = run.lastLine;
-				abortCtrl.abort();
-				updateCommandRunsWidget(store, ctx);
+
+				const lines: string[] = [];
+				if (aborting.length > 0) lines.push(`Aborting: ${aborting.map((id) => `#${id}`).join(", ")}.`);
+				if (notRunning.length > 0) lines.push(`Not running: ${notRunning.map((id) => `#${id}`).join(", ")}.`);
+				if (unknown.length > 0) lines.push(`Unknown: ${unknown.map((id) => `#${id}`).join(", ")}.`);
+				if (lines.length === 0) lines.push("No subagent runs matched.");
+
 				return {
-					content: [{ type: "text", text: `Aborting subagent run #${run.id}...` }],
+					content: [{ type: "text", text: lines.join("\n") }],
 					details: makeDetails("single")([]),
 				};
 			}
 
 			if (asyncAction === "remove") {
-				const { aborted } = removeRun(store, run.id, {
-					ctx,
-					pi,
-					reason: "Aborting by subagent tool remove...",
-					removalReason: "tool-remove",
-				});
+				const removed: number[] = [];
+				const abortedWhileRemoving: number[] = [];
+				const unknown: number[] = [];
+
+				for (const runId of targetRunIds) {
+					const run = store.commandRuns.get(runId);
+					if (!run) {
+						unknown.push(runId);
+						continue;
+					}
+
+					const { removed: didRemove, aborted } = removeRun(store, run.id, {
+						ctx,
+						pi,
+						reason: "Aborting by subagent tool remove...",
+						removalReason: "tool-remove",
+						updateWidget: false,
+					});
+					if (!didRemove) {
+						unknown.push(runId);
+						continue;
+					}
+
+					removed.push(runId);
+					if (aborted) abortedWhileRemoving.push(runId);
+				}
+
+				if (removed.length > 0) {
+					updateCommandRunsWidget(store, ctx);
+				}
+
+				if (targetRunIds.length === 1 && removed.length === 1 && unknown.length === 0) {
+					return {
+						content: [
+							{
+								type: "text",
+								text:
+									abortedWhileRemoving.length > 0
+										? `Removed subagent run #${removed[0]} (aborting in background).`
+										: `Removed subagent run #${removed[0]}.`,
+							},
+						],
+						details: makeDetails("single")([]),
+					};
+				}
+
+				const lines: string[] = [];
+				if (removed.length > 0) lines.push(`Removed: ${removed.map((id) => `#${id}`).join(", ")}.`);
+				if (abortedWhileRemoving.length > 0)
+					lines.push(`Aborting in background: ${abortedWhileRemoving.map((id) => `#${id}`).join(", ")}.`);
+				if (unknown.length > 0) lines.push(`Unknown: ${unknown.map((id) => `#${id}`).join(", ")}.`);
+				if (lines.length === 0) lines.push("No subagent runs matched.");
+
 				return {
-					content: [
-						{
-							type: "text",
-							text: aborted
-								? `Removed subagent run #${run.id} (aborting in background).`
-								: `Removed subagent run #${run.id}.`,
-						},
-					],
+					content: [{ type: "text", text: lines.join("\n") }],
 					details: makeDetails("single")([]),
 				};
 			}

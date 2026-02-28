@@ -603,7 +603,7 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 		description: [
 			"Delegate tasks to specialized subagents with isolated context.",
 			"Modes: single (agent + task), parallel (tasks array), chain (sequential with {previous} placeholder).",
-			"Supports background async jobs via runAsync + asyncAction (list/status/detail/abort/remove).",
+			"Supports background async jobs via runAsync + asyncAction (list/status/detail/abort/remove). abort/remove accept runId (single) or runIds (bulk).",
 			'Use contextMode: "main" to inherit current main-session context, or "isolated" for dedicated sub-session.',
 			'Default agent scope is "user" (from ~/.pi/agent/agents).',
 			'To enable project-local agents in .pi/agents or .claude/agents, set agentScope: "both" (or "project").',
