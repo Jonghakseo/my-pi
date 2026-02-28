@@ -614,7 +614,7 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 			'Default agent scope is "user" (from ~/.pi/agent/agents).',
 			'To enable project-local agents in .pi/agents or .claude/agents, set agentScope: "both" (or "project").',
 			"Important: Do NOT keep calling subagent for polling. Async runs push completion/failure/error updates automatically as follow-up messages; status/detail/list is for occasional manual checks only.",
-			"Concurrent async subagent runs are capped at 10. If idle (done/error) non-removed runs pile up (6+), clean up with asyncAction: remove.",
+			"Concurrent async subagent runs are capped at 10. If idle (done/error) non-removed runs pile up (8+), clean up with asyncAction: remove.",
 		].join(" "),
 		parameters: SubagentParams,
 
