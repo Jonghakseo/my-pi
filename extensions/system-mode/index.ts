@@ -5,6 +5,9 @@
  * between normal mode, soft delegation mode, and hard delegation-only master mode.
  */
 
+import * as fs from "node:fs";
+import * as os from "node:os";
+import * as path from "node:path";
 import { type ExtensionAPI, type ExtensionContext, isToolCallEventType } from "@mariozechner/pi-coding-agent";
 import { STATUS_LOG_FOOTER, SUBAGENT_STARTED_STATUS_FOOTER } from "../subagent/constants.ts";
 import { SYSTEM_MODE_STATUS_KEY } from "../utils/status-keys.ts";
@@ -15,6 +18,62 @@ type SystemMode = "default" | "agents" | "master";
 const STATUS_POLL_WINDOW_MS = 12_000;
 const STATUS_POLL_BLOCK_THRESHOLD = 3;
 const STATUS_POLL_NOTIFY_COOLDOWN_MS = 30_000;
+const FIRST_ASYNC_ABORT_MARKER_ENTRY_TYPE = "system-first-async-abort-triggered";
+const FIRST_ASYNC_ABORT_STATE_FILE = path.join(
+	os.homedir(),
+	".pi",
+	"agent",
+	"state",
+	"system-mode-first-async-abort.json",
+);
+
+function normalizeSessionKey(raw: unknown): string | null {
+	if (typeof raw !== "string") return null;
+	const cleaned = raw.replace(/[\r\n\t]+/g, "").trim();
+	return cleaned || null;
+}
+
+function getSessionKey(ctx: ExtensionContext): string | null {
+	try {
+		const byId = (ctx.sessionManager as any)?.getSessionId?.();
+		const normalizedId = normalizeSessionKey(byId);
+		if (normalizedId) return `id:${normalizedId}`;
+		const byFile = ctx.sessionManager?.getSessionFile?.();
+		const normalizedFile = normalizeSessionKey(byFile);
+		if (normalizedFile) return `file:${normalizedFile}`;
+	} catch {
+		/* ignore */
+	}
+	return null;
+}
+
+function loadPersistedFirstAbortSessions(): Set<string> {
+	try {
+		if (!fs.existsSync(FIRST_ASYNC_ABORT_STATE_FILE)) return new Set();
+		const raw = fs.readFileSync(FIRST_ASYNC_ABORT_STATE_FILE, "utf-8");
+		const parsed = JSON.parse(raw) as { sessionKeys?: unknown };
+		if (!Array.isArray(parsed?.sessionKeys)) return new Set();
+		const normalized = parsed.sessionKeys
+			.map((value) => normalizeSessionKey(value))
+			.filter((value): value is string => Boolean(value));
+		return new Set(normalized);
+	} catch {
+		return new Set();
+	}
+}
+
+function savePersistedFirstAbortSessions(sessionKeys: Set<string>): void {
+	try {
+		const parentDir = path.dirname(FIRST_ASYNC_ABORT_STATE_FILE);
+		if (!fs.existsSync(parentDir)) {
+			fs.mkdirSync(parentDir, { recursive: true });
+		}
+		const payload = JSON.stringify({ sessionKeys: Array.from(sessionKeys).sort() });
+		fs.writeFileSync(FIRST_ASYNC_ABORT_STATE_FILE, payload, "utf-8");
+	} catch {
+		/* ignore */
+	}
+}
 
 const AGENTS_PROMPT = `## Agent Delegation Mode
 
@@ -185,14 +244,25 @@ export default function (pi: ExtensionAPI) {
 	let recentStatusPollCalls: number[] = [];
 	let lastStatusPollNotifyAt = 0;
 	let firstAsyncLaunchAbortTriggeredInSession = false;
+	let persistedFirstAbortSessionKeys = loadPersistedFirstAbortSessions();
+
+	const hasPersistedFirstAbortForSession = (ctx: ExtensionContext): boolean => {
+		const sessionKey = getSessionKey(ctx);
+		if (!sessionKey) return false;
+		return persistedFirstAbortSessionKeys.has(sessionKey);
+	};
+
+	const persistFirstAbortForSession = (ctx: ExtensionContext): void => {
+		const sessionKey = getSessionKey(ctx);
+		if (!sessionKey) return;
+		if (persistedFirstAbortSessionKeys.has(sessionKey)) return;
+		persistedFirstAbortSessionKeys.add(sessionKey);
+		savePersistedFirstAbortSessions(persistedFirstAbortSessionKeys);
+	};
 
 	const resetStatusPollTracker = () => {
 		recentStatusPollCalls = [];
 		lastStatusPollNotifyAt = 0;
-	};
-
-	const resetFirstSubagentAbortGuard = () => {
-		firstAsyncLaunchAbortTriggeredInSession = false;
 	};
 
 	const trackStatusPolling = (ctx: ExtensionContext): string | undefined => {
@@ -298,17 +368,21 @@ export default function (pi: ExtensionAPI) {
 
 	const restoreModeFromEntries = (ctx: Parameters<Parameters<typeof pi.on>[1]>[1]) => {
 		resetStatusPollTracker();
-		resetFirstSubagentAbortGuard();
+		persistedFirstAbortSessionKeys = loadPersistedFirstAbortSessions();
 		const entries = ctx.sessionManager.getEntries();
 		let restoredMode: SystemMode = "default";
+		let abortGuardTriggered = false;
 		for (const entry of entries) {
-			if (entry.type === "custom") {
-				const ce = entry as any;
-				if (ce.customType === "system-mode-change" && ce.data?.mode) {
-					restoredMode = ce.data.mode === "agents" || ce.data.mode === "master" ? ce.data.mode : "default";
-				}
+			if (entry.type !== "custom") continue;
+			const ce = entry as any;
+			if (ce.customType === "system-mode-change" && ce.data?.mode) {
+				restoredMode = ce.data.mode === "agents" || ce.data.mode === "master" ? ce.data.mode : "default";
+			}
+			if (ce.customType === FIRST_ASYNC_ABORT_MARKER_ENTRY_TYPE) {
+				abortGuardTriggered = true;
 			}
 		}
+		firstAsyncLaunchAbortTriggeredInSession = abortGuardTriggered || hasPersistedFirstAbortForSession(ctx);
 		applyMode(restoredMode, ctx);
 	};
 
@@ -361,8 +435,10 @@ export default function (pi: ExtensionAPI) {
 		if (firstAsyncLaunchAbortTriggeredInSession) return;
 
 		firstAsyncLaunchAbortTriggeredInSession = true;
-		// Hard-stop only once per session (or after mode switch): immediately after the first async subagent launch.
-		// Applies only in delegation modes (agents/master), never in default mode.
+		// Hard-stop only once per session: immediately after the first async subagent launch.
+		// Persist both in-session marker entry and file-backed guard so reload/switch still keeps once-per-session behavior.
+		persistFirstAbortForSession(ctx);
+		pi.appendEntry(FIRST_ASYNC_ABORT_MARKER_ENTRY_TYPE, { triggeredAt: Date.now(), mode });
 		if (ctx.hasUI) {
 			ctx.ui.notify("환각 방지: 첫 subagent 호출 이후 메인 응답을 강제 abort합니다.", "info");
 		}
