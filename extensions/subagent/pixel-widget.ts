@@ -3,6 +3,9 @@
  *
  * Each agent gets a dynamically-sized cell based on its label width.
  * Pixel art is centered within the cell, and a gap separates cells.
+ *
+ * Parallel runs are expanded: each sub-task gets its own pixel art
+ * character cell, all sharing the same run # number.
  */
 
 import { Box, Text, truncateToWidth, visibleWidth } from "@mariozechner/pi-tui";
@@ -39,9 +42,41 @@ function getToolRuns(store: SubagentStore): CommandRunState[] {
 
 interface RenderedCell {
 	artLines: string[]; // CHAR_HEIGHT lines of pixel art (CHAR_WIDTH visible cols)
-	label: string; // "✓ #5 parallel" with ANSI color
+	label: string; // "✓ #5 worker" with ANSI color
 	labelWidth: number; // visible width of label
 	cellWidth: number; // max(CHAR_WIDTH, labelWidth) + CELL_MARGIN
+}
+
+/**
+ * Build a single rendered cell for a given agent/status/run.
+ */
+function buildCell(
+	agent: string,
+	status: "running" | "done" | "error",
+	characterField: string | undefined,
+	runId: number,
+	tick: number,
+	theme: any,
+): RenderedCell {
+	const charDef = resolveCharacter(characterField, agent);
+	const frameCount = charDef.frames.length;
+	const frameIdx = status === "running" ? tick % frameCount : 0;
+	const artLines = renderFrame(charDef.frames[frameIdx]);
+
+	const spinnerFrame = SPINNER_FRAMES[Math.floor(Date.now() / SPINNER_INTERVAL_MS) % SPINNER_FRAMES.length];
+	const statusIcon =
+		status === "done"
+			? theme.fg("success", "✓")
+			: status === "error"
+				? theme.fg("error", "✗")
+				: theme.fg("warning", spinnerFrame);
+
+	const agentColor = AGENT_NAME_PALETTE[agentBgIndex(agent)];
+	const label = `${statusIcon} #${runId} \x1b[38;5;${agentColor}m${agent}\x1b[39m`;
+	const labelWidth = visibleWidth(label);
+	const cellWidth = Math.max(CHAR_WIDTH, labelWidth) + CELL_MARGIN;
+
+	return { artLines, label, labelWidth, cellWidth };
 }
 
 export function updatePixelWidget(store: SubagentStore, ctx?: any): void {
@@ -67,28 +102,20 @@ export function updatePixelWidget(store: SubagentStore, ctx?: any): void {
 				const innerWidth = Math.max(1, width);
 				const tick = Math.floor(Date.now() / ANIM_INTERVAL_MS);
 
-				// Build cells with dynamic widths
+				// Build cells — expand parallel runs into individual sub-task cells
 				const allCells: RenderedCell[] = [];
 				for (const run of toolRuns) {
-					const charDef = resolveCharacter(run.characterField, run.agent);
-					const frameCount = charDef.frames.length;
-					const frameIdx = run.status === "running" ? tick % frameCount : 0;
-					const artLines = renderFrame(charDef.frames[frameIdx]);
-
-					const spinnerFrame = SPINNER_FRAMES[Math.floor(Date.now() / SPINNER_INTERVAL_MS) % SPINNER_FRAMES.length];
-					const statusIcon =
-						run.status === "done"
-							? theme.fg("success", "✓")
-							: run.status === "error"
-								? theme.fg("error", "✗")
-								: theme.fg("warning", spinnerFrame);
-
-					const agentColor = AGENT_NAME_PALETTE[agentBgIndex(run.agent)];
-					const label = `${statusIcon} #${run.id} \x1b[38;5;${agentColor}m${run.agent}\x1b[39m`;
-					const labelWidth = visibleWidth(label);
-					const cellWidth = Math.max(CHAR_WIDTH, labelWidth) + CELL_MARGIN;
-
-					allCells.push({ artLines, label, labelWidth, cellWidth });
+					if (run.parallelSubTasks && run.parallelSubTasks.length > 0) {
+						// Parallel run: each sub-task gets its own character cell
+						for (const subTask of run.parallelSubTasks) {
+							allCells.push(
+								buildCell(subTask.agent, subTask.status, subTask.characterField, run.id, tick, theme),
+							);
+						}
+					} else {
+						// Single run: one cell
+						allCells.push(buildCell(run.agent, run.status, run.characterField, run.id, tick, theme));
+					}
 				}
 
 				// Determine how many cells fit in width

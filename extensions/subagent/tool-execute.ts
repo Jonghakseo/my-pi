@@ -38,6 +38,7 @@ import type {
 	ChainItemFields,
 	CommandRunState,
 	OnUpdateCallback,
+	ParallelSubTask,
 	SingleResult,
 	SubagentDetails,
 	TaskItemFields,
@@ -252,6 +253,20 @@ function updateParallelRunProgress(runState: CommandRunState, results: SingleRes
 		(result) => result.exitCode !== PLACEHOLDER_RUNNING_EXIT_CODE && isResultError(result),
 	).length;
 	const successCount = Math.max(0, doneCount - failureCount);
+
+	// Update per-task statuses for pixel widget individual characters
+	if (runState.parallelSubTasks) {
+		for (let i = 0; i < results.length && i < runState.parallelSubTasks.length; i++) {
+			const result = results[i];
+			if (result.exitCode === PLACEHOLDER_RUNNING_EXIT_CODE) {
+				runState.parallelSubTasks[i].status = "running";
+			} else if (isResultError(result)) {
+				runState.parallelSubTasks[i].status = "error";
+			} else {
+				runState.parallelSubTasks[i].status = "done";
+			}
+		}
+	}
 
 	runState.elapsedMs = Date.now() - runState.startedAt;
 	runState.toolCalls = results.reduce(
@@ -719,6 +734,17 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 
 				const runId = store.nextCommandRunId++;
 				const taskForDisplay = buildParallelRunTaskPreview(parallelTasks);
+
+				// Build per-task sub-task entries for pixel widget individual characters
+				const parallelSubTasks: ParallelSubTask[] = parallelTasks.map((task) => {
+					const agentConfig = agents.find((a) => a.name === task.agent);
+					return {
+						agent: task.agent,
+						status: "running" as const,
+						characterField: agentConfig?.character,
+					};
+				});
+
 				const runState: CommandRunState = {
 					id: runId,
 					agent: "parallel",
@@ -734,6 +760,7 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 					removed: false,
 					contextMode: inheritMainContext ? "main" : "sub",
 					source: "tool",
+					parallelSubTasks,
 				};
 				store.commandRuns.set(runId, runState);
 
@@ -834,6 +861,14 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 
 						const { successCount, failureCount, output } = buildParallelOutputSummary(parallelTasks, results);
 						const usageTotal = aggregateUsage(results);
+
+						// Final sync of per-task statuses for pixel widget
+						if (runState.parallelSubTasks) {
+							for (let i = 0; i < results.length && i < runState.parallelSubTasks.length; i++) {
+								runState.parallelSubTasks[i].status = isResultError(results[i]) ? "error" : "done";
+							}
+						}
+
 						runState.status = failureCount > 0 ? "error" : "done";
 						runState.elapsedMs = Date.now() - runState.startedAt;
 						runState.toolCalls = results.reduce(
