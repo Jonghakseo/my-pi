@@ -330,7 +330,7 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 		ctx: any,
 	): Promise<SubagentExecuteResult> => {
 		const agentScope: AgentScope = params.agentScope ?? "user";
-		const contextMode = params.contextMode ?? "isolated";
+		const contextMode = params.contextMode ?? "main";
 		const inheritMainContext = contextMode === "main";
 		const discovery = discoverAgents(ctx.cwd, agentScope);
 		const agents = discovery.agents;

@@ -157,8 +157,8 @@ export const AgentScopeSchema = StringEnum(["user", "project", "both"] as const,
 
 export const ContextModeSchema = StringEnum(["isolated", "main"] as const, {
 	description:
-		'Subagent context mode. "isolated" starts a dedicated sub-session, "main" inherits current main session context.',
-	default: "isolated",
+		'Subagent context mode. "main" inherits current main session context, "isolated" starts a dedicated sub-session.',
+	default: "main",
 });
 
 export const AsyncActionSchema = StringEnum(["run", "list", "status", "detail", "abort", "remove"] as const, {
