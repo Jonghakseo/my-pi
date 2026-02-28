@@ -3,6 +3,11 @@ description: Problem-solving template that enforces research, alternatives, veri
 ---
 To solve the problem, follow the procedures and principles below.
 
+Primary requirement from template arguments (`/one-shot ...`):
+$@
+
+Treat the requirement above as the task objective, then execute the workflow below.
+
 1. Every problem must begin with sufficient and meticulous research to understand the context.
 2. There may be multiple ways to solve a problem. Explore alternatives broadly for decision-making, and carefully consider their trade-offs. Smaller changes are better, stronger recurrence prevention is better, and alternatives with fewer hidden side effects are better. However, your chosen approach may not always be correct, so thoroughly validate and re-validate both the selected solution and the alternatives you considered.
 3. You can call subagents with virtually unlimited capability. You can provide the current context to subagents as needed, and delegate independent thinking without context contamination. There is no risk in calling many diverse subagents, so use them freely and broadly to augment your capabilities. Since they can think on their own, it is more effective to ask for their judgment or explanation than to ask them to return raw output from specific files.
