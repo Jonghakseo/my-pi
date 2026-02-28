@@ -10,6 +10,7 @@
 | `claude-mcp-bridge/` | Claude Code MCP 설정을 pi에서 재활용 |
 | `system-mode/` | 에이전트 모드 온/오프 토글 |
 | `ask-user-question.ts` | 옵션 선택 + 자유 입력 질문 도구 |
+| `command-typo-assist.ts` | 슬래시 커맨드 오타 감지 → 제안 + 에디터 프리필 |
 | `voice-input.ts` | 음성 딕테이션 입력 & TTS 요약 |
 | `diff-overlay.ts` | Diff 뷰어 오버레이 |
 | `github-overlay.ts` | GitHub PR 뷰 (gh CLI 연동) |
