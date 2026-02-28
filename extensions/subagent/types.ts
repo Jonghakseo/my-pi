@@ -66,6 +66,10 @@ export interface CommandRunState {
 	thoughtText?: string;
 	/** Timestamp of last detected activity (tool call / turn / liveText change). Used for hang detection. */
 	lastActivityAt: number;
+	/** Origin of this run: "tool" = LLM called subagent tool, "command" = user slash-command / >> shorthand. */
+	source?: "tool" | "command";
+	/** Pixel character field from agent .md frontmatter (e.g. "fox", "blue-slime"). */
+	characterField?: string;
 }
 
 export interface SessionReplayItem {

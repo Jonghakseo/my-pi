@@ -26,6 +26,7 @@
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import { registerAll } from "./commands.js";
 import { HANG_CHECK_INTERVAL_MS, HANG_TIMEOUT_MS } from "./constants.js";
+import { cleanupPixelTimer } from "./pixel-widget.js";
 import { createStore, type SubagentStore } from "./store.js";
 import type { CommandRunState } from "./types.js";
 import { updateCommandRunsWidget } from "./widget.js";
@@ -102,8 +103,9 @@ export default function (pi: ExtensionAPI) {
 	// Periodic hang detection — auto-abort subagents with no activity
 	const hangCheckTimer = setInterval(() => checkForHungRuns(store, pi), HANG_CHECK_INTERVAL_MS);
 
-	// Clean up interval on session shutdown
+	// Clean up intervals on session shutdown
 	pi.on("session_shutdown", async () => {
 		clearInterval(hangCheckTimer);
+		cleanupPixelTimer();
 	});
 }

@@ -52,7 +52,6 @@ function stringifyToolCallArguments(args: unknown): string {
 	}
 }
 
-
 /**
  * Build a text representation of the main session context for injection into subagent tasks.
  * Instead of copying the entire session file (which causes persona confusion),
@@ -133,9 +132,7 @@ export function buildMainContextText(ctx: any): string {
 
 			// Truncate overly long results
 			const text =
-				raw.length > SUBAGENT_RESULT_MAX_CHARS
-					? `${raw.slice(0, SUBAGENT_RESULT_MAX_CHARS)}\n... [truncated]`
-					: raw;
+				raw.length > SUBAGENT_RESULT_MAX_CHARS ? `${raw.slice(0, SUBAGENT_RESULT_MAX_CHARS)}\n... [truncated]` : raw;
 			subagentParts.push(text);
 		}
 
