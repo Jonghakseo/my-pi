@@ -4,8 +4,8 @@
  */
 
 import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
-import { formatElapsedSince } from "./utils/time-utils.ts";
 import { ELAPSED_STATUS_KEY } from "./utils/status-keys.ts";
+import { formatElapsedSince } from "./utils/time-utils.ts";
 
 const FUNNY_MESSAGES = [
 	// pending

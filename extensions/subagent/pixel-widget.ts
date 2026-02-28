@@ -6,8 +6,8 @@
  */
 
 import { Box, Text, truncateToWidth, visibleWidth } from "@mariozechner/pi-tui";
-import { CHAR_HEIGHT, CHAR_WIDTH, renderFrame, resolveCharacter } from "./pixel-characters.js";
 import { AGENT_NAME_PALETTE, agentBgIndex } from "./format.js";
+import { CHAR_HEIGHT, CHAR_WIDTH, renderFrame, resolveCharacter } from "./pixel-characters.js";
 import type { SubagentStore } from "./store.js";
 import type { CommandRunState } from "./types.js";
 
