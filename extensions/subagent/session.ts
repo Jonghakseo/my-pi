@@ -156,11 +156,41 @@ export function buildMainContextText(ctx: any): string {
 
 /**
  * Wrap a task string with main session context text.
- * Returns the original task if contextText is empty.
+ *
+ * When available, also provides the main session JSONL path so subagents can
+ * inspect deeper history on demand (instead of receiving the entire log inline).
  */
-export function wrapTaskWithMainContext(task: string, contextText: string): string {
-	if (!contextText) return task;
-	return `[Main Session Context]\n${contextText}\n\n[Request]\n${task}`;
+export function wrapTaskWithMainContext(
+	task: string,
+	contextText: string,
+	options?: { mainSessionFile?: string },
+): string {
+	const rawSessionFile = options?.mainSessionFile;
+	const sessionFile =
+		typeof rawSessionFile === "string"
+			? rawSessionFile.replace(/[\r\n\t]+/g, "").trim() || undefined
+			: undefined;
+
+	if (!contextText && !sessionFile) return task;
+
+	const sections: string[] = [];
+	if (contextText) {
+		sections.push(`[Main Session Context]\n${contextText}`);
+	}
+	if (sessionFile) {
+		sections.push(
+			[
+				"[Main Session Log Access]",
+				`Main agent session JSONL path: ${sessionFile}`,
+				"If deeper history is needed, inspect this file on demand.",
+				"Use targeted reads first (search keywords, then read with offset/limit).",
+				"Avoid dumping entire logs into context; summarize only relevant parts.",
+			].join("\n"),
+		);
+	}
+	sections.push(`[Request]\n${task}`);
+
+	return sections.join("\n\n");
 }
 
 export function writePromptToTempFile(agentName: string, prompt: string): { dir: string; filePath: string } {
