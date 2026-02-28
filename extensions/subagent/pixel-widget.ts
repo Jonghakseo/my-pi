@@ -8,14 +8,13 @@
 import { Box, Text, truncateToWidth, visibleWidth } from "@mariozechner/pi-tui";
 import { AGENT_NAME_PALETTE, agentBgIndex } from "./format.js";
 import { CHAR_HEIGHT, CHAR_WIDTH, renderFrame, resolveCharacter } from "./pixel-characters.js";
-import { truncateText } from "./store.js";
 import type { SubagentStore } from "./store.js";
 import type { CommandRunState } from "./types.js";
 
 const ANIM_INTERVAL_MS = 300;
 const ANIM_REFRESH_MS = 150;
 const CELL_MARGIN = 2; // min padding inside cell (1 each side)
-const CELL_GAP = 2; // gap between cells
+const CELL_GAP = 3; // gap between cells
 const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"] as const;
 const SPINNER_INTERVAL_MS = 120;
 
@@ -50,7 +49,50 @@ interface RenderedCell {
 /**
  * Build a single rendered cell for a given agent/status/run.
  */
-const THOUGHT_MAX_WIDTH = 14; // 💭(1) + space(1) + text(~10 visible) + ...(2-3)
+const THOUGHT_DISPLAY_WIDTH = 13; // visible text area after 💭 icon (icon = 2 cols)
+const MARQUEE_SPEED_MS = 400; // scroll 1 char every N ms
+
+/** Slice a plain string from a visible-width offset for a given visible-width window. */
+function marqueeSlice(text: string, offset: number, maxWidth: number): string {
+	// Build grapheme array with widths
+	const segs: { ch: string; w: number }[] = [];
+	let totalW = 0;
+	for (const ch of text) {
+		const w = visibleWidth(ch);
+		segs.push({ ch, w });
+		totalW += w;
+	}
+	if (totalW <= maxWidth) return text;
+
+	// Add spacing + repeat for seamless wrap
+	const spacer = "   ";
+	const fullSegs = [...segs];
+	for (const ch of spacer) fullSegs.push({ ch, w: 1 });
+	for (const s of segs) fullSegs.push({ ch: s.ch, w: s.w });
+
+	// Skip to offset
+	let skipped = 0;
+	let startIdx = 0;
+	const wrapOffset = offset % (totalW + spacer.length);
+	for (let i = 0; i < fullSegs.length; i++) {
+		if (skipped >= wrapOffset) {
+			startIdx = i;
+			break;
+		}
+		skipped += fullSegs[i].w;
+		startIdx = i + 1;
+	}
+
+	// Collect maxWidth visible chars
+	let result = "";
+	let width = 0;
+	for (let i = startIdx; i < fullSegs.length && width < maxWidth; i++) {
+		if (width + fullSegs[i].w > maxWidth) break;
+		result += fullSegs[i].ch;
+		width += fullSegs[i].w;
+	}
+	return result;
+}
 
 function buildCell(
 	agent: string,
@@ -78,12 +120,13 @@ function buildCell(
 	const label = `${statusIcon} #${runId} \x1b[38;5;${agentColor}m${agent}\x1b[39m`;
 	const labelWidth = visibleWidth(label);
 
-	// Build thought line — only for running status with thoughtText
+	// Build thought line — marquee scrolling for running status
 	let thoughtLine = "";
 	let thoughtWidth = 0;
 	if (status === "running" && thoughtText) {
-		const truncated = truncateText(thoughtText, THOUGHT_MAX_WIDTH - 2); // reserve 2 for "💭 "
-		thoughtLine = theme.fg("muted", `💭${truncated}`);
+		const scrollOffset = Math.floor(Date.now() / MARQUEE_SPEED_MS);
+		const scrolled = marqueeSlice(thoughtText, scrollOffset, THOUGHT_DISPLAY_WIDTH + 2);
+		thoughtLine = theme.fg("muted", scrolled);
 		thoughtWidth = visibleWidth(thoughtLine);
 	}
 
