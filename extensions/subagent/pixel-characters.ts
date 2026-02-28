@@ -1,12 +1,16 @@
 /**
  * Pixel art character definitions and half-block rendering engine.
  *
+ * Two character groups:
+ *   1. Role-based icons — matched to agent roles via AGENT_DEFAULTS
+ *   2. Legacy creatures — available for custom `character:` field assignment
+ *
  * Each character is a 5px × 6px grid with 2+ animation frames.
  * Rendered using ▀▄█ half-block technique → 5 cols × 3 terminal rows.
  *
  * Characters can be referenced by name in agent .md frontmatter:
+ *   character: globe
  *   character: fox
- *   character: blue-slime
  */
 
 // ─── Color Palette ───────────────────────────────────────────────────────────
@@ -63,215 +67,162 @@ function walkFrame(base: string[], footA: string, footB: string): string[] {
 	return f;
 }
 
-// ─── 5×6 Mini Sprites ───────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════════════
+// ROLE-BASED ICON CHARACTERS — matched to agents via AGENT_DEFAULTS
+// ═══════════════════════════════════════════════════════════════════════════════
 
-const workerBase = [
-	".YYY.",
-	"SESES",
-	".BBB.",
-	"BBBBB",
-	".K.K.",
-	".....",
-];
+// ─── 1. Construction Worker (worker) ─────────────────────────────────────────
+// Yellow hard hat + skin face + orange hi-vis vest + black boots
+const hardhatBase = ["YYYYY", ".SES.", ".oOo.", ".OOO.", ".K.K.", "....."];
 
-const catBase = [
-	"L...L",
-	"LELEL",
-	".LIL.",
-	"LLLLL",
-	".L.L.",
-	".....",
-];
+// ─── 2. Rotating Globe (browser) ─────────────────────────────────────────────
+// Blue sphere with green land mass that scrolls right (rotation)
+const globeF0 = [".bBb.", "BGBBB", "BGGBB", "BGBBB", ".bBb.", "....."];
+const globeF1 = [".bBb.", "BBGBB", "BBGGB", "BBGBB", ".bBb.", "....."];
+const globeF2 = [".bBb.", "BBBGB", "BBBGG", "BBBGB", ".bBb.", "....."];
+const globeF3 = [".bBb.", "GBBBG", "GBBBB", "GBBBG", ".bBb.", "....."];
 
-const bunnyBase = [
-	".W.W.",
-	"WEWEW",
-	".WWW.",
-	"WWWWW",
-	".W.W.",
-	".....",
-];
+// ─── 3. Boxing Glove (challenger) ────────────────────────────────────────────
+// Red glove: bounces up (uppercut punch animation)
+const gloveDown = [".....", ".RRR.", "RRRRR", "RRRRr", "..r..", "..N.."];
+const gloveUp = [".RRR.", "RRRRR", "RRRRr", ".RRR.", "..r..", "..N.."];
 
-const bearBase = [
-	"N...N",
-	"NENEN",
-	".NnN.",
-	"NNNNN",
-	".N.N.",
-	".....",
-];
+// ─── 4. Folder Icon (finder) ─────────────────────────────────────────────────
+// Yellow folder with tab; paper peeks out when searching
+const folderClosed = [".YY..", "YYYYY", "YyyyY", "YyyyY", "YYYYY", "....."];
+const folderOpen = [".YYW.", "YYYYY", "YWyyY", "YyyyY", "YYYYY", "....."];
 
-const penguinBase = [
-	".KKK.",
-	"KWKWK",
-	".KOK.",
-	"KWWWK",
-	".O.O.",
-	".....",
-];
+// ─── 5. Wizard Hat (planner) ─────────────────────────────────────────────────
+// Tall purple cone with orbiting yellow star (✦)
+const wizardF0 = ["..P..", "..P..", ".PPP.", ".PYP.", "PPPPP", "....."];
+const wizardF1 = ["..P..", "..P.Y", ".PPP.", ".PWP.", "PPPPP", "....."];
+const wizardF2 = ["..P..", "Y.P..", ".PPP.", ".PYP.", "PPPPP", "....."];
+const wizardF3 = ["..P..", "..P..", ".PPP.", ".PWP.", "PPPPP", "Y...."];
 
-const foxBase = [
-	"O...O",
-	"OEOEO",
-	".OWO.",
-	"OWWWO",
-	".O.O.",
-	".....",
-];
+// ─── 6. Computer Monitor (reviewer) ──────────────────────────────────────────
+// Screen shows scrolling code diff (G=additions, R=deletions, K=background)
+const monitorF0 = ["DDDDD", "DGKRD", "DRKGD", "DDDDD", "..D..", ".DDD."];
+const monitorF1 = ["DDDDD", "DRKGD", "DGKRD", "DDDDD", "..D..", ".DDD."];
 
-const slimeBase = [
-	".....",
-	".GGG.",
-	"GWGWG",
-	"GGGGG",
-	"GGGGG",
-	".....",
-];
+// ─── 7. Magnifying Glass (searcher) ──────────────────────────────────────────
+// Metal rim (l) + glass lens (w) + gleam (W) sweeps across + wooden handle (N)
+const magF0 = [".lll.", "lwwwl", "lwwwl", ".lll.", "...lN", "....N"];
+const magF1 = [".lll.", "lWwwl", "lwwwl", ".lll.", "...lN", "....N"];
+const magF2 = [".lll.", "lwWwl", "lwwwl", ".lll.", "...lN", "....N"];
+const magF3 = [".lll.", "lwwWl", "lwwwl", ".lll.", "...lN", "....N"];
 
-const chickBase = [
-	".YYY.",
-	"YEYEY",
-	".YOY.",
-	".YYY.",
-	".o.o.",
-	".....",
-];
+// ─── 8. Checkbox (verifier) ──────────────────────────────────────────────────
+// Frame 0 = CHECKED (shown when done). Running cycles: check→empty→build→build
+const checkF0 = ["DDDDD", "D..GD", "D.GGD", "DGG.D", "DDDDD", "....."];
+const checkF1 = ["DDDDD", "D...D", "D...D", "D...D", "DDDDD", "....."];
+const checkF2 = ["DDDDD", "D...D", "D...D", "DG..D", "DDDDD", "....."];
+const checkF3 = ["DDDDD", "D...D", "D.G.D", "DGG.D", "DDDDD", "....."];
 
-const mushroomBase = [
-	".RRR.",
-	"RRWRR",
-	"RRRRR",
-	".www.",
-	".www.",
-	".....",
-];
+// ─── 9. Judge's Gavel (decider) ──────────────────────────────────────────────
+// Swing animation: raised → mid → SLAM (impact reverb on base) → recoil
+const gavelF0 = [".NNN.", ".NnN.", "..N..", "..N..", ".....", ".nnn."];
+const gavelF1 = [".....", ".NNN.", ".NnN.", "..N..", "..N..", ".nnn."];
+const gavelF2 = [".....", ".....", ".NNN.", ".NnN.", "..Nn.", "NnNnN"];
+// F3 = F1 (recoil = mid-swing)
 
-const ghostBase = [
-	".www.",
-	"wEwEw",
-	"wwwww",
-	"wwwww",
-	"w.w.w",
-	".....",
-];
+// ═══════════════════════════════════════════════════════════════════════════════
+// LEGACY CREATURE CHARACTERS — available for custom character: field
+// ═══════════════════════════════════════════════════════════════════════════════
 
-const robotBase = [
-	"..L..",
-	"DCDCD",
-	"DDDDD",
-	"DLDLD",
-	".D.D.",
-	".....",
-];
+const catBase = ["L...L", "LELEL", ".LIL.", "LLLLL", ".L.L.", "....."];
+const bunnyBase = [".W.W.", "WEWEW", ".WWW.", "WWWWW", ".W.W.", "....."];
+const bearBase = ["N...N", "NENEN", ".NnN.", "NNNNN", ".N.N.", "....."];
+const penguinBase = [".KKK.", "KWKWK", ".KOK.", "KWWWK", ".O.O.", "....."];
+const foxBase = ["O...O", "OEOEO", ".OWO.", "OWWWO", ".O.O.", "....."];
+const chickBase = [".YYY.", "YEYEY", ".YOY.", ".YYY.", ".o.o.", "....."];
+const ghostBase = [".www.", "wEwEw", "wwwww", "wwwww", "w.w.w", "....."];
+const robotBase = ["..L..", "DCDCD", "DDDDD", "DLDLD", ".D.D.", "....."];
+const dragonBase = ["R...R", "RERER", "RRRRR", ".RRR.", ".R.R.", "....."];
+const frogBase = [".W.W.", "GEGEG", "GGGGG", ".GGG.", ".G.G.", "....."];
+const alienBase = [".CCC.", "CECEC", "CCCCC", ".CCC.", ".C.C.", "....."];
+const princessBase = [".YYY.", "SESES", ".III.", "IIIII", ".I.I.", "....."];
 
-const dragonBase = [
-	"R...R",
-	"RERER",
-	"RRRRR",
-	".RRR.",
-	".R.R.",
-	".....",
-];
-
-const frogBase = [
-	".W.W.",
-	"GEGEG",
-	"GGGGG",
-	".GGG.",
-	".G.G.",
-	".....",
-];
-
-const alienBase = [
-	".CCC.",
-	"CECEC",
-	"CCCCC",
-	".CCC.",
-	".C.C.",
-	".....",
-];
-
-const princessBase = [
-	".YYY.",
-	"SESES",
-	".III.",
-	"IIIII",
-	".I.I.",
-	".....",
-];
+const slimeBase = [".....", ".GGG.", "GWGWG", "GGGGG", "GGGGG", "....."];
+const slimeBounce = [".....", ".....", ".GGG.", "GWGWG", "GGGGG", "....."];
+const mushroomBase = [".RRR.", "RRWRR", "RRRRR", ".www.", ".www.", "....."];
+const mushroomSwell = ["RRRRR", "RWRWR", "RRRRR", ".www.", ".www.", "....."];
+const ghostFloat = [".....", ".www.", "wEwEw", "wwwww", "w.w.w", "....."];
 
 /** Apply color replacement for slime variants. */
 function recolorSlime(base: string[], from: string, to: string): string[] {
 	return base.map((row) => row.replaceAll(from, to));
 }
 
-const slimeBounce = [
-	".....",
-	".....",
-	".GGG.",
-	"GWGWG",
-	"GGGGG",
-	".....",
-];
-
-const ghostFloat = [
-	".....",
-	".www.",
-	"wEwEw",
-	"wwwww",
-	"w.w.w",
-	".....",
-];
-
-const mushroomSwell = [
-	"RRRRR",
-	"RWRWR",
-	"RRRRR",
-	".www.",
-	".www.",
-	".....",
-];
+// ─── Character Registry ─────────────────────────────────────────────────────
 
 export const CHARACTERS: PixelCharacterDef[] = [
+	// ── Role-based icons ──
 	{
-		name: "worker",
-		aliases: ["노동자", "builder"],
+		name: "hardhat",
+		aliases: ["건설공", "worker-icon", "construction"],
 		frames: [
-			workerBase,
-			walkFrame(workerBase, "K...K", "....."),
-			workerBase,
-			walkFrame(workerBase, "..KK.", "....."),
+			hardhatBase,
+			walkFrame(hardhatBase, "K...K", "....."),
+			hardhatBase,
+			walkFrame(hardhatBase, "..KK.", "....."),
 		],
 	},
 	{
+		name: "globe",
+		aliases: ["지구본", "earth", "browser-icon"],
+		frames: [globeF0, globeF1, globeF2, globeF3],
+	},
+	{
+		name: "glove",
+		aliases: ["글러브", "boxing-glove", "challenger-icon", "권투글러브"],
+		frames: [gloveDown, gloveUp],
+	},
+	{
+		name: "folder",
+		aliases: ["폴더", "finder-icon"],
+		frames: [folderClosed, folderOpen],
+	},
+	{
+		name: "wizard",
+		aliases: ["마법사", "wizard-hat", "마법사모자", "planner-icon"],
+		frames: [wizardF0, wizardF1, wizardF2, wizardF3],
+	},
+	{
+		name: "monitor",
+		aliases: ["모니터", "computer", "컴퓨터", "reviewer-icon"],
+		frames: [monitorF0, monitorF1],
+	},
+	{
+		name: "magnifier",
+		aliases: ["돋보기", "magnifying-glass", "searcher-icon"],
+		frames: [magF0, magF1, magF2, magF3],
+	},
+	{
+		name: "checkbox",
+		aliases: ["체크박스", "check", "verifier-icon"],
+		frames: [checkF0, checkF1, checkF2, checkF3],
+	},
+	{
+		name: "gavel",
+		aliases: ["법봉", "판사봉", "judge", "decider-icon"],
+		frames: [gavelF0, gavelF1, gavelF2, gavelF1],
+	},
+
+	// ── Legacy creature characters ──
+	{
 		name: "cat",
 		aliases: ["고양이", "kitty", "neko"],
-		frames: [
-			catBase,
-			walkFrame(catBase, "L...L", "....."),
-			catBase,
-			walkFrame(catBase, "..LL.", "....."),
-		],
+		frames: [catBase, walkFrame(catBase, "L...L", "....."), catBase, walkFrame(catBase, "..LL.", ".....")],
 	},
 	{
 		name: "bunny",
 		aliases: ["토끼", "rabbit"],
-		frames: [
-			bunnyBase,
-			walkFrame(bunnyBase, "W...W", "....."),
-			bunnyBase,
-			walkFrame(bunnyBase, "..WW.", "....."),
-		],
+		frames: [bunnyBase, walkFrame(bunnyBase, "W...W", "....."), bunnyBase, walkFrame(bunnyBase, "..WW.", ".....")],
 	},
 	{
 		name: "bear",
 		aliases: ["곰돌이", "곰", "teddy"],
-		frames: [
-			bearBase,
-			walkFrame(bearBase, "N...N", "....."),
-			bearBase,
-			walkFrame(bearBase, "..NN.", "....."),
-		],
+		frames: [bearBase, walkFrame(bearBase, "N...N", "....."), bearBase, walkFrame(bearBase, "..NN.", ".....")],
 	},
 	{
 		name: "penguin",
@@ -286,12 +237,7 @@ export const CHARACTERS: PixelCharacterDef[] = [
 	{
 		name: "fox",
 		aliases: ["여우"],
-		frames: [
-			foxBase,
-			walkFrame(foxBase, "O...O", "....."),
-			foxBase,
-			walkFrame(foxBase, "..OO.", "....."),
-		],
+		frames: [foxBase, walkFrame(foxBase, "O...O", "....."), foxBase, walkFrame(foxBase, "..OO.", ".....")],
 	},
 	{
 		name: "slime",
@@ -301,36 +247,22 @@ export const CHARACTERS: PixelCharacterDef[] = [
 	{
 		name: "blue-slime",
 		aliases: ["파란슬라임"],
-		frames: [
-			recolorSlime(slimeBase, "G", "C"),
-			recolorSlime(slimeBounce, "G", "C"),
-		],
+		frames: [recolorSlime(slimeBase, "G", "C"), recolorSlime(slimeBounce, "G", "C")],
 	},
 	{
 		name: "pink-slime",
 		aliases: ["핑크슬라임"],
-		frames: [
-			recolorSlime(slimeBase, "G", "I"),
-			recolorSlime(slimeBounce, "G", "I"),
-		],
+		frames: [recolorSlime(slimeBase, "G", "I"), recolorSlime(slimeBounce, "G", "I")],
 	},
 	{
 		name: "purple-slime",
 		aliases: ["보라슬라임"],
-		frames: [
-			recolorSlime(slimeBase, "G", "P"),
-			recolorSlime(slimeBounce, "G", "P"),
-		],
+		frames: [recolorSlime(slimeBase, "G", "P"), recolorSlime(slimeBounce, "G", "P")],
 	},
 	{
 		name: "chick",
 		aliases: ["병아리"],
-		frames: [
-			chickBase,
-			walkFrame(chickBase, "o...o", "....."),
-			chickBase,
-			walkFrame(chickBase, "..oo.", "....."),
-		],
+		frames: [chickBase, walkFrame(chickBase, "o...o", "....."), chickBase, walkFrame(chickBase, "..oo.", ".....")],
 	},
 	{
 		name: "mushroom",
@@ -345,42 +277,22 @@ export const CHARACTERS: PixelCharacterDef[] = [
 	{
 		name: "robot",
 		aliases: ["로봇"],
-		frames: [
-			robotBase,
-			walkFrame(robotBase, "D...D", "....."),
-			robotBase,
-			walkFrame(robotBase, "..DD.", "....."),
-		],
+		frames: [robotBase, walkFrame(robotBase, "D...D", "....."), robotBase, walkFrame(robotBase, "..DD.", ".....")],
 	},
 	{
 		name: "dragon",
 		aliases: ["용", "드래곤"],
-		frames: [
-			dragonBase,
-			walkFrame(dragonBase, "R...R", "....."),
-			dragonBase,
-			walkFrame(dragonBase, "..RR.", "....."),
-		],
+		frames: [dragonBase, walkFrame(dragonBase, "R...R", "....."), dragonBase, walkFrame(dragonBase, "..RR.", ".....")],
 	},
 	{
 		name: "frog",
 		aliases: ["개구리"],
-		frames: [
-			frogBase,
-			walkFrame(frogBase, "G...G", "....."),
-			frogBase,
-			walkFrame(frogBase, "..GG.", "....."),
-		],
+		frames: [frogBase, walkFrame(frogBase, "G...G", "....."), frogBase, walkFrame(frogBase, "..GG.", ".....")],
 	},
 	{
 		name: "alien",
 		aliases: ["외계인"],
-		frames: [
-			alienBase,
-			walkFrame(alienBase, "C...C", "....."),
-			alienBase,
-			walkFrame(alienBase, "..CC.", "....."),
-		],
+		frames: [alienBase, walkFrame(alienBase, "C...C", "....."), alienBase, walkFrame(alienBase, "..CC.", ".....")],
 	},
 	{
 		name: "princess",
@@ -393,6 +305,24 @@ export const CHARACTERS: PixelCharacterDef[] = [
 		],
 	},
 ];
+
+// ─── Default agent → character mapping ───────────────────────────────────────
+
+/**
+ * Maps agent names to their default role-based character.
+ * Used when no `character:` field is set in the agent's .md frontmatter.
+ */
+const AGENT_DEFAULTS: Record<string, string> = {
+	worker: "hardhat",
+	browser: "globe",
+	challenger: "glove",
+	finder: "folder",
+	planner: "wizard",
+	reviewer: "monitor",
+	searcher: "magnifier",
+	verifier: "checkbox",
+	decider: "gavel",
+};
 
 // ─── Lookup ──────────────────────────────────────────────────────────────────
 
@@ -410,14 +340,30 @@ function agentHash(name: string): number {
 
 /**
  * Resolve a pixel character for an agent.
+ *
+ * Priority:
+ *   1. Explicit `character:` field from agent .md frontmatter
+ *   2. AGENT_DEFAULTS mapping (role-based default)
+ *   3. Hash-based fallback from all available characters
+ *
  * @param characterField - value from agent .md frontmatter `character:` field
- * @param agentName - fallback: hash agent name to pick a character
+ * @param agentName - agent name used for default/hash lookup
  */
 export function resolveCharacter(characterField: string | undefined, agentName: string): PixelCharacterDef {
+	// 1. Explicit character field
 	if (characterField) {
 		const found = charByName.get(characterField.toLowerCase().trim());
 		if (found) return found;
 	}
+
+	// 2. Role-based default
+	const defaultChar = AGENT_DEFAULTS[agentName.toLowerCase()];
+	if (defaultChar) {
+		const found = charByName.get(defaultChar);
+		if (found) return found;
+	}
+
+	// 3. Hash fallback
 	const idx = agentHash(agentName) % CHARACTERS.length;
 	return CHARACTERS[idx];
 }
