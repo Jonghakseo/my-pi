@@ -351,7 +351,11 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 		const agents = discovery.agents;
 		const confirmProjectAgents = params.confirmProjectAgents ?? true;
 		const asyncActionRequested = params.asyncAction ?? "run";
-		const mainSessionFile = inheritMainContext ? (ctx.sessionManager.getSessionFile() ?? undefined) : undefined;
+		const rawMainSessionFile = inheritMainContext ? (ctx.sessionManager.getSessionFile() ?? undefined) : undefined;
+		const mainSessionFile =
+			typeof rawMainSessionFile === "string"
+				? rawMainSessionFile.replace(/[\r\n\t]+/g, "").trim() || undefined
+				: undefined;
 
 		if (inheritMainContext && !mainSessionFile && asyncActionRequested === "run") {
 			return {
@@ -837,7 +841,7 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 								ctx.cwd,
 								agents,
 								task.agent,
-								wrapTaskWithMainContext(task.task, mainContextText),
+								wrapTaskWithMainContext(task.task, mainContextText, { mainSessionFile }),
 								task.cwd,
 								undefined,
 								abortController.signal,
@@ -1189,7 +1193,7 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 						ctx.cwd,
 						agents,
 						resolvedAgent,
-						wrapTaskWithMainContext(params.task!, mainContextText),
+						wrapTaskWithMainContext(params.task!, mainContextText, { mainSessionFile }),
 						params.cwd,
 						undefined,
 						abortController.signal,
@@ -1398,7 +1402,7 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 					ctx.cwd,
 					agents,
 					step.agent,
-					wrapTaskWithMainContext(taskWithContext, mainContextText),
+					wrapTaskWithMainContext(taskWithContext, mainContextText, { mainSessionFile }),
 					step.cwd,
 					i + 1,
 					signal,
@@ -1470,7 +1474,7 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 					ctx.cwd,
 					agents,
 					t.agent,
-					wrapTaskWithMainContext(t.task, mainContextText),
+					wrapTaskWithMainContext(t.task, mainContextText, { mainSessionFile }),
 					t.cwd,
 					undefined,
 					signal,
@@ -1510,7 +1514,7 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 				ctx.cwd,
 				agents,
 				params.agent,
-				wrapTaskWithMainContext(params.task, mainContextText),
+				wrapTaskWithMainContext(params.task, mainContextText, { mainSessionFile }),
 				params.cwd,
 				undefined,
 				signal,
