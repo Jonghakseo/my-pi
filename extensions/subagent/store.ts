@@ -22,6 +22,8 @@ export interface SubagentStore {
 	renderedRunWidgetIds: Set<number>;
 	nextCommandRunId: number;
 	commandWidgetCtx: any;
+	/** Context reference for the above-editor pixel art widget (tool-invoked runs). */
+	pixelWidgetCtx: any;
 	/** @deprecated Kept for backward compat; persistent parent link now used instead. */
 	sessionStack: string[];
 	/** Captured switchSession from ExtensionCommandContext (for use in input handlers). */
@@ -44,6 +46,7 @@ export function createStore(): SubagentStore {
 		renderedRunWidgetIds: new Set(),
 		nextCommandRunId: 1,
 		commandWidgetCtx: null,
+		pixelWidgetCtx: null,
 		sessionStack: [],
 		switchSessionFn: null,
 		currentParentSessionFile: null,
