@@ -404,6 +404,9 @@ function restoreRunsFromSession(store: SubagentStore, ctx: any, pi?: ExtensionAP
 
 			const finalStatus = statusFromDetails ?? statusFromExitCode ?? statusFromErrorField ?? legacyStatusFromContent;
 
+			// Derive source from customType so tool-invoked runs keep their pixel widget placement after reload.
+			const restoredSource: "tool" | "command" = cm.customType === "subagent-tool" ? "tool" : "command";
+
 			if (finalStatus) {
 				// Final message — create or overwrite with done/error state
 				const run: CommandRunState = {
@@ -424,13 +427,14 @@ function restoreRunsFromSession(store: SubagentStore, ctx: any, pi?: ExtensionAP
 					usage: d.usage ?? existing?.usage,
 					model: d.model ?? existing?.model,
 					thoughtText: d.thoughtText ?? d.progressText ?? existing?.thoughtText,
+					source: restoredSource,
+					characterField: d.characterField ?? existing?.characterField,
 				};
 				// Extract thought/progress and output from content payload
 				const lines = content.split("\n");
 				if (!run.thoughtText) {
 					const thoughtLine = lines.find(
-						(l: string) =>
-							l.startsWith("Thought: ") || l.startsWith("Result: ") || l.startsWith("Progress: "),
+						(l: string) => l.startsWith("Thought: ") || l.startsWith("Result: ") || l.startsWith("Progress: "),
 					);
 					if (thoughtLine) run.thoughtText = thoughtLine.replace(/^(Thought|Result|Progress): /, "").trim();
 				}
@@ -462,6 +466,8 @@ function restoreRunsFromSession(store: SubagentStore, ctx: any, pi?: ExtensionAP
 					usage: existing?.usage,
 					model: existing?.model,
 					thoughtText: d.thoughtText ?? d.progressText ?? existing?.thoughtText,
+					source: restoredSource,
+					characterField: d.characterField ?? existing?.characterField,
 				});
 			}
 		}

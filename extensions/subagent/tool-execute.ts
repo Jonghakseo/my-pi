@@ -23,13 +23,14 @@ import {
 	resolveContextWindow,
 	truncateLines,
 } from "./format.js";
+import { updatePixelWidget } from "./pixel-widget.js";
 import { formatCommandRunSummary, removeRun, trimCommandRunHistory } from "./run-utils.js";
 import { getFinalOutput, getLastNonEmptyLine, mapWithConcurrencyLimit, runSingleAgent } from "./runner.js";
 import { buildMainContextText, makeSubagentSessionFile, wrapTaskWithMainContext } from "./session.js";
 import {
+	collectToolCallCount,
 	MAX_CONCURRENCY,
 	MAX_PARALLEL_TASKS,
-	collectToolCallCount,
 	type SubagentStore,
 	updateRunFromResult,
 } from "./store.js";
@@ -197,14 +198,19 @@ function aggregateUsage(results: SingleResult[]) {
 
 function buildParallelRunTaskPreview(tasks: TaskItemFields[]): string {
 	const previews = tasks.slice(0, 3).map((task, index) => {
-		const normalizedTask = truncateLines(task.task, 1).replace(/\s*\n+\s*/g, " ").trim();
+		const normalizedTask = truncateLines(task.task, 1)
+			.replace(/\s*\n+\s*/g, " ")
+			.trim();
 		return `${index + 1}. ${task.agent}: ${normalizedTask}`;
 	});
 	const suffix = tasks.length > 3 ? ` | ... +${tasks.length - 3} more` : "";
 	return `[parallel ${tasks.length} tasks] ${previews.join(" | ")}${suffix}`;
 }
 
-function buildParallelOutputSummary(tasks: TaskItemFields[], results: SingleResult[]): {
+function buildParallelOutputSummary(
+	tasks: TaskItemFields[],
+	results: SingleResult[],
+): {
 	successCount: number;
 	failureCount: number;
 	output: string;
@@ -378,8 +384,7 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 			ctx.ui.notify(idleRunWarning, "warning");
 		}
 
-		const withIdleRunWarning = (text: string): string =>
-			idleRunWarning ? `${idleRunWarning}\n\n${text}` : text;
+		const withIdleRunWarning = (text: string): string => (idleRunWarning ? `${idleRunWarning}\n\n${text}` : text);
 
 		const asyncAction = asyncActionRequested;
 
@@ -642,7 +647,10 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 			if (hasChain) {
 				return {
 					content: [
-						{ type: "text", text: withIdleRunWarning("runAsync currently supports single or parallel mode. chain is not supported.") },
+						{
+							type: "text",
+							text: withIdleRunWarning("runAsync currently supports single or parallel mode. chain is not supported."),
+						},
 					],
 					details: makeDetails("single")([]),
 					isError: true,
@@ -651,7 +659,9 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 
 			if (!hasSingle && !hasTasks) {
 				return {
-					content: [{ type: "text", text: withIdleRunWarning("runAsync requires single(agent+task) or tasks(parallel) mode.") }],
+					content: [
+						{ type: "text", text: withIdleRunWarning("runAsync requires single(agent+task) or tasks(parallel) mode.") },
+					],
 					details: makeDetails("single")([]),
 					isError: true,
 				};
@@ -723,6 +733,7 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 					turnCount: DEFAULT_TURN_COUNT,
 					removed: false,
 					contextMode: inheritMainContext ? "main" : "sub",
+					source: "tool",
 				};
 				store.commandRuns.set(runId, runState);
 
@@ -1023,6 +1034,7 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 			}
 
 			const resolvedAgent = params.agent ?? continueFromRun?.agent ?? "worker";
+			const resolvedAgentConfig = agents.find((a) => a.name === resolvedAgent);
 			let runId: number;
 			let runState: CommandRunState;
 			let taskForDisplay: string;
@@ -1051,6 +1063,8 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 				runState.turnCount = Math.max(DEFAULT_TURN_COUNT, runState.turnCount || DEFAULT_TURN_COUNT) + 1;
 				runState.contextMode = runState.contextMode ?? (inheritMainContext ? "main" : "sub");
 				runState.sessionFile = runState.sessionFile ?? makeSubagentSessionFile(runId);
+				runState.source = "tool";
+				runState.characterField = runState.characterField ?? resolvedAgentConfig?.character;
 				sessionFileForRun = runState.sessionFile;
 			} else {
 				runId = store.nextCommandRunId++;
@@ -1072,6 +1086,8 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 					sessionFile: sessionFileForRun,
 					removed: false,
 					contextMode: inheritMainContext ? "main" : "sub",
+					source: "tool",
+					characterField: resolvedAgentConfig?.character,
 				};
 				store.commandRuns.set(runId, runState);
 			}
@@ -1117,6 +1133,7 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 						sessionFile: runState.sessionFile,
 						status: startedState,
 						thoughtText: runState.thoughtText,
+						characterField: runState.characterField,
 					},
 				},
 				{ deliverAs: "followUp", triggerTurn: false },
@@ -1191,6 +1208,7 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 							source: result.agentSource,
 							thoughtText: runState.thoughtText,
 							status: runState.status,
+							characterField: runState.characterField,
 						},
 					};
 					const completionOptions = { deliverAs: "followUp" as const, triggerTurn: true };
@@ -1256,6 +1274,7 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 							error: runState.lastLine,
 							thoughtText: runState.thoughtText,
 							status: runState.status,
+							characterField: runState.characterField,
 						},
 					};
 

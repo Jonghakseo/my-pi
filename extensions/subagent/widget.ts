@@ -13,6 +13,7 @@ import {
 	getUsedContextPercent,
 	resolveContextWindow,
 } from "./format.js";
+import { updatePixelWidget } from "./pixel-widget.js";
 
 const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"] as const;
 const SPINNER_INTERVAL_MS = 120;
@@ -65,13 +66,17 @@ export function updateCommandRunsWidget(store: SubagentStore, ctx?: any): void {
 
 	const statusPriority = (status: "running" | "done" | "error") =>
 		status === "running" ? 0 : status === "done" ? 1 : 2;
-	const runs = Array.from(store.commandRuns.values()).sort((a, b) => {
-		const priorityDiff = statusPriority(a.status) - statusPriority(b.status);
-		if (priorityDiff !== 0) return priorityDiff;
-		const startedDiff = (b.startedAt ?? 0) - (a.startedAt ?? 0);
-		if (startedDiff !== 0) return startedDiff;
-		return b.id - a.id;
-	});
+	// Only show command-invoked runs in the belowEditor widget.
+	// Tool-invoked runs (source === "tool") are shown in the pixel widget above the editor.
+	const runs = Array.from(store.commandRuns.values())
+		.filter((r) => r.source !== "tool")
+		.sort((a, b) => {
+			const priorityDiff = statusPriority(a.status) - statusPriority(b.status);
+			if (priorityDiff !== 0) return priorityDiff;
+			const startedDiff = (b.startedAt ?? 0) - (a.startedAt ?? 0);
+			if (startedDiff !== 0) return startedDiff;
+			return b.id - a.id;
+		});
 	const visibleRunIds = new Set<number>(runs.map((run) => run.id));
 
 	for (const id of Array.from(store.renderedRunWidgetIds)) {
@@ -84,6 +89,8 @@ export function updateCommandRunsWidget(store: SubagentStore, ctx?: any): void {
 	if (runs.length === 0) {
 		activeCtx.ui.setWidget("subagent-runs", undefined);
 		manageSpinnerTimer(store);
+		// Still need to refresh the pixel widget for tool-invoked runs.
+		updatePixelWidget(store, ctx);
 		return;
 	}
 
@@ -195,4 +202,7 @@ export function updateCommandRunsWidget(store: SubagentStore, ctx?: any): void {
 	}
 
 	manageSpinnerTimer(store);
+
+	// Also refresh the pixel widget (above-editor) for tool-invoked runs.
+	updatePixelWidget(store, ctx);
 }
