@@ -3,14 +3,12 @@
  *
  * Each agent gets a dynamically-sized cell based on its label width.
  * Pixel art is centered within the cell, and a gap separates cells.
- *
- * Parallel runs are expanded: each sub-task gets its own pixel art
- * character cell, all sharing the same run # number.
  */
 
 import { Box, Text, truncateToWidth, visibleWidth } from "@mariozechner/pi-tui";
 import { AGENT_NAME_PALETTE, agentBgIndex } from "./format.js";
 import { CHAR_HEIGHT, CHAR_WIDTH, renderFrame, resolveCharacter } from "./pixel-characters.js";
+import { truncateText } from "./store.js";
 import type { SubagentStore } from "./store.js";
 import type { CommandRunState } from "./types.js";
 
@@ -44,12 +42,16 @@ interface RenderedCell {
 	artLines: string[]; // CHAR_HEIGHT lines of pixel art (CHAR_WIDTH visible cols)
 	label: string; // "✓ #5 worker" with ANSI color
 	labelWidth: number; // visible width of label
-	cellWidth: number; // max(CHAR_WIDTH, labelWidth) + CELL_MARGIN
+	thoughtLine: string; // "💭 생각..." with ANSI color (or empty)
+	thoughtWidth: number; // visible width of thought line
+	cellWidth: number; // max(CHAR_WIDTH, labelWidth, thoughtWidth) + CELL_MARGIN
 }
 
 /**
  * Build a single rendered cell for a given agent/status/run.
  */
+const THOUGHT_MAX_WIDTH = 14; // 💭(1) + space(1) + text(~10 visible) + ...(2-3)
+
 function buildCell(
 	agent: string,
 	status: "running" | "done" | "error",
@@ -57,6 +59,7 @@ function buildCell(
 	runId: number,
 	tick: number,
 	theme: any,
+	thoughtText?: string,
 ): RenderedCell {
 	const charDef = resolveCharacter(characterField, agent);
 	const frameCount = charDef.frames.length;
@@ -74,9 +77,19 @@ function buildCell(
 	const agentColor = AGENT_NAME_PALETTE[agentBgIndex(agent)];
 	const label = `${statusIcon} #${runId} \x1b[38;5;${agentColor}m${agent}\x1b[39m`;
 	const labelWidth = visibleWidth(label);
-	const cellWidth = Math.max(CHAR_WIDTH, labelWidth) + CELL_MARGIN;
 
-	return { artLines, label, labelWidth, cellWidth };
+	// Build thought line — only for running status with thoughtText
+	let thoughtLine = "";
+	let thoughtWidth = 0;
+	if (status === "running" && thoughtText) {
+		const truncated = truncateText(thoughtText, THOUGHT_MAX_WIDTH - 2); // reserve 2 for "💭 "
+		thoughtLine = theme.fg("muted", `💭${truncated}`);
+		thoughtWidth = visibleWidth(thoughtLine);
+	}
+
+	const cellWidth = Math.max(CHAR_WIDTH, labelWidth, thoughtWidth) + CELL_MARGIN;
+
+	return { artLines, label, labelWidth, thoughtLine, thoughtWidth, cellWidth };
 }
 
 export function updatePixelWidget(store: SubagentStore, ctx?: any): void {
@@ -102,20 +115,12 @@ export function updatePixelWidget(store: SubagentStore, ctx?: any): void {
 				const innerWidth = Math.max(1, width);
 				const tick = Math.floor(Date.now() / ANIM_INTERVAL_MS);
 
-				// Build cells — expand parallel runs into individual sub-task cells
+				// Build cells — one per run
 				const allCells: RenderedCell[] = [];
 				for (const run of toolRuns) {
-					if (run.parallelSubTasks && run.parallelSubTasks.length > 0) {
-						// Parallel run: each sub-task gets its own character cell
-						for (const subTask of run.parallelSubTasks) {
-							allCells.push(
-								buildCell(subTask.agent, subTask.status, subTask.characterField, run.id, tick, theme),
-							);
-						}
-					} else {
-						// Single run: one cell
-						allCells.push(buildCell(run.agent, run.status, run.characterField, run.id, tick, theme));
-					}
+					allCells.push(
+						buildCell(run.agent, run.status, run.characterField, run.id, tick, theme, run.thoughtText),
+					);
 				}
 
 				// Determine how many cells fit in width
@@ -139,11 +144,26 @@ export function updatePixelWidget(store: SubagentStore, ctx?: any): void {
 				const blockMargin = Math.max(0, Math.floor((innerWidth - sepWidth) / 2));
 				const marginStr = " ".repeat(blockMargin);
 
-				// Top separator
-				outputLines.push(marginStr + theme.fg("muted", "─".repeat(Math.min(innerWidth - blockMargin, sepWidth))));
+				const gap = " ".repeat(CELL_GAP);
+
+				// Thought row — above pixel art (like a thought bubble from the character)
+				const hasAnyThought = cells.some((c) => c.thoughtLine.length > 0);
+				if (hasAnyThought) {
+					const thoughtSegments: string[] = [];
+					for (const cell of cells) {
+						if (cell.thoughtLine) {
+							const padTotal = Math.max(0, cell.cellWidth - cell.thoughtWidth);
+							const padL = Math.floor(padTotal / 2);
+							const padR = padTotal - padL;
+							thoughtSegments.push(" ".repeat(padL) + cell.thoughtLine + " ".repeat(padR));
+						} else {
+							thoughtSegments.push(" ".repeat(cell.cellWidth));
+						}
+					}
+					outputLines.push(truncateToWidth(marginStr + thoughtSegments.join(gap), innerWidth));
+				}
 
 				// Art rows — center each art within its cell
-				const gap = " ".repeat(CELL_GAP);
 				for (let row = 0; row < CHAR_HEIGHT; row++) {
 					const segments: string[] = [];
 					for (const cell of cells) {
