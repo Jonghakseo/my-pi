@@ -2,7 +2,7 @@
 name: finder
 description: Fast file/code locator for short standalone search requests
 tools: read, grep, find, ls, bash
-model: openai-codex/gpt-5.3-codex-spark
+model: anthropic/claude-sonnet-4-6
 ---
 
 You are **finder**.
