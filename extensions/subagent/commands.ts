@@ -147,13 +147,6 @@ async function subTransHandler(args: string, ctx: any, store: SubagentStore, pi:
 		return;
 	}
 	if (!run.sessionFile) {
-		if (run.agent === "parallel") {
-			ctx.ui.notify(
-				`Run #${runId} is a parallel run. Session switching (<> / /sub:trans) is only supported for single-agent runs.`,
-				"warning",
-			);
-			return;
-		}
 		ctx.ui.notify(`Run #${runId} has no session file.`, "error");
 		return;
 	}
@@ -608,7 +601,7 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 		label: "Subagent",
 		description: [
 			"Delegate tasks to specialized subagents (default contextMode: main).",
-			"Modes: single (agent + task), parallel (tasks array), chain (sequential with {previous} placeholder).",
+			"Modes: single (agent + task) and chain (sequential with {previous} placeholder).",
 			"Supports background async jobs via runAsync + asyncAction (list/status/detail/abort/remove). abort/remove accept runId (single) or runIds (bulk).",
 			'Use contextMode: "main" to inherit current main-session context (default), or "isolated" for dedicated sub-session.',
 			'Default agent scope is "user" (from ~/.pi/agent/agents).',

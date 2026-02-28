@@ -38,19 +38,11 @@ export interface SingleResult {
 }
 
 export interface SubagentDetails {
-	mode: "single" | "parallel" | "chain";
+	mode: "single" | "chain";
 	agentScope: AgentScope;
 	inheritMainContext: boolean;
 	projectAgentsDir: string | null;
 	results: SingleResult[];
-}
-
-/** Per-task tracking for parallel runs (used by pixel widget). */
-export interface ParallelSubTask {
-	agent: string;
-	status: "running" | "done" | "error";
-	/** Pixel character from agent .md frontmatter. */
-	characterField?: string;
 }
 
 export interface CommandRunState {
@@ -78,8 +70,6 @@ export interface CommandRunState {
 	source?: "tool" | "command";
 	/** Pixel character field from agent .md frontmatter (e.g. "fox", "blue-slime"). */
 	characterField?: string;
-	/** Per-task info for parallel runs — enables individual pixel art characters per sub-task. */
-	parallelSubTasks?: ParallelSubTask[];
 }
 
 export interface SessionReplayItem {
@@ -133,24 +123,11 @@ export interface GlobalRunEntry {
 
 // ─── Typebox Schemas ─────────────────────────────────────────────────────────
 
-export const TaskItem = Type.Object({
-	agent: Type.String({ description: "Name of the agent to invoke" }),
-	task: Type.String({ description: "Task to delegate to the agent" }),
-	cwd: Type.Optional(Type.String({ description: "Working directory for the agent process" })),
-});
-
 export const ChainItem = Type.Object({
 	agent: Type.String({ description: "Name of the agent to invoke" }),
 	task: Type.String({ description: "Task with optional {previous} placeholder for prior output" }),
 	cwd: Type.Optional(Type.String({ description: "Working directory for the agent process" })),
 });
-
-/** TypeScript interface matching the TaskItem Typebox schema. */
-export interface TaskItemFields {
-	agent: string;
-	task: string;
-	cwd?: string;
-}
 
 /** TypeScript interface matching the ChainItem Typebox schema. */
 export interface ChainItemFields {
@@ -190,7 +167,6 @@ export const ListAgentsParams = Type.Object({
 export const SubagentParams = Type.Object({
 	agent: Type.Optional(Type.String({ description: "Name of the agent to invoke (for single mode)" })),
 	task: Type.Optional(Type.String({ description: "Task to delegate (for single mode)" })),
-	tasks: Type.Optional(Type.Array(TaskItem, { description: "Array of {agent, task} for parallel execution" })),
 	chain: Type.Optional(Type.Array(ChainItem, { description: "Array of {agent, task} for sequential execution" })),
 	agentScope: Type.Optional(AgentScopeSchema),
 	confirmProjectAgents: Type.Optional(

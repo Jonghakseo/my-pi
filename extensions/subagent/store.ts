@@ -7,8 +7,6 @@ import { visibleWidth } from "@mariozechner/pi-tui";
 import { getDisplayItems, getFinalOutput, getLastNonEmptyLine, getLatestActivityPreview } from "./runner.js";
 import type { CommandRunState, GlobalRunEntry, SingleResult } from "./types.js";
 
-export const MAX_PARALLEL_TASKS = 8;
-export const MAX_CONCURRENCY = 4;
 export const COLLAPSED_ITEM_COUNT = 10;
 
 export interface SubagentStore {

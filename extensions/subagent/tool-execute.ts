@@ -13,7 +13,6 @@ import {
 	DEFAULT_TURN_COUNT,
 	IDLE_RUN_WARNING_THRESHOLD,
 	MAX_CONCURRENT_ASYNC_SUBAGENT_RUNS,
-	PLACEHOLDER_RUNNING_EXIT_CODE,
 	STATUS_OUTPUT_PREVIEW_MAX_CHARS,
 } from "./constants.js";
 import {
@@ -23,26 +22,11 @@ import {
 	resolveContextWindow,
 	truncateLines,
 } from "./format.js";
-import { updatePixelWidget } from "./pixel-widget.js";
 import { formatCommandRunSummary, removeRun, trimCommandRunHistory } from "./run-utils.js";
-import { getFinalOutput, getLastNonEmptyLine, mapWithConcurrencyLimit, runSingleAgent } from "./runner.js";
+import { getFinalOutput, getLastNonEmptyLine, runSingleAgent } from "./runner.js";
 import { buildMainContextText, makeSubagentSessionFile, wrapTaskWithMainContext } from "./session.js";
-import {
-	collectToolCallCount,
-	MAX_CONCURRENCY,
-	MAX_PARALLEL_TASKS,
-	type SubagentStore,
-	updateRunFromResult,
-} from "./store.js";
-import type {
-	ChainItemFields,
-	CommandRunState,
-	OnUpdateCallback,
-	ParallelSubTask,
-	SingleResult,
-	SubagentDetails,
-	TaskItemFields,
-} from "./types.js";
+import { type SubagentStore, updateRunFromResult } from "./store.js";
+import type { ChainItemFields, CommandRunState, OnUpdateCallback, SingleResult, SubagentDetails } from "./types.js";
 import { updateCommandRunsWidget } from "./widget.js";
 
 type SessionToolCall = {
@@ -177,132 +161,6 @@ function formatRunDetailOutput(run: CommandRunState): string {
 	return lines.join("\n");
 }
 
-function isResultError(result: SingleResult): boolean {
-	return result.exitCode !== 0 || result.stopReason === "error" || result.stopReason === "aborted";
-}
-
-function aggregateUsage(results: SingleResult[]) {
-	return results.reduce(
-		(acc, result) => {
-			acc.input += result.usage?.input ?? 0;
-			acc.output += result.usage?.output ?? 0;
-			acc.cacheRead += result.usage?.cacheRead ?? 0;
-			acc.cacheWrite += result.usage?.cacheWrite ?? 0;
-			acc.cost += result.usage?.cost ?? 0;
-			acc.contextTokens += result.usage?.contextTokens ?? 0;
-			acc.turns += result.usage?.turns ?? 0;
-			return acc;
-		},
-		{ input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0, contextTokens: 0, turns: 0 },
-	);
-}
-
-function buildParallelRunTaskPreview(tasks: TaskItemFields[]): string {
-	const previews = tasks.slice(0, 3).map((task, index) => {
-		const normalizedTask = truncateLines(task.task, 1)
-			.replace(/\s*\n+\s*/g, " ")
-			.trim();
-		return `${index + 1}. ${task.agent}: ${normalizedTask}`;
-	});
-	const suffix = tasks.length > 3 ? ` | ... +${tasks.length - 3} more` : "";
-	return `[parallel ${tasks.length} tasks] ${previews.join(" | ")}${suffix}`;
-}
-
-function buildParallelOutputSummary(
-	tasks: TaskItemFields[],
-	results: SingleResult[],
-): {
-	successCount: number;
-	failureCount: number;
-	output: string;
-} {
-	const lines: string[] = [];
-	let successCount = 0;
-	let failureCount = 0;
-
-	for (let i = 0; i < results.length; i++) {
-		const result = results[i];
-		const task = tasks[i];
-		const failed = isResultError(result);
-		const output = failed
-			? result.errorMessage || result.stderr || getFinalOutput(result.messages) || "(no output)"
-			: getFinalOutput(result.messages) || "(no output)";
-
-		if (failed) failureCount += 1;
-		else successCount += 1;
-
-		lines.push(
-			`[${i + 1}/${results.length}] ${result.agent} ${failed ? "failed" : "completed"}`,
-			`Task: ${truncateLines(task?.task ?? result.task, 2)}`,
-			output,
-		);
-		if (i < results.length - 1) lines.push("", "---", "");
-	}
-
-	return {
-		successCount,
-		failureCount,
-		output: lines.join("\n") || "(no output)",
-	};
-}
-
-function updateParallelRunProgress(runState: CommandRunState, results: SingleResult[], totalTasks: number): void {
-	const runningCount = results.filter((result) => result.exitCode === PLACEHOLDER_RUNNING_EXIT_CODE).length;
-	const doneCount = Math.max(0, totalTasks - runningCount);
-	const failureCount = results.filter(
-		(result) => result.exitCode !== PLACEHOLDER_RUNNING_EXIT_CODE && isResultError(result),
-	).length;
-	const successCount = Math.max(0, doneCount - failureCount);
-
-	// Update per-task statuses for pixel widget individual characters
-	if (runState.parallelSubTasks) {
-		for (let i = 0; i < results.length && i < runState.parallelSubTasks.length; i++) {
-			const result = results[i];
-			if (result.exitCode === PLACEHOLDER_RUNNING_EXIT_CODE) {
-				runState.parallelSubTasks[i].status = "running";
-			} else if (isResultError(result)) {
-				runState.parallelSubTasks[i].status = "error";
-			} else {
-				runState.parallelSubTasks[i].status = "done";
-			}
-		}
-	}
-
-	runState.elapsedMs = Date.now() - runState.startedAt;
-	runState.toolCalls = results.reduce(
-		(count, result) => count + Math.max(result.liveToolCalls ?? 0, collectToolCallCount(result.messages)),
-		0,
-	);
-
-	const latestThought = [...results]
-		.reverse()
-		.find((result) => typeof result.thoughtText === "string" && result.thoughtText.trim().length > 0);
-	if (latestThought?.thoughtText) runState.thoughtText = latestThought.thoughtText;
-
-	let latestPreview = "";
-	for (let i = results.length - 1; i >= 0; i--) {
-		const result = results[i];
-		const live = result.liveText ? getLastNonEmptyLine(result.liveText) : "";
-		if (live) {
-			latestPreview = `${result.agent}: ${live}`;
-			break;
-		}
-		const output = getFinalOutput(result.messages);
-		const outputLine = output ? getLastNonEmptyLine(output) : "";
-		if (outputLine) {
-			latestPreview = `${result.agent}: ${outputLine}`;
-			break;
-		}
-	}
-
-	const base = `Parallel ${doneCount}/${totalTasks} done (${successCount} ok, ${failureCount} fail${
-		runningCount > 0 ? `, ${runningCount} running` : ""
-	})`;
-	runState.lastLine = latestPreview ? `${base} · ${latestPreview}` : base;
-	runState.lastOutput = runState.lastLine;
-	runState.lastActivityAt = Date.now();
-}
-
 function getRunCounts(store: SubagentStore): { running: number; idle: number } {
 	const dedupedRunning = new Map<number, CommandRunState>();
 
@@ -381,12 +239,11 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 		const mainContextText = inheritMainContext ? buildMainContextText(ctx) : "";
 
 		const hasChain = (params.chain?.length ?? 0) > 0;
-		const hasTasks = (params.tasks?.length ?? 0) > 0;
 		const hasSingle = Boolean(params.agent && params.task);
-		const modeCount = Number(hasChain) + Number(hasTasks) + Number(hasSingle);
+		const modeCount = Number(hasChain) + Number(hasSingle);
 
 		const makeDetails =
-			(mode: "single" | "parallel" | "chain") =>
+			(mode: "single" | "chain") =>
 			(results: SingleResult[]): SubagentDetails => ({
 				mode,
 				agentScope,
@@ -638,7 +495,6 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 		if ((agentScope === "project" || agentScope === "both") && confirmProjectAgents && ctx.hasUI) {
 			const requestedAgentNames = new Set<string>();
 			if (params.chain) for (const step of params.chain as ChainItemFields[]) requestedAgentNames.add(step.agent);
-			if (params.tasks) for (const t of params.tasks as TaskItemFields[]) requestedAgentNames.add(t.agent);
 			if (params.agent) requestedAgentNames.add(params.agent);
 
 			const projectAgentsRequested = Array.from(requestedAgentNames)
@@ -655,7 +511,7 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 				if (!ok)
 					return {
 						content: [{ type: "text", text: "Canceled: project-local agents not approved." }],
-						details: makeDetails(hasChain ? "chain" : hasTasks ? "parallel" : "single")([]),
+						details: makeDetails(hasChain ? "chain" : "single")([]),
 					};
 			}
 		}
@@ -668,7 +524,9 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 					content: [
 						{
 							type: "text",
-							text: withIdleRunWarning("runAsync currently supports single or parallel mode. chain is not supported."),
+							text: withIdleRunWarning(
+								"runAsync supports single mode only. For dependent multi-step work, use chain with runAsync:false.",
+							),
 						},
 					],
 					details: makeDetails("single")([]),
@@ -676,11 +534,9 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 				};
 			}
 
-			if (!hasSingle && !hasTasks) {
+			if (!hasSingle) {
 				return {
-					content: [
-						{ type: "text", text: withIdleRunWarning("runAsync requires single(agent+task) or tasks(parallel) mode.") },
-					],
+					content: [{ type: "text", text: withIdleRunWarning("runAsync requires single mode: provide agent + task.") }],
 					details: makeDetails("single")([]),
 					isError: true,
 				};
@@ -707,327 +563,6 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 					],
 					details: makeDetails("single")([]),
 					isError: true,
-				};
-			}
-
-			if (hasTasks) {
-				const parallelTasks = params.tasks as TaskItemFields[];
-				if (parallelTasks.length > MAX_PARALLEL_TASKS) {
-					return {
-						content: [
-							{
-								type: "text",
-								text: withIdleRunWarning(
-									`Too many parallel tasks (${parallelTasks.length}). Max is ${MAX_PARALLEL_TASKS}.`,
-								),
-							},
-						],
-						details: makeDetails("parallel")([]),
-						isError: true,
-					};
-				}
-				if (params.continueRunId !== undefined) {
-					return {
-						content: [
-							{ type: "text", text: withIdleRunWarning("continueRunId is supported only for single async runs.") },
-						],
-						details: makeDetails("parallel")([]),
-						isError: true,
-					};
-				}
-
-				const runId = store.nextCommandRunId++;
-				const taskForDisplay = buildParallelRunTaskPreview(parallelTasks);
-
-				// Build per-task sub-task entries for pixel widget individual characters
-				const parallelSubTasks: ParallelSubTask[] = parallelTasks.map((task) => {
-					const agentConfig = agents.find((a) => a.name === task.agent);
-					return {
-						agent: task.agent,
-						status: "running" as const,
-						characterField: agentConfig?.character,
-					};
-				});
-
-				const runState: CommandRunState = {
-					id: runId,
-					agent: "parallel",
-					task: taskForDisplay,
-					status: "running",
-					startedAt: Date.now(),
-					lastActivityAt: Date.now(),
-					elapsedMs: 0,
-					toolCalls: 0,
-					lastLine: "Parallel run started",
-					lastOutput: "Parallel run started",
-					turnCount: DEFAULT_TURN_COUNT,
-					removed: false,
-					contextMode: inheritMainContext ? "main" : "sub",
-					source: "tool",
-					parallelSubTasks,
-				};
-				store.commandRuns.set(runId, runState);
-
-				const abortController = new AbortController();
-				runState.abortController = abortController;
-
-				let originSessionFile = "";
-				try {
-					const raw = ctx.sessionManager.getSessionFile() ?? "";
-					originSessionFile = raw.replace(/[\r\n\t]+/g, "").trim();
-				} catch {
-					/* ignore */
-				}
-				store.globalLiveRuns.set(runId, {
-					runState,
-					abortController,
-					originSessionFile,
-				});
-
-				store.commandWidgetCtx = ctx;
-				updateCommandRunsWidget(store, ctx);
-
-				const contextLabel = runState.contextMode === "main" ? "main context" : "dedicated sub-session";
-				pi.sendMessage(
-					{
-						customType: "subagent-tool",
-						content:
-							`[subagent:parallel#${runId}] started` +
-							`\nContext: ${contextLabel} · tasks ${parallelTasks.length}` +
-							``,
-						display: false,
-						details: {
-							runId,
-							agent: "parallel",
-							task: taskForDisplay,
-							turnCount: runState.turnCount,
-							contextMode: runState.contextMode,
-							status: "started",
-							thoughtText: runState.thoughtText,
-						},
-					},
-					{ deliverAs: "followUp", triggerTurn: false },
-				);
-
-				if (ctx.hasUI) {
-					ctx.ui.notify(
-						`Started async parallel subagent run #${runId} (${parallelTasks.length} tasks) (${contextLabel}).`,
-						"info",
-					);
-				}
-
-				void (async () => {
-					const allResults: SingleResult[] = parallelTasks.map((task) => ({
-						agent: task.agent,
-						agentSource: "unknown",
-						task: task.task,
-						exitCode: PLACEHOLDER_RUNNING_EXIT_CODE,
-						messages: [],
-						stderr: "",
-						usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0, contextTokens: 0, turns: 0 },
-					}));
-
-					const emitParallelProgress = () => {
-						if (runState.removed) return;
-						updateParallelRunProgress(runState, allResults, parallelTasks.length);
-						updateCommandRunsWidget(store);
-					};
-
-					try {
-						const results = await mapWithConcurrencyLimit(parallelTasks, MAX_CONCURRENCY, async (task, index) => {
-							if (abortController.signal.aborted) throw new Error("Subagent was aborted");
-
-							const result = await runSingleAgent(
-								ctx.cwd,
-								agents,
-								task.agent,
-								wrapTaskWithMainContext(task.task, mainContextText, { mainSessionFile }),
-								task.cwd,
-								undefined,
-								abortController.signal,
-								(partial) => {
-									if (runState.removed) return;
-									const current = partial.details?.results?.[0];
-									if (!current) return;
-									allResults[index] = current;
-									emitParallelProgress();
-								},
-								makeDetails("parallel"),
-								undefined,
-							);
-
-							allResults[index] = result;
-							emitParallelProgress();
-							return result;
-						});
-
-						if (runState.removed) return;
-
-						const { successCount, failureCount, output } = buildParallelOutputSummary(parallelTasks, results);
-						const usageTotal = aggregateUsage(results);
-
-						// Final sync of per-task statuses for pixel widget
-						if (runState.parallelSubTasks) {
-							for (let i = 0; i < results.length && i < runState.parallelSubTasks.length; i++) {
-								runState.parallelSubTasks[i].status = isResultError(results[i]) ? "error" : "done";
-							}
-						}
-
-						runState.status = failureCount > 0 ? "error" : "done";
-						runState.elapsedMs = Date.now() - runState.startedAt;
-						runState.toolCalls = results.reduce(
-							(count, result) => count + Math.max(result.liveToolCalls ?? 0, collectToolCallCount(result.messages)),
-							0,
-						);
-						runState.usage = usageTotal;
-						runState.turnCount = Math.max(
-							DEFAULT_TURN_COUNT,
-							results.reduce((maxTurns, result) => Math.max(maxTurns, result.usage?.turns ?? 0), 0),
-						);
-						runState.lastOutput = output;
-						runState.lastLine = getLastNonEmptyLine(output);
-						runState.lastActivityAt = Date.now();
-						updateCommandRunsWidget(store);
-
-						const usage = formatUsageStats(usageTotal);
-						const completionMessage = {
-							customType: "subagent-tool" as const,
-							content:
-								`[subagent:parallel#${runId}] ${failureCount > 0 ? "failed" : "completed"}` +
-								`\nPrompt: ${truncateLines(taskForDisplay, 2)}` +
-								`\nTasks: ${parallelTasks.length} (${successCount} succeeded${
-									failureCount > 0 ? `, ${failureCount} failed` : ""
-								})` +
-								(usage ? `\nUsage: ${usage}` : "") +
-								(runState.thoughtText ? `\nThought: ${runState.thoughtText}` : "") +
-								`\n\n${output}`,
-							display: true,
-							details: {
-								runId,
-								agent: "parallel",
-								task: taskForDisplay,
-								turnCount: runState.turnCount,
-								contextMode: runState.contextMode,
-								exitCode: failureCount > 0 ? 1 : 0,
-								usage: usageTotal,
-								thoughtText: runState.thoughtText,
-								status: runState.status,
-							},
-						};
-						const completionOptions = { deliverAs: "followUp" as const, triggerTurn: true };
-
-						const toolGlobalEntry = store.globalLiveRuns.get(runId);
-						let toolCurrentSession: string | null = null;
-						try {
-							const rawSession = ctx.sessionManager.getSessionFile() ?? null;
-							toolCurrentSession = rawSession ? rawSession.replace(/[\r\n\t]+/g, "").trim() : null;
-						} catch {
-							/* ignore */
-						}
-
-						const toolInOrigin =
-							!toolGlobalEntry ||
-							!toolCurrentSession ||
-							!toolGlobalEntry.originSessionFile ||
-							toolCurrentSession === toolGlobalEntry.originSessionFile;
-
-						if (toolInOrigin) {
-							pi.sendMessage(completionMessage, completionOptions);
-							store.globalLiveRuns.delete(runId);
-						} else {
-							toolGlobalEntry.pendingCompletion = {
-								message: completionMessage,
-								options: completionOptions,
-							};
-							store.commandRuns.set(runId, runState);
-						}
-
-						if (ctx.hasUI) {
-							ctx.ui.notify(
-								runState.status === "error"
-									? `subagent tool parallel run #${runId} failed (${failureCount}/${parallelTasks.length})`
-									: `subagent tool parallel run #${runId} completed (${successCount}/${parallelTasks.length})`,
-								runState.status === "error" ? "error" : "info",
-							);
-						}
-					} catch (error: any) {
-						if (runState.removed) return;
-						runState.status = "error";
-						runState.elapsedMs = Date.now() - runState.startedAt;
-						runState.lastLine = error?.message ? String(error.message) : "Parallel subagent execution failed";
-						runState.lastOutput = runState.lastLine;
-						runState.lastActivityAt = Date.now();
-
-						const errorMessage = {
-							customType: "subagent-tool" as const,
-							content:
-								`[subagent:parallel#${runId}] failed` +
-								`\nPrompt: ${truncateLines(taskForDisplay, 2)}` +
-								`\n\n${runState.lastLine}`,
-							display: true,
-							details: {
-								runId,
-								agent: "parallel",
-								task: taskForDisplay,
-								turnCount: runState.turnCount,
-								contextMode: runState.contextMode,
-								error: runState.lastLine,
-								thoughtText: runState.thoughtText,
-								status: runState.status,
-							},
-						};
-
-						const errGlobalEntry = store.globalLiveRuns.get(runId);
-						let errCurrentSession: string | null = null;
-						try {
-							const rawErrSession = ctx.sessionManager.getSessionFile() ?? null;
-							errCurrentSession = rawErrSession ? rawErrSession.replace(/[\r\n\t]+/g, "").trim() : null;
-						} catch {
-							/* ignore */
-						}
-
-						const errInOrigin =
-							!errGlobalEntry ||
-							!errCurrentSession ||
-							!errGlobalEntry.originSessionFile ||
-							errCurrentSession === errGlobalEntry.originSessionFile;
-
-						if (errInOrigin) {
-							pi.sendMessage(errorMessage, { deliverAs: "followUp", triggerTurn: true });
-							store.globalLiveRuns.delete(runId);
-						} else {
-							errGlobalEntry.pendingCompletion = {
-								message: errorMessage,
-								options: { deliverAs: "followUp", triggerTurn: true },
-							};
-							store.commandRuns.set(runId, runState);
-						}
-
-						if (ctx.hasUI) ctx.ui.notify(`subagent tool parallel run #${runId} failed: ${runState.lastLine}`, "error");
-						updateCommandRunsWidget(store);
-					} finally {
-						runState.abortController = undefined;
-						trimCommandRunHistory(store, {
-							maxRuns: 10,
-							ctx,
-							pi,
-							updateWidget: false,
-							removalReason: "trim",
-						});
-						updateCommandRunsWidget(store);
-					}
-				})();
-
-				return {
-					content: [
-						{
-							type: "text",
-							text: withIdleRunWarning(
-								`Started async parallel subagent run #${runId} (${parallelTasks.length} tasks).`,
-							),
-						},
-					],
-					details: makeDetails("parallel")([]),
 				};
 			}
 
@@ -1426,86 +961,6 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 			return {
 				content: [{ type: "text", text: getFinalOutput(results[results.length - 1].messages) || "(no output)" }],
 				details: makeDetails("chain")(results),
-			};
-		}
-
-		if (params.tasks && params.tasks.length > 0) {
-			const parallelTasks = params.tasks as TaskItemFields[];
-			if (parallelTasks.length > MAX_PARALLEL_TASKS)
-				return {
-					content: [
-						{
-							type: "text",
-							text: `Too many parallel tasks (${parallelTasks.length}). Max is ${MAX_PARALLEL_TASKS}.`,
-						},
-					],
-					details: makeDetails("parallel")([]),
-				};
-
-			// Track all results for streaming updates
-			const allResults: SingleResult[] = new Array(parallelTasks.length);
-
-			// Initialize placeholder results
-			for (let i = 0; i < parallelTasks.length; i++) {
-				allResults[i] = {
-					agent: parallelTasks[i].agent,
-					agentSource: "unknown",
-					task: parallelTasks[i].task,
-					exitCode: PLACEHOLDER_RUNNING_EXIT_CODE, // still running
-					messages: [],
-					stderr: "",
-					usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0, contextTokens: 0, turns: 0 },
-				};
-			}
-
-			const emitParallelUpdate = () => {
-				if (onUpdate) {
-					const running = allResults.filter((r) => r.exitCode === PLACEHOLDER_RUNNING_EXIT_CODE).length;
-					const done = allResults.filter((r) => r.exitCode !== PLACEHOLDER_RUNNING_EXIT_CODE).length;
-					onUpdate({
-						content: [{ type: "text", text: `Parallel: ${done}/${allResults.length} done, ${running} running...` }],
-						details: makeDetails("parallel")([...allResults]),
-					});
-				}
-			};
-
-			const results = await mapWithConcurrencyLimit(parallelTasks, MAX_CONCURRENCY, async (t, index) => {
-				const result = await runSingleAgent(
-					ctx.cwd,
-					agents,
-					t.agent,
-					wrapTaskWithMainContext(t.task, mainContextText, { mainSessionFile }),
-					t.cwd,
-					undefined,
-					signal,
-					// Per-task update callback
-					(partial) => {
-						if (partial.details?.results[0]) {
-							allResults[index] = partial.details.results[0];
-							emitParallelUpdate();
-						}
-					},
-					makeDetails("parallel"),
-					undefined,
-				);
-				allResults[index] = result;
-				emitParallelUpdate();
-				return result;
-			});
-
-			const successCount = results.filter((r) => r.exitCode === 0).length;
-			const summaries = results.map((r) => {
-				const output = getFinalOutput(r.messages);
-				return `[${r.agent}] ${r.exitCode === 0 ? "completed" : "failed"}:\n${output || "(no output)"}`;
-			});
-			return {
-				content: [
-					{
-						type: "text",
-						text: `Parallel: ${successCount}/${results.length} succeeded\n\n${summaries.join("\n\n")}`,
-					},
-				],
-				details: makeDetails("parallel")(results),
 			};
 		}
 
