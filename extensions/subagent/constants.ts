@@ -74,7 +74,7 @@ export const SUBVIEW_OVERLAY_MAX_HEIGHT = "95%";
 export const MAX_CONCURRENT_ASYNC_SUBAGENT_RUNS = 10;
 
 /** Warn when non-removed idle runs (done/error) pile up to this count or more. */
-export const IDLE_RUN_WARNING_THRESHOLD = 6;
+export const IDLE_RUN_WARNING_THRESHOLD = 8;
 
 // ─── replay.ts ─────────────────────────────────────────────────────────────
 
