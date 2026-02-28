@@ -15,6 +15,8 @@ Custom extensions for the pi coding agent. All extensions are written in TypeScr
 │   ├── replay.ts          #   Session replay TUI viewer
 │   ├── agents.ts          #   Agent discovery & configuration
 │   ├── widget.ts          #   Run status widget (below-editor)
+│   ├── pixel-characters.ts #  Pixel art character definitions & half-block renderer
+│   ├── pixel-widget.ts    #   Pixel art above-editor widget for subagent runs
 │   ├── store.ts           #   Shared state store
 │   ├── types.ts           #   Type definitions & Typebox schemas
 │   ├── constants.ts       #   Constants
@@ -27,15 +29,18 @@ Custom extensions for the pi coding agent. All extensions are written in TypeScr
 │   ├── index.ts           #   Mode switching logic
 │   └── state.ts           #   Global state management
 ├── utils/                 # Shared utility functions
-│   └── time-utils.ts      #   Time/duration formatting helpers
+│   ├── time-utils.ts      #   Time/duration formatting helpers
+│   └── status-keys.ts     #   Shared footer status key constants
 ├── ask-user-question.ts   # AskUserQuestion tool with options & free-text input
 ├── context.ts             # /context — context window usage & session stats overlay
 ├── cross-agent.ts         # Load commands/skills from .claude/.gemini/.codex dirs
 ├── damage-control-rmrf.ts # Safety guard against rm -rf
-├── dynamic-agents-md.ts   # Dynamic AGENTS.md loading per directory scope
 ├── delayed-action.ts      # Delayed action scheduling ("do this later" style)
+├── diff-overlay.ts        # /diff — Git diff split-pane overlay (file list + diff viewer)
+├── dynamic-agents-md.ts   # Dynamic AGENTS.md loading per directory scope
 ├── files.ts               # File picker / diff viewer UI
 ├── github-overlay.ts      # GitHub PR view overlay (gh CLI integration)
+├── idle-screensaver.ts    # Idle screensaver — session context display after inactivity
 ├── minimal-mode.ts        # Compact tool output rendering (collapsed/expanded toggle)
 ├── pipi-footer.ts         # Custom footer UI (model, branch, context bar)
 ├── working-text.ts              # Spinner working message (funny text + elapsed time)
