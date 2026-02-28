@@ -45,6 +45,14 @@ export interface SubagentDetails {
 	results: SingleResult[];
 }
 
+/** Per-task tracking for parallel runs (used by pixel widget). */
+export interface ParallelSubTask {
+	agent: string;
+	status: "running" | "done" | "error";
+	/** Pixel character from agent .md frontmatter. */
+	characterField?: string;
+}
+
 export interface CommandRunState {
 	id: number;
 	agent: string;
@@ -70,6 +78,8 @@ export interface CommandRunState {
 	source?: "tool" | "command";
 	/** Pixel character field from agent .md frontmatter (e.g. "fox", "blue-slime"). */
 	characterField?: string;
+	/** Per-task info for parallel runs — enables individual pixel art characters per sub-task. */
+	parallelSubTasks?: ParallelSubTask[];
 }
 
 export interface SessionReplayItem {
