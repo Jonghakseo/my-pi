@@ -250,9 +250,7 @@ export default function (pi: ExtensionAPI) {
 		masterHardLockEnabled = false;
 		if (previousMode === "master") {
 			const restoreTools =
-				activeToolsBeforeMaster && activeToolsBeforeMaster.length > 0
-					? activeToolsBeforeMaster
-					: getAllToolNames(pi);
+				activeToolsBeforeMaster && activeToolsBeforeMaster.length > 0 ? activeToolsBeforeMaster : getAllToolNames(pi);
 			pi.setActiveTools(restoreTools);
 			activeToolsBeforeMaster = undefined;
 		}

@@ -16,7 +16,6 @@ const IDLE_MS = 5 * 60 * 1000; // 5 minutes
 const EDITOR_POLL_INTERVAL_MS = 300;
 const PURPOSE_ENTRY_TYPE = "purpose:set";
 
-
 // ─── State ─────────────────────────────────────────────────────────────────
 
 let idleTimer: ReturnType<typeof setTimeout> | null = null;
@@ -122,12 +121,7 @@ function stylizeTitleLine(text: string, maxWidth: number): string {
 	return compact;
 }
 
-function renderScreensaver(
-	width: number,
-	height: number,
-	theme: any,
-	title: string,
-): string[] {
+function renderScreensaver(width: number, height: number, theme: any, title: string): string[] {
 	const fg = (c: string, t: string) => theme.fg(c, t);
 	const bold = (t: string) => theme.bold(t);
 	const border = new DynamicBorder((s: string) => fg("accent", s));

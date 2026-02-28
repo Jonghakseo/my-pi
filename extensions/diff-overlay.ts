@@ -155,7 +155,10 @@ async function fileDiff(pi: ExtensionAPI, cwd: string, file: DiffFile, mergeBase
 	if (file.status === "untracked") {
 		const r = await pi.exec("cat", [file.path], { cwd });
 		if (r.code !== 0) return "(cannot read file)";
-		return (r.stdout ?? "").split("\n").map((l) => `+ ${l}`).join("\n");
+		return (r.stdout ?? "")
+			.split("\n")
+			.map((l) => `+ ${l}`)
+			.join("\n");
 	}
 
 	// When on a feature branch, diff from merge-base to working tree
@@ -172,7 +175,11 @@ async function fileDiff(pi: ExtensionAPI, cwd: string, file: DiffFile, mergeBase
 
 	if (file.status === "added") {
 		const cat = await pi.exec("cat", [file.path], { cwd });
-		if (cat.code === 0) return (cat.stdout ?? "").split("\n").map((l) => `+ ${l}`).join("\n");
+		if (cat.code === 0)
+			return (cat.stdout ?? "")
+				.split("\n")
+				.map((l) => `+ ${l}`)
+				.join("\n");
 	}
 
 	return "(no diff available)";
@@ -331,7 +338,7 @@ class DiffOverlay {
 		const filePath = path.isAbsolute(file.path) ? file.path : path.resolve(this.cwd, file.path);
 		const command = process.platform === "darwin" ? "open" : "xdg-open";
 		const r = await this.pi.exec(command, [filePath], { cwd: this.cwd });
-		this.st.error = r.code === 0 ? null : (r.stderr?.trim() || `Failed to open ${file.path}`);
+		this.st.error = r.code === 0 ? null : r.stderr?.trim() || `Failed to open ${file.path}`;
 	}
 
 	private async revealSelectedFile(file: DiffFile): Promise<void> {
@@ -339,7 +346,7 @@ class DiffOverlay {
 		const command = process.platform === "darwin" ? "open" : "xdg-open";
 		const args = process.platform === "darwin" ? ["-R", filePath] : [path.dirname(filePath)];
 		const r = await this.pi.exec(command, args, { cwd: this.cwd });
-		this.st.error = r.code === 0 ? null : (r.stderr?.trim() || `Failed to reveal ${file.path}`);
+		this.st.error = r.code === 0 ? null : r.stderr?.trim() || `Failed to reveal ${file.path}`;
 	}
 
 	private async refreshFiles(): Promise<void> {
@@ -467,7 +474,9 @@ class DiffOverlay {
 		const branch = st.branch ? t.fg("muted", st.branch) : t.fg("dim", "(detached)");
 		const baseInfo = st.baseBranch ? ` ${t.fg("dim", "vs")} ${t.fg("muted", st.baseBranch)}` : "";
 		const cnt = t.fg("muted", `${st.files.length} file${st.files.length !== 1 ? "s" : ""}`);
-		header.push(`  ${t.fg("accent", t.bold("DIFF"))} ${t.fg("dim", "|")} ${branch}${baseInfo} ${t.fg("dim", "·")} ${cnt}`);
+		header.push(
+			`  ${t.fg("accent", t.bold("DIFF"))} ${t.fg("dim", "|")} ${branch}${baseInfo} ${t.fg("dim", "·")} ${cnt}`,
+		);
 		header.push("");
 
 		// ── Footer (3 lines) ──
@@ -485,20 +494,12 @@ class DiffOverlay {
 		const leftW = Math.max(14, Math.min(Math.floor(w * 0.28), 44));
 		const rightW = Math.max(10, w - leftW - 3); // 3 = " │ "
 
-		const leftTitle =
-			st.focus === "files"
-				? t.fg("accent", t.bold(" FILES"))
-				: t.fg("dim", " FILES");
-		const rightTitle =
-			st.focus === "diff"
-				? t.fg("accent", t.bold(" DIFF"))
-				: t.fg("dim", " DIFF");
+		const leftTitle = st.focus === "files" ? t.fg("accent", t.bold(" FILES")) : t.fg("dim", " FILES");
+		const rightTitle = st.focus === "diff" ? t.fg("accent", t.bold(" DIFF")) : t.fg("dim", " DIFF");
 
 		// File header
 		const f = st.files[st.selectedIndex];
-		const fileLabel = f
-			? t.fg(statusColor(f.status), `${icon(f.status)} ${f.path}`)
-			: "";
+		const fileLabel = f ? t.fg(statusColor(f.status), `${icon(f.status)} ${f.path}`) : "";
 		const rightHeader = `${rightTitle} ${fileLabel}`;
 
 		const titleLine = `${truncateToWidth(leftTitle, leftW)}${" ".repeat(Math.max(0, leftW - visibleWidth(leftTitle)))} ${t.fg("dim", "│")} ${truncateToWidth(rightHeader, rightW)}`;
@@ -558,7 +559,10 @@ export default function diffOverlayExtension(pi: ExtensionAPI) {
 		};
 
 		if (!ctx.hasUI) {
-			if (files.length === 0) { console.log("No changes."); return; }
+			if (files.length === 0) {
+				console.log("No changes.");
+				return;
+			}
 			for (const f of files) console.log(`${icon(f.status)} ${f.path}`);
 			return;
 		}
