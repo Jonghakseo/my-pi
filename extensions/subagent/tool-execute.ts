@@ -615,7 +615,7 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 			let sessionFileForRun: string | undefined;
 
 			if (continueFromRun) {
-				// Reuse existing run — same pattern as /sub:run command continuation
+				// Reuse existing run — same pattern as /sub:main command continuation
 				runId = continueFromRun.id;
 				taskForDisplay = `[continue #${runId}] ${params.task}`;
 				sessionFileForRun = continueFromRun.sessionFile;
