@@ -158,7 +158,7 @@ const magF3 = ["..LLL..", ".LwwwL.", ".LWWWL.", "..LLL..", "...N...", "....N.."]
 // ─── 8. Checkbox (verifier) ─────────────────────────────────────────────────
 // Box with Green V checkmark.
 const checkEmpty = ["LLLLLLL", "LWWWWWL", "LWWWWWL", "LWWWWWL", "LWWWWWL", "LLLLLLL"];
-const checkDone =  ["LLLLLLL", "LWWWWWL", "LWWWGWL", "LWGWGWL", "LGWGWWL", "LLLLLLL"];
+const checkDone =  ["LLLLLLL", "LWWWWGL", "LWWWGWL", "LGWGWWL", "LWGWWWL", "LLLLLLL"];
 
 // ─── 9. Judge's Gavel (decider) ─────────────────────────────────────────────
 // Brown hammer.
