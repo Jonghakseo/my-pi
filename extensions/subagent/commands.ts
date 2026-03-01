@@ -620,7 +620,7 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 
 	const subCommand = {
 		description:
-			"Run a subagent in a dedicated sub-session: /sub:new <agent|alias> <task>, /sub:new <runId> <task>, /sub:new <task> (defaults to worker)",
+			"Run a subagent in a dedicated sub-session: /sub:isolate <agent|alias> <task>, /sub:isolate <runId> <task>, /sub:isolate <task> (defaults to worker)",
 		getArgumentCompletions: (argumentPrefix: string) => {
 			const trimmedStart = argumentPrefix.trimStart();
 			if (trimmedStart.includes(" ")) return null;
@@ -645,12 +645,12 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 			captureSwitchSession(store, ctx);
 			const input = (args ?? "").trim();
 			const usageText =
-				"Usage: /sub:run <agent|alias> <task> | /sub:run <runId> <task> | /sub:run <task> | /sub:new <agent|alias> <task> | /sub:new <runId> <task> | /sub:new <task>";
+				"Usage: /sub:main <agent|alias> <task> | /sub:main <runId> <task> | /sub:main <task> | /sub:isolate <agent|alias> <task> | /sub:isolate <runId> <task> | /sub:isolate <task>";
 			let forceMainContext = forceMainContextFromWrapper;
 
 			if (input === "--main" || input.startsWith("--main ")) {
 				ctx.ui.notify(
-					"'--main' 접두어는 사용할 수 없습니다. /sub:run 또는 /sub:new 명령 자체로 컨텍스트를 선택하세요.",
+					"'--main' 접두어는 사용할 수 없습니다. /sub:main 또는 /sub:isolate 명령 자체로 컨텍스트를 선택하세요.",
 					"warning",
 				);
 				return;
@@ -667,7 +667,7 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 
 			if (agents.length === 0) {
 				ctx.ui.notify(
-					"No agents found in ~/.pi/agent/agents (sub:new/sub:run uses user scope). Use /subagents both to inspect project agents.",
+					"No agents found in ~/.pi/agent/agents (sub:isolate/sub:main uses user scope). Use /subagents both to inspect project agents.",
 					"error",
 				);
 				return;
@@ -710,7 +710,7 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 
 				if (!agents.some((agent) => agent.name === selectedAgent)) {
 					ctx.ui.notify(
-						`Run #${targetRunId} references unknown agent "${previousAgentName}". Use /sub:run <agent> <task> instead.`,
+						`Run #${targetRunId} references unknown agent "${previousAgentName}". Use /sub:main <agent> <task> instead.`,
 						"error",
 					);
 					return;
@@ -819,7 +819,7 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 				runState.removed = false;
 				runState.turnCount = Math.max(DEFAULT_TURN_COUNT, runState.turnCount || DEFAULT_TURN_COUNT) + 1;
 				// NOTE(user-approved): continuation 시 기존 context/session을 유지한다.
-				// /sub:run 과 /sub:new 간 모드 전환은 기존 run에는 소급 적용하지 않는다.
+				// /sub:main 과 /sub:isolate 간 모드 전환은 기존 run에는 소급 적용하지 않는다.
 				runState.contextMode = runState.contextMode ?? (forceMainContext ? "main" : "sub");
 				runState.sessionFile = runState.sessionFile ?? sessionFileForRun ?? makeSubagentSessionFile(runId);
 				sessionFileForRun = runState.sessionFile;
@@ -1113,10 +1113,10 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 		},
 	};
 
-	pi.registerCommand("sub:new", subCommand);
+	pi.registerCommand("sub:isolate", subCommand);
 
-	pi.registerCommand("sub:run", {
-		description: "Run a subagent with main-session context inheritance: /sub:run <agent|alias> <task>",
+	pi.registerCommand("sub:main", {
+		description: "Run a subagent with main-session context inheritance: /sub:main <agent|alias> <task>",
 		getArgumentCompletions: subCommand.getArgumentCompletions,
 		handler: async (args, ctx) => {
 			captureSwitchSession(store, ctx);
@@ -1428,7 +1428,7 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 	});
 
 	pi.registerShortcut(">>>" as any, {
-		description: "Run subagent in dedicated sub-session (= /sub:new, supports symbols)",
+		description: "Run subagent in dedicated sub-session (= /sub:isolate, supports symbols)",
 		handler: async () => {
 			// Documentation-only entry.
 		},
@@ -1444,7 +1444,7 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 			return { action: "continue" as const };
 		}
 
-		// ── >>> shortcut: dedicated sub-session (same as /sub:new) ──
+		// ── >>> shortcut: dedicated sub-session (same as /sub:isolate) ──
 		// Must be matched before >> symbol/space patterns.
 		if (text.startsWith(">>>")) {
 			const forwardedArgs = text.slice(3).trim();
