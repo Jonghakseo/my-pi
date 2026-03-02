@@ -5,8 +5,8 @@ import * as path from "node:path";
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import { Type } from "@sinclair/typebox";
 
-const STORAGE_OWNER = "creatrip";
-const STORAGE_REPO = "agent-storage";
+const STORAGE_OWNER = process.env.PI_STORAGE_OWNER || "creatrip";
+const STORAGE_REPO = process.env.PI_STORAGE_REPO || "agent-storage";
 const STORAGE_BRANCH = "main";
 
 const ALLOWED_EXTENSIONS = new Set([".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".bmp", ".ico"]);
@@ -75,7 +75,7 @@ export default function uploadImageUrl(pi: ExtensionAPI) {
 		name: "upload_image_url",
 		label: "Upload Image from URL",
 		description:
-			"Upload an image to GitHub storage (creatrip/agent-storage) and return a permanent raw URL. " +
+			`Upload an image to GitHub storage (${STORAGE_OWNER}/${STORAGE_REPO}) and return a permanent raw URL. ` +
 			"Accepts a URL or a local file path. " +
 			"Useful for embedding Figma exports, screenshots, or any external image into GitHub content.",
 		parameters: Type.Object({

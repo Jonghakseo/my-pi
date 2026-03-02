@@ -4,8 +4,8 @@ import type { ProjectIdResult } from "./types.ts";
 
 /**
  * Normalize a git remote URL to a slug.
- *   https://github.com/creatrip/product.git → github-creatrip-product
- *   git@github.com:creatrip/product.git     → github-creatrip-product
+ *   https://github.com/acme-org/my-app.git → github-acme-org-my-app
+ *   git@github.com:acme-org/my-app.git     → github-acme-org-my-app
  */
 export function normalizeRemoteUrl(url: string): string {
 	let normalized = url.trim();
