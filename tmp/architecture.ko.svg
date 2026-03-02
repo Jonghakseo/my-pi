@@ -102,9 +102,9 @@
     <text x="331" y="322" text-anchor="middle" fill="#e6edf3" font-size="8">의사 결정</text>
     <text x="331" y="333" text-anchor="middle" fill="#484f58" font-size="8">⚖️</text>
 
-    <rect x="406" y="278" width="126" height="60" rx="6" fill="rgba(188,140,255,0.1)" stroke="#bc8cff" stroke-width="1"/>
-    <text x="469" y="294" text-anchor="middle" fill="#bc8cff" font-size="12" font-weight="bold">searcher</text>
-    <text x="469" y="308" text-anchor="middle" fill="#8b949e" font-size="8">opus</text>
+    <rect x="406" y="278" width="126" height="60" rx="6" fill="rgba(88,166,255,0.1)" stroke="#58a6ff" stroke-width="1"/>
+    <text x="469" y="294" text-anchor="middle" fill="#58a6ff" font-size="12" font-weight="bold">searcher</text>
+    <text x="469" y="308" text-anchor="middle" fill="#8b949e" font-size="8">sonnet</text>
     <text x="469" y="322" text-anchor="middle" fill="#e6edf3" font-size="8">리서치</text>
     <text x="469" y="333" text-anchor="middle" fill="#484f58" font-size="8">🌐</text>
 
