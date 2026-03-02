@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 500" width="800" height="500">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 520" width="880" height="520">
   <defs>
     <filter id="aglow">
       <feGaussianBlur stdDeviation="3" result="blur"/>
@@ -15,131 +15,131 @@
   </defs>
 
   <!-- Background -->
-  <rect width="800" height="500" fill="url(#abgGrad)" rx="12"/>
+  <rect width="880" height="520" fill="url(#abgGrad)" rx="12"/>
 
   <!-- Subtle radial glow behind center -->
-  <circle cx="400" cy="250" r="200" fill="url(#centerGlow)"/>
+  <circle cx="440" cy="260" r="200" fill="url(#centerGlow)"/>
 
   <!-- Title -->
-  <text x="400" y="30" text-anchor="middle" fill="#e6edf3" font-family="monospace" font-size="16" font-weight="bold">🤖 Agent Orchestra</text>
+  <text x="440" y="30" text-anchor="middle" fill="#e6edf3" font-family="monospace" font-size="16" font-weight="bold">🤖 Agent Orchestra</text>
 
   <!-- Connection lines (behind nodes) -->
   <g stroke="#21262d" stroke-width="1.5" stroke-dasharray="4,4" opacity="0.7">
     <!-- finder -->
-    <line x1="400" y1="250" x2="135" y2="105"/>
+    <line x1="440" y1="260" x2="155" y2="105"/>
     <!-- worker -->
-    <line x1="400" y1="250" x2="400" y2="90"/>
+    <line x1="440" y1="260" x2="440" y2="100"/>
     <!-- planner -->
-    <line x1="400" y1="250" x2="665" y2="105"/>
+    <line x1="440" y1="260" x2="725" y2="105"/>
     <!-- reviewer -->
-    <line x1="400" y1="250" x2="710" y2="250"/>
+    <line x1="440" y1="260" x2="770" y2="260"/>
     <!-- challenger -->
-    <line x1="400" y1="250" x2="665" y2="395"/>
+    <line x1="440" y1="260" x2="725" y2="405"/>
     <!-- verifier -->
-    <line x1="400" y1="250" x2="400" y2="415"/>
+    <line x1="440" y1="260" x2="440" y2="425"/>
     <!-- decider -->
-    <line x1="400" y1="250" x2="135" y2="395"/>
+    <line x1="440" y1="260" x2="155" y2="405"/>
     <!-- searcher -->
-    <line x1="400" y1="250" x2="90" y2="250"/>
+    <line x1="440" y1="260" x2="110" y2="260"/>
     <!-- browser -->
-    <line x1="400" y1="250" x2="220" y2="155"/>
+    <line x1="440" y1="260" x2="260" y2="165"/>
   </g>
 
   <!-- Center: Main Agent -->
-  <rect x="325" y="218" width="150" height="64" rx="12" fill="rgba(230,237,243,0.06)" stroke="#e6edf3" stroke-width="2" filter="url(#aglow)"/>
-  <text x="400" y="243" text-anchor="middle" fill="#e6edf3" font-family="monospace" font-size="13" font-weight="bold">Main Agent</text>
-  <text x="400" y="260" text-anchor="middle" fill="#8b949e" font-family="monospace" font-size="9">Orchestrator</text>
-  <text x="400" y="275" text-anchor="middle" fill="#484f58" font-family="monospace" font-size="9">claude-opus-4</text>
+  <rect x="355" y="225" width="170" height="70" rx="12" fill="rgba(230,237,243,0.06)" stroke="#e6edf3" stroke-width="2" filter="url(#aglow)"/>
+  <text x="440" y="252" text-anchor="middle" fill="#e6edf3" font-family="monospace" font-size="13" font-weight="bold">Main Agent</text>
+  <text x="440" y="268" text-anchor="middle" fill="#8b949e" font-family="monospace" font-size="9">Orchestrator</text>
+  <text x="440" y="284" text-anchor="middle" fill="#484f58" font-family="monospace" font-size="8">claude-opus-4-6</text>
 
   <!-- Agent nodes -->
-  <!-- finder: sonnet, blue -->
+  <!-- finder: claude-sonnet-4-6, blue -->
   <g transform="translate(65, 68)">
-    <rect width="140" height="70" rx="10" fill="rgba(88,166,255,0.08)" stroke="#58a6ff" stroke-width="1.5"/>
-    <text x="70" y="20" text-anchor="middle" fill="#58a6ff" font-family="monospace" font-size="14" font-weight="bold">🔍 finder</text>
-    <text x="70" y="37" text-anchor="middle" fill="#8b949e" font-family="monospace" font-size="9">sonnet</text>
-    <text x="70" y="54" text-anchor="middle" fill="#e6edf3" font-family="monospace" font-size="9">Fast File Locator</text>
-    <circle cx="130" cy="12" r="5" fill="#58a6ff" opacity="0.6"/>
+    <rect width="170" height="70" rx="10" fill="rgba(88,166,255,0.08)" stroke="#58a6ff" stroke-width="1.5"/>
+    <text x="85" y="20" text-anchor="middle" fill="#58a6ff" font-family="monospace" font-size="13" font-weight="bold">🔍 finder</text>
+    <text x="85" y="37" text-anchor="middle" fill="#8b949e" font-family="monospace" font-size="8">claude-sonnet-4-6</text>
+    <text x="85" y="54" text-anchor="middle" fill="#e6edf3" font-family="monospace" font-size="9">Fast File Locator</text>
+    <circle cx="158" cy="12" r="5" fill="#58a6ff" opacity="0.6"/>
   </g>
 
-  <!-- worker: opus, purple -->
-  <g transform="translate(330, 50)">
-    <rect width="140" height="70" rx="10" fill="rgba(188,140,255,0.08)" stroke="#bc8cff" stroke-width="1.5"/>
-    <text x="70" y="20" text-anchor="middle" fill="#bc8cff" font-family="monospace" font-size="14" font-weight="bold">⚡ worker</text>
-    <text x="70" y="37" text-anchor="middle" fill="#8b949e" font-family="monospace" font-size="9">opus</text>
-    <text x="70" y="54" text-anchor="middle" fill="#e6edf3" font-family="monospace" font-size="9">Task Executor</text>
-    <circle cx="130" cy="12" r="5" fill="#bc8cff" opacity="0.6"/>
+  <!-- worker: claude-opus-4-6, purple -->
+  <g transform="translate(355, 50)">
+    <rect width="170" height="70" rx="10" fill="rgba(188,140,255,0.08)" stroke="#bc8cff" stroke-width="1.5"/>
+    <text x="85" y="20" text-anchor="middle" fill="#bc8cff" font-family="monospace" font-size="13" font-weight="bold">⚡ worker</text>
+    <text x="85" y="37" text-anchor="middle" fill="#8b949e" font-family="monospace" font-size="8">claude-opus-4-6</text>
+    <text x="85" y="54" text-anchor="middle" fill="#e6edf3" font-family="monospace" font-size="9">Task Executor</text>
+    <circle cx="158" cy="12" r="5" fill="#bc8cff" opacity="0.6"/>
   </g>
 
-  <!-- planner: codex, orange -->
-  <g transform="translate(595, 68)">
-    <rect width="140" height="70" rx="10" fill="rgba(240,136,62,0.08)" stroke="#f0883e" stroke-width="1.5"/>
-    <text x="70" y="20" text-anchor="middle" fill="#f0883e" font-family="monospace" font-size="14" font-weight="bold">📐 planner</text>
-    <text x="70" y="37" text-anchor="middle" fill="#8b949e" font-family="monospace" font-size="9">codex</text>
-    <text x="70" y="54" text-anchor="middle" fill="#e6edf3" font-family="monospace" font-size="9">Architect</text>
-    <circle cx="130" cy="12" r="5" fill="#f0883e" opacity="0.6"/>
+  <!-- planner: gpt-5.3-codex, orange -->
+  <g transform="translate(645, 68)">
+    <rect width="170" height="70" rx="10" fill="rgba(240,136,62,0.08)" stroke="#f0883e" stroke-width="1.5"/>
+    <text x="85" y="20" text-anchor="middle" fill="#f0883e" font-family="monospace" font-size="13" font-weight="bold">📐 planner</text>
+    <text x="85" y="37" text-anchor="middle" fill="#8b949e" font-family="monospace" font-size="8">gpt-5.3-codex</text>
+    <text x="85" y="54" text-anchor="middle" fill="#e6edf3" font-family="monospace" font-size="9">Architect</text>
+    <circle cx="158" cy="12" r="5" fill="#f0883e" opacity="0.6"/>
   </g>
 
-  <!-- browser: opus, purple — between finder and worker -->
-  <g transform="translate(155, 120)">
-    <rect width="140" height="70" rx="10" fill="rgba(188,140,255,0.08)" stroke="#bc8cff" stroke-width="1.5"/>
-    <text x="70" y="20" text-anchor="middle" fill="#bc8cff" font-family="monospace" font-size="14" font-weight="bold">🖥️ browser</text>
-    <text x="70" y="37" text-anchor="middle" fill="#8b949e" font-family="monospace" font-size="9">opus</text>
-    <text x="70" y="54" text-anchor="middle" fill="#e6edf3" font-family="monospace" font-size="9">UI Testing</text>
-    <circle cx="130" cy="12" r="5" fill="#bc8cff" opacity="0.6"/>
+  <!-- browser: claude-opus-4-6, purple — between finder and worker -->
+  <g transform="translate(175, 130)">
+    <rect width="170" height="70" rx="10" fill="rgba(188,140,255,0.08)" stroke="#bc8cff" stroke-width="1.5"/>
+    <text x="85" y="20" text-anchor="middle" fill="#bc8cff" font-family="monospace" font-size="13" font-weight="bold">🖥️ browser</text>
+    <text x="85" y="37" text-anchor="middle" fill="#8b949e" font-family="monospace" font-size="8">claude-opus-4-6</text>
+    <text x="85" y="54" text-anchor="middle" fill="#e6edf3" font-family="monospace" font-size="9">UI Testing</text>
+    <circle cx="158" cy="12" r="5" fill="#bc8cff" opacity="0.6"/>
   </g>
 
-  <!-- searcher: opus, purple — left -->
-  <g transform="translate(20, 218)">
-    <rect width="140" height="70" rx="10" fill="rgba(188,140,255,0.08)" stroke="#bc8cff" stroke-width="1.5"/>
-    <text x="70" y="20" text-anchor="middle" fill="#bc8cff" font-family="monospace" font-size="14" font-weight="bold">🌐 searcher</text>
-    <text x="70" y="37" text-anchor="middle" fill="#8b949e" font-family="monospace" font-size="9">opus</text>
-    <text x="70" y="54" text-anchor="middle" fill="#e6edf3" font-family="monospace" font-size="9">Research</text>
-    <circle cx="130" cy="12" r="5" fill="#bc8cff" opacity="0.6"/>
+  <!-- searcher: claude-opus-4-6, purple — left -->
+  <g transform="translate(20, 228)">
+    <rect width="170" height="70" rx="10" fill="rgba(188,140,255,0.08)" stroke="#bc8cff" stroke-width="1.5"/>
+    <text x="85" y="20" text-anchor="middle" fill="#bc8cff" font-family="monospace" font-size="13" font-weight="bold">🌐 searcher</text>
+    <text x="85" y="37" text-anchor="middle" fill="#8b949e" font-family="monospace" font-size="8">claude-opus-4-6</text>
+    <text x="85" y="54" text-anchor="middle" fill="#e6edf3" font-family="monospace" font-size="9">Research</text>
+    <circle cx="158" cy="12" r="5" fill="#bc8cff" opacity="0.6"/>
   </g>
 
-  <!-- reviewer: codex, orange — right -->
-  <g transform="translate(640, 218)">
-    <rect width="140" height="70" rx="10" fill="rgba(240,136,62,0.08)" stroke="#f0883e" stroke-width="1.5"/>
-    <text x="70" y="20" text-anchor="middle" fill="#f0883e" font-family="monospace" font-size="14" font-weight="bold">🔎 reviewer</text>
-    <text x="70" y="37" text-anchor="middle" fill="#8b949e" font-family="monospace" font-size="9">codex</text>
-    <text x="70" y="54" text-anchor="middle" fill="#e6edf3" font-family="monospace" font-size="9">Code Review</text>
-    <circle cx="130" cy="12" r="5" fill="#f0883e" opacity="0.6"/>
+  <!-- reviewer: gpt-5.3-codex, orange — right -->
+  <g transform="translate(690, 228)">
+    <rect width="170" height="70" rx="10" fill="rgba(240,136,62,0.08)" stroke="#f0883e" stroke-width="1.5"/>
+    <text x="85" y="20" text-anchor="middle" fill="#f0883e" font-family="monospace" font-size="13" font-weight="bold">🔎 reviewer</text>
+    <text x="85" y="37" text-anchor="middle" fill="#8b949e" font-family="monospace" font-size="8">gpt-5.3-codex</text>
+    <text x="85" y="54" text-anchor="middle" fill="#e6edf3" font-family="monospace" font-size="9">Code Review</text>
+    <circle cx="158" cy="12" r="5" fill="#f0883e" opacity="0.6"/>
   </g>
 
-  <!-- decider: codex, orange — bottom left -->
-  <g transform="translate(65, 362)">
-    <rect width="140" height="70" rx="10" fill="rgba(240,136,62,0.08)" stroke="#f0883e" stroke-width="1.5"/>
-    <text x="70" y="20" text-anchor="middle" fill="#f0883e" font-family="monospace" font-size="14" font-weight="bold">⚖️ decider</text>
-    <text x="70" y="37" text-anchor="middle" fill="#8b949e" font-family="monospace" font-size="9">codex</text>
-    <text x="70" y="54" text-anchor="middle" fill="#e6edf3" font-family="monospace" font-size="9">Decision Maker</text>
-    <circle cx="130" cy="12" r="5" fill="#f0883e" opacity="0.6"/>
+  <!-- decider: gpt-5.3-codex, orange — bottom left -->
+  <g transform="translate(65, 372)">
+    <rect width="170" height="70" rx="10" fill="rgba(240,136,62,0.08)" stroke="#f0883e" stroke-width="1.5"/>
+    <text x="85" y="20" text-anchor="middle" fill="#f0883e" font-family="monospace" font-size="13" font-weight="bold">⚖️ decider</text>
+    <text x="85" y="37" text-anchor="middle" fill="#8b949e" font-family="monospace" font-size="8">gpt-5.3-codex</text>
+    <text x="85" y="54" text-anchor="middle" fill="#e6edf3" font-family="monospace" font-size="9">Decision Maker</text>
+    <circle cx="158" cy="12" r="5" fill="#f0883e" opacity="0.6"/>
   </g>
 
-  <!-- verifier: opus, purple — bottom center -->
-  <g transform="translate(330, 380)">
-    <rect width="140" height="70" rx="10" fill="rgba(188,140,255,0.08)" stroke="#bc8cff" stroke-width="1.5"/>
-    <text x="70" y="20" text-anchor="middle" fill="#bc8cff" font-family="monospace" font-size="14" font-weight="bold">✅ verifier</text>
-    <text x="70" y="37" text-anchor="middle" fill="#8b949e" font-family="monospace" font-size="9">opus</text>
-    <text x="70" y="54" text-anchor="middle" fill="#e6edf3" font-family="monospace" font-size="9">Validation</text>
-    <circle cx="130" cy="12" r="5" fill="#bc8cff" opacity="0.6"/>
+  <!-- verifier: claude-opus-4-6, purple — bottom center -->
+  <g transform="translate(355, 390)">
+    <rect width="170" height="70" rx="10" fill="rgba(188,140,255,0.08)" stroke="#bc8cff" stroke-width="1.5"/>
+    <text x="85" y="20" text-anchor="middle" fill="#bc8cff" font-family="monospace" font-size="13" font-weight="bold">✅ verifier</text>
+    <text x="85" y="37" text-anchor="middle" fill="#8b949e" font-family="monospace" font-size="8">claude-opus-4-6</text>
+    <text x="85" y="54" text-anchor="middle" fill="#e6edf3" font-family="monospace" font-size="9">Validation</text>
+    <circle cx="158" cy="12" r="5" fill="#bc8cff" opacity="0.6"/>
   </g>
 
-  <!-- challenger: opus, purple — bottom right -->
-  <g transform="translate(595, 362)">
-    <rect width="140" height="70" rx="10" fill="rgba(188,140,255,0.08)" stroke="#bc8cff" stroke-width="1.5"/>
-    <text x="70" y="20" text-anchor="middle" fill="#bc8cff" font-family="monospace" font-size="14" font-weight="bold">🥊 challenger</text>
-    <text x="70" y="37" text-anchor="middle" fill="#8b949e" font-family="monospace" font-size="9">opus</text>
-    <text x="70" y="54" text-anchor="middle" fill="#e6edf3" font-family="monospace" font-size="9">Pressure Test</text>
-    <circle cx="130" cy="12" r="5" fill="#bc8cff" opacity="0.6"/>
+  <!-- challenger: claude-opus-4-6, purple — bottom right -->
+  <g transform="translate(645, 372)">
+    <rect width="170" height="70" rx="10" fill="rgba(188,140,255,0.08)" stroke="#bc8cff" stroke-width="1.5"/>
+    <text x="85" y="20" text-anchor="middle" fill="#bc8cff" font-family="monospace" font-size="13" font-weight="bold">🥊 challenger</text>
+    <text x="85" y="37" text-anchor="middle" fill="#8b949e" font-family="monospace" font-size="8">claude-opus-4-6</text>
+    <text x="85" y="54" text-anchor="middle" fill="#e6edf3" font-family="monospace" font-size="9">Pressure Test</text>
+    <circle cx="158" cy="12" r="5" fill="#bc8cff" opacity="0.6"/>
   </g>
 
   <!-- Legend -->
-  <g transform="translate(20, 468)" font-family="monospace" font-size="9">
+  <g transform="translate(20, 488)" font-family="monospace" font-size="9">
     <circle cx="8" cy="6" r="5" fill="#58a6ff" opacity="0.8"/>
-    <text x="20" y="10" fill="#8b949e">Sonnet (fast)</text>
-    <circle cx="118" cy="6" r="5" fill="#bc8cff" opacity="0.8"/>
-    <text x="130" y="10" fill="#8b949e">Opus (deep)</text>
-    <circle cx="228" cy="6" r="5" fill="#f0883e" opacity="0.8"/>
-    <text x="240" y="10" fill="#8b949e">Codex (reasoning)</text>
+    <text x="20" y="10" fill="#8b949e">claude-sonnet-4-6 (fast)</text>
+    <circle cx="188" cy="6" r="5" fill="#bc8cff" opacity="0.8"/>
+    <text x="200" y="10" fill="#8b949e">claude-opus-4-6 (deep)</text>
+    <circle cx="378" cy="6" r="5" fill="#f0883e" opacity="0.8"/>
+    <text x="390" y="10" fill="#8b949e">gpt-5.3-codex (reasoning)</text>
   </g>
 </svg>
