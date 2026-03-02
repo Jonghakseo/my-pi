@@ -1,7 +1,7 @@
 import type { ExtensionAPI, ExtensionContext, InputEventResult } from "@mariozechner/pi-coding-agent";
 import { copyToClipboard } from "@mariozechner/pi-coding-agent";
 
-import { buildCatalogHint, buildFirstTurnInjection, isFirstTurn, markFirstTurnDone, resetFirstTurn } from "./inject.ts";
+import { buildCatalogHint } from "./inject.ts";
 import { extractKeywords } from "./keyword.ts";
 import { resolveProjectId } from "./project-id.ts";
 import {
@@ -452,11 +452,11 @@ export default function memoryLayerExtension(pi: ExtensionAPI) {
 		description:
 			"Search the user's long-term memory for relevant information. " +
 			"Use this when you need to check if there are stored rules, preferences, or lessons " +
-			"related to the current task. You can search by keywords, filter by scope, or retrieve by ID.",
+			"related to the current task. You can search by keywords, or retrieve by ID.",
 		parameters: RecallParams,
 		async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
 			try {
-				const { query, scope, id } = params as { query?: string; scope?: MemoryScope; id?: string };
+				const { query, id } = params as { query?: string; id?: string };
 				currentProjectId = resolveCurrentProjectId(ctx.cwd);
 
 				// By ID
@@ -480,7 +480,7 @@ export default function memoryLayerExtension(pi: ExtensionAPI) {
 						.toLowerCase()
 						.split(/\s+/)
 						.filter((w) => w.length >= 2 || /^[\uAC00-\uD7AF]$/.test(w));
-					const scored = await searchMemories(words, scope, currentProjectId);
+					const scored = await searchMemories(words, undefined, currentProjectId);
 					if (!scored.length) {
 						return {
 							content: [{ type: "text" as const, text: "No matching memories found." }],
@@ -501,17 +501,16 @@ export default function memoryLayerExtension(pi: ExtensionAPI) {
 
 				// No query — list all active
 				const all = await getAllActiveMemories(currentProjectId);
-				const filtered = scope ? all.filter((m) => m.scope === scope) : all;
-				if (!filtered.length) {
+				if (!all.length) {
 					return {
 						content: [{ type: "text" as const, text: "No memories stored." }],
 						details: undefined,
 					};
 				}
 
-				const lines = filtered.map((m) => `[${m.id}] ${m.title} (${m.scope}) — keywords: ${m.keywords.join(", ")}`);
+				const lines = all.map((m) => `[${m.id}] ${m.title} (${m.scope}) — keywords: ${m.keywords.join(", ")}`);
 				return {
-					content: [{ type: "text" as const, text: `${filtered.length} memories:\n${lines.join("\n")}` }],
+					content: [{ type: "text" as const, text: `${all.length} memories:\n${lines.join("\n")}` }],
 					details: undefined,
 				};
 			} catch (err: unknown) {
@@ -628,7 +627,6 @@ export default function memoryLayerExtension(pi: ExtensionAPI) {
 	pi.on("session_start", async (_event, ctx) => {
 		try {
 			await ensureDir();
-			resetFirstTurn();
 			currentProjectId = resolveCurrentProjectId(ctx.cwd);
 		} catch {
 			// Graceful degradation: memory features disabled
@@ -637,7 +635,6 @@ export default function memoryLayerExtension(pi: ExtensionAPI) {
 
 	pi.on("session_switch", async (_event, ctx) => {
 		try {
-			resetFirstTurn();
 			currentProjectId = resolveCurrentProjectId(ctx.cwd);
 		} catch {
 			// Graceful degradation
@@ -646,7 +643,6 @@ export default function memoryLayerExtension(pi: ExtensionAPI) {
 
 	pi.on("session_fork", async (_event, ctx) => {
 		try {
-			resetFirstTurn();
 			currentProjectId = resolveCurrentProjectId(ctx.cwd);
 		} catch {
 			// Graceful degradation
@@ -659,35 +655,9 @@ export default function memoryLayerExtension(pi: ExtensionAPI) {
 		try {
 			currentProjectId = resolveCurrentProjectId(ctx.cwd);
 
-			if (isFirstTurn()) {
-				markFirstTurnDone();
-
-				// First turn: keyword-match → inject top 2-3 memories
-				const injection = await buildFirstTurnInjection(event.prompt, currentProjectId);
-				if (injection) {
-					// Also append catalog hint to system prompt
-					const hint = await buildCatalogHint(currentProjectId);
-					return {
-						message: {
-							customType: "memory-layer",
-							content: injection.content,
-							display: true,
-						},
-						systemPrompt: hint ? event.systemPrompt + hint : undefined,
-					};
-				}
-
-				// No match on first turn — still add catalog hint if memories exist
-				const hint = await buildCatalogHint(currentProjectId);
-				if (hint) {
-					return { systemPrompt: event.systemPrompt + hint };
-				}
-			} else {
-				// Subsequent turns: catalog hint only
-				const hint = await buildCatalogHint(currentProjectId);
-				if (hint) {
-					return { systemPrompt: event.systemPrompt + hint };
-				}
+			const hint = await buildCatalogHint(currentProjectId);
+			if (hint) {
+				return { systemPrompt: event.systemPrompt + hint };
 			}
 		} catch {
 			// Graceful degradation: no injection on error

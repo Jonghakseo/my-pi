@@ -40,7 +40,6 @@ export const RecallParams = Type.Object({
 	query: Type.Optional(
 		Type.String({ description: "Search query (keywords or natural language) to find relevant memories" }),
 	),
-	scope: Type.Optional(StringEnum(["user", "project"] as const, { description: "Filter by scope" })),
 	id: Type.Optional(Type.String({ description: "Retrieve a specific memory by ID" })),
 });
 
