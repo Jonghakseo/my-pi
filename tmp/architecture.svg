@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 520" width="800" height="520">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 450" width="800" height="450">
   <defs>
     <filter id="glow">
       <feGaussianBlur stdDeviation="2" result="blur"/>
@@ -11,7 +11,7 @@
   </defs>
 
   <!-- Background -->
-  <rect width="800" height="520" fill="url(#bgGrad)" rx="12"/>
+  <rect width="800" height="450" fill="url(#bgGrad)" rx="12"/>
 
   <!-- Title -->
   <text x="400" y="32" text-anchor="middle" fill="#e6edf3" font-family="monospace" font-size="16" font-weight="bold" filter="url(#glow)">⚙ System Architecture</text>
@@ -119,55 +119,34 @@
   <line x1="400" y1="356" x2="400" y2="370" stroke="#484f58" stroke-width="1.5"/>
   <polygon points="394,367 400,374 406,367" fill="#484f58"/>
 
-  <!-- Layer 4: Automation -->
-  <rect x="40" y="376" width="720" height="50" rx="10" fill="rgba(240,136,62,0.05)" stroke="#f0883e" stroke-width="1.5"/>
-  <text x="60" y="396" fill="#f0883e" font-family="monospace" font-size="11" font-weight="bold">AUTOMATION LAYER</text>
-
-  <g font-family="monospace" font-size="9.5" fill="#e6edf3">
-    <text x="60" y="416" fill="#e6edf3">Daily Retrospective:  </text>
-    <text x="230" y="416" fill="#f0883e">backup</text>
-    <text x="280" y="416" fill="#484f58">→</text>
-    <text x="300" y="416" fill="#f0883e">collect</text>
-    <text x="350" y="416" fill="#484f58">→</text>
-    <text x="370" y="416" fill="#f0883e">analyze</text>
-    <text x="425" y="416" fill="#484f58">→</text>
-    <text x="445" y="416" fill="#f0883e">Slack DM</text>
-    <text x="560" y="416" fill="#484f58">│</text>
-    <text x="580" y="416" fill="#8b949e">cron 23:50 KST</text>
-  </g>
-
-  <!-- Arrow down -->
-  <line x1="400" y1="426" x2="400" y2="440" stroke="#484f58" stroke-width="1.5"/>
-  <polygon points="394,437 400,444 406,437" fill="#484f58"/>
-
-  <!-- Layer 5: Infrastructure -->
-  <rect x="40" y="446" width="720" height="56" rx="10" fill="rgba(63,185,80,0.05)" stroke="#3fb950" stroke-width="1.5"/>
-  <text x="60" y="466" fill="#3fb950" font-family="monospace" font-size="11" font-weight="bold">INFRASTRUCTURE ─ MCP Tools</text>
+  <!-- Layer 4: Infrastructure -->
+  <rect x="40" y="376" width="720" height="56" rx="10" fill="rgba(63,185,80,0.05)" stroke="#3fb950" stroke-width="1.5"/>
+  <text x="60" y="396" fill="#3fb950" font-family="monospace" font-size="11" font-weight="bold">INFRASTRUCTURE ─ MCP Tools</text>
 
   <g font-family="monospace" font-size="10" fill="#e6edf3">
-    <rect x="60" y="474" width="70" height="20" rx="4" fill="rgba(63,185,80,0.12)" stroke="#3fb950" stroke-width="0.8"/>
-    <text x="95" y="488" text-anchor="middle">Jira</text>
+    <rect x="60" y="404" width="70" height="20" rx="4" fill="rgba(63,185,80,0.12)" stroke="#3fb950" stroke-width="0.8"/>
+    <text x="95" y="418" text-anchor="middle">Jira</text>
 
-    <rect x="142" y="474" width="70" height="20" rx="4" fill="rgba(63,185,80,0.12)" stroke="#3fb950" stroke-width="0.8"/>
-    <text x="177" y="488" text-anchor="middle">Slack</text>
+    <rect x="142" y="404" width="70" height="20" rx="4" fill="rgba(63,185,80,0.12)" stroke="#3fb950" stroke-width="0.8"/>
+    <text x="177" y="418" text-anchor="middle">Slack</text>
 
-    <rect x="224" y="474" width="70" height="20" rx="4" fill="rgba(63,185,80,0.12)" stroke="#3fb950" stroke-width="0.8"/>
-    <text x="259" y="488" text-anchor="middle">Gmail</text>
+    <rect x="224" y="404" width="70" height="20" rx="4" fill="rgba(63,185,80,0.12)" stroke="#3fb950" stroke-width="0.8"/>
+    <text x="259" y="418" text-anchor="middle">Gmail</text>
 
-    <rect x="306" y="474" width="70" height="20" rx="4" fill="rgba(63,185,80,0.12)" stroke="#3fb950" stroke-width="0.8"/>
-    <text x="341" y="488" text-anchor="middle">Calendar</text>
+    <rect x="306" y="404" width="70" height="20" rx="4" fill="rgba(63,185,80,0.12)" stroke="#3fb950" stroke-width="0.8"/>
+    <text x="341" y="418" text-anchor="middle">Calendar</text>
 
-    <rect x="388" y="474" width="70" height="20" rx="4" fill="rgba(63,185,80,0.12)" stroke="#3fb950" stroke-width="0.8"/>
-    <text x="423" y="488" text-anchor="middle">GA4</text>
+    <rect x="388" y="404" width="70" height="20" rx="4" fill="rgba(63,185,80,0.12)" stroke="#3fb950" stroke-width="0.8"/>
+    <text x="423" y="418" text-anchor="middle">GA4</text>
 
-    <rect x="470" y="474" width="70" height="20" rx="4" fill="rgba(63,185,80,0.12)" stroke="#3fb950" stroke-width="0.8"/>
-    <text x="505" y="488" text-anchor="middle">Figma</text>
+    <rect x="470" y="404" width="70" height="20" rx="4" fill="rgba(63,185,80,0.12)" stroke="#3fb950" stroke-width="0.8"/>
+    <text x="505" y="418" text-anchor="middle">Figma</text>
 
-    <rect x="552" y="474" width="70" height="20" rx="4" fill="rgba(63,185,80,0.12)" stroke="#3fb950" stroke-width="0.8"/>
-    <text x="587" y="488" text-anchor="middle">Database</text>
+    <rect x="552" y="404" width="70" height="20" rx="4" fill="rgba(63,185,80,0.12)" stroke="#3fb950" stroke-width="0.8"/>
+    <text x="587" y="418" text-anchor="middle">Database</text>
 
-    <rect x="634" y="474" width="70" height="20" rx="4" fill="rgba(63,185,80,0.12)" stroke="#3fb950" stroke-width="0.8"/>
-    <text x="669" y="488" text-anchor="middle">GitHub</text>
+    <rect x="634" y="404" width="70" height="20" rx="4" fill="rgba(63,185,80,0.12)" stroke="#3fb950" stroke-width="0.8"/>
+    <text x="669" y="418" text-anchor="middle">GitHub</text>
   </g>
 
   <!-- Model legend -->
