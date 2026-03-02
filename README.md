@@ -4,17 +4,17 @@
 
 **A personal AI operating system built on [pi](https://github.com/mariozechner/pi-coding-agent)**
 
-*9 specialized agents · 20+ extensions · automated daily retrospectives · one developer's opinionated setup*
+*9 specialized agents · 20+ extensions · one developer's opinionated setup*
 
 <br/>
 
-`🤖 9 Agents` &nbsp; `🧩 20+ Extensions` &nbsp; `🎨 5 Themes` &nbsp; `📊 Daily Retro` &nbsp; `🔧 8 MCP Integrations`
+`🤖 9 Agents` &nbsp; `🧩 20+ Extensions` &nbsp; `🎨 5 Themes` &nbsp; `🔧 8 MCP Integrations`
 
 <br/>
 
 > What if you treated your AI coding agent configuration as a **first-class engineering project**?
 >
-> This repo is the answer — a living, daily-driven configuration that transforms pi from a CLI tool into a multi-agent orchestration platform with specialized roles, safety guards, and automated self-reflection.
+> This repo is the answer — a living, daily-driven configuration that transforms pi from a CLI tool into a multi-agent orchestration platform with specialized roles, safety guards, and deep customization.
 
 </div>
 
@@ -26,14 +26,13 @@
   <img src="./tmp/architecture.svg" alt="System Architecture" width="800"/>
 </p>
 
-The system is organized in **five layers**:
+The system is organized in **four layers**:
 
 | Layer | Purpose |
 |---|---|
 | **User / pi TUI** | Interactive terminal interface |
 | **Extensions** | 20+ TypeScript plugins — subagent management, voice I/O, MCP bridge, UI overlays, safety guards |
 | **Agent Orchestra** | 9 purpose-built agents with distinct models and roles |
-| **Automation** | Daily retrospective pipeline — backup, collect, analyze, deliver via Slack |
 | **Infrastructure** | MCP tool integrations — Jira, Slack, Gmail, Calendar, GA4, Figma, Database, GitHub |
 
 ---
@@ -162,40 +161,6 @@ Automatically sets the session purpose from the current context.
 
 ---
 
-## 📊 Daily Retrospective
-
-<p align="center">
-  <img src="./tmp/daily-retro.svg" alt="Daily Retrospective Pipeline" width="800"/>
-</p>
-
-An automated pipeline that runs daily via `launchd`, analyzing every session for patterns, insights, and improvements:
-
-| Step | Script | What It Does |
-|---|---|---|
-| 1 | `backup-sessions.py` | Converts JSONL session files → readable Markdown archives |
-| 2 | `collect-daily-data.py` | Parses archives → structured stats JSON (sessions, messages, tools, projects, costs) |
-| 3 | `daily-retrospective.sh` | Launches pi to analyze the day's data with AI |
-| 4 | Slack DM | Delivers insights and pattern analysis directly to Slack |
-
-<details>
-<summary><strong>Sample Daily Stats (real data)</strong></summary>
-
-```json
-{
-  "sessionCount": 948,
-  "mainSessionCount": 212,
-  "subagentSessionCount": 736,
-  "userMessageCount": 3505,
-  "assistantMessageCount": 7579,
-  "toolCallCount": 32477,
-  "compactionCount": 50
-}
-```
-
-</details>
-
----
-
 ## 🎨 Themes
 
 Five hand-picked themes, hot-swappable with `Ctrl+X`:
@@ -273,13 +238,10 @@ Every agent prompt is crafted like a job description. Every extension solves a r
 **2. Specialization beats generalization.**
 A reviewer that only reviews catches more bugs than a generalist asked to "also review." The challenger agent exists solely to poke holes — and it's one of the most valuable agents in the system.
 
-**3. Self-reflection should be automated.**
-The daily retrospective isn't optional discipline — it's a cron job. Every session is captured, analyzed, and delivered as insights. The system improves itself.
-
-**4. Safety is a feature, not a constraint.**
+**3. Safety is a feature, not a constraint.**
 `damage-control-rmrf.ts` exists because one accidental `rm -rf /` is one too many. Typo detection, confirmation prompts, and thinking visibility are all first-class concerns.
 
-**5. The terminal is the IDE.**
+**4. The terminal is the IDE.**
 Voice input, git diffs, GitHub PRs, screensavers — all inside the terminal. No context-switching required.
 
 ---
@@ -290,9 +252,6 @@ This is not a demo project. It's a **living configuration** used daily for produ
 
 | Metric | Value |
 |---|---|
-| Daily sessions | ~948 |
-| Daily messages | ~3,500 |
-| Daily tool calls | ~32,000 |
 | Active extensions | 20+ |
 | Agent definitions | 9 |
 | Themes | 5 |
