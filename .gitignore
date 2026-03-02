@@ -15,6 +15,7 @@ pi-crash.log
 # Internal pi data
 .pi/
 state/
+.context/
 
 # OS / IDE
 .DS_Store
