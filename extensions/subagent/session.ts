@@ -167,9 +167,7 @@ export function wrapTaskWithMainContext(
 ): string {
 	const rawSessionFile = options?.mainSessionFile;
 	const sessionFile =
-		typeof rawSessionFile === "string"
-			? rawSessionFile.replace(/[\r\n\t]+/g, "").trim() || undefined
-			: undefined;
+		typeof rawSessionFile === "string" ? rawSessionFile.replace(/[\r\n\t]+/g, "").trim() || undefined : undefined;
 	const totalMessageCount = options?.totalMessageCount;
 
 	if (!contextText && !sessionFile) return task;
@@ -179,10 +177,7 @@ export function wrapTaskWithMainContext(
 		sections.push(`[Main Session Context]\n${contextText}`);
 	}
 	if (sessionFile) {
-		const logLines = [
-			"[Main Session Log Access]",
-			`Main agent session JSONL path: ${sessionFile}`,
-		];
+		const logLines = ["[Main Session Log Access]", `Main agent session JSONL path: ${sessionFile}`];
 		if (totalMessageCount !== undefined && totalMessageCount > 0) {
 			logLines.push(`Total messages in main session: ${totalMessageCount} (only the last 20 are included above)`);
 		}

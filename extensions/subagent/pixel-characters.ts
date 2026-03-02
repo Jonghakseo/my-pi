@@ -115,7 +115,7 @@ const hardhatBase = [
 	"..SES..", // Face
 	".OOOOO.", // Vest
 	".OOOOO.", // Vest
-	"..N.N.."  // Boots
+	"..N.N..", // Boots
 ];
 
 // ─── 2. Rotating Globe (browser) ─────────────────────────────────────────────
@@ -128,13 +128,13 @@ const globeF3 = ["..BBB..", ".BGBBB.", "BGBBBGB", "BBGBBGB", ".BBBGB.", "..BBB..
 // ─── 3. Boxing Glove (challenger) ────────────────────────────────────────────
 // Red glove punching Left (<--)
 const gloveRetract = [".......", "..RRRR.", ".RRRRRW", ".RRRRRW", "..RRR..", "......."];
-const gloveExtend =  [".......", "RRRR...", "RRRRRW.", "RRRRRW.", "RRR....", "......."];
-const gloveHit =     ["Y......", "RRRR...", "RRRRRW.", "RRRRRW.", "RRR....", "Y......"];
+const gloveExtend = [".......", "RRRR...", "RRRRRW.", "RRRRRW.", "RRR....", "......."];
+const gloveHit = ["Y......", "RRRR...", "RRRRRW.", "RRRRRW.", "RRR....", "Y......"];
 
 // ─── 4. Folder Icon (finder) ─────────────────────────────────────────────────
 // Manila folder style.
 const folderClosed = [".OOO...", "OOOOOOO", "OwwwwwO", "OwwwwwO", "OwwwwwO", "OOOOOOO"];
-const folderOpen =   [".OOO.W.", "OOOOOOO", "OwWKWwO", "OwWKWwO", "OwwwwwO", "OOOOOOO"];
+const folderOpen = [".OOO.W.", "OOOOOOO", "OwWKWwO", "OwWKWwO", "OwwwwwO", "OOOOOOO"];
 
 // ─── 5. Wizard Hat (planner) ─────────────────────────────────────────────────
 // Purple hat with yellow star/belt.
@@ -158,7 +158,7 @@ const magF3 = ["..LLL..", ".LwwwL.", ".LWWWL.", "..LLL..", "...N...", "....N.."]
 // ─── 8. Checkbox (verifier) ─────────────────────────────────────────────────
 // Box with Green V checkmark.
 const checkEmpty = ["LLLLLLL", "LWWWWWL", "LWWWWWL", "LWWWWWL", "LWWWWWL", "LLLLLLL"];
-const checkDone =  ["LLLLLLL", "LWWWWGL", "LWWWGWL", "LGWGWWL", "LWGWWWL", "LLLLLLL"];
+const checkDone = ["LLLLLLL", "LWWWWGL", "LWWWGWL", "LGWGWWL", "LWGWWWL", "LLLLLLL"];
 
 // ─── 9. Judge's Gavel (decider) ─────────────────────────────────────────────
 // Brown hammer.
@@ -171,120 +171,71 @@ const gavelF2 = [".......", ".......", ".......", "N......", "NNNN...", "NNNN.N.
 // ═══════════════════════════════════════════════════════════════════════════════
 
 // Cat: Grey, pink ears/nose.
-const catBase =      [
-	".L...L.",
-	"LLLLLLL",
-	"L.W.W.L",
-	"L..I..L",
-	".LLLLL.",
-	"..L.L.."
-];
+const catBase = [".L...L.", "LLLLLLL", "L.W.W.L", "L..I..L", ".LLLLL.", "..L.L.."];
 
 // Bunny: White, pink ears.
-const bunnyBase =    [
-	".W...W.",
-	".W...W.",
-	".WWWWW.",
-	".W.I.W.",
-	".WWWWW.",
-	"..W.W.."
-];
+const bunnyBase = [".W...W.", ".W...W.", ".WWWWW.", ".W.I.W.", ".WWWWW.", "..W.W.."];
 
 // Bear: Brown, round ears.
-const bearBase =     [
-	".N...N.",
-	".NNNNN.",
-	".NW.WN.",
-	".N.K.N.",
-	".NNNNN.",
-	"..N.N.."
-];
+const bearBase = [".N...N.", ".NNNNN.", ".NW.WN.", ".N.K.N.", ".NNNNN.", "..N.N.."];
 
 // Penguin: Black & White.
-const penguinBase =  [
-	"..KKK..",
-	".KKKKK.",
-	".K.O.K.",
-	".WWWWW.",
-	".WWWWW.",
-	".O...O."
-];
+const penguinBase = ["..KKK..", ".KKKKK.", ".K.O.K.", ".WWWWW.", ".WWWWW.", ".O...O."];
 
 // Fox: Orange, white chin.
-const foxBase =      [
-	".O...O.",
-	".OOOOO.",
-	".OW.WO.",
-	".WWKWW.",
-	".OOOOO.",
-	"..O.O.."
-];
+const foxBase = [".O...O.", ".OOOOO.", ".OW.WO.", ".WWKWW.", ".OOOOO.", "..O.O.."];
 
 // Chick: Yellow, orange beak.
-const chickBase =    [
+const chickBase = [
 	"..Y.Y..", // Comb
 	".YYYYY.",
 	".YW.WY.",
 	".Y.O.Y.",
 	".YYYYY.",
-	"..O.O.."
+	"..O.O..",
 ];
 
 // Ghost: White, floaty.
-const ghostBase =    [
-	"..WWW..",
-	".WWWWW.",
-	".WE.EW.",
-	".WWWWW.",
-	".WWWWW.",
-	".W.W.W."
-];
-const ghostFloat =   [
-	".......",
-	"..WWW..",
-	".WWWWW.",
-	".WE.EW.",
-	".WWWWW.",
-	".W.W.W."
-];
+const ghostBase = ["..WWW..", ".WWWWW.", ".WE.EW.", ".WWWWW.", ".WWWWW.", ".W.W.W."];
+const ghostFloat = [".......", "..WWW..", ".WWWWW.", ".WE.EW.", ".WWWWW.", ".W.W.W."];
 
 // Robot: Grey/Blue, red eye.
-const robotBase =    [
+const robotBase = [
 	"...L...", // Antenna
 	".DDDDD.",
 	".D.R.D.", // Red eye
 	".DDDDD.",
 	".LLLLL.",
-	".D...D."
+	".D...D.",
 ];
 
 // Dragon: Green, red wings.
-const dragonBase =   [
+const dragonBase = [
 	".R...R.", // Wings
 	".GGGGG.",
 	"G.W.W.G",
 	"G..K..G", // Nostrils
 	".GGGGG.",
-	"..G.G.."
+	"..G.G..",
 ];
 
 // Frog: Green, big eyes.
-const frogBase =     [
+const frogBase = [
 	".G...G.",
 	"GGGGGGG",
 	"G.W.W.G", // Eyes
 	"G..g..G", // Mouth
 	".GGGGG.",
-	"..G.G.."
+	"..G.G..",
 ];
 
 // Alien: Green, classic invader.
-const alienBase =    [
+const alienBase = [
 	"..G.G..",
 	...frogBase.slice(1, 3), // Reuse head/eyes
 	".GGGGG.",
 	".G.G.G.",
-	"G.....G"
+	"G.....G",
 ];
 
 // Princess: Pink dress, crown.
@@ -294,44 +245,30 @@ const princessBase = [
 	".SSSSS.", // Face
 	".IIIII.", // Dress
 	".IIIII.",
-	"..I.I.."
+	"..I.I..",
 ];
 
 // Slime: Green jelly.
-const slimeBase =    [
+const slimeBase = [
 	".......",
 	"..GGG..",
 	".GWGWG.", // Highlights
 	".GGGGG.",
 	"GGGGGGG",
-	".GG.GG."
+	".GG.GG.",
 ];
-const slimeBounce =  [
-	".......",
-	".......",
-	"..GGG..",
-	".GWGWG.",
-	"GGGGGGG",
-	"GGGGGGG"
-];
+const slimeBounce = [".......", ".......", "..GGG..", ".GWGWG.", "GGGGGGG", "GGGGGGG"];
 
 // Mushroom: Red cap, white spots.
-const mushroomBase =  [
+const mushroomBase = [
 	"..RRR..",
 	".RWRWR.",
 	"RRRRRRR",
 	"..SSS..", // Stem
 	"..SSS..",
-	"..S.S.."
+	"..S.S..",
 ];
-const mushroomSwell = [
-	".RRRRR.",
-	"RWRWRWR",
-	"RRRRRRR",
-	"..SSS..",
-	"..SSS..",
-	"..S.S.."
-];
+const mushroomSwell = [".RRRRR.", "RWRWRWR", "RRRRRRR", "..SSS..", "..SSS..", "..S.S.."];
 
 function recolorSlime(base: ReadonlyArray<string>, from: string, to: string): string[] {
 	return base.map((row) => row.replaceAll(from, to));

@@ -120,5 +120,3 @@ export function updateRunFromResult(state: CommandRunState, result: SingleResult
 		state.lastActivityAt = Date.now();
 	}
 }
-
-

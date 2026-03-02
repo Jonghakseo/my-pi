@@ -837,7 +837,10 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 							? rawMainSessionFile.replace(/[\r\n\t]+/g, "").trim() || undefined
 							: undefined;
 					if (subContextText || mainSessionFile) {
-						taskForAgent = wrapTaskWithMainContext(taskForAgent, subContextText, { mainSessionFile, totalMessageCount });
+						taskForAgent = wrapTaskWithMainContext(taskForAgent, subContextText, {
+							mainSessionFile,
+							totalMessageCount,
+						});
 					} else {
 						ctx.ui.notify(
 							"Main session context is unavailable in this mode. Running with dedicated sub-session.",
