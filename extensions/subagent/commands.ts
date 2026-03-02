@@ -828,14 +828,16 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 				if (forceMainContext) {
 					// Extract main session context as text instead of copying the session file.
 					// This prevents subagents from inheriting the main agent's persona.
-					const subContextText = buildMainContextText(ctx);
+					const subContextResult = buildMainContextText(ctx);
+					const subContextText = typeof subContextResult === "string" ? subContextResult : subContextResult.text;
+					const totalMessageCount = typeof subContextResult === "string" ? 0 : subContextResult.totalMessageCount;
 					const rawMainSessionFile = ctx.sessionManager?.getSessionFile?.() ?? undefined;
 					const mainSessionFile =
 						typeof rawMainSessionFile === "string"
 							? rawMainSessionFile.replace(/[\r\n\t]+/g, "").trim() || undefined
 							: undefined;
 					if (subContextText || mainSessionFile) {
-						taskForAgent = wrapTaskWithMainContext(taskForAgent, subContextText, { mainSessionFile });
+						taskForAgent = wrapTaskWithMainContext(taskForAgent, subContextText, { mainSessionFile, totalMessageCount });
 					} else {
 						ctx.ui.notify(
 							"Main session context is unavailable in this mode. Running with dedicated sub-session.",

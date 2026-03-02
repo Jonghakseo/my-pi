@@ -236,7 +236,9 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 
 		// Extract main session context as text instead of copying session file.
 		// This prevents subagents from inheriting the main agent's persona.
-		const mainContextText = inheritMainContext ? buildMainContextText(ctx) : "";
+		const mainContextResult = inheritMainContext ? buildMainContextText(ctx) : { text: "", totalMessageCount: 0 };
+		const mainContextText = typeof mainContextResult === "string" ? mainContextResult : mainContextResult.text;
+		const totalMessageCount = typeof mainContextResult === "string" ? 0 : mainContextResult.totalMessageCount;
 
 		const hasChain = (params.chain?.length ?? 0) > 0;
 		const hasSingle = Boolean(params.agent && params.task);
@@ -728,7 +730,7 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 						ctx.cwd,
 						agents,
 						resolvedAgent,
-						wrapTaskWithMainContext(params.task!, mainContextText, { mainSessionFile }),
+						wrapTaskWithMainContext(params.task!, mainContextText, { mainSessionFile, totalMessageCount }),
 						params.cwd,
 						undefined,
 						abortController.signal,
@@ -937,7 +939,7 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 					ctx.cwd,
 					agents,
 					step.agent,
-					wrapTaskWithMainContext(taskWithContext, mainContextText, { mainSessionFile }),
+					wrapTaskWithMainContext(taskWithContext, mainContextText, { mainSessionFile, totalMessageCount }),
 					step.cwd,
 					i + 1,
 					signal,
@@ -969,7 +971,7 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 				ctx.cwd,
 				agents,
 				params.agent,
-				wrapTaskWithMainContext(params.task, mainContextText, { mainSessionFile }),
+				wrapTaskWithMainContext(params.task, mainContextText, { mainSessionFile, totalMessageCount }),
 				params.cwd,
 				undefined,
 				signal,
