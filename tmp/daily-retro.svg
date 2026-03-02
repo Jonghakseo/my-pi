@@ -1,0 +1,120 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 200" width="800" height="200">
+  <defs>
+    <linearGradient id="rbgGrad" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#0d1117"/>
+      <stop offset="50%" stop-color="#0f1318"/>
+      <stop offset="100%" stop-color="#0d1117"/>
+    </linearGradient>
+    <linearGradient id="arrowGrad" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#f0883e"/>
+      <stop offset="100%" stop-color="#3fb950"/>
+    </linearGradient>
+    <linearGradient id="pipeGrad" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="rgba(240,136,62,0.3)"/>
+      <stop offset="100%" stop-color="rgba(63,185,80,0.3)"/>
+    </linearGradient>
+    <filter id="rglow">
+      <feGaussianBlur stdDeviation="2" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+
+  <!-- Background -->
+  <rect width="800" height="200" fill="url(#rbgGrad)" rx="12"/>
+
+  <!-- Title -->
+  <text x="400" y="28" text-anchor="middle" fill="#e6edf3" font-family="monospace" font-size="14" font-weight="bold">📊 Daily Retrospective Pipeline</text>
+  <text x="400" y="44" text-anchor="middle" fill="#484f58" font-family="monospace" font-size="9">Automated at 23:50 KST via cron</text>
+
+  <!-- Pipeline flow line -->
+  <rect x="50" y="92" width="700" height="4" rx="2" fill="url(#pipeGrad)" opacity="0.4"/>
+
+  <!-- Step 1: Sessions -->
+  <g transform="translate(28, 58)">
+    <rect width="100" height="72" rx="8" fill="rgba(88,166,255,0.08)" stroke="#58a6ff" stroke-width="1.2"/>
+    <text x="50" y="22" text-anchor="middle" fill="#58a6ff" font-family="monospace" font-size="10" font-weight="bold">Sessions</text>
+    <text x="50" y="38" text-anchor="middle" fill="#8b949e" font-family="monospace" font-size="8">JSONL files</text>
+    <line x1="10" y1="46" x2="90" y2="46" stroke="#21262d" stroke-width="0.5"/>
+    <text x="50" y="60" text-anchor="middle" fill="#e6edf3" font-family="monospace" font-size="8">948 sessions</text>
+    <text x="50" y="70" text-anchor="middle" fill="#484f58" font-family="monospace" font-size="7">/day avg</text>
+  </g>
+
+  <!-- Arrow 1 -->
+  <g transform="translate(132, 86)">
+    <line x1="0" y1="8" x2="28" y2="8" stroke="url(#arrowGrad)" stroke-width="2"/>
+    <polygon points="26,3 34,8 26,13" fill="#f0883e"/>
+  </g>
+
+  <!-- Step 2: Backup -->
+  <g transform="translate(168, 58)">
+    <rect width="100" height="72" rx="8" fill="rgba(240,136,62,0.08)" stroke="#f0883e" stroke-width="1.2"/>
+    <text x="50" y="22" text-anchor="middle" fill="#f0883e" font-family="monospace" font-size="10" font-weight="bold">backup</text>
+    <text x="50" y="38" text-anchor="middle" fill="#8b949e" font-family="monospace" font-size="8">.py script</text>
+    <line x1="10" y1="46" x2="90" y2="46" stroke="#21262d" stroke-width="0.5"/>
+    <text x="50" y="60" text-anchor="middle" fill="#e6edf3" font-family="monospace" font-size="8">JSONL → MD</text>
+    <text x="50" y="70" text-anchor="middle" fill="#484f58" font-family="monospace" font-size="7">archives</text>
+  </g>
+
+  <!-- Arrow 2 -->
+  <g transform="translate(272, 86)">
+    <line x1="0" y1="8" x2="28" y2="8" stroke="url(#arrowGrad)" stroke-width="2"/>
+    <polygon points="26,3 34,8 26,13" fill="#f0883e"/>
+  </g>
+
+  <!-- Step 3: Collect -->
+  <g transform="translate(308, 58)">
+    <rect width="100" height="72" rx="8" fill="rgba(240,136,62,0.08)" stroke="#f0883e" stroke-width="1.2"/>
+    <text x="50" y="22" text-anchor="middle" fill="#f0883e" font-family="monospace" font-size="10" font-weight="bold">collect</text>
+    <text x="50" y="38" text-anchor="middle" fill="#8b949e" font-family="monospace" font-size="8">.py script</text>
+    <line x1="10" y1="46" x2="90" y2="46" stroke="#21262d" stroke-width="0.5"/>
+    <text x="50" y="60" text-anchor="middle" fill="#e6edf3" font-family="monospace" font-size="8">3,505 msgs</text>
+    <text x="50" y="70" text-anchor="middle" fill="#484f58" font-family="monospace" font-size="7">stats JSON</text>
+  </g>
+
+  <!-- Arrow 3 -->
+  <g transform="translate(412, 86)">
+    <line x1="0" y1="8" x2="28" y2="8" stroke="url(#arrowGrad)" stroke-width="2"/>
+    <polygon points="26,3 34,8 26,13" fill="#f0883e"/>
+  </g>
+
+  <!-- Step 4: Analyze -->
+  <g transform="translate(448, 58)">
+    <rect width="100" height="72" rx="8" fill="rgba(188,140,255,0.08)" stroke="#bc8cff" stroke-width="1.2"/>
+    <text x="50" y="22" text-anchor="middle" fill="#bc8cff" font-family="monospace" font-size="10" font-weight="bold">pi analyze</text>
+    <text x="50" y="38" text-anchor="middle" fill="#8b949e" font-family="monospace" font-size="8">AI analysis</text>
+    <line x1="10" y1="46" x2="90" y2="46" stroke="#21262d" stroke-width="0.5"/>
+    <text x="50" y="60" text-anchor="middle" fill="#e6edf3" font-family="monospace" font-size="8">32,477 calls</text>
+    <text x="50" y="70" text-anchor="middle" fill="#484f58" font-family="monospace" font-size="7">tool usage</text>
+  </g>
+
+  <!-- Arrow 4 -->
+  <g transform="translate(552, 86)">
+    <line x1="0" y1="8" x2="28" y2="8" stroke="url(#arrowGrad)" stroke-width="2"/>
+    <polygon points="26,3 34,8 26,13" fill="#3fb950"/>
+  </g>
+
+  <!-- Step 5: Slack DM -->
+  <g transform="translate(588, 58)">
+    <rect width="120" height="72" rx="8" fill="rgba(63,185,80,0.08)" stroke="#3fb950" stroke-width="1.5" filter="url(#rglow)"/>
+    <text x="60" y="22" text-anchor="middle" fill="#3fb950" font-family="monospace" font-size="10" font-weight="bold">💬 Slack DM</text>
+    <text x="60" y="38" text-anchor="middle" fill="#8b949e" font-family="monospace" font-size="8">daily report</text>
+    <line x1="10" y1="46" x2="110" y2="46" stroke="#21262d" stroke-width="0.5"/>
+    <text x="60" y="60" text-anchor="middle" fill="#e6edf3" font-family="monospace" font-size="8">Insights &amp;</text>
+    <text x="60" y="70" text-anchor="middle" fill="#e6edf3" font-family="monospace" font-size="8">Patterns</text>
+  </g>
+
+  <!-- Bottom stats bar -->
+  <g transform="translate(0, 155)" font-family="monospace" font-size="9">
+    <rect x="50" y="0" width="700" height="30" rx="6" fill="rgba(255,255,255,0.02)" stroke="#21262d" stroke-width="0.5"/>
+    <text x="100" y="12" fill="#58a6ff">📁 948</text>
+    <text x="100" y="24" fill="#484f58" font-size="7">sessions/day</text>
+    <text x="250" y="12" fill="#f0883e">💬 3,505</text>
+    <text x="250" y="24" fill="#484f58" font-size="7">messages</text>
+    <text x="400" y="12" fill="#bc8cff">🔧 32,477</text>
+    <text x="400" y="24" fill="#484f58" font-size="7">tool calls</text>
+    <text x="550" y="12" fill="#3fb950">💰 $25.63</text>
+    <text x="550" y="24" fill="#484f58" font-size="7">daily cost</text>
+    <text x="680" y="12" fill="#e6edf3">⏱ 23:50</text>
+    <text x="680" y="24" fill="#484f58" font-size="7">KST trigger</text>
+  </g>
+</svg>
