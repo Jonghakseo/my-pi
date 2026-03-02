@@ -11,7 +11,8 @@
   },
   "scripts": {
     "sync-agents": "node scripts/sync-agents.mjs",
-    "postinstall": "node scripts/sync-agents.mjs"
+    "sync-skills": "node scripts/sync-skills.mjs",
+    "postinstall": "node scripts/sync-agents.mjs && node scripts/sync-skills.mjs"
   },
   "pi": {
     "extensions": ["./extensions"],
