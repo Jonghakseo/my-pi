@@ -22,16 +22,28 @@ Custom extensions for the pi coding agent. All extensions are written in TypeScr
 │   ├── constants.ts       #   Constants
 │   ├── format.ts          #   Formatting utilities
 │   └── run-utils.ts       #   Run management utilities
+├── memory-layer/          # Long-term memory system (remember/recall/forget)
+│   ├── index.ts           #   Entry point — tools, commands, system prompt injection
+│   ├── inject.ts          #   Build memory prompt injected into systemPrompt each turn
+│   ├── project-id.ts      #   Resolve project ID from cwd (git remote / folder name)
+│   ├── storage.ts         #   Markdown-based file storage (~/.pi/memory/)
+│   ├── types.ts           #   TypeBox schemas for tool parameters
+│   └── ui.ts              #   /memory overlay UI (selector, detail, action menu)
 ├── claude-hooks-bridge.ts  # Bridge to run Claude Code hooks in pi
 ├── claude-mcp-bridge/     # Bridge to reuse Claude Code MCP config in pi
 │   └── index.ts           #   Merge-load MCP settings & register servers
 ├── system-mode/           # System mode toggle (agent mode on/off)
 │   ├── index.ts           #   Mode switching logic
-│   └── state.ts           #   Global state management
+│   ├── state.ts           #   Global state management
+│   └── prompts/           #   System mode prompt templates
+│       ├── master.md      #     Master system prompt
+│       └── agents.md      #     Agent definitions prompt
 ├── utils/                 # Shared utility functions
 │   ├── time-utils.ts      #   Time/duration formatting helpers
 │   └── status-keys.ts     #   Shared footer status key constants
+├── archive-to-html.ts     # Auto-archive to-html skill output HTML to ~/Documents
 ├── ask-user-question.ts   # AskUserQuestion tool with options & free-text input
+├── clipboard.ts           # OSC52-based clipboard copy tool for LLM
 ├── command-typo-assist.ts # Slash command typo detection → suggest + editor prefill
 ├── context.ts             # /context — context window usage & session stats overlay
 ├── cross-agent.ts         # Load commands/skills from .claude/.gemini/.codex dirs
