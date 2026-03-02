@@ -5,8 +5,6 @@
  * using OSC52 escape sequences. This works across SSH sessions and most
  * modern terminal emulators.
  *
- * Source: https://github.com/hjanuschka/shitty-extensions
- *
  * Usage:
  *   Ask the LLM: "write me a draft reply and put it into clipboard!"
  */

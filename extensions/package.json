@@ -1,5 +1,6 @@
 {
 	"name": "pi-extensions",
+	"license": "MIT",
 	"private": true,
 	"type": "module",
 	"packageManager": "pnpm@10.15.1",
