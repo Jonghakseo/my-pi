@@ -5,8 +5,31 @@ import * as path from "node:path";
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import { Type } from "@sinclair/typebox";
 
-const STORAGE_OWNER = process.env.PI_STORAGE_OWNER;
-const STORAGE_REPO = process.env.PI_STORAGE_REPO;
+function loadEnvFile(envPath: string): Record<string, string> {
+	try {
+		const content = fs.readFileSync(envPath, "utf-8");
+		const vars: Record<string, string> = {};
+		for (const line of content.split("\n")) {
+			const trimmed = line.trim();
+			if (!trimmed || trimmed.startsWith("#")) continue;
+			const eqIdx = trimmed.indexOf("=");
+			if (eqIdx === -1) continue;
+			const key = trimmed.slice(0, eqIdx).trim();
+			const value = trimmed
+				.slice(eqIdx + 1)
+				.trim()
+				.replace(/^["']|["']$/g, "");
+			vars[key] = value;
+		}
+		return vars;
+	} catch {
+		return {};
+	}
+}
+
+const envFile = loadEnvFile(path.join(__dirname, ".env"));
+const STORAGE_OWNER = process.env.PI_STORAGE_OWNER || envFile.PI_STORAGE_OWNER;
+const STORAGE_REPO = process.env.PI_STORAGE_REPO || envFile.PI_STORAGE_REPO;
 const STORAGE_BRANCH = "main";
 
 const ALLOWED_EXTENSIONS = new Set([".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".bmp", ".ico"]);
