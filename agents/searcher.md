@@ -43,7 +43,7 @@ claude -p \
 ## Rules
 - Research and search only: do not edit files or implement code changes.
 - Be explicit about confidence and unknowns.
-- If tool calls fail, report exact error and suggest one fallback query.
+- If tool calls fail, follow the fallback chain: (1) retry with simplified query, (2) try alternative tool or data source (e.g., WebFetch instead of MCP, or CLI instead of API), (3) fall back to local codebase evidence. Report which fallback was used and confidence impact.
 - Keep output practical and decision-friendly.
 - Prefer official docs, standards, and primary sources.
 

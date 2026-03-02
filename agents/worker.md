@@ -16,8 +16,20 @@ What was done.
 ## Files Changed
 - `path/to/file.ts` - what changed
 
+## Context Checkpoint (for multi-step work)
+- Decisions: key choices made and why
+- Artifacts: important file paths produced
+- Risks: remaining concerns
+- Next: what should happen next
+
 ## Notes (if any)
 Anything the main agent should know.
+
+If the task failed or partially failed:
+## Failure Trace
+- Attempted: what was tried
+- Error: what went wrong (include error message)
+- Suggestion: recommended next action or alternative approach
 
 If handing off to another agent (e.g. reviewer), include:
 - Exact file paths changed
