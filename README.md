@@ -47,24 +47,24 @@ Nine agents, three models, one orchestrator. Each agent has a specific mandate, 
 
 | Agent | Model | Role | When to Use |
 |---|---|---|---|
-| 🔍 **finder** | `sonnet` | Fast file & code locator | Quick lookups, grep-like tasks |
-| ⚡ **worker** | `opus` | General-purpose executor | Implementation, writing, fixes |
-| 📐 **planner** | `codex` | Implementation architect | Breaking down complex tasks |
-| 🔎 **reviewer** | `codex` | Code review (P0–P3 severity) | PR reviews, quality checks |
-| 🥊 **challenger** | `opus` | Pressure tester | Stress-test plans before execution |
-| ✅ **verifier** | `opus` | 3-tier evidence validation | Verify claims, check correctness |
-| ⚖️ **decider** | `codex` | Technical decision maker | Architecture choices, trade-offs |
-| 🌐 **searcher** | `opus` | Research & web search | Documentation lookup, exploration |
-| 🖥️ **browser** | `opus` | Browser automation & UI testing | E2E testing, visual verification |
+| 🔍 **finder** | `claude-sonnet-4-6` | Fast file & code locator | Quick lookups, grep-like tasks |
+| ⚡ **worker** | `claude-opus-4-6` | General-purpose executor | Implementation, writing, fixes |
+| 📐 **planner** | `gpt-5.3-codex` | Implementation architect | Breaking down complex tasks |
+| 🔎 **reviewer** | `gpt-5.3-codex` | Code review (P0–P3 severity) | PR reviews, quality checks |
+| 🥊 **challenger** | `claude-opus-4-6` | Pressure tester | Stress-test plans before execution |
+| ✅ **verifier** | `claude-opus-4-6` | 3-tier evidence validation | Verify claims, check correctness |
+| ⚖️ **decider** | `gpt-5.3-codex` | Technical decision maker | Architecture choices, trade-offs |
+| 🌐 **searcher** | `claude-opus-4-6` | Research & web search | Documentation lookup, exploration |
+| 🖥️ **browser** | `claude-opus-4-6` | Browser automation & UI testing | E2E testing, visual verification |
 
 <details>
 <summary><strong>Model Selection Philosophy</strong></summary>
 
-- **Sonnet** — Speed-optimized tasks (file search, quick lookups)
-- **Opus** — Deep reasoning tasks (code execution, analysis, creative work)
-- **Codex** — Structured reasoning tasks (planning, reviewing, decision-making)
+- **claude-sonnet-4-6** — Speed-optimized tasks (file search, quick lookups)
+- **claude-opus-4-6** — Deep reasoning tasks (code execution, analysis, creative work)
+- **gpt-5.3-codex** — Structured reasoning tasks (planning, reviewing, decision-making)
 
-The orchestrator (main agent) runs on `claude-opus-4` with `xhigh` thinking, ensuring maximum reasoning depth for delegation decisions.
+The orchestrator (main agent) runs on `claude-opus-4-6` with `xhigh` thinking, ensuring maximum reasoning depth for delegation decisions.
 
 </details>
 
