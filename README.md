@@ -220,32 +220,45 @@ Five hand-picked themes, hot-swappable with `Ctrl+X`:
 
 ---
 
-## 🚀 Getting Started
+## 📦 Install as pi Package
 
 > **Prerequisite:** [pi coding agent](https://github.com/mariozechner/pi-coding-agent) installed globally.
 
-1. **Clone into pi's config directory:**
+### Option A: pi package (recommended)
+
+```bash
+# Global install
+pi install git:https://github.com/Jonghakseo/my-pi.git
+
+# Project-local install
+pi install -l git:https://github.com/Jonghakseo/my-pi.git
+```
+
+### Option B: Clone manually
 
 ```bash
 git clone https://github.com/Jonghakseo/my-pi.git ~/.pi/agent
-```
-
-2. **Install extension dependencies:**
-
-```bash
 cd ~/.pi/agent/extensions && pnpm install
 ```
 
-3. **Configure credentials:**
+### Post-install
 
 ```bash
 cp auth.json.example auth.json  # Add your API keys
+pi                               # Launch — extensions load automatically
 ```
 
-4. **Launch pi** — extensions load automatically:
+### Agent Definitions
+
+> **Note:** Agent `.md` files in `agents/` are **not** a pi standard package resource — `pi install` does not auto-register them.
+
+This package includes a `postinstall` script that copies missing agent definitions from the repo's `agents/` directory into `~/.pi/agent/agents/`. It will **never overwrite** existing files, so your local customizations are always safe.
+
+To manually re-sync agents at any time:
 
 ```bash
-pi
+npm run sync-agents           # copy only missing agents
+node scripts/sync-agents.mjs --force   # overwrite all (use with caution)
 ```
 
 ---

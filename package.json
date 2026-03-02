@@ -1,0 +1,29 @@
+{
+  "name": "@jonghakseo/my-pi",
+  "version": "0.1.0",
+  "description": "A personal AI operating system built on pi — 9 agents, 20+ extensions, 5 themes, automated daily retrospectives",
+  "keywords": ["pi-package"],
+  "license": "MIT",
+  "author": "Jonghakseo",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Jonghakseo/my-pi.git"
+  },
+  "scripts": {
+    "sync-agents": "node scripts/sync-agents.mjs",
+    "postinstall": "node scripts/sync-agents.mjs"
+  },
+  "pi": {
+    "extensions": ["./extensions"],
+    "prompts": ["./prompts"],
+    "themes": ["./themes"]
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.27.0"
+  },
+  "peerDependencies": {
+    "@mariozechner/pi-coding-agent": "*",
+    "@sinclair/typebox": "*",
+    "@mariozechner/pi-tui": "*"
+  }
+}
