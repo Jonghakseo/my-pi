@@ -2,6 +2,8 @@
 auth.json
 settings.json
 agents/.env.browser
+.env
+extensions/.env
 
 # Session data (large)
 sessions/
