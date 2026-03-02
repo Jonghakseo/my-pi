@@ -1,23 +1,49 @@
-import { getAllActiveMemories } from "./storage.ts";
+import { readMemoryMd } from "./storage.ts";
 
-// ── Catalog Hint ─────────────────────────────────────────────────────────────
+const MAX_LINES = 200;
 
 /**
- * Build a catalog listing all active memories (title + ID + scope).
- * Appended to systemPrompt every turn so the LLM knows what's available.
- * Detailed content is accessed via the `recall` tool.
+ * Build the memory prompt injected into systemPrompt every turn.
+ *
+ * Strategy (Claude Code style):
+ *   - Read user/MEMORY.md + project/MEMORY.md (index files)
+ *   - If combined ≤ 200 lines → inject full index
+ *   - If > 200 lines → truncate with hint to use recall
+ *
+ * The index already contains every memory title grouped by topic,
+ * so the LLM knows what's available without needing a separate recall call.
  */
-export async function buildCatalogHint(projectId?: string): Promise<string | null> {
-	const allActive = await getAllActiveMemories(projectId);
-	if (!allActive.length) return null;
+export async function buildMemoryPrompt(projectId?: string): Promise<string | null> {
+	const userIndex = (await readMemoryMd("user")).trim();
+	const projectIndex = projectId ? (await readMemoryMd("project", projectId)).trim() : "";
 
-	const lines = [`\n\n[Memory Layer] 접근 가능한 기억 ${allActive.length}건:`];
+	if (!userIndex && !projectIndex) return null;
 
-	for (const mem of allActive) {
-		lines.push(`- [${mem.id}] ${mem.title} (${mem.scope})`);
+	const parts: string[] = [];
+
+	if (userIndex) {
+		parts.push("[User Memory]");
+		parts.push(userIndex);
 	}
 
-	lines.push("세부 내용이 필요하면 recall 도구를 사용하세요.");
+	if (projectIndex) {
+		if (parts.length) parts.push("");
+		parts.push("[Project Memory]");
+		parts.push(projectIndex);
+	}
 
-	return lines.join("\n");
+	let lines = parts.join("\n").split("\n");
+
+	if (lines.length > MAX_LINES) {
+		lines = lines.slice(0, MAX_LINES);
+		lines.push("... (truncated — use recall tool for full details)");
+	}
+
+	return [
+		"",
+		"",
+		"[Memory Layer]",
+		lines.join("\n"),
+		"상세 내용은 recall 도구로 topic을 지정하여 조회할 수 있습니다.",
+	].join("\n");
 }
