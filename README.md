@@ -1,272 +1,274 @@
 <div align="center">
 
+[English](./README.en.md) | **한국어**
+
 # 🧠 my-pi
 
-**A personal AI operating system built on [pi](https://github.com/mariozechner/pi-coding-agent)**
+**[pi](https://github.com/mariozechner/pi-coding-agent) 기반 개인 AI 오퍼레이팅 시스템**
 
-*9 specialized agents · 20+ extensions · one developer's opinionated setup*
-
-<br/>
-
-`🤖 9 Agents` &nbsp; `🧩 20+ Extensions` &nbsp; `🎨 5 Themes`
+*9개의 전문 에이전트 · 20개 이상의 확장 기능 · 한 개발자의 주관적인 셋업*
 
 <br/>
 
-> What if you treated your AI coding agent configuration as a **first-class engineering project**?
+`🤖 9 에이전트` &nbsp; `🧩 20+ 확장 기능` &nbsp; `🎨 5 테마`
+
+<br/>
+
+> AI 코딩 에이전트 설정을 하나의 **엔지니어링 프로젝트**로 다룬다면?
 >
-> This repo is the answer — a living, daily-driven configuration that transforms pi from a CLI tool into a multi-agent orchestration platform with specialized roles, safety guards, and deep customization.
+> 이 레포가 그 답이다 — 매일 실사용하는 설정으로, pi를 CLI 도구에서 멀티 에이전트 오케스트레이션 플랫폼으로 확장한다. 역할별 전문 에이전트, 안전 장치, 세밀한 커스터마이징까지.
 
 </div>
 
 ---
 
-## 🏗️ Architecture
+## 🏗️ 아키텍처
 
 <p align="center">
-  <img src="./tmp/architecture.svg" alt="System Architecture" width="800"/>
+  <img src="./tmp/architecture.ko.svg" alt="시스템 아키텍처" width="800"/>
 </p>
 
-The system is organized in **four layers**:
+시스템은 **네 개의 레이어**로 구성된다:
 
-| Layer | Purpose |
+| 레이어 | 역할 |
 |---|---|
-| **User / pi TUI** | Interactive terminal interface |
-| **Extensions** | 20+ TypeScript plugins — subagent management, voice I/O, MCP bridge, UI overlays, safety guards |
-| **Agent Orchestra** | 9 purpose-built agents with distinct models and roles |
-| **Infrastructure** | MCP tool integrations via [claude-mcp-bridge](./extensions/claude-mcp-bridge/) — reuses your existing Claude Code MCP setup (Jira, Slack, Gmail, Calendar, GA4, Figma, DB, etc.) |
+| **사용자 / pi TUI** | 터미널 기반 인터랙티브 인터페이스 |
+| **확장 기능** | 20개 이상의 TypeScript 플러그인 — 서브에이전트, 음성 I/O, MCP 브릿지, UI 오버레이, 안전 장치 |
+| **에이전트 오케스트라** | 역할과 모델이 다른 9개의 전문 에이전트 |
+| **인프라** | [claude-mcp-bridge](./extensions/claude-mcp-bridge/)를 통한 MCP 도구 연동 — 기존 Claude Code MCP 설정을 그대로 재사용 (Jira, Slack, Gmail, Calendar, GA4, Figma, DB 등) |
 
 ---
 
-## 🤖 Agent Orchestra
+## 🤖 에이전트 오케스트라
 
 <p align="center">
-  <img src="./tmp/agents.svg" alt="Agent Orchestra" width="800"/>
+  <img src="./tmp/agents.ko.svg" alt="에이전트 오케스트라" width="800"/>
 </p>
 
-Nine agents, three models, one orchestrator. Each agent has a specific mandate, its own system prompt, and a model chosen for its strengths:
+9개의 에이전트, 3개의 모델, 하나의 오케스트레이터. 각 에이전트는 고유한 역할, 전용 시스템 프롬프트, 그리고 강점에 맞는 모델을 갖는다:
 
-| Agent | Model | Role | When to Use |
+| 에이전트 | 모델 | 역할 | 사용 시점 |
 |---|---|---|---|
-| 🔍 **finder** | `claude-sonnet-4-6` | Fast file & code locator | Quick lookups, grep-like tasks |
-| ⚡ **worker** | `claude-opus-4-6` | General-purpose executor | Implementation, writing, fixes |
-| 📐 **planner** | `gpt-5.3-codex` | Implementation architect | Breaking down complex tasks |
-| 🔎 **reviewer** | `gpt-5.3-codex` | Code review (P0–P3 severity) | PR reviews, quality checks |
-| 🥊 **challenger** | `claude-opus-4-6` | Pressure tester | Stress-test plans before execution |
-| ✅ **verifier** | `claude-opus-4-6` | 3-tier evidence validation | Verify claims, check correctness |
-| ⚖️ **decider** | `gpt-5.3-codex` | Technical decision maker | Architecture choices, trade-offs |
-| 🌐 **searcher** | `claude-opus-4-6` | Research & web search | Documentation lookup, exploration |
-| 🖥️ **browser** | `claude-opus-4-6` | Browser automation & UI testing | E2E testing, visual verification |
+| 🔍 **finder** | `claude-sonnet-4-6` | 빠른 파일·코드 탐색 | 빠른 조회, grep 스타일 탐색 |
+| ⚡ **worker** | `claude-opus-4-6` | 범용 작업 실행기 | 구현, 작성, 수정 |
+| 📐 **planner** | `gpt-5.3-codex` | 구현 설계자 | 복잡한 작업 분할 |
+| 🔎 **reviewer** | `gpt-5.3-codex` | 코드 리뷰 (P0–P3 심각도) | PR 리뷰, 품질 점검 |
+| 🥊 **challenger** | `claude-opus-4-6` | 스트레스 테스터 | 실행 전 계획 검증 |
+| ✅ **verifier** | `claude-opus-4-6` | 3단계 근거 검증 | 주장 확인, 정확성 점검 |
+| ⚖️ **decider** | `gpt-5.3-codex` | 기술 의사 결정 | 아키텍처 선택, 트레이드오프 분석 |
+| 🌐 **searcher** | `claude-opus-4-6` | 리서치·웹 검색 | 문서 탐색, 조사 |
+| 🖥️ **browser** | `claude-opus-4-6` | 브라우저 자동화·UI 테스트 | E2E 테스트, 시각 검증 |
 
 <details>
-<summary><strong>Model Selection Philosophy</strong></summary>
+<summary><strong>모델 선택 기준</strong></summary>
 
-- **claude-sonnet-4-6** — Speed-optimized tasks (file search, quick lookups)
-- **claude-opus-4-6** — Deep reasoning tasks (code execution, analysis, creative work)
-- **gpt-5.3-codex** — Structured reasoning tasks (planning, reviewing, decision-making)
+- **claude-sonnet-4-6** — 속도 우선 작업 (파일 탐색, 빠른 조회)
+- **claude-opus-4-6** — 깊은 추론 작업 (코드 실행, 분석, 창작)
+- **gpt-5.3-codex** — 구조적 추론 작업 (설계, 리뷰, 의사 결정)
 
-The orchestrator (main agent) runs on `claude-opus-4-6` with `xhigh` thinking, ensuring maximum reasoning depth for delegation decisions.
+오케스트레이터(메인 에이전트)는 `claude-opus-4-6`에 `xhigh` 사고 수준으로 동작하여, 위임 결정에 최대한의 추론 깊이를 확보한다.
 
 </details>
 
 ---
 
-## 🧩 Extensions
+## 🧩 확장 기능
 
-Over 20 custom TypeScript extensions organized by domain:
+20개 이상의 커스텀 TypeScript 확장을 도메인별로 정리했다:
 
-### Core System
+### 코어 시스템
 
-| Extension | Description |
+| 확장 | 설명 |
 |---|---|
-| **subagent/** | Multi-agent delegation engine — spawns sub-pi processes, manages concurrent runs with pixel-art status widget, hang detection, and automatic cleanup |
-| **system-mode/** | Toggle "Master mode" (delegation-only orchestrator) vs normal hands-on mode |
-| **claude-mcp-bridge/** | Reuses Claude Code's MCP server configurations — zero-duplication setup |
-| **cross-agent.ts** | Load agent definitions from `.claude/`, `.gemini/`, `.codex/` directories |
-| **memory-layer/** | Persistent memory system across sessions |
+| **subagent/** | 멀티 에이전트 위임 엔진 — 서브 pi 프로세스 생성, 픽셀아트 상태 위젯으로 동시 실행 관리, 행 감지, 자동 정리 |
+| **system-mode/** | "마스터 모드" (위임 전용 오케스트레이터) ↔ 일반 모드 전환 |
+| **claude-mcp-bridge/** | Claude Code의 MCP 서버 설정을 그대로 재사용 — 중복 설정 제로 |
+| **cross-agent.ts** | `.claude/`, `.gemini/`, `.codex/` 디렉터리에서 에이전트 정의 로드 |
+| **memory-layer/** | 세션 간 영속 메모리 시스템 |
 
 ### UI / UX
 
-| Extension | Description |
+| 확장 | 설명 |
 |---|---|
-| **voice-input.ts** | `Option+V` voice dictation with TTS response — talk to your agent |
-| **pipi-footer.ts** | Custom footer showing model, git branch, context usage |
-| **working-text.ts** | Humorous spinner text with elapsed time during processing |
-| **idle-screensaver.ts** | Terminal screensaver when idle |
-| **theme-cycler.ts** | `Ctrl+X` to cycle through all themes on-the-fly |
-| **diff-overlay.ts** | `/diff` — split-pane git diff viewer overlay |
-| **github-overlay.ts** | GitHub PR view directly in the terminal |
-| **status-overlay.ts** | `/status` — extension and skill status dashboard |
-| **minimal-mode.ts** | Collapse/expand verbose tool output for cleaner sessions |
+| **voice-input.ts** | `Option+V` 음성 받아쓰기 + TTS 응답 — 에이전트와 대화하기 |
+| **pipi-footer.ts** | 모델, git 브랜치, 컨텍스트 사용량을 보여주는 커스텀 푸터 |
+| **working-text.ts** | 처리 중 경과 시간과 함께 재미있는 스피너 텍스트 |
+| **idle-screensaver.ts** | 유휴 시 터미널 스크린세이버 |
+| **theme-cycler.ts** | `Ctrl+X`로 테마 실시간 순환 |
+| **diff-overlay.ts** | `/diff` — 분할 화면 git diff 뷰어 오버레이 |
+| **github-overlay.ts** | 터미널에서 바로 GitHub PR 확인 |
+| **status-overlay.ts** | `/status` — 확장 기능·스킬 상태 대시보드 |
+| **minimal-mode.ts** | 도구 출력 접기/펼치기로 세션 깔끔하게 유지 |
 
-### Developer Tools
+### 개발 도구
 
-| Extension | Description |
+| 확장 | 설명 |
 |---|---|
-| **todos.ts** | Task management with persistent storage and TUI |
-| **session-replay.ts** | `/replay` — browse and replay past sessions |
-| **context.ts** | `/context` — context window usage statistics |
-| **purpose.ts** | Pin a session purpose that persists across compactions |
-| **upload-image-url.ts** | Upload images to GitHub CDN for embedding |
-| **ask-user-question.ts** | Interactive question tool with predefined options |
-| **delayed-action.ts** | Schedule deferred actions |
-| **archive-to-html.ts** | Export sessions to styled HTML documents |
+| **todos.ts** | 영속 저장소와 TUI를 갖춘 할 일 관리 |
+| **session-replay.ts** | `/replay` — 과거 세션 탐색·재생 |
+| **context.ts** | `/context` — 컨텍스트 윈도우 사용 통계 |
+| **purpose.ts** | 컴팩션을 거쳐도 유지되는 세션 목적 고정 |
+| **upload-image-url.ts** | GitHub CDN으로 이미지 업로드 후 임베딩 |
+| **ask-user-question.ts** | 사전 정의 옵션을 갖춘 인터랙티브 질문 도구 |
+| **delayed-action.ts** | 지연 실행 예약 |
+| **archive-to-html.ts** | 세션을 스타일 적용된 HTML 문서로 내보내기 |
 
-### Safety
+### 안전 장치
 
-| Extension | Description |
+| 확장 | 설명 |
 |---|---|
-| **damage-control-rmrf.ts** | 🛡️ Blocks destructive `rm -rf` commands before they execute |
-| **command-typo-assist.ts** | Detects command typos and offers auto-correction |
+| **damage-control-rmrf.ts** | 🛡️ `rm -rf` 같은 파괴적 명령을 실행 전에 차단 |
+| **command-typo-assist.ts** | 명령어 오타를 감지하고 자동 수정 제안 |
 
 ---
 
-## 📋 Prompt Templates
+## 📋 프롬프트 템플릿
 
-Reusable workflow templates invoked with `/template-name`:
+`/template-name` 형태로 호출하는 재사용 가능한 워크플로우 템플릿:
 
-### `/one-shot` — Full Research & Solve Pipeline
+### `/one-shot` — 풀 리서치 & 해결 파이프라인
 
-A heavyweight problem-solving template that enforces:
+다음을 강제하는 고강도 문제 해결 템플릿:
 
-1. **Research first** — understand context before acting
-2. **Explore alternatives** — consider trade-offs broadly
-3. **Unlimited subagent use** — delegate freely across agents
-4. **Mandatory challenger gates** — pressure-test before and after execution
-5. **3-tier validation** — automated tests → browser verification → source analysis
-6. **HTML deliverables** — final report, alternatives explored, retrospective
+1. **리서치 우선** — 행동하기 전에 맥락 파악
+2. **대안 탐색** — 폭넓은 트레이드오프 검토
+3. **서브에이전트 무제한 활용** — 에이전트 자유롭게 위임
+4. **challenger 게이트 필수** — 실행 전후 스트레스 테스트
+5. **3단계 검증** — 자동 테스트 → 브라우저 검증 → 소스 분석
+6. **HTML 산출물** — 최종 리포트, 대안 분석, 회고
 
 ```
-/one-shot Fix the race condition in the payment processing pipeline
+/one-shot 결제 처리 파이프라인의 레이스 컨디션 수정
 ```
 
-### `/qa-chain` — QA Pipeline
+### `/qa-chain` — QA 파이프라인
 
-Chains multiple agents for end-to-end quality assurance:
+여러 에이전트를 순차 연결하는 E2E 품질 보증:
 
 ```
 worker → browser → verifier → reviewer
 ```
 
 ```pseudo
-scenarios = worker("analyze changes, derive test scenarios")
-results   = browser(scenarios, "test each in real browser")
-fixes     = worker(failures, "fix issues")  →  verifier(fixes)
-retest    = browser("verify fixes with screenshots")
-final     = reviewer("review all changes")
+scenarios = worker("변경사항 분석, 테스트 시나리오 도출")
+results   = browser(scenarios, "각 시나리오를 실제 브라우저에서 테스트")
+fixes     = worker(failures, "이슈 수정")  →  verifier(fixes)
+retest    = browser("수정 사항을 스크린샷으로 검증")
+final     = reviewer("전체 변경사항 리뷰")
 ```
 
-### `/set-purpose` — Auto Session Purpose
+### `/set-purpose` — 자동 세션 목적 설정
 
-Automatically sets the session purpose from the current context.
+현재 컨텍스트에서 세션 목적을 자동으로 설정한다.
 
 ---
 
-## 🎨 Themes
+## 🎨 테마
 
-Five hand-picked themes, hot-swappable with `Ctrl+X`:
+엄선한 5개 테마, `Ctrl+X`로 실시간 전환:
 
-| Theme | Style |
+| 테마 | 스타일 |
 |---|---|
-| **nord** *(active)* | Arctic, clean blues and frost tones |
-| **catppuccin-mocha** | Warm pastels on dark chocolate |
-| **gruvbox** | Retro warm tones, easy on the eyes |
-| **midnight-ocean** | Deep sea blues and teals |
-| **rose-pine** | Muted, elegant rose tones |
+| **nord** *(기본)* | 북극풍, 깔끔한 블루와 서리 톤 |
+| **catppuccin-mocha** | 다크 초콜릿 위의 따뜻한 파스텔 |
+| **gruvbox** | 레트로 따뜻한 톤, 눈이 편한 |
+| **midnight-ocean** | 깊은 바다 블루와 틸 |
+| **rose-pine** | 차분하고 우아한 로즈 톤 |
 
 ---
 
-## ⌨️ Keybindings
+## ⌨️ 단축키
 
-| Key | Action |
+| 키 | 동작 |
 |---|---|
-| `Ctrl+T` | Toggle thinking visibility |
-| `Ctrl+X` | Cycle themes |
-| `Option+V` | Voice input (dictation + TTS) |
+| `Ctrl+T` | 사고(thinking) 표시 토글 |
+| `Ctrl+X` | 테마 순환 |
+| `Option+V` | 음성 입력 (받아쓰기 + TTS) |
 
 ---
 
-## 📦 Install as pi Package
+## 📦 설치
 
-> **Prerequisite:** [pi coding agent](https://github.com/mariozechner/pi-coding-agent) installed globally.
+> **사전 조건:** [pi coding agent](https://github.com/mariozechner/pi-coding-agent)가 글로벌 설치되어 있어야 한다.
 
-### Option A: pi package (recommended)
+### 방법 A: pi 패키지 (권장)
 
 ```bash
-# Global install
+# 글로벌 설치
 pi install git:https://github.com/Jonghakseo/my-pi.git
 
-# Project-local install
+# 프로젝트 로컬 설치
 pi install -l git:https://github.com/Jonghakseo/my-pi.git
 ```
 
-### Option B: Clone manually
+### 방법 B: 수동 클론
 
 ```bash
 git clone https://github.com/Jonghakseo/my-pi.git ~/.pi/agent
 cd ~/.pi/agent/extensions && pnpm install
 ```
 
-### Post-install
+### 설치 후
 
 ```bash
-# Set up API keys (choose one):
-pi /login                        # Interactive — configure keys via CLI prompt
-# or set environment variables:
-export ANTHROPIC_API_KEY=sk-...  # for Claude models
-export OPENAI_API_KEY=sk-...     # for GPT models
+# API 키 설정 (택 1):
+pi /login                        # 인터랙티브 — CLI 프롬프트로 키 설정
+# 또는 환경 변수 설정:
+export ANTHROPIC_API_KEY=sk-...  # Claude 모델용
+export OPENAI_API_KEY=sk-...     # GPT 모델용
 
-pi                               # Launch — extensions load automatically
+pi                               # 실행 — 확장 기능 자동 로드
 ```
 
-### Agent Definitions
+### 에이전트 정의
 
-> **Note:** Agent `.md` files in `agents/` are **not** a pi standard package resource — `pi install` does not auto-register them.
+> **참고:** `agents/` 디렉터리의 에이전트 `.md` 파일은 pi 표준 패키지 리소스가 **아니므로** `pi install`로 자동 등록되지 않는다.
 
-This package includes a `postinstall` script that copies missing agent definitions from the repo's `agents/` directory into `~/.pi/agent/agents/`. It will **never overwrite** existing files, so your local customizations are always safe.
+이 패키지는 `postinstall` 스크립트로 레포의 `agents/` 디렉터리에서 누락된 에이전트 정의를 `~/.pi/agent/agents/`에 복사한다. 기존 파일은 **절대 덮어쓰지 않으므로** 로컬 커스터마이징은 항상 안전하다.
 
-To manually re-sync agents at any time:
+수동으로 에이전트를 동기화하려면:
 
 ```bash
-npm run sync-agents           # copy only missing agents
-node scripts/sync-agents.mjs --force   # overwrite all (use with caution)
+npm run sync-agents           # 누락된 에이전트만 복사
+node scripts/sync-agents.mjs --force   # 전부 덮어쓰기 (주의해서 사용)
 ```
 
 ---
 
-## 💡 Philosophy
+## 💡 설계 철학
 
-This project is built on a few core beliefs:
+이 프로젝트는 몇 가지 핵심 원칙에 기반한다:
 
-**1. Agent configuration is engineering, not just config files.**
-Every agent prompt is crafted like a job description. Every extension solves a real friction point. Every automation earns its complexity.
+**1. 에이전트 설정은 설정 파일이 아니라 엔지니어링이다.**
+모든 에이전트 프롬프트는 직무 기술서처럼 설계한다. 모든 확장 기능은 실제 불편을 해결한다. 모든 자동화는 그 복잡성의 값어치를 한다.
 
-**2. Specialization beats generalization.**
-A reviewer that only reviews catches more bugs than a generalist asked to "also review." The challenger agent exists solely to poke holes — and it's one of the most valuable agents in the system.
+**2. 전문화가 범용을 이긴다.**
+리뷰만 하는 리뷰어가 "리뷰도 해줘"라는 범용 에이전트보다 더 많은 버그를 잡는다. challenger 에이전트는 오직 헛점을 찌르기 위해 존재하며, 시스템에서 가장 가치 있는 에이전트 중 하나다.
 
-**3. Safety is a feature, not a constraint.**
-`damage-control-rmrf.ts` exists because one accidental `rm -rf /` is one too many. Typo detection, confirmation prompts, and thinking visibility are all first-class concerns.
+**3. 안전은 제약이 아니라 기능이다.**
+`damage-control-rmrf.ts`는 `rm -rf /` 한 번이면 충분하기 때문에 존재한다. 오타 감지, 확인 프롬프트, 사고 과정 표시 모두 일급 관심사다.
 
-**4. The terminal is the IDE.**
-Voice input, git diffs, GitHub PRs, screensavers — all inside the terminal. No context-switching required.
+**4. 터미널이 곧 IDE다.**
+음성 입력, git diff, GitHub PR, 스크린세이버 — 전부 터미널 안에서. 컨텍스트 스위칭 필요 없음.
 
 ---
 
-## 📈 Stats
+## 📈 운영 현황
 
-This is not a demo project. It's a **living configuration** used daily for production engineering work.
+데모 프로젝트가 아니다. 프로덕션 엔지니어링 업무에 **매일 사용하는 실전 설정**이다.
 
-| Metric | Value |
+| 지표 | 값 |
 |---|---|
-| Active extensions | 20+ |
-| Agent definitions | 9 |
-| Themes | 5 |
+| 활성 확장 기능 | 20+ |
+| 에이전트 정의 | 9개 |
+| 테마 | 5개 |
 
 ---
 
 <div align="center">
 
-*Built and used daily by [@Jonghakseo](https://github.com/Jonghakseo)*
+*[@Jonghakseo](https://github.com/Jonghakseo)가 매일 만들고 사용하는 설정*
 
-*Powered by [pi coding agent](https://github.com/mariozechner/pi-coding-agent)*
+*[pi coding agent](https://github.com/mariozechner/pi-coding-agent) 기반*
 
 </div>
