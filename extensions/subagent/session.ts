@@ -55,12 +55,12 @@ function stringifyToolCallArguments(args: unknown): string {
 /**
  * Build a text representation of the main session context for injection into subagent tasks.
  * Instead of copying the entire session file (which causes persona confusion),
- * this extracts context text: compaction summary + last 10 messages (+ assistant tool calls).
+ * this extracts context text: compaction summary + last 20 messages (+ assistant tool calls).
  */
-export function buildMainContextText(ctx: any): string {
+export function buildMainContextText(ctx: any): { text: string; totalMessageCount: number } {
 	try {
 		const entries = ctx.sessionManager.getEntries();
-		if (!entries || entries.length === 0) return "";
+		if (!entries || entries.length === 0) return { text: "", totalMessageCount: 0 };
 
 		// 1. Find the last compaction summary (most recent compaction)
 		let compactionSummary = "";
@@ -71,9 +71,9 @@ export function buildMainContextText(ctx: any): string {
 			}
 		}
 
-		// 2. Collect last 10 message entries and extract text/tool-calls
+		// 2. Collect last 20 message entries and extract text/tool-calls
 		const messageEntries = entries.filter((e: any) => e.type === "message");
-		const recentMessages = messageEntries.slice(-10);
+		const recentMessages = messageEntries.slice(-20);
 
 		const messageParts: string[] = [];
 		for (const entry of recentMessages) {
@@ -148,9 +148,9 @@ export function buildMainContextText(ctx: any): string {
 			parts.push("[Subagent Results]\n" + subagentParts.join("\n\n---\n\n"));
 		}
 
-		return parts.join("\n\n");
+		return { text: parts.join("\n\n"), totalMessageCount: messageEntries.length };
 	} catch {
-		return "";
+		return { text: "", totalMessageCount: 0 };
 	}
 }
 
@@ -163,13 +163,14 @@ export function buildMainContextText(ctx: any): string {
 export function wrapTaskWithMainContext(
 	task: string,
 	contextText: string,
-	options?: { mainSessionFile?: string },
+	options?: { mainSessionFile?: string; totalMessageCount?: number },
 ): string {
 	const rawSessionFile = options?.mainSessionFile;
 	const sessionFile =
 		typeof rawSessionFile === "string"
 			? rawSessionFile.replace(/[\r\n\t]+/g, "").trim() || undefined
 			: undefined;
+	const totalMessageCount = options?.totalMessageCount;
 
 	if (!contextText && !sessionFile) return task;
 
@@ -178,15 +179,19 @@ export function wrapTaskWithMainContext(
 		sections.push(`[Main Session Context]\n${contextText}`);
 	}
 	if (sessionFile) {
-		sections.push(
-			[
-				"[Main Session Log Access]",
-				`Main agent session JSONL path: ${sessionFile}`,
-				"If deeper history is needed, inspect this file on demand.",
-				"Use targeted reads first (search keywords, then read with offset/limit).",
-				"Avoid dumping entire logs into context; summarize only relevant parts.",
-			].join("\n"),
+		const logLines = [
+			"[Main Session Log Access]",
+			`Main agent session JSONL path: ${sessionFile}`,
+		];
+		if (totalMessageCount !== undefined && totalMessageCount > 0) {
+			logLines.push(`Total messages in main session: ${totalMessageCount} (only the last 20 are included above)`);
+		}
+		logLines.push(
+			"If deeper history is needed, inspect this file on demand.",
+			"Use targeted reads first (search keywords, then read with offset/limit).",
+			"Avoid dumping entire logs into context; summarize only relevant parts.",
 		);
+		sections.push(logLines.join("\n"));
 	}
 	sections.push(`[Request]\n${task}`);
 
