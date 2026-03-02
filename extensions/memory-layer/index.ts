@@ -57,118 +57,6 @@ export default function memoryLayerExtension(pi: ExtensionAPI) {
 			.join(" ");
 	}
 
-	// ── P2-1: Scope Auto-Inference (token-based matching) ─────────────────
-
-	const USER_HINTS = [
-		"앞으로 항상",
-		"모든 프로젝트",
-		"내 선호",
-		"내 프로필",
-		"이메일",
-		"전역",
-		"global",
-		"always",
-		"every project",
-		"all projects",
-		"개인",
-		"슬랙 id",
-		"slack id",
-		"github 계정",
-		"계정",
-		"my preference",
-		"my profile",
-	];
-
-	const PROJECT_HINTS = [
-		"이 프로젝트",
-		"이 레포",
-		"레포",
-		"repo",
-		"this project",
-		"build",
-		"lint",
-		"test",
-		"테스트",
-		"tailwind",
-		"next",
-		"nuxt",
-		"tsconfig",
-		"eslint",
-		"prettier",
-		"biome",
-		"vite",
-		"webpack",
-		"db",
-		"database",
-		"schema",
-		"migration",
-		"prisma",
-		"drizzle",
-		"mcp",
-		"docker",
-		"ci",
-		"cd",
-		"deploy",
-		"배포",
-		"env",
-		"환경변수",
-		".env",
-		"api key",
-		"endpoint",
-		"컴포넌트",
-		"component",
-		"모듈",
-		"module",
-		"pnpm",
-		"npm",
-		"yarn",
-		"bun",
-	];
-
-	/**
-	 * Match a hint against text using word-boundary awareness.
-	 * - ASCII-only hints: non-alphanumeric boundary matching (prevents "ci" matching "specific").
-	 * - Non-ASCII hints (Korean, etc.): simple substring match (safe for CJK).
-	 */
-	function matchesHint(text: string, hint: string): boolean {
-		const lh = hint.toLowerCase();
-
-		// ASCII-only hints: word-boundary matching via lookbehind/lookahead
-		if (/^[\x20-\x7E]+$/.test(lh)) {
-			const escaped = lh.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-			return new RegExp(`(?<![a-zA-Z0-9])${escaped}(?![a-zA-Z0-9])`, "i").test(text);
-		}
-
-		// Non-ASCII (Korean, etc.): substring match
-		return text.includes(lh);
-	}
-
-	/**
-	 * Infer the storage scope from content and title using keyword heuristics.
-	 * - user: personal profile, global preferences, cross-project rules
-	 * - project: repo-specific tech decisions, env, tooling, configs
-	 * - Defaults to "project" when ambiguous (safer for isolation).
-	 */
-	function inferScope(content: string, title?: string): MemoryScope {
-		const text = `${title ?? ""} ${content}`.toLowerCase();
-
-		let userScore = 0;
-		let projectScore = 0;
-
-		for (const hint of USER_HINTS) {
-			if (matchesHint(text, hint)) userScore++;
-		}
-		for (const hint of PROJECT_HINTS) {
-			if (matchesHint(text, hint)) projectScore++;
-		}
-
-		// User scope only when user signals clearly dominate
-		if (userScore > 0 && userScore > projectScore) return "user";
-
-		// Default to project (safer isolation)
-		return "project";
-	}
-
 	async function promptTopic(
 		ctx: ExtensionContext,
 		scope: MemoryScope,
@@ -204,21 +92,21 @@ export default function memoryLayerExtension(pi: ExtensionAPI) {
 	/**
 	 * Core save logic shared by /remember command and remember tool.
 	 *
+	 * @param scope - Explicit storage scope ("user" | "project").
 	 * @param interactive - If true (default), prompts for topic selection.
 	 *   If false, auto-selects "general" topic with no UI prompts.
 	 */
 	async function saveContent(
 		content: string,
 		title: string | undefined,
+		scope: MemoryScope,
 		ctx: ExtensionContext,
 		interactive = true,
 	): Promise<{ topic: string; title: string; scope: MemoryScope } | { cancelled: true } | { error: string }> {
 		try {
 			const displayTitle = title ?? truncateTitle(content);
 
-			// Auto-determine scope (no UI prompt)
 			currentProjectId = resolveCurrentProjectId(ctx.cwd);
-			const scope = inferScope(content, title);
 
 			// Fail-fast: project scope requires a resolved projectId
 			if (scope === "project" && !currentProjectId) {
@@ -257,17 +145,30 @@ export default function memoryLayerExtension(pi: ExtensionAPI) {
 
 	// ── /remember Command ─────────────────────────────────────────────────
 
+	/**
+	 * Parse `/remember` args: `/remember [user|project] <content>`
+	 * Returns { scope, content }. Defaults scope to "project" if not specified.
+	 */
+	function parseRememberArgs(raw: string): { scope: MemoryScope; content: string } {
+		const scopeMatch = raw.match(/^(user|project)\s+([\s\S]+)$/);
+		if (scopeMatch) {
+			return { scope: scopeMatch[1] as MemoryScope, content: scopeMatch[2].trim() };
+		}
+		return { scope: "project", content: raw };
+	}
+
 	pi.on("input", async (event, ctx): Promise<InputEventResult | undefined> => {
 		const text = event.text.trim();
 		if (!text.startsWith("/remember")) return;
 
-		const content = text.replace(/^\/remember\s*/, "").trim();
-		if (!content) {
-			ctx.ui.notify("사용법: /remember <기억할 내용>", "warning");
+		const raw = text.replace(/^\/remember\s*/, "").trim();
+		if (!raw) {
+			ctx.ui.notify("사용법: /remember [user|project] <기억할 내용>", "warning");
 			return { action: "handled" };
 		}
 
-		const result = await saveContent(content, undefined, ctx);
+		const { scope, content } = parseRememberArgs(raw);
+		const result = await saveContent(content, undefined, scope, ctx);
 
 		if ("cancelled" in result) {
 			ctx.ui.notify("기억 저장을 취소했습니다.", "info");
@@ -275,7 +176,7 @@ export default function memoryLayerExtension(pi: ExtensionAPI) {
 			ctx.ui.notify(result.error, "error");
 		} else {
 			ctx.ui.notify(
-				`📝 저장: "${result.title}" → ${result.topic}.md (선택된 스코프: ${result.scope}) — /memory에서 이동/정리 가능`,
+				`📝 저장: "${result.title}" → ${result.topic}.md (scope: ${result.scope}) — /memory에서 이동/정리 가능`,
 				"info",
 			);
 		}
@@ -284,21 +185,22 @@ export default function memoryLayerExtension(pi: ExtensionAPI) {
 	});
 
 	pi.registerCommand("remember", {
-		description: "Store a memory. Usage: /remember <content>",
+		description: "Store a memory. Usage: /remember [user|project] <content>",
 		handler: async (args, ctx) => {
-			const content = args.trim();
-			if (!content) {
-				ctx.ui.notify("사용법: /remember <기억할 내용>", "warning");
+			const raw = args.trim();
+			if (!raw) {
+				ctx.ui.notify("사용법: /remember [user|project] <기억할 내용>", "warning");
 				return;
 			}
-			const result = await saveContent(content, undefined, ctx);
+			const { scope, content } = parseRememberArgs(raw);
+			const result = await saveContent(content, undefined, scope, ctx);
 			if ("cancelled" in result) {
 				ctx.ui.notify("기억 저장을 취소했습니다.", "info");
 			} else if ("error" in result) {
 				ctx.ui.notify(result.error, "error");
 			} else {
 				ctx.ui.notify(
-					`📝 저장: "${result.title}" → ${result.topic}.md (선택된 스코프: ${result.scope}) — /memory에서 이동/정리 가능`,
+					`📝 저장: "${result.title}" → ${result.topic}.md (scope: ${result.scope}) — /memory에서 이동/정리 가능`,
 					"info",
 				);
 			}
@@ -471,14 +373,13 @@ export default function memoryLayerExtension(pi: ExtensionAPI) {
 		description:
 			"Save a fact, rule, or lesson to the user's long-term memory. " +
 			"Call this when the user says '기억해', '앞으로 이렇게 해', '이 규칙 적용해', 'remember this', etc. " +
-			"The storage scope is auto-determined: " +
-			"personal profile, global preferences, or cross-project rules → user scope; " +
-			"repo-specific tech decisions, env, tooling, configs → project scope. " +
-			"Defaults to project when ambiguous.",
+			"You must choose the appropriate scope: " +
+			"'user' for personal profile, global preferences, or cross-project rules; " +
+			"'project' for repo-specific tech decisions, env, tooling, configs. " +
+			"Defaults to 'project' when ambiguous.",
 		parameters: RememberParams,
 		async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
-			const content = (params as { content: string }).content;
-			const title = (params as { title?: string }).title;
+			const { content, title, scope } = params as { content: string; title?: string; scope: MemoryScope };
 
 			if (!content?.trim()) {
 				return {
@@ -488,8 +389,7 @@ export default function memoryLayerExtension(pi: ExtensionAPI) {
 				};
 			}
 
-			// Non-interactive: auto-determine scope + auto "general" topic
-			const result = await saveContent(content, title, ctx, false);
+			const result = await saveContent(content, title, scope, ctx, false);
 
 			if ("cancelled" in result) {
 				return { content: [{ type: "text" as const, text: "사용자가 기억 저장을 취소했습니다." }], details: undefined };
@@ -502,10 +402,7 @@ export default function memoryLayerExtension(pi: ExtensionAPI) {
 				content: [
 					{
 						type: "text" as const,
-						text:
-							`Memory saved.\nTopic: ${result.topic}.md\nTitle: ${result.title}\n` +
-							`Auto-selected scope: ${result.scope}\n` +
-							`(스코프가 잘못 분류된 경우 /memory에서 이동/정리 가능)`,
+						text: `Memory saved.\nScope: ${result.scope}\nTopic: ${result.topic}.md\nTitle: ${result.title}`,
 					},
 				],
 				details: undefined,
