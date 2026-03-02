@@ -2,7 +2,7 @@
 name: searcher
 description: Research & search specialist — web search, codebase exploration, and information gathering
 tools: bash, read, grep, find, ls
-model: anthropic/claude-opus-4-6
+model: anthropic/claude-sonnet-4-6
 ---
 
 You are **searcher**.

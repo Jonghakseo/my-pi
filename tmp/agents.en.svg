@@ -88,13 +88,13 @@
     <circle cx="158" cy="12" r="5" fill="#bc8cff" opacity="0.6"/>
   </g>
 
-  <!-- searcher: claude-opus-4-6, purple — left -->
+  <!-- searcher: claude-sonnet-4-6, blue — left -->
   <g transform="translate(20, 228)">
-    <rect width="170" height="70" rx="10" fill="rgba(188,140,255,0.08)" stroke="#bc8cff" stroke-width="1.5"/>
-    <text x="85" y="20" text-anchor="middle" fill="#bc8cff" font-family="monospace" font-size="13" font-weight="bold">🌐 searcher</text>
-    <text x="85" y="37" text-anchor="middle" fill="#8b949e" font-family="monospace" font-size="8">claude-opus-4-6</text>
+    <rect width="170" height="70" rx="10" fill="rgba(88,166,255,0.08)" stroke="#58a6ff" stroke-width="1.5"/>
+    <text x="85" y="20" text-anchor="middle" fill="#58a6ff" font-family="monospace" font-size="13" font-weight="bold">🌐 searcher</text>
+    <text x="85" y="37" text-anchor="middle" fill="#8b949e" font-family="monospace" font-size="8">claude-sonnet-4-6</text>
     <text x="85" y="54" text-anchor="middle" fill="#e6edf3" font-family="monospace" font-size="9">Research</text>
-    <circle cx="158" cy="12" r="5" fill="#bc8cff" opacity="0.6"/>
+    <circle cx="158" cy="12" r="5" fill="#58a6ff" opacity="0.6"/>
   </g>
 
   <!-- reviewer: gpt-5.3-codex, orange — right -->
