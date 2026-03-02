@@ -64,7 +64,7 @@ export function renderSubagentToolCall(args: any, theme: any) {
 		return new Text(text, 0, 0);
 	}
 	const agentName = args.agent || "...";
-	const preview = args.task ? (args.task.length > 60 ? `${args.task.slice(0, 60)}...` : args.task) : "...";
+	const preview = args.task || "...";
 	let text =
 		theme.fg("toolTitle", theme.bold("subagent ")) + theme.fg("accent", agentName) + theme.fg("muted", ` [${scope}]`);
 	text += `\n  ${theme.fg("dim", preview)}`;

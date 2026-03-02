@@ -5,7 +5,7 @@
 import type { Message } from "@mariozechner/pi-ai";
 import { visibleWidth } from "@mariozechner/pi-tui";
 import { getDisplayItems, getFinalOutput, getLastNonEmptyLine, getLatestActivityPreview } from "./runner.js";
-import type { CommandRunState, GlobalRunEntry, SingleResult } from "./types.js";
+import type { CommandRunState, GlobalRunEntry, SingleResult, UsageStats } from "./types.js";
 
 export const COLLAPSED_ITEM_COUNT = 10;
 
@@ -120,3 +120,5 @@ export function updateRunFromResult(state: CommandRunState, result: SingleResult
 		state.lastActivityAt = Date.now();
 	}
 }
+
+

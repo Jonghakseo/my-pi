@@ -37,6 +37,12 @@ You may raise concerns **even without conclusive evidence**, as long as they are
 ## Challenger Verdict
 PASS | QUESTIONABLE | BLOCKER
 
+## Gate Decision
+Proceed | Pivot | Block
+- Proceed: No significant concerns. Continue as planned.
+- Pivot: Concerns exist that should be addressed. Adjust approach before continuing.
+- Block: Critical issues found. Do not proceed until resolved.
+
 ## Skeptical Questions (Max 3)
 - Include no more than 3 questions total.
 - [High|Med|Low] <question>
