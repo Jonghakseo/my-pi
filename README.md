@@ -8,7 +8,7 @@
 
 <br/>
 
-`🤖 9 Agents` &nbsp; `🧩 20+ Extensions` &nbsp; `🎨 5 Themes` &nbsp; `🔧 8 MCP Integrations`
+`🤖 9 Agents` &nbsp; `🧩 20+ Extensions` &nbsp; `🎨 5 Themes`
 
 <br/>
 
@@ -33,7 +33,7 @@ The system is organized in **four layers**:
 | **User / pi TUI** | Interactive terminal interface |
 | **Extensions** | 20+ TypeScript plugins — subagent management, voice I/O, MCP bridge, UI overlays, safety guards |
 | **Agent Orchestra** | 9 purpose-built agents with distinct models and roles |
-| **Infrastructure** | MCP tool integrations — Jira, Slack, Gmail, Calendar, GA4, Figma, Database, GitHub |
+| **Infrastructure** | MCP tool integrations via [claude-mcp-bridge](./extensions/claude-mcp-bridge/) — reuses your existing Claude Code MCP setup (Jira, Slack, Gmail, Calendar, GA4, Figma, DB, etc.) |
 
 ---
 
@@ -209,7 +209,12 @@ cd ~/.pi/agent/extensions && pnpm install
 ### Post-install
 
 ```bash
-cp auth.json.example auth.json  # Add your API keys
+# Set up API keys (choose one):
+pi /login                        # Interactive — configure keys via CLI prompt
+# or set environment variables:
+export ANTHROPIC_API_KEY=sk-...  # for Claude models
+export OPENAI_API_KEY=sk-...     # for GPT models
+
 pi                               # Launch — extensions load automatically
 ```
 
@@ -255,7 +260,6 @@ This is not a demo project. It's a **living configuration** used daily for produ
 | Active extensions | 20+ |
 | Agent definitions | 9 |
 | Themes | 5 |
-| MCP integrations | 8 |
 
 ---
 
