@@ -111,7 +111,7 @@
 | **upload-image-url.ts** | GitHub CDN으로 이미지 업로드 후 임베딩 |
 | **ask-user-question.ts** | 사전 정의 옵션을 갖춘 인터랙티브 질문 도구 |
 | **delayed-action.ts** | 지연 실행 예약 |
-| **archive-to-html.ts** | 세션을 스타일 적용된 HTML 문서로 내보내기 |
+| **archive-to-html.ts** | to-html 스킬로 생성된 HTML 파일을 `~/Documents`에 자동 아카이브 |
 
 ### 안전 장치
 
