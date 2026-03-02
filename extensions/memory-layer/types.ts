@@ -12,6 +12,12 @@ export const RememberParams = Type.Object({
 		description: "Content to remember (the fact, rule, or lesson to store in long-term memory)",
 	}),
 	title: Type.Optional(Type.String({ description: "Short title/summary for the memory (auto-generated if omitted)" })),
+	scope: StringEnum(["user", "project"] as const, {
+		description:
+			"Storage scope. 'user' for personal profile, global preferences, or cross-project rules. " +
+			"'project' for repo-specific tech decisions, env, tooling, configs. " +
+			"Choose based on whether the information applies globally or only to the current project.",
+	}),
 });
 
 export const RecallParams = Type.Object({
