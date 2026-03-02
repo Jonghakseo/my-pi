@@ -99,6 +99,9 @@ function getAllToolNames(pi: ExtensionAPI): string[] {
 	return pi.getAllTools().map((tool) => tool.name);
 }
 
+/** Memory-layer tools allowed in master mode for cross-session knowledge management. */
+const MEMORY_TOOLS = ["remember", "recall", "forget", "memory_list"] as const;
+
 export default function (pi: ExtensionAPI) {
 	let mode: SystemMode = "default";
 	let activeToolsBeforeMaster: string[] | undefined;
@@ -166,6 +169,12 @@ export default function (pi: ExtensionAPI) {
 				const allowedTools = ["subagent"];
 				if (tools.includes("list-agents")) {
 					allowedTools.push("list-agents");
+				}
+				// Memory tools are allowed in master mode for cross-session knowledge
+				for (const memTool of MEMORY_TOOLS) {
+					if (tools.includes(memTool)) {
+						allowedTools.push(memTool);
+					}
 				}
 				pi.setActiveTools(allowedTools);
 				masterHardLockEnabled = true;
@@ -280,10 +289,16 @@ export default function (pi: ExtensionAPI) {
 		if (isToolCallEventType("list-agents", event)) {
 			return;
 		}
+		// Allow memory-layer tools in master mode
+		for (const memTool of MEMORY_TOOLS) {
+			if (isToolCallEventType(memTool, event)) {
+				return;
+			}
+		}
 		return {
 			block: true,
 			reason:
-				"Master mode hard policy: only the subagent and list-agents tools can be called by the main agent. " +
+				"Master mode hard policy: only the subagent, list-agents, and memory tools (remember/recall/forget/memory_list) can be called by the main agent. " +
 				"Delegate execution through subagent after checking available agents with list-agents.",
 		};
 	});
