@@ -161,9 +161,7 @@ export function updatePixelWidget(store: SubagentStore, ctx?: any): void {
 				// Build cells — one per run
 				const allCells: RenderedCell[] = [];
 				for (const run of toolRuns) {
-					allCells.push(
-						buildCell(run.agent, run.status, run.characterField, run.id, tick, theme, run.thoughtText),
-					);
+					allCells.push(buildCell(run.agent, run.status, run.characterField, run.id, tick, theme, run.thoughtText));
 				}
 
 				// Determine how many cells fit in width

@@ -24,7 +24,6 @@ import { type SubagentStore, truncateText } from "./store.js";
 /** Fast timer that drives spinner animation while any run is active. */
 let spinnerTimer: ReturnType<typeof setInterval> | undefined;
 
-
 function manageSpinnerTimer(store: SubagentStore): void {
 	const hasRunning = Array.from(store.commandRuns.values()).some((r) => r.status === "running");
 	if (hasRunning && !spinnerTimer) {
