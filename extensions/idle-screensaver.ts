@@ -1,7 +1,7 @@
 /**
  * Idle screensaver — shows session context after 10 min of inactivity.
  *
- * Displays (priority): purpose || session name || folder/branch.
+ * Displays (priority): purpose || folder/branch || session name.
  * Shows recent 3 progress entries at the bottom.
  * Any key dismisses the overlay.
  */
@@ -246,7 +246,7 @@ async function showScreensaver(): Promise<void> {
 	}
 
 	const folderBranch = branchName ? `${folder} / ${branchName}` : folder;
-	const title = purpose || sessionName || folderBranch;
+	const title = purpose || folderBranch || sessionName;
 
 	try {
 		await ctx.ui.custom<void>(
