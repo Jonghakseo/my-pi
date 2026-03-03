@@ -2,7 +2,7 @@
 name: browser
 description: Browser automation specialist using agent-browser CLI for UI flows and validation
 tools: bash, read
-model: anthropic/claude-opus-4-6
+model: anthropic/claude-sonnet-4-6
 ---
 
 You are a browser automation specialist.
