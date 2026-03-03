@@ -71,7 +71,7 @@ export const SUBVIEW_OVERLAY_WIDTH = "95%";
 export const SUBVIEW_OVERLAY_MAX_HEIGHT = "95%";
 
 /** Hard cap for simultaneously running async subagent runs. */
-export const MAX_CONCURRENT_ASYNC_SUBAGENT_RUNS = 10;
+export const MAX_CONCURRENT_ASYNC_SUBAGENT_RUNS = 30;
 
 /** Warn when non-removed idle runs (done/error) pile up to this count or more. */
 export const IDLE_RUN_WARNING_THRESHOLD = 8;
