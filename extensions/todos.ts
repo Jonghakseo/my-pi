@@ -1373,9 +1373,15 @@ async function acquireLock(
 					// ignore
 				}
 			};
-		} catch (error: any) {
-			if (error?.code !== "EEXIST") {
-				return { error: `Failed to acquire lock: ${error?.message ?? "unknown error"}` };
+		} catch (error: unknown) {
+			const errorCode =
+				error && typeof error === "object" && "code" in error ? (error as { code: unknown }).code : undefined;
+			const errorMessage =
+				error && typeof error === "object" && "message" in error ? (error as { message: unknown }).message : undefined;
+			if (errorCode !== "EEXIST") {
+				return {
+					error: `Failed to acquire lock: ${typeof errorMessage === "string" ? errorMessage : "unknown error"}`,
+				};
 			}
 			const stats = await fs.stat(lockPath).catch(() => null);
 			const lockAge = stats ? now - stats.mtimeMs : LOCK_TTL_MS + 1;

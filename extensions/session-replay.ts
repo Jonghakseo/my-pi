@@ -124,17 +124,51 @@ class SessionReplayUI {
 	}
 }
 
-function extractContent(entry: any): string {
+type ContentBlock = {
+	type: string;
+	text?: string;
+	name?: string;
+	arguments?: unknown;
+	[key: string]: unknown;
+};
+
+type MessageWithContent = {
+	message: {
+		content: string | ContentBlock[] | unknown;
+		[key: string]: unknown;
+	};
+	[key: string]: unknown;
+};
+
+function isMessageWithContent(entry: unknown): entry is MessageWithContent {
+	if (typeof entry !== "object" || entry === null) return false;
+	const e = entry as Record<string, unknown>;
+	return typeof e.message === "object" && e.message !== null;
+}
+
+function extractContent(entry: unknown): string {
+	if (!isMessageWithContent(entry)) return "";
 	const msg = entry.message;
-	if (!msg) return "";
-	const content = msg.content;
+	if (!msg || typeof msg !== "object") return "";
+	const msgObj = msg as Record<string, unknown>;
+	const content = msgObj.content;
 	if (!content) return "";
 	if (typeof content === "string") return content;
 	if (Array.isArray(content)) {
 		return content
-			.map((c: any) => {
-				if (c.type === "text") return c.text || "";
-				if (c.type === "toolCall") return `Tool: ${c.name}(${JSON.stringify(c.arguments).slice(0, 200)})`;
+			.map((c): string => {
+				if (typeof c !== "object" || c === null) return "";
+				const block = c as Record<string, unknown>;
+				if (block.type === "text") {
+					const text = block.text;
+					return typeof text === "string" ? text : "";
+				}
+				if (block.type === "toolCall") {
+					const name = block.name;
+					const args = block.arguments;
+					const nameStr = typeof name === "string" ? name : "unknown";
+					return `Tool: ${nameStr}(${JSON.stringify(args).slice(0, 200)})`;
+				}
 				return "";
 			})
 			.filter(Boolean)

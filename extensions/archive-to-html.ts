@@ -27,7 +27,9 @@ export default function (pi: ExtensionAPI) {
 			const dest = path.join(ARCHIVE_DIR, path.basename(filePath));
 			fs.copyFileSync(resolved, dest);
 
-			ctx.ui.notify(`📚 아카이브 복사됨 → 분류 전/${path.basename(filePath)}`, "info");
+			if (ctx.hasUI) {
+				ctx.ui.notify(`📚 아카이브 복사됨 → 분류 전/${path.basename(filePath)}`, "info");
+			}
 		} catch {
 			// file read/copy failed — silently skip
 		}

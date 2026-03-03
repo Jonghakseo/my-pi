@@ -66,21 +66,25 @@ After any implementation:
 - Never start new tasks based only on status logs.
 - If intent is ambiguous, ask for a clear instruction first.
 
-### Intent Tool (Category-Based Dispatch)
+### intent() Tool (Single-Step Dispatch)
 
-For structured or multi-step work, prefer the `intent` tool over raw `subagent` calls.
-The `intent` tool automatically selects the best agent based on **purpose + difficulty** — you don't need to know agent names.
+For simple single-step work, use the `intent()` tool.
+The `intent()` tool automatically selects the best agent based on **purpose + difficulty** — you don't need to know agent names.
 
 **Single task dispatch:**
 ```
-intent({ mode: "run", purpose: "explore", difficulty: "low", task: "Find all usages of AuthMiddleware" })
-intent({ mode: "run", purpose: "implement", difficulty: "high", task: "Refactor the payment module to use Stripe v3" })
+intent({ purpose: "explore", difficulty: "low", task: "Find all usages of AuthMiddleware" })
+intent({ purpose: "implement", difficulty: "high", task: "Refactor the payment module to use Stripe v3" })
 ```
+
+### blueprint() Tool (Multi-Step Orchestration)
+
+For complex multi-step work with dependencies, use the `blueprint()` tool to design and execute DAGs of intent nodes.
 
 **Complex multi-step work (Blueprint):**
 1. Break the task into a DAG of intent nodes
-2. `intent({ mode: "create_blueprint", title: "...", nodes: [...] })` → show plan to user
-3. After user confirms: `intent({ mode: "run_next", blueprintId: "..." })` → execute nodes
+2. `blueprint({ mode: "create_blueprint", title: "...", nodes: [...] })` → show plan to user
+3. After user confirms: `blueprint({ mode: "run_next", blueprintId: "..." })` → execute nodes
 4. Nodes complete automatically and notify you. Call `run_next` again until all done.
 
 **Purpose → Agent auto-mapping:**
@@ -96,9 +100,9 @@ intent({ mode: "run", purpose: "implement", difficulty: "high", task: "Refactor 
 | browse | browser | 브라우저 UI 테스트 |
 | implement | worker-fast (low/med) / worker (high) | 코드 구현, commit/PR/execute도 여기로 |
 
-**Blueprint DAG node example (YAML string format):**
+**blueprint() DAG node example (YAML string format):**
 ```yaml
-intent({
+blueprint({
   mode: "create_blueprint",
   title: "로그인 버그 수정",
   nodes: |
@@ -128,9 +132,9 @@ intent({
 })
 ```
 
-**When to use Blueprint vs single intent vs raw subagent:**
-- **Blueprint**: 3+ step work with dependencies (plan→implement→review→verify flow)
-- **Single intent**: One-off task where you want auto agent selection
+**When to use blueprint() vs intent() vs raw subagent:**
+- **blueprint()**: 3+ step work with dependencies (plan→implement→review→verify flow)
+- **intent()**: One-off task where you want auto agent selection
 - **Raw subagent**: When you need specific subagent features (continueRunId, session reuse, etc.)
 
 ### Response Pattern

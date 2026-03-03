@@ -575,9 +575,10 @@ export default function diffOverlayExtension(pi: ExtensionAPI) {
 		await ctx.ui.custom<void>(
 			(tui, theme, _kb, done) => {
 				const o = new DiffOverlay(pi, root, st, () => done(undefined));
+				const tuiWithHeight = tui as Tui & { height?: number };
 				return {
-					render: (w) => o.render(w, (tui as unknown as Tui).height ?? 40, theme as unknown as Theme),
-					handleInput: (data) => o.handleInput(data, tui as unknown as Tui),
+					render: (w) => o.render(w, tuiWithHeight.height ?? 40, theme as any),
+					handleInput: (data) => o.handleInput(data, tuiWithHeight),
 					invalidate: () => {},
 				};
 			},

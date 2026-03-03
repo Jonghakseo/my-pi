@@ -124,6 +124,35 @@ type SkillIndexEntry = {
 	skillDir: string;
 };
 
+type CustomEntry = {
+	type: "custom";
+	customType: string;
+	data: unknown;
+};
+
+function isCustomEntry(entry: unknown): entry is CustomEntry {
+	if (typeof entry !== "object" || entry === null) return false;
+	const obj = entry as Record<string, unknown>;
+	return obj.type === "custom";
+}
+
+type MessageEntry = {
+	type: "message";
+	message: {
+		role: string;
+		usage?: unknown;
+		[key: string]: unknown;
+	};
+};
+
+function isMessageEntry(entry: unknown): entry is MessageEntry {
+	if (typeof entry !== "object" || entry === null) return false;
+	const e = entry as Record<string, unknown>;
+	if (e.type !== "message") return false;
+	const msg = e.message;
+	return typeof msg === "object" && msg !== null;
+}
+
 function buildSkillIndex(pi: ExtensionAPI, cwd: string): SkillIndexEntry[] {
 	return pi
 		.getCommands()
@@ -149,27 +178,31 @@ type SkillLoadedEntryData = {
 function getLoadedSkillsFromSession(ctx: ExtensionContext): Set<string> {
 	const out = new Set<string>();
 	for (const e of ctx.sessionManager.getEntries()) {
-		if ((e as any)?.type !== "custom") continue;
-		if ((e as any)?.customType !== SKILL_LOADED_ENTRY) continue;
-		const data = (e as any)?.data as SkillLoadedEntryData | undefined;
+		if (!isCustomEntry(e)) continue;
+		if (e.customType !== SKILL_LOADED_ENTRY) continue;
+		const data = e.data as SkillLoadedEntryData | undefined;
 		if (data?.name) out.add(data.name);
 	}
 	return out;
 }
 
-function extractCostTotal(usage: any): number {
-	if (!usage) return 0;
-	const c = usage?.cost;
+function extractCostTotal(usage: unknown): number {
+	if (!usage || typeof usage !== "object") return 0;
+	const obj = usage as Record<string, unknown>;
+	const c = obj.cost;
 	if (typeof c === "number") return Number.isFinite(c) ? c : 0;
 	if (typeof c === "string") {
 		const n = Number(c);
 		return Number.isFinite(n) ? n : 0;
 	}
-	const t = c?.total;
-	if (typeof t === "number") return Number.isFinite(t) ? t : 0;
-	if (typeof t === "string") {
-		const n = Number(t);
-		return Number.isFinite(n) ? n : 0;
+	if (typeof c === "object" && c !== null) {
+		const cObj = c as Record<string, unknown>;
+		const t = cObj.total;
+		if (typeof t === "number") return Number.isFinite(t) ? t : 0;
+		if (typeof t === "string") {
+			const n = Number(t);
+			return Number.isFinite(n) ? n : 0;
+		}
 	}
 	return 0;
 }
@@ -189,13 +222,13 @@ function sumSessionUsage(ctx: ExtensionCommandContext): {
 	let totalCost = 0;
 
 	for (const entry of ctx.sessionManager.getEntries()) {
-		if ((entry as any)?.type !== "message") continue;
-		const msg = (entry as any)?.message;
+		if (!isMessageEntry(entry)) continue;
+		const msg = entry.message;
 		if (!msg || msg.role !== "assistant") continue;
 		const usage = msg.usage;
 		if (!usage) continue;
-		input += Number(usage.inputTokens ?? 0) || 0;
-		output += Number(usage.outputTokens ?? 0) || 0;
+		input += Number(usage.input ?? 0) || 0;
+		output += Number(usage.output ?? 0) || 0;
 		cacheRead += Number(usage.cacheRead ?? 0) || 0;
 		cacheWrite += Number(usage.cacheWrite ?? 0) || 0;
 		totalCost += extractCostTotal(usage);
