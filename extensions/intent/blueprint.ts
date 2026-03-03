@@ -126,13 +126,16 @@ function recalculateBlueprintStatus(bp: Blueprint): void {
 	const allDone = bp.nodes.every((n) => n.status === "completed" || n.status === "skipped");
 	const anyRunning = bp.nodes.some((n) => n.status === "running");
 	const anyFailed = bp.nodes.some((n) => n.status === "failed");
+	const anyEscalated = bp.nodes.some((n) => n.status === "escalated");
 
 	if (allDone) {
 		bp.status = "completed";
-	} else if (anyFailed && !anyRunning) {
-		// Only mark as failed if nothing is still running
+	} else if (anyFailed && !anyRunning && !anyEscalated) {
+		// Only mark as failed if nothing is still running AND no escalations pending
 		bp.status = "failed";
-	} else if (anyRunning) {
+	} else if (anyRunning || anyEscalated) {
+		// Escalated nodes keep the Blueprint in "running" state (not failed)
+		// so the master can retry them after providing judgment
 		bp.status = "running";
 	}
 	// Otherwise keep current status (confirmed/running)
@@ -149,13 +152,14 @@ export function resetNodeStatus(blueprintId: string, nodeId: string): Blueprint 
 	if (!bp) return null;
 	const node = bp.nodes.find((n) => n.id === nodeId);
 	if (!node) return null;
-	// Only failed or skipped nodes can be reset
-	if (node.status !== "failed" && node.status !== "skipped") return null;
+	// Only failed, skipped, or escalated nodes can be reset
+	if (node.status !== "failed" && node.status !== "skipped" && node.status !== "escalated") return null;
 	node.status = "pending";
 	node.startedAt = undefined;
 	node.completedAt = undefined;
 	node.result = undefined;
 	node.error = undefined;
+	node.escalationMessage = undefined;
 	// If the Blueprint itself is in a terminal state, bring it back to running/confirmed
 	if (bp.status === "completed" || bp.status === "failed") {
 		bp.status = "confirmed";
@@ -435,6 +439,7 @@ const STATUS_ICONS: Record<string, string> = {
 	completed: "✅",
 	failed: "❌",
 	skipped: "⏭️",
+	escalated: "🆘",
 };
 
 /**
@@ -445,10 +450,12 @@ export function formatBlueprintSummary(blueprint: Blueprint): string {
 	const completed = blueprint.nodes.filter((n) => n.status === "completed").length;
 	const failed = blueprint.nodes.filter((n) => n.status === "failed").length;
 	const running = blueprint.nodes.filter((n) => n.status === "running").length;
+	const escalated = blueprint.nodes.filter((n) => n.status === "escalated").length;
 
 	const progressParts = [`${completed}/${total} completed`];
 	if (failed > 0) progressParts.push(`${failed} failed`);
 	if (running > 0) progressParts.push(`${running} running`);
+	if (escalated > 0) progressParts.push(`${escalated} escalated`);
 
 	const lines = [
 		`## Blueprint: ${blueprint.title}`,
@@ -476,6 +483,11 @@ export function formatBlueprintSummary(blueprint: Blueprint): string {
 		if (node.error) {
 			const preview = node.error.length > 120 ? `${node.error.slice(0, 120)}...` : node.error;
 			lines.push(`   ⚠️ Error: ${preview}`);
+		}
+		if (node.escalationMessage) {
+			const preview =
+				node.escalationMessage.length > 120 ? `${node.escalationMessage.slice(0, 120)}...` : node.escalationMessage;
+			lines.push(`   🆘 Escalation: ${preview}`);
 		}
 	}
 
@@ -515,11 +527,13 @@ export function formatBlueprintProgress(blueprint: Blueprint): string {
 	const completed = blueprint.nodes.filter((n) => n.status === "completed").length;
 	const failed = blueprint.nodes.filter((n) => n.status === "failed").length;
 	const running = blueprint.nodes.filter((n) => n.status === "running").length;
+	const escalated = blueprint.nodes.filter((n) => n.status === "escalated").length;
 
 	// Header
 	const counters: string[] = [`${completed}/${total} 완료`];
 	if (running > 0) counters.push(`${running} 실행 중`);
 	if (failed > 0) counters.push(`${failed} 실패`);
+	if (escalated > 0) counters.push(`${escalated} 에스컬레이션`);
 
 	const allDone = completed === total;
 	const doneTag = allDone ? " ✅ Blueprint 완료!" : "";
@@ -541,6 +555,10 @@ export function formatBlueprintProgress(blueprint: Blueprint): string {
 			lines.push(`다음 실행 가능: ${runnable.map((n) => n.id).join(", ")}`);
 		} else if (running > 0) {
 			lines.push(`다음 실행 가능: 없음 (${running}개 노드 실행 완료 대기)`);
+		} else if (escalated > 0) {
+			const escNodes = blueprint.nodes.filter((n) => n.status === "escalated");
+			const escList = escNodes.map((n) => `${n.id}`).join(", ");
+			lines.push(`🆘 에스컬레이션 대기: ${escList}. retry_node로 재개하거나 abort로 중단하세요.`);
 		} else if (failed > 0) {
 			lines.push(`⚠️ 블로킹: ${failed}개 노드 실패. 수동 개입 필요.`);
 		}
@@ -565,6 +583,10 @@ function formatNodeStatusText(node: BlueprintNode, blueprint: Blueprint): string
 		}
 		case "skipped":
 			return "스킵";
+		case "escalated": {
+			const escDetail = node.escalationMessage ? `: ${node.escalationMessage.slice(0, 80)}` : "";
+			return `에스컬레이션${escDetail}`;
+		}
 		default: {
 			// Pending — show which dependencies are still blocking
 			const blocking = node.dependsOn.filter((d) => {

@@ -23,6 +23,7 @@
  */
 
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
+import { Text } from "@mariozechner/pi-tui";
 import { parse as parseYaml } from "yaml";
 import {
 	deleteBlueprint,
@@ -204,7 +205,7 @@ export default function (pi: ExtensionAPI) {
 									text: `Blueprint "${blueprint.title}" (${blueprint.id}) 생성 완료 (자동 확인).\n\`intent({ mode: "run_next", blueprintId: "${blueprint.id}" })\`를 호출해 실행을 시작하세요.`,
 								},
 							],
-							details: undefined,
+							details: { blueprintId: blueprint.id },
 						};
 					}
 
@@ -230,7 +231,7 @@ export default function (pi: ExtensionAPI) {
 						deleteBlueprint(blueprint.id);
 						return {
 							content: [{ type: "text" as const, text: "Blueprint 생성 취소됨 (사용자 취소)." }],
-							details: undefined,
+							details: { cancelled: true },
 						};
 					}
 
@@ -244,7 +245,7 @@ export default function (pi: ExtensionAPI) {
 								text: `Blueprint "${blueprint.title}" (${blueprint.id}) 확인됨.\n\`intent({ mode: "run_next", blueprintId: "${blueprint.id}" })\`를 호출해 실행을 시작하세요.`,
 							},
 						],
-						details: undefined,
+						details: { blueprintId: blueprint.id },
 					};
 				}
 
@@ -257,7 +258,7 @@ export default function (pi: ExtensionAPI) {
 						};
 					}
 
-					const result = await runNext(pi, params.blueprintId, ctx);
+					const result = await runNext(pi, params.blueprintId, ctx, signal);
 					return {
 						content: [{ type: "text" as const, text: result }],
 						details: undefined,
@@ -278,7 +279,7 @@ export default function (pi: ExtensionAPI) {
 						};
 					}
 
-					const result = await runSingleIntent(pi, params.purpose, params.difficulty, params.task, params.context, ctx);
+					const result = await runSingleIntent(pi, params.purpose, params.difficulty, params.task, params.context, ctx, signal);
 					return {
 						content: [{ type: "text" as const, text: result }],
 						details: undefined,
@@ -439,7 +440,7 @@ export default function (pi: ExtensionAPI) {
 							content: [
 								{
 									type: "text" as const,
-									text: `노드 "${params.nodeId}"를 찾을 수 없거나 failed/skipped 상태가 아닙니다.`,
+									text: `노드 "${params.nodeId}"를 찾을 수 없거나 failed/skipped/escalated 상태가 아닙니다.`,
 								},
 							],
 							details: undefined,
@@ -447,7 +448,7 @@ export default function (pi: ExtensionAPI) {
 					}
 
 					// Immediately dispatch run_next so the retried node starts executing
-					const runResult = await runNext(pi, params.blueprintId, ctx);
+					const runResult = await runNext(pi, params.blueprintId, ctx, signal);
 					return {
 						content: [
 							{
@@ -618,6 +619,32 @@ export default function (pi: ExtensionAPI) {
 						details: undefined,
 					};
 			}
+		},
+
+		renderResult(result, _options, theme) {
+			const details = result.details as any;
+			const text = (result.content.find((c: any) => c.type === "text") as any)?.text ?? "";
+
+			// Blueprint creation result → show DAG visually
+			if (details?.blueprintId) {
+				const bp = loadBlueprint(details.blueprintId);
+				if (bp) {
+					const fullText = renderBlueprintDAGText(bp);
+					const lines = fullText.split("\n");
+					// Show only the DAG portion (skip node-summary list after ─── separator)
+					const sepIdx = lines.findIndex((l, i) => i >= 2 && /^─+/.test(l));
+					const dagLines = sepIdx > 0 ? lines.slice(0, sepIdx) : lines;
+					return new Text(dagLines.join("\n").trim(), 1, 0);
+				}
+			}
+
+			// Cancelled → show brief message
+			if (details?.cancelled) {
+				return new Text(theme.fg("muted", "Blueprint 취소됨"), 1, 0);
+			}
+
+			// All other modes (run, run_next, status, etc.) → default text
+			return new Text(text, 1, 0);
 		},
 	});
 

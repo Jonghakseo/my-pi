@@ -38,7 +38,7 @@ export interface BlueprintNode {
 	context?: string;
 	dependsOn: string[];
 	chainFrom?: string;
-	status: "pending" | "running" | "completed" | "failed" | "skipped";
+	status: "pending" | "running" | "completed" | "failed" | "skipped" | "escalated";
 	result?: string;
 	/** Path to full result .md file */
 	resultPath?: string;
@@ -47,6 +47,8 @@ export interface BlueprintNode {
 	startedAt?: string;
 	completedAt?: string;
 	error?: string;
+	/** Escalation message from the subagent (set when status === "escalated") */
+	escalationMessage?: string;
 }
 
 // ─── Blueprint ───────────────────────────────────────────────────────────────
@@ -69,7 +71,7 @@ export interface SingleIntentRun {
 	difficulty: string;
 	task: string;
 	agent: string;
-	status: "running" | "completed" | "failed";
+	status: "running" | "completed" | "failed" | "escalated";
 	startedAt: string;
 	completedAt?: string;
 	result?: string;
@@ -78,6 +80,23 @@ export interface SingleIntentRun {
 	abort?: () => void;
 	/** Session file path of the subagent process, for sub:trans support */
 	sessionFile?: string;
+}
+
+// ─── Escalation Record ───────────────────────────────────────────────────────
+
+/**
+ * Written to ~/.pi/agent/escalations/<session-basename>.yaml by the escalate tool.
+ * Consumed (read + deleted) by executor.ts after detecting exit code 42.
+ */
+export interface EscalationRecord {
+	/** Session file of the subagent that triggered the escalation */
+	sessionFile?: string;
+	/** Human-readable escalation message from the subagent */
+	message: string;
+	/** Additional context provided by the subagent */
+	context?: string;
+	/** ISO timestamp */
+	timestamp: string;
 }
 
 // ─── TypeBox Schemas ─────────────────────────────────────────────────────────
@@ -155,7 +174,8 @@ export const IntentParams = Type.Object({
 	// ── retry_node mode ──
 	nodeId: Type.Optional(
 		Type.String({
-			description: "Node ID to reset and retry (retry_node mode). Node must be in failed or skipped state.",
+			description:
+				"Node ID to reset and retry (retry_node mode). Node must be in failed, skipped, or escalated state.",
 		}),
 	),
 
