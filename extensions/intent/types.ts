@@ -94,22 +94,6 @@ const DifficultySchema = StringEnum(["low", "medium", "high"] as const, {
 	description: "Task difficulty: low(단순), medium(보통), high(복잡)",
 });
 
-const BlueprintNodeSchema = Type.Object({
-	id: Type.String({ description: "Unique node ID (e.g. 'plan-1', 'impl-a', 'review-1')" }),
-	purpose: PurposeSchema,
-	difficulty: DifficultySchema,
-	task: Type.String({ description: "Task description for the subagent" }),
-	context: Type.Optional(Type.String({ description: "Additional context for the task" })),
-	dependsOn: Type.Array(Type.String(), {
-		description: "Node IDs that must complete before this node can run. Empty array = no dependencies.",
-	}),
-	chainFrom: Type.Optional(
-		Type.String({
-			description: "Node ID whose result should be automatically injected as context for this node",
-		}),
-	),
-});
-
 export const IntentParams = Type.Object({
 	mode: StringEnum(
 		["create_blueprint", "run_next", "run", "status", "abort", "abort_run", "retry_node", "edit_blueprint"] as const,
@@ -132,8 +116,25 @@ export const IntentParams = Type.Object({
 	title: Type.Optional(Type.String({ description: "Blueprint title (create_blueprint mode)" })),
 	description: Type.Optional(Type.String({ description: "Blueprint description (create_blueprint mode)" })),
 	nodes: Type.Optional(
-		Type.Array(BlueprintNodeSchema, {
-			description: "Blueprint nodes forming a DAG (create_blueprint mode)",
+		Type.String({
+			description: [
+				"Blueprint nodes as YAML string (create_blueprint mode). Each node: id, purpose, difficulty, task, dependsOn[]. Optional: context, chainFrom.",
+				"",
+				"Example:",
+				"- id: plan-1",
+				"  purpose: plan",
+				"  difficulty: medium",
+				"  task: |",
+				"    작업 내용을 여기에",
+				"    여러 줄도 가능",
+				"  dependsOn: []",
+				"- id: impl-1",
+				"  purpose: implement",
+				"  difficulty: high",
+				"  task: 구현 작업",
+				"  dependsOn: [plan-1]",
+				"  chainFrom: plan-1",
+			].join("\n"),
 		}),
 	),
 
@@ -160,23 +161,28 @@ export const IntentParams = Type.Object({
 
 	// ── edit_blueprint mode ──
 	nodeUpdates: Type.Optional(
-		Type.Array(
-			Type.Object({
-				id: Type.String({ description: "수정할 노드 ID" }),
-				task: Type.Optional(Type.String({ description: "변경할 task 내용" })),
-				context: Type.Optional(Type.String({ description: "변경할 context" })),
-				purpose: Type.Optional(
-					StringEnum(
-						["explore", "search", "plan", "challenge", "decide", "implement", "review", "verify", "browse"] as const,
-						{ description: "변경할 purpose" },
-					),
-				),
-				difficulty: Type.Optional(StringEnum(["low", "medium", "high"] as const, { description: "변경할 difficulty" })),
-				dependsOn: Type.Optional(Type.Array(Type.String(), { description: "변경할 dependsOn 목록" })),
-				chainFrom: Type.Optional(Type.String({ description: "변경할 chainFrom 노드 ID" })),
-			}),
-			{ description: "수정할 노드 목록 (pending 노드만 가능)" },
-		),
+		Type.String({
+			description: [
+				"수정할 노드 목록을 YAML string으로 전달 (pending 노드만 가능).",
+				"필드: id(필수), task, context, purpose, difficulty, dependsOn[], chainFrom",
+				"",
+				"Example:",
+				"- id: impl-1",
+				"  task: 수정된 작업 내용",
+				"  difficulty: low",
+				"- id: review-1",
+				"  purpose: verify",
+				"  dependsOn: [impl-1]",
+			].join("\n"),
+		}),
+	),
+
+	// ── create_blueprint mode — auto-confirm ──
+	need_confirm: Type.Optional(
+		Type.Boolean({
+			description:
+				"false시 사용자 확인 없이 Blueprint를 즉시 confirmed 상태로 저장합니다 (소규모/저위험 Blueprint용). 기본값 true (확인 UI 표시)",
+		}),
 	),
 });
 

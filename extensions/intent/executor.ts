@@ -21,6 +21,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
+import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
 import type { AgentConfig } from "../subagent/agents.js";
 import { discoverAgents } from "../subagent/agents.js";
 import { getFinalOutput, runSingleAgent } from "../subagent/runner.js";
@@ -120,41 +121,66 @@ export function abortAllBlueprintRuns(blueprintId: string): number {
 
 // ─── Single Intent Run Tracking ──────────────────────────────────────────────
 
-const SINGLE_RUNS_FILE = path.join(os.homedir(), ".pi", "blueprints", "single-runs.json");
+const SINGLE_RUNS_YAML = path.join(os.homedir(), ".pi", "blueprints", "single-runs.yaml");
+const SINGLE_RUNS_JSON = path.join(os.homedir(), ".pi", "blueprints", "single-runs.json");
 
 /** Load persisted runs from disk (called once on module init) */
 function loadPersistedRuns(): Map<string, SingleIntentRun> {
 	try {
-		if (!fs.existsSync(SINGLE_RUNS_FILE)) return new Map();
-		const raw = fs.readFileSync(SINGLE_RUNS_FILE, "utf-8");
-		const arr: SingleIntentRun[] = JSON.parse(raw);
-		// Trim old runs: keep last 200, mark stale "running" as failed
-		const now = Date.now();
-		const trimmed = arr.slice(-200);
-		for (const r of trimmed) {
-			if (r.status === "running") {
-				const age = now - new Date(r.startedAt).getTime();
-				if (age > 30 * 60 * 1000) {
-					// >30 min old "running" → stale
-					r.status = "failed";
-					r.error = "Stale (pi restarted)";
-				}
-			}
+		// Try YAML first
+		if (fs.existsSync(SINGLE_RUNS_YAML)) {
+			const raw = fs.readFileSync(SINGLE_RUNS_YAML, "utf-8");
+			const arr: SingleIntentRun[] = parseYaml(raw);
+			return applyRunFiltering(arr);
 		}
-		return new Map(trimmed.map((r) => [r.id, r]));
+
+		// Fallback to JSON for migration
+		if (fs.existsSync(SINGLE_RUNS_JSON)) {
+			const raw = fs.readFileSync(SINGLE_RUNS_JSON, "utf-8");
+			const arr: SingleIntentRun[] = JSON.parse(raw);
+			const result = applyRunFiltering(arr);
+			// Migrate to YAML and delete JSON
+			persistRuns(result);
+			try {
+				fs.unlinkSync(SINGLE_RUNS_JSON);
+			} catch {
+				/* ignore deletion error */
+			}
+			return result;
+		}
+
+		return new Map();
 	} catch {
 		return new Map();
 	}
 }
 
+/** Filter and mark stale runs */
+function applyRunFiltering(arr: SingleIntentRun[]): Map<string, SingleIntentRun> {
+	// Trim old runs: keep last 200, mark stale "running" as failed
+	const now = Date.now();
+	const trimmed = arr.slice(-200);
+	for (const r of trimmed) {
+		if (r.status === "running") {
+			const age = now - new Date(r.startedAt).getTime();
+			if (age > 30 * 60 * 1000) {
+				// >30 min old "running" → stale
+				r.status = "failed";
+				r.error = "Stale (pi restarted)";
+			}
+		}
+	}
+	return new Map(trimmed.map((r) => [r.id, r]));
+}
+
 /** Persist in-memory runs to disk (debounced via immediate write) */
-function persistRuns(): void {
+function persistRuns(runsMap?: Map<string, SingleIntentRun>): void {
 	try {
-		const dir = path.dirname(SINGLE_RUNS_FILE);
+		const dir = path.dirname(SINGLE_RUNS_YAML);
 		if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 		// Keep last 200 runs
-		const arr = Array.from(singleIntentRuns.values()).slice(-200);
-		fs.writeFileSync(SINGLE_RUNS_FILE, JSON.stringify(arr, null, 2), "utf-8");
+		const arr = Array.from((runsMap ?? singleIntentRuns).values()).slice(-200);
+		fs.writeFileSync(SINGLE_RUNS_YAML, stringifyYaml(arr), "utf-8");
 	} catch (err) {
 		console.warn("[intent] Failed to persist single-runs:", err);
 	}
@@ -497,12 +523,14 @@ export async function runSingleIntent(
 	// ── Soft duplicate warning: warn (don't block) if 3+ same-purpose intents running ──
 	const runningCount = countRunningByPurpose(purpose);
 	if (runningCount >= 3) {
-		void pi.sendMessage({
-			role: "user",
-			content: `⚠️ 같은 목적의 동일한 작업을 다시 호출하지 마세요. 완료 알림을 기다려주세요. (현재 ${runningCount}개 실행 중)`,
-			display: true,
-			triggerTurn: false,
-		});
+		void pi.sendMessage(
+			{
+				customType: "intent-single",
+				content: `⚠️ [경고] 같은 목적의 동일한 작업을 다시 호출하지 마세요. 완료 알림을 기다려주세요. (현재 ${runningCount}개 실행 중)`,
+				display: true,
+			},
+			{ triggerTurn: false, deliverAs: "followUp" },
+		);
 	}
 
 	// Initialize widget and start tracking (both UI widget and status tracking)

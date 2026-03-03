@@ -155,6 +155,14 @@ function durationBetween(start?: string, end?: string): string {
 	return formatMs(Math.max(0, e - s));
 }
 
+// ─── Blueprint DAG Viewer Options ───────────────────────────────────────────
+
+export interface BlueprintDagViewerOptions {
+	confirmMode?: boolean;
+	onConfirm?: () => void;
+	onCancel?: () => void;
+}
+
 // ─── Blueprint DAG Viewer ────────────────────────────────────────────────────
 
 export class BlueprintDagViewer {
@@ -162,27 +170,46 @@ export class BlueprintDagViewer {
 	private layout: StageLayout;
 	private selectedIndex = 0;
 	private onDone: () => void;
+	private confirmMode: boolean;
+	private viewerOptions?: BlueprintDagViewerOptions;
 
-	constructor(blueprint: Blueprint, onDone: () => void) {
+	constructor(blueprint: Blueprint, onDone: () => void, options?: BlueprintDagViewerOptions) {
 		this.blueprint = blueprint;
 		this.layout = computeLayout(blueprint);
+		this.selectedIndex = 0;
 		this.onDone = onDone;
+		this.confirmMode = options?.confirmMode ?? false;
+		this.viewerOptions = options;
 	}
 
 	handleInput(data: string, tui: any): void {
-		if (matchesKey(data, Key.escape) || data === "q" || data === "Q") {
-			this.onDone();
-			return;
+		// Confirm mode key handling
+		if (this.confirmMode) {
+			if (data === "\r" || data === "y" || data === "Y") {
+				this.viewerOptions?.onConfirm?.();
+				return;
+			}
+			if (matchesKey(data, Key.escape) || data === "n" || data === "N" || data === "q" || data === "Q") {
+				this.viewerOptions?.onCancel?.();
+				return;
+			}
+		} else {
+			// View mode
+			if (matchesKey(data, Key.escape) || data === "q" || data === "Q") {
+				this.onDone();
+				return;
+			}
 		}
+		// Navigation (both modes)
 		if (matchesKey(data, Key.up) || data === "k") {
 			this.selectedIndex = Math.max(0, this.selectedIndex - 1);
 		} else if (matchesKey(data, Key.down) || data === "j") {
 			this.selectedIndex = Math.min(this.layout.flatOrder.length - 1, this.selectedIndex + 1);
-		} else if (data === "g") {
+		} else if (!this.confirmMode && data === "g") {
 			this.selectedIndex = 0;
-		} else if (data === "G") {
+		} else if (!this.confirmMode && data === "G") {
 			this.selectedIndex = Math.max(0, this.layout.flatOrder.length - 1);
-		} else if (data === "r") {
+		} else if (!this.confirmMode && data === "r") {
 			const reloaded = loadBlueprint(this.blueprint.id);
 			if (reloaded) {
 				this.blueprint = reloaded;
@@ -219,7 +246,21 @@ export class BlueprintDagViewer {
 		}
 
 		// ═══ HELP ═══
-		container.addChild(new Text(pad + theme.fg("dim", "↑↓/jk select  g/G top/end  r refresh  q/Esc close"), 0, 0));
+		if (this.confirmMode) {
+			container.addChild(
+				new Text(
+					pad +
+						theme.fg("dim", "↑↓/jk select  ") +
+						theme.fg("success", "Enter/y 실행") +
+						theme.fg("dim", "  ") +
+						theme.fg("error", "n/Esc 취소"),
+					0,
+					0,
+				),
+			);
+		} else {
+			container.addChild(new Text(pad + theme.fg("dim", "↑↓/jk select  g/G top/end  r refresh  q/Esc close"), 0, 0));
+		}
 		container.addChild(new Spacer(1));
 
 		return container.render(width);

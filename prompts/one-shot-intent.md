@@ -10,23 +10,28 @@ Use the requirements above as the work objective and execute the workflow below.
 
 ---
 
-## 1. Research First
+## 1. Decide Single Task vs Blueprint First
 
-Complete **sufficient upfront research** before deciding execution direction.
+When requirements are received, **decide execution mode first** - single `intent()` or Blueprint.
 
-- Explore inside the codebase → `intent({ mode: "run", purpose: "explore", ... })`
-- Search external docs/web information → `intent({ mode: "run", purpose: "search", ... })`
-- Do not start implementation before research.
+- **Single task (1 purpose)**: run immediately with `intent({ mode: "run", purpose: "...", difficulty: "...", task: "..." })`
+  - Examples: single explore, single implement, single verify
+- **Multi-step (2+ purposes or dependencies)**: proceed with Blueprint workflow below
+  - Examples: explore → implement, plan → implement → review, or anything with explicit dependencies
+- **If uncertain**: confirm with `AskUserQuestion` - "Should we do this quickly now, or plan first?"
 
 ---
 
-## 2. Single Task vs Blueprint Decision
+## 2. Research-First Principle
 
-When requirements are received, decide **first**.
+Once execution mode is decided, apply the research-first principle as needed:
 
-- **1–2 steps**: run immediately with `intent({ mode: "run", purpose: "...", difficulty: "...", task: "..." })`
-- **3+ steps + dependencies**: proceed with the Blueprint workflow below
-- **If uncertain**: confirm with `AskUserQuestion` — “Should we do it quickly now, or make a plan first?”
+- For single `explore` or `search` tasks: execute directly
+- For `implement` without prior research: run `explore` or `search` first within the Blueprint
+- Examples:
+  - Explore inside the codebase → `intent({ mode: "run", purpose: "explore", ... })`
+  - Search external docs/web information → `intent({ mode: "run", purpose: "search", ... })`
+- Do not start implementation before sufficient research
 
 ---
 
@@ -50,8 +55,8 @@ Research/Plan nodes → Implement nodes → Verify nodes
 - `dependsOn`: controls execution order
 - `chainFrom`: automatically injects previous node results into the next node
 - Run independent nodes in parallel (without dependsOn)
-- Challenge gates are **auto-inserted** — if plan/explore → implement exists, Gate 1 is inserted (before implement); if implement → review exists, Gate 2 is inserted (before review). If there are already 2+ challenge nodes, injection is skipped. No manual insertion is needed (except when there are fewer than 3 nodes or custom challenge logic is required)
-- Verify nodes are not auto-inserted — include them explicitly
+- Challenge gates are **auto-inserted** - if plan/explore → implement exists, Gate 1 is inserted (before implement); if implement → review exists, Gate 2 is inserted (before review). If there are already 2+ challenge nodes, injection is skipped. No manual insertion is needed (except when there are fewer than 3 nodes or custom challenge logic is required)
+- Verify nodes are not auto-inserted - include them explicitly
 - Keep node count between 3 and 7. If larger, split into sequential Blueprints
 
 ### 3-3. Execution
@@ -59,7 +64,7 @@ Research/Plan nodes → Implement nodes → Verify nodes
 create_blueprint → user confirm → run_next (once) → wait for completion
 ```
 
-Call `run_next` only once; the executor will automatically process subsequent nodes.  
+Call `run_next` only once; the executor will automatically process subsequent nodes.
 Wait until the `[Intent Blueprint 완료]` notification arrives.
 
 ### 3-4. Failure Recovery
@@ -94,12 +99,12 @@ Do not give up when blocked. Try workarounds step by step.
 After implementation, **do not declare completion without evidence**.
 
 Run the highest practical verification tier:
-- **Tier 1** — automated tests, lint, typecheck (highest reliability)
-- **Tier 2** — browser/interactive behavior checks
-- **Tier 3** — source analysis + official documentation citations (must be marked PARTIAL)
+- **Tier 1** - automated tests, lint, typecheck (highest reliability)
+- **Tier 2** - browser/interactive behavior checks
+- **Tier 3** - source analysis + official documentation citations (must be marked PARTIAL)
 
 ```
-intent({ mode: "run", purpose: "verify", difficulty: "medium", task: "Validate the changes — prioritize Tier 1" })
+intent({ mode: "run", purpose: "verify", difficulty: "medium", task: "Validate the changes - prioritize Tier 1" })
 ```
 
 If official documentation cannot be cited, explicitly state that findings are based on source-code analysis.
@@ -108,10 +113,20 @@ If official documentation cannot be cited, explicitly state that findings are ba
 
 ## 7. HTML Report Deliverables (Required)
 
-After completion, generate **three Korean** HTML reports under `~/Documents/`.
+After completion, generate **three Korean** HTML reports.
 
-Delegate via `implement` intent to a worker using the to-html skill.  
-The worker inherits main context, so it can reflect the full work details.
+Delegate via `implement` intent using the `to-html` skill:
+
+```
+intent({
+  mode: "run",
+  purpose: "implement",
+  difficulty: "medium",
+  task: "Use the to-html skill to generate three Korean HTML reports and save them to ~/Documents/:\n1. Result Report — problem understanding, executed work, resolution method\n2. Alternatives Report — trade-offs, adoption/rejection rationale\n3. Retrospective Report — blocking points, improvements for tools/prompts"
+})
+```
+
+The intent system will automatically route this to the best executor. Main context inheritance ensures full work details are reflected in the reports.
 
 1. **Result Report** — problem understanding process, executed work, and resolution method
 2. **Alternatives Report** — considered options, trade-offs, and adoption/rejection rationale

@@ -1,18 +1,20 @@
 /**
- * Idle screensaver — shows session context after 10 min of inactivity.
+ * Idle screensaver — shows session context after inactivity.
  *
  * Displays (priority): purpose || folder/branch || session name.
- * Shows recent 3 progress entries at the bottom.
+ * Shows active blueprint (if running or confirmed) with node statuses.
  * Any key dismisses the overlay.
  */
 
 import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
 import { DynamicBorder } from "@mariozechner/pi-coding-agent";
-import { truncateToWidth, visibleWidth } from "@mariozechner/pi-tui";
+import { truncateText, textWidth } from "@mariozechner/pi-tui";
+import type { Blueprint, NodeStatus } from "./intent/types";
+import { listBlueprints } from "./intent/blueprints";
 
 // ─── Config ────────────────────────────────────────────────────────────────
 
-const IDLE_MS = 5 * 60 * 1000; // 5 minutes
+const IDLE_MS = 30 * 60 * 1000; // 30 minutes
 const EDITOR_POLL_INTERVAL_MS = 300;
 const PURPOSE_ENTRY_TYPE = "purpose:set";
 
@@ -88,92 +90,177 @@ function readFolder(ctx: ExtensionContext): string {
 	return parts.length > 0 ? parts[parts.length - 1] : cwd || "unknown";
 }
 
-function centerPad(text: string, width: number): string {
-	const vis = visibleWidth(text);
-	if (vis >= width) return truncateToWidth(text, width);
-	return `${" ".repeat(Math.floor((width - vis) / 2))}${text}`;
+// ─── Blueprint helpers ──────────────────────────────────────────────────────
+
+function nodeStatusIcon(status: NodeStatus): string {
+	switch (status) {
+		case "pending":
+			return "⏳";
+		case "running":
+			return "🔄";
+		case "completed":
+			return "✅";
+		case "failed":
+			return "❌";
+		case "skipped":
+			return "⏭ ";
+		default:
+			return "  ";
+	}
 }
 
-function wrapText(text: string, maxWidth: number): string[] {
-	const input = normalizeLine(text);
-	if (!input) return [""];
-	const words = input.split(" ");
+function buildBlueprintLines(blueprint: Blueprint, maxWidth: number): string[] {
 	const lines: string[] = [];
-	let current = "";
 
-	for (const w of words) {
-		const next = current ? `${current} ${w}` : w;
-		if (visibleWidth(next) > maxWidth && current) {
-			lines.push(current);
-			current = w;
-		} else {
-			current = next;
-		}
+	// Line 1: title + badge
+	let badge = "";
+	switch (blueprint.status) {
+		case "confirmed":
+			badge = "📋 confirmed";
+			break;
+		case "running":
+			badge = "▶  running";
+			break;
+		case "completed":
+			badge = "✅ done";
+			break;
+		case "failed":
+			badge = "❌ failed";
+			break;
+		case "aborted":
+			badge = "🚫 aborted";
+			break;
 	}
-	if (current) lines.push(current);
+	lines.push(`${blueprint.title}  ${badge}`);
+
+	// Line 2: separator
+	lines.push("─".repeat(Math.min(maxWidth, 60)));
+
+	// Lines 3+: nodes
+	for (const node of blueprint.nodes) {
+		const icon = nodeStatusIcon(node.status);
+		const prefix = `${icon} ${node.id} — `;
+		const prefixWidth = textWidth(prefix);
+		const availableWidth = Math.max(0, maxWidth - prefixWidth - 1);
+		const truncatedTask = truncateText(node.task, availableWidth);
+		lines.push(`${prefix}${truncatedTask}`);
+	}
+
 	return lines;
 }
 
-function stylizeTitleLine(text: string, maxWidth: number): string {
-	const compact = normalizeLine(text);
-	if (!compact) return "";
-	const spread = compact.split("").join(" ");
-	if (compact.length <= 24 && visibleWidth(spread) <= maxWidth) return spread;
-	return compact;
-}
+// ─── Screensaver rendering ──────────────────────────────────────────────────
 
-function renderScreensaver(width: number, height: number, theme: any, title: string): string[] {
-	const fg = (c: string, t: string) => theme.fg(c, t);
-	const bold = (t: string) => theme.bold(t);
-	const border = new DynamicBorder((s: string) => fg("accent", s));
+function renderScreensaver(
+	width: number,
+	height: number,
+	title: string,
+	blueprint?: Blueprint | null,
+): string {
+	const lines: string[] = [];
 
-	const innerW = Math.max(20, width - 4);
-	const out: string[] = [];
+	const border = new DynamicBorder(width, height, {
+		title: " Pi ",
+		titlePosition: "right",
+		style: "single",
+	});
 
-	// Stronger frame
-	out.push(...border.render(width));
-	out.push(centerPad(fg("accent", bold(" IDLE MODE ")), width));
-	out.push(centerPad(fg("dim", "─".repeat(Math.min(innerW, 52))), width));
-	out.push("");
+	const borderLines = border.getLines();
+	const innerWidth = border.innerWidth;
+	const innerHeight = border.innerHeight;
 
-	// Main title box (larger emphasis)
-	const titleLinesRaw = wrapText(title || "(untitled session)", Math.max(16, innerW - 14));
-	const titleLines = titleLinesRaw.slice(0, 3).map((l) => stylizeTitleLine(l, Math.max(16, innerW - 20)));
+	// ── header ──────────────────────────────────────────────────────
+	lines.push(borderLines[0]);
 
-	const boxInner = Math.max(24, Math.min(innerW - 10, Math.floor(innerW * 0.78)));
-	const boxTop = `╔${"═".repeat(boxInner + 2)}╗`;
-	const boxBottom = `╚${"═".repeat(boxInner + 2)}╝`;
-	const blankRow = `║ ${" ".repeat(boxInner)} ║`;
-	const boxColor = "warning";
-
-	out.push(centerPad(fg(boxColor, boxTop), width));
-	out.push(centerPad(fg(boxColor, blankRow), width));
-	for (const raw of titleLines) {
-		const clipped = truncateToWidth(raw, boxInner);
-		const textWidth = visibleWidth(clipped);
-		const leftPadLen = Math.max(0, Math.floor((boxInner - textWidth) / 2));
-		const rightPadLen = Math.max(0, boxInner - textWidth - leftPadLen);
-		const leftPad = " ".repeat(leftPadLen);
-		const rightPad = " ".repeat(rightPadLen);
-		const row = `${fg(boxColor, "║ ")}${leftPad}${fg("accent", bold(clipped))}${rightPad}${fg(boxColor, " ║")}`;
-		out.push(centerPad(row, width));
+	// ── calculate dynamic top padding ────────────────────────────────
+	// Base content: 4 lines (title box) + 1 line (footer)
+	let baseContentH = 5;
+	if (blueprint) {
+		// With blueprint: add spacing + blueprint lines + footer
+		const bpLines = buildBlueprintLines(blueprint, innerWidth - 4);
+		const maxBpLines = Math.max(0, height - 6 - baseContentH); // leave room for spacing + footer
+		baseContentH += 1 + Math.min(bpLines.length, maxBpLines);
 	}
-	out.push(centerPad(fg(boxColor, blankRow), width));
-	out.push(centerPad(fg(boxColor, boxBottom), width));
-	out.push("");
+	const topPad = Math.max(0, Math.floor((innerHeight - baseContentH) / 2) - 1);
+	for (let i = 0; i < topPad; i++) lines.push(borderLines[lines.length]);
 
-	out.push(centerPad(fg("dim", "Press any key to dismiss"), width));
-	out.push("");
-	out.push(...border.render(width));
+	// ── title box ───────────────────────────────────────────────────
+	const compact = title.trim();
+	const spread = compact.length <= 24 ? compact.split("").join(" ") : compact;
 
-	// top-align content (avoid large blank area above header)
-	if (out.length < height) {
-		const padded = [...out];
-		while (padded.length < height) padded.push("");
-		return padded;
+	const centerLine = (text: string) => {
+		const vw = textWidth(text);
+		const pad = Math.max(0, Math.floor((innerWidth - vw) / 2));
+		return (
+			borderLines[lines.length]
+				.slice(0, 1)
+				.padEnd(1 + pad)
+				.concat(text)
+				.padEnd(width - 1)
+				.concat(borderLines[lines.length].slice(-1))
+		);
+	};
+
+	const doubleBoxW = Math.min(innerWidth - 4, Math.max(spread.length + 8, 40));
+	const dblLeft = Math.floor((innerWidth - doubleBoxW) / 2);
+
+	const topDoubleBar = "╔" + "═".repeat(doubleBoxW - 2) + "╗";
+	const midDoubleBar = "║" + " ".repeat(doubleBoxW - 2) + "║";
+	const botDoubleBar = "╚" + "═".repeat(doubleBoxW - 2) + "╝";
+
+	const titleInBox =
+		spread.length <= doubleBoxW - 4
+			? spread
+					.padStart(Math.floor((doubleBoxW - 2 + spread.length) / 2)))
+					.padEnd(doubleBoxW - 2)
+			: spread.slice(0, doubleBoxW - 4);
+
+	const emptyBorderLine = () => borderLines[lines.length];
+
+	const placeLine = (chars: string) => {
+		const idx = lines.length;
+		const left = borderLines[idx].slice(0, 1);
+		const right = borderLines[idx].slice(-1);
+		const vw = textWidth(chars);
+		return left + chars + " ".repeat(Math.max(0, innerWidth - vw)) + right;
+	};
+
+	lines.push(placeLine(topDoubleBar));
+	lines.push(
+		placeLine(
+			midDoubleBar.slice(0, 1) +
+				" " +
+				titleInBox +
+				" " +
+				midDoubleBar.slice(-1),
+		),
+	);
+	lines.push(placeLine(midDoubleBar));
+	lines.push(placeLine(botDoubleBar));
+
+	// ── blueprint widget ────────────────────────────────────────────
+	if (blueprint) {
+		const bpLines = buildBlueprintLines(blueprint, innerWidth - 4);
+		const maxBpLines = Math.max(0, height - lines.length - 3);
+		const visible = bpLines.slice(0, maxBpLines);
+		if (visible.length > 0) {
+			lines.push(emptyBorderLine()); // spacing line
+			for (const bl of visible) {
+				if (lines.length >= height - 2) break;
+				lines.push(placeLine("  " + bl));
+			}
+		}
 	}
 
-	return out;
+	// ── "Press any key" footer ──────────────────────────────────────
+	const footerText = "Press any key to dismiss";
+	lines.push(centerLine(footerText));
+
+	// ── fill remaining inner rows ───────────────────────────────────
+	while (lines.length < height - 1) lines.push(borderLines[lines.length]);
+	lines.push(borderLines[height - 1]);
+
+	return lines.join("\n");
 }
 
 // ─── Timer control ─────────────────────────────────────────────────────────
@@ -224,7 +311,8 @@ function clearIdleTimer() {
 
 function scheduleIdleTimer() {
 	clearIdleTimer();
-	if (agentRunning || overlayActive || askUserQuestionActive || !latestCtx?.hasUI) return;
+	if (agentRunning || overlayActive || askUserQuestionActive || !latestCtx?.hasUI)
+		return;
 	idleTimer = setTimeout(() => void showScreensaver(), IDLE_MS);
 }
 
@@ -249,12 +337,23 @@ async function showScreensaver(): Promise<void> {
 	const folderBranch = branchName ? `${folder} / ${branchName}` : folder;
 	const title = purpose || folderBranch || sessionName;
 
+	// Find active blueprint (running or confirmed)
+	let activeBlueprint: Blueprint | null = null;
+	try {
+		const blueprints = listBlueprints();
+		activeBlueprint =
+			blueprints.find((b) => b.status === "running" || b.status === "confirmed") ??
+			null;
+	} catch {
+		// ignore blueprint errors
+	}
+
 	try {
 		await ctx.ui.custom<void>(
-			(tui, theme, _kb, done) => ({
+			(tui, _theme, _kb, done) => ({
 				render: (w: number) => {
 					const h = (tui as any).height ?? 32;
-					return renderScreensaver(w, h, theme, title);
+					return renderScreensaver(w, h, title, activeBlueprint);
 				},
 				handleInput: () => done(undefined),
 				invalidate: () => {},

@@ -1,13 +1,14 @@
 /**
  * Blueprint CRUD and state management.
  *
- * Blueprints are persisted as JSON files in ~/.pi/blueprints/.
+ * Blueprints are persisted as YAML files in ~/.pi/blueprints/.
  * Each Blueprint is a DAG of intent nodes with status tracking.
  * Inspired by oh-my-opencode's Boulder State pattern.
  */
 
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
 import type { Blueprint, BlueprintNode } from "./types.js";
 
 // ─── File System ─────────────────────────────────────────────────────────────
@@ -26,27 +27,67 @@ export function generateBlueprintId(): string {
 
 export function saveBlueprint(blueprint: Blueprint): void {
 	ensureDir();
-	const filePath = path.join(BLUEPRINTS_DIR, `${blueprint.id}.json`);
-	fs.writeFileSync(filePath, JSON.stringify(blueprint, null, 2), "utf-8");
+	const filePath = path.join(BLUEPRINTS_DIR, `${blueprint.id}.yaml`);
+	fs.writeFileSync(filePath, stringifyYaml(blueprint), "utf-8");
 }
 
 export function loadBlueprint(blueprintId: string): Blueprint | null {
-	const filePath = path.join(BLUEPRINTS_DIR, `${blueprintId}.json`);
-	if (!fs.existsSync(filePath)) return null;
+	const yamlPath = path.join(BLUEPRINTS_DIR, `${blueprintId}.yaml`);
+	const jsonPath = path.join(BLUEPRINTS_DIR, `${blueprintId}.json`);
+
+	// Try YAML first
+	if (fs.existsSync(yamlPath)) {
+		try {
+			return parseYaml(fs.readFileSync(yamlPath, "utf-8")) as Blueprint;
+		} catch {
+			return null;
+		}
+	}
+
+	// Fallback to JSON for migration compatibility
+	if (fs.existsSync(jsonPath)) {
+		try {
+			return JSON.parse(fs.readFileSync(jsonPath, "utf-8")) as Blueprint;
+		} catch {
+			return null;
+		}
+	}
+
+	return null;
+}
+
+export function deleteBlueprint(blueprintId: string): void {
+	const yamlPath = path.join(BLUEPRINTS_DIR, `${blueprintId}.yaml`);
+	const jsonPath = path.join(BLUEPRINTS_DIR, `${blueprintId}.json`);
 	try {
-		return JSON.parse(fs.readFileSync(filePath, "utf-8")) as Blueprint;
+		if (fs.existsSync(yamlPath)) fs.unlinkSync(yamlPath);
+		if (fs.existsSync(jsonPath)) fs.unlinkSync(jsonPath);
 	} catch {
-		return null;
+		/* ignore delete errors */
 	}
 }
 
 export function listBlueprints(cwdFilter?: string): Blueprint[] {
 	ensureDir();
-	const files = fs.readdirSync(BLUEPRINTS_DIR).filter((f) => f.endsWith(".json"));
+	const files = fs.readdirSync(BLUEPRINTS_DIR).filter((f) => f.endsWith(".yaml") || f.endsWith(".json"));
 	const blueprints: Blueprint[] = [];
+	const seen = new Set<string>(); // Track blueprint IDs to avoid duplicates
+
 	for (const file of files) {
 		try {
-			const bp = JSON.parse(fs.readFileSync(path.join(BLUEPRINTS_DIR, file), "utf-8")) as Blueprint;
+			const filePath = path.join(BLUEPRINTS_DIR, file);
+			let bp: Blueprint;
+
+			if (file.endsWith(".yaml")) {
+				bp = parseYaml(fs.readFileSync(filePath, "utf-8")) as Blueprint;
+			} else {
+				bp = JSON.parse(fs.readFileSync(filePath, "utf-8")) as Blueprint;
+			}
+
+			// Skip if we've already loaded a newer YAML version of this blueprint
+			if (seen.has(bp.id)) continue;
+			seen.add(bp.id);
+
 			if (!cwdFilter || bp.cwd === cwdFilter) {
 				blueprints.push(bp);
 			}
