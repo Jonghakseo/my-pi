@@ -241,7 +241,10 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 		const totalMessageCount = typeof mainContextResult === "string" ? 0 : mainContextResult.totalMessageCount;
 
 		const hasChain = (params.chain?.length ?? 0) > 0;
-		const hasSingle = Boolean(params.agent && params.task);
+		// hasSingle: true when (agent + task) OR (continueRunId + task — agent will be resolved from the prior run)
+		const hasSingle = Boolean(
+			(params.agent && params.task) || (params.continueRunId !== undefined && params.task),
+		);
 		const modeCount = Number(hasChain) + Number(hasSingle);
 
 		const makeDetails =
@@ -538,7 +541,14 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 
 			if (!hasSingle) {
 				return {
-					content: [{ type: "text", text: withIdleRunWarning("runAsync requires single mode: provide agent + task.") }],
+					content: [
+						{
+							type: "text",
+							text: withIdleRunWarning(
+								"runAsync requires single mode: provide agent + task, or continueRunId + task.",
+							),
+						},
+					],
 					details: makeDetails("single")([]),
 					isError: true,
 				};
