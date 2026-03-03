@@ -93,6 +93,18 @@ function renderFullOutput(text: string, theme: any): Text {
 	return output ? new Text(`\n${output}`, 0, 0) : new Text("", 0, 0);
 }
 
+/** Render first N lines as a dim preview with a "more" hint. */
+function renderPreviewLines(text: string, maxLines: number, theme: any): string {
+	const lines = text.trim().split("\n");
+	const preview = lines.slice(0, maxLines);
+	const remaining = lines.length - maxLines;
+	let output = preview.map((l) => theme.fg("dim", l)).join("\n");
+	if (remaining > 0) {
+		output += "\n" + theme.fg("muted", `… +${remaining} lines`);
+	}
+	return output;
+}
+
 // ── Side-by-Side Diff ──────────────────────────────────────────────────────
 
 interface DiffLine {
@@ -191,15 +203,17 @@ function buildDiffRows(parsed: DiffLine[]): DiffRow[] {
 
 class SideBySideDiffView {
 	private rows: DiffRow[];
+	private maxRows?: number;
 	private lineNumWidth: number;
 	private theme: any;
 	private summaryFn: (t: any) => string;
 	private cachedWidth?: number;
 	private cachedLines?: string[];
 
-	constructor(diffText: string, theme: any, summaryFn: (t: any) => string) {
+	constructor(diffText: string, theme: any, summaryFn: (t: any) => string, maxRows?: number) {
 		const parsed = parseDiffLines(diffText);
 		this.rows = buildDiffRows(parsed);
+		this.maxRows = maxRows;
 		this.theme = theme;
 		this.summaryFn = summaryFn;
 		let maxNum = 0;
@@ -217,17 +231,34 @@ class SideBySideDiffView {
 		const halfWidth = Math.floor((width - 1) / 2);
 		const rightWidth = width - halfWidth - 1;
 
+		let rowsToShow: DiffRow[];
+		let hasMore = false;
+
+		if (this.maxRows) {
+			// Skip leading context — start from first actual change
+			const firstChangeIdx = this.rows.findIndex((r) => r.left.type === "removed" || r.right.type === "added");
+			const startIdx = firstChangeIdx >= 0 ? firstChangeIdx : 0;
+			rowsToShow = this.rows.slice(startIdx, startIdx + this.maxRows);
+			hasMore = startIdx + this.maxRows < this.rows.length;
+		} else {
+			rowsToShow = this.rows;
+		}
+
 		if (halfWidth < 20) {
-			for (const row of this.rows) {
+			for (const row of rowsToShow) {
 				if (row.left.type === "removed") lines.push(t.fg("toolDiffRemoved", `- ${row.left.content}`));
 				if (row.right.type === "added") lines.push(t.fg("toolDiffAdded", `+ ${row.right.content}`));
 				if (row.left.type === "context") lines.push(t.fg("toolDiffContext", `  ${row.left.content}`));
 				if (row.left.type === "ellipsis") lines.push(t.fg("toolDiffContext", `  ${row.left.content}`));
 			}
 		} else {
-			for (const row of this.rows) {
+			for (const row of rowsToShow) {
 				lines.push(this.formatSide(row.left, halfWidth) + t.fg("dim", "│") + this.formatSide(row.right, rightWidth));
 			}
+		}
+
+		if (hasMore) {
+			lines.push(t.fg("muted", `… +${this.rows.length - this.maxRows!} rows`));
 		}
 
 		this.cachedWidth = width;
@@ -302,9 +333,9 @@ export default function (pi: ExtensionAPI) {
 		},
 
 		renderResult(result, { expanded }, theme) {
-			if (!expanded) return new Text("", 0, 0);
 			const tc = result.content.find((c) => c.type === "text");
 			if (!tc || tc.type !== "text") return new Text("", 0, 0);
+			if (!expanded) return new Text(renderPreviewLines(tc.text, 5, theme), 0, 0);
 			return renderFullOutput(tc.text, theme);
 		},
 	});
@@ -357,12 +388,10 @@ export default function (pi: ExtensionAPI) {
 		},
 
 		renderResult(result, { expanded }, theme) {
-			if (!expanded) return new Text("", 0, 0);
 			const tc = result.content.find((c) => c.type === "text");
-			if (tc?.type === "text" && tc.text) {
-				return new Text(`\n${theme.fg("error", tc.text)}`, 0, 0);
-			}
-			return new Text("", 0, 0);
+			if (!tc || tc.type !== "text" || !tc.text) return new Text("", 0, 0);
+			if (!expanded) return new Text(renderPreviewLines(tc.text, 5, theme), 0, 0);
+			return renderFullOutput(tc.text, theme);
 		},
 	});
 
@@ -415,10 +444,10 @@ export default function (pi: ExtensionAPI) {
 				return s;
 			};
 
-			// Collapsed → summary only
-			if (!expanded) return new Text(makeSummary(theme), 0, 0);
+			// Collapsed → summary + first 5 rows
+			if (!expanded) return new SideBySideDiffView(details.diff, theme, makeSummary, 5) as any;
 
-			// Expanded → side-by-side diff
+			// Expanded → full side-by-side diff
 			return new SideBySideDiffView(details.diff, theme, makeSummary) as any;
 		},
 	});
