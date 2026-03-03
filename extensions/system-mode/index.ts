@@ -13,7 +13,7 @@ import { STATUS_LOG_FOOTER, SUBAGENT_STARTED_STATUS_FOOTER } from "../subagent/c
 import { SYSTEM_MODE_STATUS_KEY } from "../utils/status-keys.ts";
 import { setAgentsModeEnabled } from "./state.ts";
 
-type SystemMode = "default" | "agents" | "master";
+type SystemMode = "default" | "agents" | "master" | "intent";
 
 const STATUS_POLL_WINDOW_MS = 12_000;
 const STATUS_POLL_BLOCK_THRESHOLD = 3;
@@ -92,6 +92,7 @@ function loadPrompt(name: string): string {
 function modeEmoji(mode: SystemMode): string | undefined {
 	if (mode === "agents") return "🤖";
 	if (mode === "master") return "👑";
+	if (mode === "intent") return "🎯";
 	return undefined;
 }
 
@@ -101,6 +102,9 @@ function getAllToolNames(pi: ExtensionAPI): string[] {
 
 /** Memory-layer tools allowed in master mode for cross-session knowledge management. */
 const MEMORY_TOOLS = ["remember", "recall", "forget", "memory_list"] as const;
+
+/** Extra tools allowed in intent mode (intent itself is the base dispatch tool, not listed here). */
+const INTENT_MODE_EXTRA_TOOLS = ["AskUserQuestion", "set_session_purpose"] as const;
 
 export default function (pi: ExtensionAPI) {
 	let mode: SystemMode = "default";
@@ -159,21 +163,34 @@ export default function (pi: ExtensionAPI) {
 	};
 
 	const applyToolPolicy = (previousMode: SystemMode, newMode: SystemMode, ctx?: ExtensionContext) => {
-		if (newMode === "master") {
-			if (previousMode !== "master") {
+		const isHardMode = newMode === "master" || newMode === "intent";
+
+		if (isHardMode) {
+			if (previousMode !== "master" && previousMode !== "intent") {
 				activeToolsBeforeMaster = pi.getActiveTools();
 			}
 
 			const tools = getAllToolNames(pi);
-			if (tools.includes("subagent")) {
-				const allowedTools = ["subagent"];
-				if (tools.includes("list-agents")) {
+			// Intent mode dispatches via "intent" tool; master mode via "subagent"
+			const baseTool = newMode === "intent" ? "intent" : "subagent";
+			if (tools.includes(baseTool)) {
+				const allowedTools = [baseTool];
+				// list-agents only in master mode; intent mode auto-selects agents
+				if (newMode !== "intent" && tools.includes("list-agents")) {
 					allowedTools.push("list-agents");
 				}
-				// Memory tools are allowed in master mode for cross-session knowledge
+				// Memory tools are allowed in hard modes for cross-session knowledge
 				for (const memTool of MEMORY_TOOLS) {
 					if (tools.includes(memTool)) {
 						allowedTools.push(memTool);
+					}
+				}
+				// Intent mode adds: AskUserQuestion, set_session_purpose, todo
+				if (newMode === "intent") {
+					for (const extraTool of INTENT_MODE_EXTRA_TOOLS) {
+						if (tools.includes(extraTool)) {
+							allowedTools.push(extraTool);
+						}
 					}
 				}
 				pi.setActiveTools(allowedTools);
@@ -183,13 +200,13 @@ export default function (pi: ExtensionAPI) {
 
 			masterHardLockEnabled = false;
 			if (ctx?.hasUI) {
-				ctx.ui.notify('Master mode warning: "subagent" tool not found. Hard tool lock was disabled.', "warning");
+				ctx.ui.notify(`${newMode} mode warning: "${baseTool}" tool not found. Hard tool lock was disabled.`, "warning");
 			}
 			return;
 		}
 
 		masterHardLockEnabled = false;
-		if (previousMode === "master") {
+		if (previousMode === "master" || previousMode === "intent") {
 			const restoreTools =
 				activeToolsBeforeMaster && activeToolsBeforeMaster.length > 0 ? activeToolsBeforeMaster : getAllToolNames(pi);
 			pi.setActiveTools(restoreTools);
@@ -237,6 +254,15 @@ export default function (pi: ExtensionAPI) {
 		},
 	});
 
+	pi.registerCommand("system:intent", {
+		description: "Switch to intent master mode (Blueprint-driven orchestration via intent tool)",
+		handler: async (_args, ctx) => {
+			applyMode("intent", ctx);
+			pi.appendEntry("system-mode-change", { mode: "intent" });
+			ctx.ui.notify("System mode: intent 🎯 - Blueprint-driven orchestration (intent only, subagent blocked)", "info");
+		},
+	});
+
 	const restoreModeFromEntries = (ctx: Parameters<Parameters<typeof pi.on>[1]>[1]) => {
 		resetStatusPollTracker();
 		persistedFirstAbortSessionKeys = loadPersistedFirstAbortSessions();
@@ -247,7 +273,10 @@ export default function (pi: ExtensionAPI) {
 			if (entry.type !== "custom") continue;
 			const ce = entry as any;
 			if (ce.customType === "system-mode-change" && ce.data?.mode) {
-				restoredMode = ce.data.mode === "agents" || ce.data.mode === "master" ? ce.data.mode : "default";
+				restoredMode =
+					ce.data.mode === "agents" || ce.data.mode === "master" || ce.data.mode === "intent"
+						? ce.data.mode
+						: "default";
 			}
 			if (ce.customType === FIRST_ASYNC_ABORT_MARKER_ENTRY_TYPE) {
 				abortGuardTriggered = true;
@@ -271,8 +300,23 @@ export default function (pi: ExtensionAPI) {
 	});
 
 	pi.on("tool_call", async (event, ctx) => {
-		if (mode !== "master" || !masterHardLockEnabled) return;
-		if (isToolCallEventType("subagent", event)) {
+		if ((mode !== "master" && mode !== "intent") || !masterHardLockEnabled) return;
+
+		// --- Intent mode: intent is the dispatch tool, subagent is blocked ---
+		if (mode === "intent") {
+			if (isToolCallEventType("intent", event)) {
+				return;
+			}
+			if (isToolCallEventType("subagent", event)) {
+				return {
+					block: true,
+					reason: "intent 모드에서는 subagent 대신 intent 도구를 사용하세요.",
+				};
+			}
+		}
+
+		// --- Master mode: subagent is the dispatch tool (with polling guard) ---
+		if (mode === "master" && isToolCallEventType("subagent", event)) {
 			const input = event.input as Record<string, unknown> | undefined;
 			const asyncAction = typeof input?.asyncAction === "string" ? input.asyncAction : undefined;
 			if (asyncAction === "status" || asyncAction === "detail") {
@@ -286,25 +330,49 @@ export default function (pi: ExtensionAPI) {
 			}
 			return;
 		}
+
+		// --- list-agents: allowed in master mode only (intent mode auto-selects agents) ---
 		if (isToolCallEventType("list-agents", event)) {
+			if (mode === "intent") {
+				return {
+					block: true,
+					reason:
+						"Intent mode does not allow list-agents. Agent selection is automatic based on purpose/difficulty. Use the intent tool.",
+				};
+			}
 			return;
 		}
-		// Allow memory-layer tools in master mode
+		// Allow memory-layer tools in hard modes
 		for (const memTool of MEMORY_TOOLS) {
 			if (isToolCallEventType(memTool, event)) {
 				return;
 			}
 		}
+		// Intent mode allows extra tools (AskUserQuestion, set_session_purpose, todo)
+		if (mode === "intent") {
+			for (const extraTool of INTENT_MODE_EXTRA_TOOLS) {
+				if (isToolCallEventType(extraTool, event)) {
+					return;
+				}
+			}
+		}
+
+		// --- Block everything else ---
+		const modeLabel = mode === "intent" ? "Intent master" : "Master";
+		const allowedLabel =
+			mode === "intent"
+				? "intent, AskUserQuestion, set_session_purpose, todo, and memory tools"
+				: "subagent, list-agents, and memory tools (remember/recall/forget/memory_list)";
 		return {
 			block: true,
 			reason:
-				"Master mode hard policy: only the subagent, list-agents, and memory tools (remember/recall/forget/memory_list) can be called by the main agent. " +
-				"Delegate execution through subagent after checking available agents with list-agents.",
+				`${modeLabel} mode hard policy: only ${allowedLabel} can be called by the main agent. ` +
+				`Delegate execution through ${mode === "intent" ? "intent" : "subagent"}.`,
 		};
 	});
 
 	pi.on("tool_result", async (event, ctx) => {
-		if (mode !== "master" && mode !== "agents") return;
+		if (mode !== "master" && mode !== "agents" && mode !== "intent") return;
 		if (event.toolName !== "subagent") return;
 		if (event.isError) return;
 		const input = event.input as Record<string, unknown> | undefined;
