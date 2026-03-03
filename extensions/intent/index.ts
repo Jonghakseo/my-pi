@@ -23,7 +23,9 @@
  */
 
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
+import { parse as parseYaml } from "yaml";
 import {
+	deleteBlueprint,
 	generateBlueprintId,
 	injectChallengerGates,
 	listBlueprints,
@@ -34,12 +36,47 @@ import {
 } from "./blueprint.js";
 import { abortAllBlueprintRuns, cancelSingleRun, listSingleRuns, runNext, runSingleIntent } from "./executor.js";
 import { getMappingDescription, resolveAgent } from "./mapping.js";
-import type { Blueprint } from "./types.js";
+import type { Blueprint, BlueprintNode } from "./types.js";
 import { IntentParams, type IntentParamsType } from "./types.js";
-import { BlueprintDagViewer, renderBlueprintDAGText } from "./viewer.js";
+import { BlueprintDagViewer, type BlueprintDagViewerOptions, renderBlueprintDAGText } from "./viewer.js";
 import { clearIntentWidget } from "./widget.js";
 
 export default function (pi: ExtensionAPI) {
+	// ─── Intent Tool Failure Auto-Retry ──────────────────────────────────────
+	// When intent tool call fails (e.g. JSON parse error in LLM-generated params),
+	// append retry instructions to the error so the master LLM retries automatically.
+	const MAX_INTENT_RETRIES_PER_TURN = 2;
+	let intentErrorsThisTurn = 0;
+
+	pi.on("turn_start", async () => {
+		intentErrorsThisTurn = 0;
+	});
+
+	pi.on("tool_result", async (event) => {
+		if (event.toolName !== "intent" || !event.isError) return;
+
+		intentErrorsThisTurn++;
+		const errorText = event.content
+			.map((c) => (c.type === "text" ? (c as { type: "text"; text: string }).text : ""))
+			.join("");
+
+		if (intentErrorsThisTurn <= MAX_INTENT_RETRIES_PER_TURN) {
+			return {
+				content: [
+					{
+						type: "text" as const,
+						text:
+							`${errorText}\n\n` +
+							`⚠️ [Intent 자동 재시도 ${intentErrorsThisTurn}/${MAX_INTENT_RETRIES_PER_TURN}] ` +
+							`intent 호출이 실패했습니다. 동일한 파라미터로 다시 호출하세요. ` +
+							`task/context 내 백슬래시(\\\\) 또는 특수 문자가 있다면 JSON에서 올바르게 이스케이프하세요.`,
+					},
+				],
+			};
+		}
+		// Max retries reached — leave error unchanged, let master escalate to user
+	});
+
 	pi.registerTool({
 		name: "intent",
 		label: "Intent",
@@ -47,7 +84,7 @@ export default function (pi: ExtensionAPI) {
 			"Category-based task dispatch tool. Automatically selects the best subagent based on purpose and difficulty.",
 			"",
 			"Modes:",
-			"  create_blueprint — Create a DAG of tasks as a Blueprint. Returns summary for user confirmation.",
+			"  create_blueprint — Create a DAG of tasks as a Blueprint. Automatically shows confirm UI to user (set need_confirm=false to skip for small/low-risk blueprints).",
 			"  run_next — Execute next runnable node(s) in a confirmed Blueprint. Call repeatedly until complete.",
 			"  run — Execute a single intent directly (no Blueprint needed).",
 			"  status — Show current Blueprint progress.",
@@ -76,11 +113,27 @@ export default function (pi: ExtensionAPI) {
 			switch (params.mode) {
 				// ─── Create Blueprint ─────────────────────────────────────
 				case "create_blueprint": {
-					if (!params.title || !params.nodes || params.nodes.length === 0) {
+					if (!params.title || !params.nodes || (params.nodes as string).trim() === "") {
 						return {
 							content: [
 								{ type: "text" as const, text: "Error: create_blueprint requires title and at least one node." },
 							],
+							details: undefined,
+						};
+					}
+
+					let parsedNodes: BlueprintNode[];
+					try {
+						parsedNodes = parseYaml(params.nodes as string);
+					} catch (e) {
+						return {
+							content: [{ type: "text" as const, text: `❌ nodes YAML 파싱 실패: ${e}` }],
+							details: undefined,
+						};
+					}
+					if (!Array.isArray(parsedNodes) || parsedNodes.length === 0) {
+						return {
+							content: [{ type: "text" as const, text: "Error: nodes YAML must be a non-empty array." }],
 							details: undefined,
 						};
 					}
@@ -91,13 +144,13 @@ export default function (pi: ExtensionAPI) {
 						description: params.description,
 						createdAt: new Date().toISOString(),
 						status: "pending_confirm",
-						nodes: params.nodes.map((n) => ({
+						nodes: parsedNodes.map((n) => ({
 							id: n.id,
 							purpose: n.purpose as any,
 							difficulty: n.difficulty as any,
 							task: n.task,
 							context: n.context,
-							dependsOn: n.dependsOn,
+							dependsOn: n.dependsOn ?? [],
 							chainFrom: n.chainFrom,
 							status: "pending" as const,
 						})),
@@ -137,15 +190,58 @@ export default function (pi: ExtensionAPI) {
 
 					saveBlueprint(blueprint);
 
-					const dagView = renderBlueprintDAGText(blueprint);
+					// need_confirm=false OR non-interactive mode → auto-confirm without UI
+					if (params.need_confirm === false || !ctx.hasUI) {
+						blueprint.status = "confirmed";
+						saveBlueprint(blueprint);
+						if (ctx.hasUI) {
+							ctx.ui.notify(`Blueprint "${blueprint.title}" 생성됨`, "info");
+						}
+						return {
+							content: [
+								{
+									type: "text" as const,
+									text: `Blueprint "${blueprint.title}" (${blueprint.id}) 생성 완료 (자동 확인).\n\`intent({ mode: "run_next", blueprintId: "${blueprint.id}" })\`를 호출해 실행을 시작하세요.`,
+								},
+							],
+							details: undefined,
+						};
+					}
+
+					// Show confirm UI overlay — block until user confirms or cancels
+					const confirmed = await ctx.ui.custom<boolean>(
+						(tui, theme, _kb, done) => {
+							const viewerOpts: BlueprintDagViewerOptions = {
+								confirmMode: true,
+								onConfirm: () => done(true),
+								onCancel: () => done(false),
+							};
+							const viewer = new BlueprintDagViewer(blueprint, () => done(false), viewerOpts);
+							return {
+								render: (w: number) => viewer.render(w, theme),
+								handleInput: (data: string) => viewer.handleInput(data, tui),
+								invalidate: () => {},
+							};
+						},
+						{ overlay: true, overlayOptions: { width: "90%", maxHeight: "85%", anchor: "center" } },
+					);
+
+					if (!confirmed) {
+						deleteBlueprint(blueprint.id);
+						return {
+							content: [{ type: "text" as const, text: "Blueprint 생성 취소됨 (사용자 취소)." }],
+							details: undefined,
+						};
+					}
+
+					// User confirmed
+					blueprint.status = "confirmed";
+					saveBlueprint(blueprint);
 					return {
 						content: [
 							{
 								type: "text" as const,
-								text:
-									`Blueprint created and saved.\n\n\`\`\`\n${dagView}\n\`\`\`\n\n` +
-									`**사용자 확인이 필요합니다.** 위 Blueprint를 검토하고 실행 여부를 사용자에게 물어보세요.\n` +
-									`승인되면 \`intent({ mode: "run_next", blueprintId: "${blueprint.id}" })\`를 호출하세요.`,
+								text: `Blueprint "${blueprint.title}" (${blueprint.id}) 확인됨.\n\`intent({ mode: "run_next", blueprintId: "${blueprint.id}" })\`를 호출해 실행을 시작하세요.`,
 							},
 						],
 						details: undefined,
@@ -392,9 +488,33 @@ export default function (pi: ExtensionAPI) {
 						};
 					}
 
-					if (!params.nodeUpdates || params.nodeUpdates.length === 0) {
+					if (!params.nodeUpdates || (params.nodeUpdates as string).trim() === "") {
 						return {
 							content: [{ type: "text" as const, text: "Error: edit_blueprint requires at least one nodeUpdate." }],
+							details: undefined,
+						};
+					}
+
+					let parsedNodeUpdates: Array<{
+						id: string;
+						task?: string;
+						context?: string;
+						purpose?: string;
+						difficulty?: string;
+						dependsOn?: string[];
+						chainFrom?: string;
+					}>;
+					try {
+						parsedNodeUpdates = parseYaml(params.nodeUpdates as string);
+					} catch (e) {
+						return {
+							content: [{ type: "text" as const, text: `❌ nodeUpdates YAML 파싱 실패: ${e}` }],
+							details: undefined,
+						};
+					}
+					if (!Array.isArray(parsedNodeUpdates) || parsedNodeUpdates.length === 0) {
+						return {
+							content: [{ type: "text" as const, text: "Error: nodeUpdates YAML must be a non-empty array." }],
 							details: undefined,
 						};
 					}
@@ -402,7 +522,7 @@ export default function (pi: ExtensionAPI) {
 					const updatedNodeIds: string[] = [];
 					const skippedNodes: Array<{ id: string; status: string }> = [];
 
-					for (const update of params.nodeUpdates) {
+					for (const update of parsedNodeUpdates) {
 						const node = bp.nodes.find((n) => n.id === update.id);
 						if (!node) {
 							return {

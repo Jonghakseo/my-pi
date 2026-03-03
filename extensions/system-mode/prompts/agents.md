@@ -96,18 +96,36 @@ intent({ mode: "run", purpose: "implement", difficulty: "high", task: "Refactor 
 | browse | browser | 브라우저 UI 테스트 |
 | implement | worker-fast (low/med) / worker (high) | 코드 구현, commit/PR/execute도 여기로 |
 
-**Blueprint DAG node example:**
-```json
-{
-  "mode": "create_blueprint",
-  "title": "로그인 버그 수정",
-  "nodes": [
-    { "id": "plan-1", "purpose": "plan", "difficulty": "medium", "task": "로그인 실패 원인 분석 계획", "dependsOn": [] },
-    { "id": "challenge-1", "purpose": "challenge", "difficulty": "medium", "task": "계획 검증", "dependsOn": ["plan-1"], "chainFrom": "plan-1" },
-    { "id": "impl-1", "purpose": "implement", "difficulty": "high", "task": "버그 수정 구현", "dependsOn": ["challenge-1"], "chainFrom": "plan-1" },
-    { "id": "verify-1", "purpose": "verify", "difficulty": "medium", "task": "수정 검증", "dependsOn": ["impl-1"], "chainFrom": "impl-1" }
-  ]
-}
+**Blueprint DAG node example (YAML string format):**
+```yaml
+intent({
+  mode: "create_blueprint",
+  title: "로그인 버그 수정",
+  nodes: |
+    - id: plan-1
+      purpose: plan
+      difficulty: medium
+      task: 로그인 실패 원인 분석 계획
+      dependsOn: []
+    - id: challenge-1
+      purpose: challenge
+      difficulty: medium
+      task: 계획 검증
+      dependsOn: [plan-1]
+      chainFrom: plan-1
+    - id: impl-1
+      purpose: implement
+      difficulty: high
+      task: 버그 수정 구현
+      dependsOn: [challenge-1]
+      chainFrom: plan-1
+    - id: verify-1
+      purpose: verify
+      difficulty: medium
+      task: 수정 검증
+      dependsOn: [impl-1]
+      chainFrom: impl-1
+})
 ```
 
 **When to use Blueprint vs single intent vs raw subagent:**
