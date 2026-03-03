@@ -128,7 +128,7 @@ async function changedFiles(pi: ExtensionAPI, cwd: string, mergeBase: string | n
 	}
 
 	// Always include git status for uncommitted/untracked changes
-	const r = await pi.exec("git", ["status", "--porcelain=1", "-z"], { cwd });
+	const r = await pi.exec("git", ["status", "--porcelain=1", "-uall", "-z"], { cwd });
 	if (r.code === 0 && r.stdout) {
 		const statusParts = r.stdout.split("\0").filter(Boolean);
 		for (let i = 0; i < statusParts.length; i++) {
