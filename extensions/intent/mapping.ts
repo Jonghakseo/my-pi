@@ -23,7 +23,7 @@ const PURPOSE_TO_AGENT: Record<Purpose, (difficulty: Difficulty) => string> = {
 	challenge: () => "challenger",
 	decide: () => "decider",
 	review: () => "reviewer",
-	verify: () => "verifier",
+	verify: (d) => (d === "high" ? "deep-verify" : "verifier"),
 	browse: () => "browser",
 	implement: (d) => (d === "high" ? "worker" : "worker-fast"),
 };
@@ -51,7 +51,8 @@ export function getMappingDescription(): string {
 		"  challenge → challenger",
 		"  decide    → decider",
 		"  review    → reviewer",
-		"  verify    → verifier",
+		"  verify (low/medium) → verifier",
+		"  verify (high)       → deep-verify",
 		"  browse    → browser",
 		"  implement (low/medium) → worker-fast",
 		"  implement (high)       → worker",
