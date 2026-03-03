@@ -203,7 +203,7 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 		ctx: any,
 	): Promise<SubagentExecuteResult> => {
 		const agentScope: AgentScope = params.agentScope ?? "user";
-		const contextMode = params.contextMode ?? "main";
+		const contextMode = params.contextMode ?? "isolated";
 		const inheritMainContext = contextMode === "main";
 		const discovery = discoverAgents(ctx.cwd, agentScope);
 		const agents = discovery.agents;
@@ -242,9 +242,7 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 
 		const hasChain = (params.chain?.length ?? 0) > 0;
 		// hasSingle: true when (agent + task) OR (continueRunId + task — agent will be resolved from the prior run)
-		const hasSingle = Boolean(
-			(params.agent && params.task) || (params.continueRunId !== undefined && params.task),
-		);
+		const hasSingle = Boolean((params.agent && params.task) || (params.continueRunId !== undefined && params.task));
 		const modeCount = Number(hasChain) + Number(hasSingle);
 
 		const makeDetails =
@@ -544,9 +542,7 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 					content: [
 						{
 							type: "text",
-							text: withIdleRunWarning(
-								"runAsync requires single mode: provide agent + task, or continueRunId + task.",
-							),
+							text: withIdleRunWarning("runAsync requires single mode: provide agent + task, or continueRunId + task."),
 						},
 					],
 					details: makeDetails("single")([]),
