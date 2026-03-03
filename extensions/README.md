@@ -24,7 +24,7 @@
 | [`files.ts`](./files.ts) | 파일 피커 / Diff 뷰어 UI |
 | [`github-overlay.ts`](./github-overlay.ts) | GitHub PR 뷰 (gh CLI 연동) |
 | [`idle-screensaver.ts`](./idle-screensaver.ts) | 유휴 시 세션 컨텍스트 스크린세이버 |
-| [`minimal-mode.ts`](./minimal-mode.ts) | 도구 출력 접기/펼치기 |
+| [`override-builtin-tools.ts`](./override-builtin-tools.ts) | 도구 출력 접기/펼치기 |
 | [`pipi-footer.ts`](./pipi-footer.ts) | 커스텀 푸터 UI (모델, 브랜치, 컨텍스트 바) |
 | [`purpose.ts`](./purpose.ts) | 세션 목적 상단 오버레이 + 가드/도구/커맨드 |
 | [`session-replay.ts`](./session-replay.ts) | 세션 리플레이 뷰어 |

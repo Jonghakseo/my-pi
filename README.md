@@ -98,7 +98,7 @@
 | **diff-overlay.ts** | `/diff` — 분할 화면 git diff 뷰어 오버레이 |
 | **github-overlay.ts** | 터미널에서 바로 GitHub PR 확인 |
 | **status-overlay.ts** | `/status` — 확장 기능·스킬 상태 대시보드 |
-| **minimal-mode.ts** | 도구 출력 접기/펼치기로 세션 깔끔하게 유지 |
+| **override-builtin-tools.ts** | 도구 출력 접기/펼치기로 세션 깔끔하게 유지 |
 
 ### 개발 도구
 

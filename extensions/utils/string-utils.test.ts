@@ -346,11 +346,11 @@ describe("expandTabs", () => {
 
 describe("extensionName", () => {
 	it("should extract name from file path", () => {
-		expect(extensionName("/path/to/minimal-mode.ts")).toBe("minimal-mode");
+		expect(extensionName("/path/to/override-builtin-tools.ts")).toBe("override-builtin-tools");
 	});
 
 	it("should extract name from file:// URL", () => {
-		expect(extensionName("file:///path/to/minimal-mode.ts")).toBe("minimal-mode");
+		expect(extensionName("file:///path/to/override-builtin-tools.ts")).toBe("override-builtin-tools");
 	});
 
 	it("should handle .js extension", () => {
