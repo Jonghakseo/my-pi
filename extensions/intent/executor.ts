@@ -690,10 +690,13 @@ export async function runSingleIntent(
 		}
 
 		const isError = result.exitCode !== 0 || result.stopReason === "error" || result.stopReason === "aborted";
-		const output = isError
-			? result.errorMessage || result.stderr || getFinalOutput(result.messages) || "(no output)"
-			: getFinalOutput(result.messages) || "(no output)";
-		return { isError, output };
+		const rawOutput = isError
+			? result.errorMessage || result.stderr || getFinalOutput(result.messages) || ""
+			: getFinalOutput(result.messages) || "";
+		// 성공인데 출력이 비어있으면 에러로 처리 (서브에이전트가 결과를 반환하지 않은 것)
+		const isEmptyOutput = !isError && !rawOutput.trim();
+		const output = rawOutput || "(no output)";
+		return { isError: isError || isEmptyOutput, output };
 	};
 
 	const isSync = difficulty === "low";
@@ -1115,16 +1118,16 @@ async function executeSyncNode(
 			: isError
 				? result.errorMessage || result.stderr || getFinalOutput(result.messages) || ""
 				: getFinalOutput(result.messages) || "";
-		// implement 노드에서 출력이 비어있으면 실패로 처리
-		const isEmptyImpl = !isError && !isUserCancelled && node.purpose === "implement" && !rawOutput.trim();
-		const effectiveIsError = isError || isEmptyImpl;
+		// 출력이 비어있으면 실패로 처리 (서브에이전트가 결과를 반환하지 않은 것)
+		const isEmptyOutput = !isError && !isUserCancelled && !rawOutput.trim();
+		const effectiveIsError = isError || isEmptyOutput;
 		const output = rawOutput || "(no output)";
 
 		const storedResult =
 			output.length > NODE_RESULT_MAX_CHARS ? `${output.slice(0, NODE_RESULT_MAX_CHARS)}\n...[truncated]` : output;
 
 		let resultPath: string | undefined;
-		if (!isError) {
+		if (!effectiveIsError) {
 			try {
 				resultPath = saveNodeResult(blueprintId, node.id, output);
 			} catch {
@@ -1137,7 +1140,7 @@ async function executeSyncNode(
 			result: storedResult,
 			resultPath,
 			error: effectiveIsError
-				? (isEmptyImpl ? "Output was empty — task may not have been executed" : output.slice(0, 500))
+				? (isEmptyOutput ? "Output was empty — task may not have been executed" : output.slice(0, 500))
 				: undefined,
 			completedAt: new Date().toISOString(),
 		});
@@ -1249,9 +1252,9 @@ async function executeNodeAsync(
 		const rawOutput = isError
 			? result.errorMessage || result.stderr || getFinalOutput(result.messages) || ""
 			: getFinalOutput(result.messages) || "";
-		// implement 노드에서 출력이 비어있으면 실패로 처리
-		const isEmptyImpl = !isError && node.purpose === "implement" && !rawOutput.trim();
-		const effectiveIsError = isError || isEmptyImpl;
+		// 출력이 비어있으면 실패로 처리 (서브에이전트가 결과를 반환하지 않은 것)
+		const isEmptyOutput = !isError && !rawOutput.trim();
+		const effectiveIsError = isError || isEmptyOutput;
 		const output = rawOutput || "(no output)";
 
 		// Truncate result for in-memory storage
@@ -1273,7 +1276,7 @@ async function executeNodeAsync(
 			result: storedResult,
 			resultPath,
 			error: effectiveIsError
-				? (isEmptyImpl ? "Output was empty — task may not have been executed" : output.slice(0, 500))
+				? (isEmptyOutput ? "Output was empty — task may not have been executed" : output.slice(0, 500))
 				: undefined,
 			completedAt: new Date().toISOString(),
 		});
