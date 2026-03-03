@@ -185,8 +185,12 @@ function buildDiffRows(parsed: DiffLine[]): DiffRow[] {
 				const r = removed[j];
 				const a = added[j];
 				rows.push({
-					left: r ? { type: "removed", lineNum: r.lineNum, content: r.content } : { type: "empty", lineNum: "", content: "" },
-					right: a ? { type: "added", lineNum: a.lineNum, content: a.content } : { type: "empty", lineNum: "", content: "" },
+					left: r
+						? { type: "removed", lineNum: r.lineNum, content: r.content }
+						: { type: "empty", lineNum: "", content: "" },
+					right: a
+						? { type: "added", lineNum: a.lineNum, content: a.content }
+						: { type: "empty", lineNum: "", content: "" },
 				});
 			}
 		} else if (line.type === "added") {

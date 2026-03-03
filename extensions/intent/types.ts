@@ -5,8 +5,8 @@
  * and all supporting types for the category-based dispatch system.
  */
 
-import { Type, type Static } from "@sinclair/typebox";
 import { StringEnum } from "@mariozechner/pi-ai";
+import { type Static, Type } from "@sinclair/typebox";
 
 // ─── Purpose & Difficulty ────────────────────────────────────────────────────
 
@@ -111,19 +111,22 @@ const BlueprintNodeSchema = Type.Object({
 });
 
 export const IntentParams = Type.Object({
-	mode: StringEnum(["create_blueprint", "run_next", "run", "status", "abort", "abort_run", "retry_node", "edit_blueprint"] as const, {
-		description: [
-			"Operation mode:",
-			"  create_blueprint — Create a DAG Blueprint of tasks. Returns summary for user confirmation.",
-			"  run_next — Execute next runnable node(s) in a Blueprint. Call repeatedly until done.",
-			"  run — Execute a single intent directly without Blueprint.",
-			"  status — Get current Blueprint progress.",
-			"  abort — Abort a running Blueprint and its active nodes.",
-			"  abort_run — Cancel a single intent run by runId. Omit runId to list running intents.",
-			"  retry_node — Reset a failed/skipped node to pending and re-run it via run_next.",
-			"  edit_blueprint — Edit pending nodes in a confirmed/running Blueprint.",
-		].join("\n"),
-	}),
+	mode: StringEnum(
+		["create_blueprint", "run_next", "run", "status", "abort", "abort_run", "retry_node", "edit_blueprint"] as const,
+		{
+			description: [
+				"Operation mode:",
+				"  create_blueprint — Create a DAG Blueprint of tasks. Returns summary for user confirmation.",
+				"  run_next — Execute next runnable node(s) in a Blueprint. Call repeatedly until done.",
+				"  run — Execute a single intent directly without Blueprint.",
+				"  status — Get current Blueprint progress.",
+				"  abort — Abort a running Blueprint and its active nodes.",
+				"  abort_run — Cancel a single intent run by runId. Omit runId to list running intents.",
+				"  retry_node — Reset a failed/skipped node to pending and re-run it via run_next.",
+				"  edit_blueprint — Edit pending nodes in a confirmed/running Blueprint.",
+			].join("\n"),
+		},
+	),
 
 	// ── create_blueprint mode ──
 	title: Type.Optional(Type.String({ description: "Blueprint title (create_blueprint mode)" })),
@@ -144,10 +147,16 @@ export const IntentParams = Type.Object({
 	context: Type.Optional(Type.String({ description: "Additional context or previous result (run mode)" })),
 
 	// ── abort_run mode ──
-	runId: Type.Optional(Type.String({ description: "Run ID of a single intent to cancel (abort_run mode). Omit to list running intents." })),
+	runId: Type.Optional(
+		Type.String({ description: "Run ID of a single intent to cancel (abort_run mode). Omit to list running intents." }),
+	),
 
 	// ── retry_node mode ──
-	nodeId: Type.Optional(Type.String({ description: "Node ID to reset and retry (retry_node mode). Node must be in failed or skipped state." })),
+	nodeId: Type.Optional(
+		Type.String({
+			description: "Node ID to reset and retry (retry_node mode). Node must be in failed or skipped state.",
+		}),
+	),
 
 	// ── edit_blueprint mode ──
 	nodeUpdates: Type.Optional(
@@ -162,9 +171,7 @@ export const IntentParams = Type.Object({
 						{ description: "변경할 purpose" },
 					),
 				),
-				difficulty: Type.Optional(
-					StringEnum(["low", "medium", "high"] as const, { description: "변경할 difficulty" }),
-				),
+				difficulty: Type.Optional(StringEnum(["low", "medium", "high"] as const, { description: "변경할 difficulty" })),
 				dependsOn: Type.Optional(Type.Array(Type.String(), { description: "변경할 dependsOn 목록" })),
 				chainFrom: Type.Optional(Type.String({ description: "변경할 chainFrom 노드 ID" })),
 			}),
