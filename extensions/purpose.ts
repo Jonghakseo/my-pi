@@ -1,10 +1,8 @@
 import { spawn } from "child_process";
 import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
-import { Type } from "@sinclair/typebox";
 import { PURPOSE_STATUS_KEY } from "./utils/status-keys.ts";
 
 const PURPOSE_ENTRY_TYPE = "purpose:set";
-const PURPOSE_TOOL_NAME = "set_session_purpose";
 const PURPOSE_COMMAND_NAME = "purpose";
 const LEGACY_WIDGET_KEY = "purpose";
 // Backward-compat alias for old builds that referenced WIDGET_KEY directly.
@@ -12,7 +10,7 @@ const WIDGET_KEY = LEGACY_WIDGET_KEY;
 
 type PurposeEntryData = {
 	purpose: string;
-	source: "tool" | "command" | "auto";
+	source: "command" | "auto";
 	updatedAt: string;
 };
 
@@ -155,60 +153,6 @@ export default function purposeExtension(pi: ExtensionAPI) {
 			{ triggerTurn: false },
 		);
 	};
-
-	// ── Tool ─────────────────────────────────────────────────────
-
-	pi.registerTool({
-		name: PURPOSE_TOOL_NAME,
-		label: "Set Session Purpose",
-		description:
-			"Set or clear the current session purpose. " +
-			"Use this to define the goal that should remain pinned at the top of the terminal.",
-		parameters: Type.Object({
-			purpose: Type.Optional(
-				Type.String({
-					description: "Purpose for this session (short and concrete).",
-				}),
-			),
-			clear: Type.Optional(
-				Type.Boolean({
-					description: "If true, clear the current session purpose.",
-					default: false,
-				}),
-			),
-		}),
-		async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
-			const clear = Boolean((params as { clear?: boolean }).clear);
-			const rawPurpose = (params as { purpose?: string }).purpose;
-			const normalized = normalizePurpose(rawPurpose);
-
-			if (!clear && !normalized) {
-				return {
-					content: [
-						{
-							type: "text" as const,
-							text: "purpose가 비어 있습니다. `purpose`를 채우거나 `clear=true`를 사용하세요.",
-						},
-					],
-					details: undefined,
-					isError: true,
-				};
-			}
-
-			const nextPurpose = clear ? "" : normalized;
-			persistPurpose(ctx, nextPurpose, "tool");
-
-			return {
-				content: [
-					{
-						type: "text" as const,
-						text: nextPurpose ? `Session purpose set: ${nextPurpose}` : "Session purpose cleared.",
-					},
-				],
-				details: undefined,
-			};
-		},
-	});
 
 	// ── Command ──────────────────────────────────────────────────
 

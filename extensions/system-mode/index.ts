@@ -104,7 +104,7 @@ function getAllToolNames(pi: ExtensionAPI): string[] {
 const MEMORY_TOOLS = ["remember", "recall", "forget", "memory_list"] as const;
 
 /** Extra tools allowed in intent mode (intent itself is the base dispatch tool, not listed here). */
-const INTENT_MODE_EXTRA_TOOLS = ["AskUserQuestion", "set_session_purpose"] as const;
+const INTENT_MODE_EXTRA_TOOLS = ["AskUserQuestion"] as const;
 
 export default function (pi: ExtensionAPI) {
 	let mode: SystemMode = "default";
@@ -185,7 +185,7 @@ export default function (pi: ExtensionAPI) {
 						allowedTools.push(memTool);
 					}
 				}
-				// Intent mode adds: AskUserQuestion, set_session_purpose, todo
+				// Intent mode adds: AskUserQuestion, todo
 				if (newMode === "intent") {
 					for (const extraTool of INTENT_MODE_EXTRA_TOOLS) {
 						if (tools.includes(extraTool)) {
@@ -348,7 +348,7 @@ export default function (pi: ExtensionAPI) {
 				return;
 			}
 		}
-		// Intent mode allows extra tools (AskUserQuestion, set_session_purpose, todo)
+		// Intent mode allows extra tools (AskUserQuestion, todo)
 		if (mode === "intent") {
 			for (const extraTool of INTENT_MODE_EXTRA_TOOLS) {
 				if (isToolCallEventType(extraTool, event)) {
@@ -361,7 +361,7 @@ export default function (pi: ExtensionAPI) {
 		const modeLabel = mode === "intent" ? "Intent master" : "Master";
 		const allowedLabel =
 			mode === "intent"
-				? "intent, AskUserQuestion, set_session_purpose, todo, and memory tools"
+				? "intent, AskUserQuestion, todo, and memory tools"
 				: "subagent, list-agents, and memory tools (remember/recall/forget/memory_list)";
 		return {
 			block: true,
