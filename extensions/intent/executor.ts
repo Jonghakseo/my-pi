@@ -518,16 +518,8 @@ export async function runSingleIntent(
 	const _runRecord = singleIntentRuns.get(statusRunId);
 	if (_runRecord) _runRecord.abort = () => abortController.abort();
 
-	// Build main context for the subagent
-	const { text: mainContextText, totalMessageCount } = buildMainContextText(ctx);
-
-	let mainSessionFile: string | undefined;
-	try {
-		const raw = ctx.sessionManager.getSessionFile() ?? "";
-		mainSessionFile = raw.replace(/[\r\n\t]+/g, "").trim() || undefined;
-	} catch {
-		/* ignore */
-	}
+	// Build main context for the subagent (respects INTENT_INHERIT_MAIN_CONTEXT flag)
+	const { mainContextText, mainSessionFile, totalMessageCount } = buildIntentMainContext(ctx);
 
 	const sessionFile = makeSubagentSessionFile(Date.now());
 	// Store sessionFile in the tracking record so /sub:history can switch into it
@@ -550,7 +542,7 @@ export async function runSingleIntent(
 			(results) => ({
 				mode: "single" as const,
 				agentScope: "user" as const,
-				inheritMainContext: true,
+				inheritMainContext: INTENT_INHERIT_MAIN_CONTEXT,
 				projectAgentsDir: discovery.projectAgentsDir,
 				results,
 			}),
@@ -653,15 +645,7 @@ export async function runNext(pi: ExtensionAPI, blueprintId: string, ctx: any): 
 	// Discover agents and build context once for all nodes
 	const discovery = discoverAgents(ctx.cwd, "user");
 	const agents = discovery.agents;
-	const { text: mainContextText, totalMessageCount } = buildMainContextText(ctx);
-
-	let mainSessionFile: string | undefined;
-	try {
-		const raw = ctx.sessionManager.getSessionFile() ?? "";
-		mainSessionFile = raw.replace(/[\r\n\t]+/g, "").trim() || undefined;
-	} catch {
-		/* ignore */
-	}
+	const { mainContextText, mainSessionFile, totalMessageCount } = buildIntentMainContext(ctx);
 
 	const resultLines: string[] = [];
 
@@ -854,7 +838,7 @@ async function executeSyncNode(
 			(results) => ({
 				mode: "single" as const,
 				agentScope: "user" as const,
-				inheritMainContext: true,
+				inheritMainContext: INTENT_INHERIT_MAIN_CONTEXT,
 				projectAgentsDir: null,
 				results,
 			}),
@@ -933,7 +917,7 @@ async function executeNodeAsync(
 			(results) => ({
 				mode: "single" as const,
 				agentScope: "user" as const,
-				inheritMainContext: true,
+				inheritMainContext: INTENT_INHERIT_MAIN_CONTEXT,
 				projectAgentsDir: null,
 				results,
 			}),
