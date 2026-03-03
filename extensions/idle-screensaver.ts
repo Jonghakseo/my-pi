@@ -140,7 +140,8 @@ async function showScreensaver(): Promise<void> {
 	await latestCtx.ui.custom(
 		// eslint-disable-next-line @typescript-eslint/no-explicit-any
 		(tui: any, theme: any, _kb: unknown, done: (v: undefined) => void) => ({
-			render: (w: number) => renderScreensaver(w, (tui.terminal?.rows as number | undefined) ?? 40, title, theme, activeBlueprint),
+			render: (w: number) =>
+				renderScreensaver(w, (tui.terminal?.rows as number | undefined) ?? 40, title, theme, activeBlueprint),
 			handleInput: (_data: string) => {
 				done(undefined);
 			},
@@ -156,7 +157,13 @@ async function showScreensaver(): Promise<void> {
 // ── Screensaver renderer ──────────────────────────────────────────────────────
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function renderScreensaver(width: number, height: number, title: string, theme: any, blueprint?: Blueprint | null): string[] {
+function renderScreensaver(
+	width: number,
+	height: number,
+	title: string,
+	theme: any,
+	blueprint?: Blueprint | null,
+): string[] {
 	const lines: string[] = [];
 
 	// Border color helper
@@ -203,7 +210,7 @@ function renderScreensaver(width: number, height: number, title: string, theme: 
 	};
 
 	const topDoubleBar = "╔" + "═".repeat(doubleBoxW - 2) + "╗";
-	const titleBar    = "║" + " " + titleInBox + " " + "║";
+	const titleBar = "║" + " " + titleInBox + " " + "║";
 	const midDoubleBar = "║" + " ".repeat(doubleBoxW - 2) + "║";
 	const botDoubleBar = "╚" + "═".repeat(doubleBoxW - 2) + "╝";
 

@@ -327,7 +327,12 @@ export async function runSingleAgent(
 					// Bug fix: agent.js catch block emits agent_end without message_end on
 					// rate-limit / abort / network errors, so stopReason is never set via
 					// the message_end path. Recover it from event.messages directly.
+					// CRITICAL: Must also add these messages to currentResult.messages,
+					// otherwise getFinalOutput() returns "" and the task fails with "Output was empty".
 					for (const msg of (event.messages ?? []) as Message[]) {
+						if (!currentResult.messages.find((m) => m === msg)) {
+							currentResult.messages.push(msg);
+						}
 						if ((msg as any).stopReason && !currentResult.stopReason) {
 							currentResult.stopReason = (msg as any).stopReason;
 							if ((msg as any).errorMessage) currentResult.errorMessage = (msg as any).errorMessage;

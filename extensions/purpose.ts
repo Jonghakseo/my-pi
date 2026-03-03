@@ -1,5 +1,5 @@
-import { spawn } from "child_process";
 import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
+import { spawn } from "child_process";
 import { PURPOSE_STATUS_KEY } from "./utils/status-keys.ts";
 
 const PURPOSE_ENTRY_TYPE = "purpose:set";

@@ -390,9 +390,7 @@ export function injectChallengerGates(blueprint: Blueprint): void {
 				if (siblingChallenge) {
 					for (const implNode of implNodesDependingOnPlan) {
 						implNode.dependsOn = [
-							...new Set(
-								implNode.dependsOn.map((dep) => (planNodeIds.has(dep) ? siblingChallenge.id : dep)),
-							),
+							...new Set(implNode.dependsOn.map((dep) => (planNodeIds.has(dep) ? siblingChallenge.id : dep))),
 						];
 						if (implNode.chainFrom && planNodeIds.has(implNode.chainFrom)) {
 							implNode.chainFrom = siblingChallenge.id;
@@ -415,17 +413,13 @@ export function injectChallengerGates(blueprint: Blueprint): void {
 					};
 
 					for (const implNode of implNodesDependingOnPlan) {
-						implNode.dependsOn = [
-							...new Set(implNode.dependsOn.map((dep) => (planNodeIds.has(dep) ? gate1.id : dep))),
-						];
+						implNode.dependsOn = [...new Set(implNode.dependsOn.map((dep) => (planNodeIds.has(dep) ? gate1.id : dep)))];
 						if (implNode.chainFrom && planNodeIds.has(implNode.chainFrom)) {
 							implNode.chainFrom = gate1.id;
 						}
 					}
 
-					const firstImplIdx = blueprint.nodes.findIndex((n) =>
-						implNodesDependingOnPlan.some((i) => i.id === n.id),
-					);
+					const firstImplIdx = blueprint.nodes.findIndex((n) => implNodesDependingOnPlan.some((i) => i.id === n.id));
 					if (firstImplIdx !== -1) {
 						blueprint.nodes.splice(firstImplIdx, 0, gate1);
 					} else {
@@ -471,9 +465,7 @@ export function injectChallengerGates(blueprint: Blueprint): void {
 				if (siblingChallenge2) {
 					for (const reviewNode of reviewNodesDependingOnImpl) {
 						reviewNode.dependsOn = [
-							...new Set(
-								reviewNode.dependsOn.map((dep) => (implNodeIds.has(dep) ? siblingChallenge2.id : dep)),
-							),
+							...new Set(reviewNode.dependsOn.map((dep) => (implNodeIds.has(dep) ? siblingChallenge2.id : dep))),
 						];
 						if (reviewNode.chainFrom && implNodeIds.has(reviewNode.chainFrom)) {
 							reviewNode.chainFrom = siblingChallenge2.id;
@@ -482,9 +474,7 @@ export function injectChallengerGates(blueprint: Blueprint): void {
 				} else {
 					// 기존 gate2 삽입 로직 (변경 없이 유지)
 					const gateDeps = [
-						...new Set(
-							reviewNodesDependingOnImpl.flatMap((n) => n.dependsOn.filter((dep) => implNodeIds.has(dep))),
-						),
+						...new Set(reviewNodesDependingOnImpl.flatMap((n) => n.dependsOn.filter((dep) => implNodeIds.has(dep)))),
 					];
 
 					const gate2: BlueprintNode = {
