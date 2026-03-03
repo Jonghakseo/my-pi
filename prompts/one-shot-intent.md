@@ -122,7 +122,7 @@ intent({
   mode: "run",
   purpose: "implement",
   difficulty: "medium",
-  task: "Use the to-html skill to generate three Korean HTML reports and save them to ~/Documents/:\n1. Result Report — problem understanding, executed work, resolution method\n2. Alternatives Report — trade-offs, adoption/rejection rationale\n3. Retrospective Report — blocking points, improvements for tools/prompts"
+  task: "Use the to-html skill to generate three Korean HTML reports:\n1. Result Report — problem understanding, executed work, resolution method\n2. Alternatives Report — trade-offs, adoption/rejection rationale\n3. Retrospective Report — blocking points, improvements for tools/prompts"
 })
 ```
 
