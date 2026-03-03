@@ -64,10 +64,15 @@ export function renderSubagentToolCall(args: any, theme: any) {
 		return new Text(text, 0, 0);
 	}
 	const agentName = args.agent || "...";
-	const preview = args.task || "...";
+	const fullTask = args.task || "...";
+	const MAX_CALL_LINES = 5;
+	const taskLines = fullTask.split("\n");
+	const truncated = taskLines.length > MAX_CALL_LINES;
+	const preview = truncated ? taskLines.slice(0, MAX_CALL_LINES).join("\n") : fullTask;
 	let text =
 		theme.fg("toolTitle", theme.bold("subagent ")) + theme.fg("accent", agentName) + theme.fg("muted", ` [${scope}]`);
 	text += `\n  ${theme.fg("dim", preview)}`;
+	if (truncated) text += `\n  ${theme.fg("muted", `... +${taskLines.length - MAX_CALL_LINES} more lines`)}`;
 	return new Text(text, 0, 0);
 }
 
@@ -96,9 +101,11 @@ export function renderSubagentToolResult(result: any, { expanded }: { expanded: 
 			container.addChild(new Text(header, 0, 0));
 			if (isError && r.errorMessage) container.addChild(new Text(theme.fg("error", `Error: ${r.errorMessage}`), 0, 0));
 			container.addChild(new Spacer(1));
+			container.addChild(new Text(theme.fg("muted", "task:"), 0, 0));
 			container.addChild(new Text(theme.fg("dim", r.task), 0, 0));
 			container.addChild(new Spacer(1));
-			container.addChild(new Text(theme.fg("muted", "─── Output ───"), 0, 0));
+			container.addChild(new Text(theme.fg("muted", "──────────────"), 0, 0));
+			container.addChild(new Spacer(1));
 			if (displayItems.length === 0 && !finalOutput) {
 				container.addChild(new Text(theme.fg("muted", "(no output)"), 0, 0));
 			} else {
@@ -160,6 +167,7 @@ export function renderSubagentToolResult(result: any, { expanded }: { expanded: 
 				container.addChild(
 					new Text(`${theme.fg("muted", `─── Step ${r.step}: `) + theme.fg("accent", r.agent)} ${rIcon}`, 0, 0),
 				);
+				container.addChild(new Text(theme.fg("muted", "task:"), 0, 0));
 				container.addChild(new Text(theme.fg("dim", r.task), 0, 0));
 
 				// Show tool calls
