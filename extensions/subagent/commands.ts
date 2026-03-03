@@ -1399,22 +1399,23 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 			captureSwitchSession(store, ctx);
 
 			// ── Merge intent-based runs (they bypass store.commandRuns) ──────────
-			// Intent runs are tracked separately in the intent executor's in-memory
-			// registry. Inject them as synthetic CommandRunState entries with
-			// negative IDs so subTransHandler can look them up by ID.
+			// Intent runs are persisted to ~/.pi/blueprints/single-runs.json by
+			// executor.ts on each run start/end. Read directly from file to avoid
+			// ESM module cache isolation issues (dynamic import can return a different
+			// instance than the one the intent tool uses).
 			try {
-				const intentModule = await import("../intent/executor.js");
-				const listSingleRuns = (intentModule as any).listSingleRuns;
-				
-				if (typeof listSingleRuns !== "function") {
-					ctx.ui.notify(
-						`[sub:history] listSingleRuns not found in intent executor (type: ${typeof listSingleRuns})`,
-						"error",
-					);
-					return;
+				const singleRunsFile = path.join(
+					process.env.HOME ?? process.env.USERPROFILE ?? "/tmp",
+					".pi", "blueprints", "single-runs.json",
+				);
+				let intentRuns: any[] = [];
+				if (fs.existsSync(singleRunsFile)) {
+					try {
+						intentRuns = JSON.parse(fs.readFileSync(singleRunsFile, "utf-8")) ?? [];
+					} catch {
+						intentRuns = [];
+					}
 				}
-
-				const intentRuns: any[] = listSingleRuns() ?? [];
 
 				// Find the minimum existing negative ID to avoid collisions
 				let nextNegId = -1;
@@ -1512,7 +1513,7 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 							if (!run.sessionFile) {
 								ctx.ui.notify(
 									`Run #${run.id} (${run.agent}) does not have a session file yet and cannot be opened.`,
-									"warn",
+									"warning",
 								);
 								return;
 							}

@@ -17,6 +17,9 @@
  * (runSingleAgent, discoverAgents, session files) for full compatibility.
  */
 
+import * as fs from "node:fs";
+import * as path from "node:path";
+import * as os from "node:os";
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import type { AgentConfig } from "../subagent/agents.js";
 import { discoverAgents } from "../subagent/agents.js";
@@ -47,6 +50,39 @@ const PARALLEL_LAUNCH_STAGGER_MS = 300;
 
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
+/**
+ * Intent defaults to isolated context injection.
+ * - isolated(false): do NOT inject main session summary/log path into subagent task.
+ * - main(true): inject main session summary/log path (legacy behavior).
+ */
+const INTENT_INHERIT_MAIN_CONTEXT = false;
+
+function buildIntentMainContext(ctx: any): {
+	mainContextText: string;
+	totalMessageCount: number;
+	mainSessionFile?: string;
+} {
+	if (!INTENT_INHERIT_MAIN_CONTEXT) {
+		return {
+			mainContextText: "",
+			totalMessageCount: 0,
+			mainSessionFile: undefined,
+		};
+	}
+
+	const { text: mainContextText, totalMessageCount } = buildMainContextText(ctx);
+
+	let mainSessionFile: string | undefined;
+	try {
+		const raw = ctx.sessionManager.getSessionFile() ?? "";
+		mainSessionFile = raw.replace(/[\r\n\t]+/g, "").trim() || undefined;
+	} catch {
+		/* ignore */
+	}
+
+	return { mainContextText, totalMessageCount, mainSessionFile };
+}
+
 // ─── Active Run Tracking ─────────────────────────────────────────────────────
 
 /** Track abort controllers for active Blueprint node runs */
@@ -70,8 +106,48 @@ export function abortAllBlueprintRuns(blueprintId: string): number {
 
 // ─── Single Intent Run Tracking ──────────────────────────────────────────────
 
-/** In-memory tracking of single intent runs for status queries */
-const singleIntentRuns = new Map<string, SingleIntentRun>();
+const SINGLE_RUNS_FILE = path.join(os.homedir(), ".pi", "blueprints", "single-runs.json");
+
+/** Load persisted runs from disk (called once on module init) */
+function loadPersistedRuns(): Map<string, SingleIntentRun> {
+	try {
+		if (!fs.existsSync(SINGLE_RUNS_FILE)) return new Map();
+		const raw = fs.readFileSync(SINGLE_RUNS_FILE, "utf-8");
+		const arr: SingleIntentRun[] = JSON.parse(raw);
+		// Trim old runs: keep last 200, mark stale "running" as failed
+		const now = Date.now();
+		const trimmed = arr.slice(-200);
+		for (const r of trimmed) {
+			if (r.status === "running") {
+				const age = now - new Date(r.startedAt).getTime();
+				if (age > 30 * 60 * 1000) {
+					// >30 min old "running" → stale
+					r.status = "failed";
+					r.error = "Stale (pi restarted)";
+				}
+			}
+		}
+		return new Map(trimmed.map((r) => [r.id, r]));
+	} catch {
+		return new Map();
+	}
+}
+
+/** Persist in-memory runs to disk (debounced via immediate write) */
+function persistRuns(): void {
+	try {
+		const dir = path.dirname(SINGLE_RUNS_FILE);
+		if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+		// Keep last 200 runs
+		const arr = Array.from(singleIntentRuns.values()).slice(-200);
+		fs.writeFileSync(SINGLE_RUNS_FILE, JSON.stringify(arr, null, 2), "utf-8");
+	} catch (err) {
+		console.warn("[intent] Failed to persist single-runs:", err);
+	}
+}
+
+/** In-memory tracking of single intent runs — initialized from disk */
+const singleIntentRuns: Map<string, SingleIntentRun> = loadPersistedRuns();
 let singleRunCounter = 0;
 
 function generateSingleRunId(): string {
@@ -89,6 +165,7 @@ function trackSingleRunStart(purpose: string, difficulty: string, task: string, 
 		status: "running",
 		startedAt: new Date().toISOString(),
 	});
+	persistRuns();
 	return id;
 }
 
@@ -99,7 +176,7 @@ function trackSingleRunEnd(runId: string, success: boolean, result?: string, err
 	run.completedAt = new Date().toISOString();
 	if (result) run.result = result.length > 500 ? `${result.slice(0, 500)}...` : result;
 	if (error) run.error = error.length > 500 ? `${error.slice(0, 500)}...` : error;
-	// No auto-cleanup: keep runs for the session lifetime so /sub:history can display them.
+	persistRuns();
 }
 
 /** List all tracked single intent runs (for status queries). */
