@@ -1246,9 +1246,13 @@ async function executeNodeAsync(
 		}
 
 		const isError = result.exitCode !== 0 || result.stopReason === "error" || result.stopReason === "aborted";
-		const output = isError
-			? result.errorMessage || result.stderr || getFinalOutput(result.messages) || "(no output)"
-			: getFinalOutput(result.messages) || "(no output)";
+		const rawOutput = isError
+			? result.errorMessage || result.stderr || getFinalOutput(result.messages) || ""
+			: getFinalOutput(result.messages) || "";
+		// implement 노드에서 출력이 비어있으면 실패로 처리
+		const isEmptyImpl = !isError && node.purpose === "implement" && !rawOutput.trim();
+		const effectiveIsError = isError || isEmptyImpl;
+		const output = rawOutput || "(no output)";
 
 		// Truncate result for in-memory storage
 		const storedResult =
