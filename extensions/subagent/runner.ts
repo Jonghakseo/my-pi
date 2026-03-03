@@ -27,7 +27,9 @@ export function getFinalOutput(messages: Message[]): string {
 		const msg = messages[i];
 		if (msg.role === "assistant") {
 			for (const part of msg.content) {
-				if (part.type === "text") return part.text;
+				// Bug fix: skip empty text blocks (e.g. thinking-only responses)
+				// so we don't prematurely return "" and show "(no output)"
+				if (part.type === "text" && part.text) return part.text;
 			}
 		}
 	}
@@ -322,6 +324,15 @@ export async function runSingleAgent(
 				}
 
 				if (event.type === "agent_end") {
+					// Bug fix: agent.js catch block emits agent_end without message_end on
+					// rate-limit / abort / network errors, so stopReason is never set via
+					// the message_end path. Recover it from event.messages directly.
+					for (const msg of (event.messages ?? []) as Message[]) {
+						if ((msg as any).stopReason && !currentResult.stopReason) {
+							currentResult.stopReason = (msg as any).stopReason;
+							if ((msg as any).errorMessage) currentResult.errorMessage = (msg as any).errorMessage;
+						}
+					}
 					sawAgentEnd = true;
 					scheduleAgentEndForceResolve();
 					return;
