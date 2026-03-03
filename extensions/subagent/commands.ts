@@ -1403,8 +1403,18 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 			// registry. Inject them as synthetic CommandRunState entries with
 			// negative IDs so subTransHandler can look them up by ID.
 			try {
-				const { listSingleRuns } = (await import("../intent/executor.js")) as any;
-				const intentRuns: any[] = listSingleRuns();
+				const intentModule = await import("../intent/executor.js");
+				const listSingleRuns = (intentModule as any).listSingleRuns;
+				
+				if (typeof listSingleRuns !== "function") {
+					ctx.ui.notify(
+						`[sub:history] listSingleRuns not found in intent executor (type: ${typeof listSingleRuns})`,
+						"error",
+					);
+					return;
+				}
+
+				const intentRuns: any[] = listSingleRuns() ?? [];
 
 				// Find the minimum existing negative ID to avoid collisions
 				let nextNegId = -1;
@@ -1420,34 +1430,53 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 				);
 
 				for (const ir of intentRuns) {
-					if (!ir.sessionFile) continue;
-					if (existingSessionFiles.has(ir.sessionFile)) continue;
+					try {
+						// sessionFile may be absent for runs that haven't started writing yet;
+						// still show them but they won't be navigable via Enter.
+						if (ir.sessionFile && existingSessionFiles.has(ir.sessionFile)) continue;
 
-					const startedMs = new Date(ir.startedAt).getTime();
-					const doneMs = ir.completedAt ? new Date(ir.completedAt).getTime() : Date.now();
-					const synthetic: CommandRunState = {
-						id: nextNegId--,
-						agent: ir.agent,
-						task: ir.task,
-						status:
-							ir.status === "completed" ? "done" : ir.status === "failed" ? "error" : "running",
-						startedAt: startedMs,
-						lastActivityAt: doneMs,
-						elapsedMs: doneMs - startedMs,
-						toolCalls: 0,
-						turnCount: 1,
-						lastLine:
-							(ir.result?.split("\n").filter(Boolean).pop() ?? ir.error ?? "") ||
-							"(intent run)",
-						lastOutput: ir.result,
-						sessionFile: ir.sessionFile,
-						source: "tool" as const,
-					};
-					store.commandRuns.set(synthetic.id, synthetic);
-					existingSessionFiles.add(ir.sessionFile);
+						const startedMs = new Date(ir.startedAt).getTime();
+						if (isNaN(startedMs)) {
+							console.warn(`[sub:history] Invalid startedAt date: ${ir.startedAt}`);
+							continue;
+						}
+
+						const doneMs = ir.completedAt ? new Date(ir.completedAt).getTime() : Date.now();
+						if (ir.completedAt && isNaN(doneMs)) {
+							console.warn(`[sub:history] Invalid completedAt date: ${ir.completedAt}`);
+							continue;
+						}
+
+						const synthetic: CommandRunState = {
+							id: nextNegId--,
+							agent: ir.agent ?? ir.purpose ?? "intent",
+							task: ir.task,
+							status:
+								ir.status === "completed" ? "done" : ir.status === "failed" ? "error" : "running",
+							startedAt: startedMs,
+							lastActivityAt: doneMs,
+							elapsedMs: doneMs - startedMs,
+							toolCalls: 0,
+							turnCount: 1,
+							lastLine:
+								(ir.result?.split("\n").filter(Boolean).pop() ?? ir.error ?? "") ||
+								"(intent run)",
+							lastOutput: ir.result,
+							sessionFile: ir.sessionFile,
+							source: "tool" as const,
+						};
+						store.commandRuns.set(synthetic.id, synthetic);
+						if (ir.sessionFile) existingSessionFiles.add(ir.sessionFile);
+					} catch (itemErr) {
+						console.warn(`[sub:history] Failed to process intent run:`, itemErr, ir);
+					}
 				}
-			} catch {
-				// intent executor not available — no-op
+			} catch (err) {
+				// intent executor not available — show notification so it's diagnosable
+				ctx.ui.notify(
+					`[sub:history] intent merge error: ${String(err)} (check console for details)`,
+					"error",
+				);
 			}
 
 			const allRuns = Array.from(store.commandRuns.values()).sort(
@@ -1479,6 +1508,14 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 						allRuns,
 						async (run) => {
 							done(undefined);
+							// Check if the selected run has a session file before trying to trans
+							if (!run.sessionFile) {
+								ctx.ui.notify(
+									`Run #${run.id} (${run.agent}) does not have a session file yet and cannot be opened.`,
+									"warn",
+								);
+								return;
+							}
 							await subTransHandler(run.id.toString(), ctx, store, pi);
 						},
 						() => done(undefined),
