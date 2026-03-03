@@ -1,5 +1,6 @@
 import type { ExtensionAPI, ExtensionContext, InputEventResult } from "@mariozechner/pi-coding-agent";
 import { copyToClipboard } from "@mariozechner/pi-coding-agent";
+import { Text } from "@mariozechner/pi-tui";
 
 import { buildMemoryPrompt } from "./inject.ts";
 import { resolveProjectId } from "./project-id.ts";
@@ -420,6 +421,17 @@ export default function memoryLayerExtension(pi: ExtensionAPI) {
 			"Use this when you need to check if there are stored rules, preferences, or lessons " +
 			"related to the current task. You can search by keywords, or retrieve a full topic file by name.",
 		parameters: RecallParams,
+
+		renderCall(args, theme) {
+			const query = typeof args.query === "string" ? args.query : undefined;
+			const topic = typeof args.topic === "string" ? args.topic : undefined;
+			let text = theme.fg("toolTitle", theme.bold("recall"));
+			if (query) text += " " + theme.fg("accent", `"${query}"`);
+			if (topic) text += " " + theme.fg("accent", `topic:${topic}`);
+			if (!query && !topic) text += " " + theme.fg("muted", "(index)");
+			return new Text(text, 0, 0);
+		},
+
 		async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
 			try {
 				const { query, topic } = params as { query?: string; topic?: string };

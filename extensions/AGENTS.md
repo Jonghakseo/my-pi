@@ -22,6 +22,14 @@ Custom extensions for the pi coding agent. All extensions are written in TypeScr
 │   ├── constants.ts       #   Constants
 │   ├── format.ts          #   Formatting utilities
 │   └── run-utils.ts       #   Run management utilities
+├── intent/                # Category-based dispatch & Blueprint execution engine
+│   ├── index.ts           #   Entry point — intent tool + /blueprint command registration
+│   ├── types.ts           #   TypeBox schemas, Blueprint/Node interfaces
+│   ├── mapping.ts         #   Purpose+Difficulty → Agent mapping table
+│   ├── blueprint.ts       #   Blueprint CRUD, validation, DAG traversal
+│   ├── executor.ts        #   Execution engine (runSingleAgent integration)
+│   ├── viewer.ts          #   Blueprint DAG TUI overlay (stage-based visual graph)
+│   └── widget.ts          #   Above-editor progress widget (spinner + elapsed time)
 ├── memory-layer/          # Long-term memory system (remember/recall/forget)
 │   ├── index.ts           #   Entry point — tools, commands, system prompt injection
 │   ├── inject.ts          #   Build memory prompt injected into systemPrompt each turn
