@@ -18,19 +18,33 @@
  */
 
 import * as fs from "node:fs";
-import * as path from "node:path";
 import * as os from "node:os";
+import * as path from "node:path";
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import type { AgentConfig } from "../subagent/agents.js";
 import { discoverAgents } from "../subagent/agents.js";
-import { getFinalOutput } from "../subagent/runner.js";
-import { runSingleAgent } from "../subagent/runner.js";
-import { makeSubagentSessionFile, buildMainContextText, wrapTaskWithMainContext } from "../subagent/session.js";
+import { getFinalOutput, runSingleAgent } from "../subagent/runner.js";
+import { buildMainContextText, makeSubagentSessionFile, wrapTaskWithMainContext } from "../subagent/session.js";
+import {
+	formatBlueprintProgress,
+	formatBlueprintSummary,
+	getRunnableNodes,
+	loadBlueprint,
+	loadNodeResult,
+	saveBlueprint,
+	saveNodeResult,
+	updateNodeStatus,
+} from "./blueprint.js";
 import { resolveAgent } from "./mapping.js";
-import { loadBlueprint, updateNodeStatus, getRunnableNodes, formatBlueprintSummary, formatBlueprintProgress, saveBlueprint, saveNodeResult, loadNodeResult } from "./blueprint.js";
-import { renderBlueprintDAGText } from "./viewer.js";
 import type { Blueprint, BlueprintNode, SingleIntentRun } from "./types.js";
-import { initWidgetCtx, trackSingleStart, trackSingleEnd, trackBlueprintActive, trackBlueprintNodeChanged } from "./widget.js";
+import { renderBlueprintDAGText } from "./viewer.js";
+import {
+	initWidgetCtx,
+	trackBlueprintActive,
+	trackBlueprintNodeChanged,
+	trackSingleEnd,
+	trackSingleStart,
+} from "./widget.js";
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -181,9 +195,7 @@ function trackSingleRunEnd(runId: string, success: boolean, result?: string, err
 
 /** List all tracked single intent runs (for status queries). */
 export function listSingleRuns(): SingleIntentRun[] {
-	return Array.from(singleIntentRuns.values()).sort(
-		(a, b) => b.startedAt.localeCompare(a.startedAt),
-	);
+	return Array.from(singleIntentRuns.values()).sort((a, b) => b.startedAt.localeCompare(a.startedAt));
 }
 
 /**
@@ -337,8 +349,15 @@ async function handleNodeCompletion(
 			const fullTask = buildNodeTask(sNode, currentBp);
 
 			const result = await executeSyncNode(
-				blueprintId, sNode, agentName, fullTask,
-				agents, mainContextText, mainSessionFile, totalMessageCount, ctx,
+				blueprintId,
+				sNode,
+				agentName,
+				fullTask,
+				agents,
+				mainContextText,
+				mainSessionFile,
+				totalMessageCount,
+				ctx,
 			);
 
 			syncExecuted++;
@@ -350,7 +369,13 @@ async function handleNodeCompletion(
 
 		if (syncFailed) break;
 		currentBp = loadBlueprint(blueprintId)!;
-		if (!currentBp || currentBp.status === "completed" || currentBp.status === "aborted" || currentBp.status === "failed") break;
+		if (
+			!currentBp ||
+			currentBp.status === "completed" ||
+			currentBp.status === "aborted" ||
+			currentBp.status === "failed"
+		)
+			break;
 	}
 
 	// Re-check Blueprint status after sync phase
@@ -415,9 +440,19 @@ async function handleNodeCompletion(
 		const sessionFile = makeSubagentSessionFile(Date.now());
 
 		void executeNodeAsync(
-			pi, blueprintId, aNode, agentName, fullTask,
-			agents, mainContextText, mainSessionFile, totalMessageCount,
-			sessionFile, abortController, ctx, advCtx,
+			pi,
+			blueprintId,
+			aNode,
+			agentName,
+			fullTask,
+			agents,
+			mainContextText,
+			mainSessionFile,
+			totalMessageCount,
+			sessionFile,
+			abortController,
+			ctx,
+			advCtx,
 		);
 
 		launchedIds.push(aNode.id);
@@ -428,26 +463,9 @@ async function handleNodeCompletion(
 		trackBlueprintNodeChanged(blueprintId);
 	}
 
-	// Notify progress (do NOT wake master — triggerTurn: false)
-	const refreshedBp = loadBlueprint(blueprintId);
-	if (refreshedBp) {
-		const advancedParts: string[] = [];
-		if (syncExecuted > 0) advancedParts.push(`${syncExecuted} sync`);
-		if (launchedIds.length > 0) advancedParts.push(...launchedIds);
-
-		if (advancedParts.length > 0) {
-			pi.sendMessage(
-				{
-					customType: "intent-blueprint",
-					content: `[자동 진행] ${advancedParts.join(", ")} 실행\n\n${formatBlueprintProgress(refreshedBp)}`,
-					display: true,
-					details: { blueprintId, autoAdvanced: advancedParts },
-				},
-				{ deliverAs: "followUp", triggerTurn: false },
-			);
-		}
-		// else: nothing to advance, other nodes still running → silent wait
-	}
+	// Auto-advance is silent by design.
+	// Send follow-up messages only on terminal events (completion/failure).
+	// (See handleNodeCompletion: completed/failed branches with triggerTurn: true.)
 }
 
 // ─── Single Intent Execution (run mode) ──────────────────────────────────────
@@ -513,7 +531,10 @@ export async function runSingleIntent(
 
 	const sessionFile = makeSubagentSessionFile(Date.now());
 	// Store sessionFile in the tracking record so /sub:history can switch into it
-	if (_runRecord) _runRecord.sessionFile = sessionFile;
+	if (_runRecord) {
+		_runRecord.sessionFile = sessionFile;
+		persistRuns(); // persist immediately so sub:history can navigate mid-run
+	}
 
 	// Core execution closure (shared between sync and async paths)
 	const executeCore = async (): Promise<{ isError: boolean; output: string }> => {
@@ -612,14 +633,11 @@ export async function runSingleIntent(
  * - low-difficulty nodes execute synchronously (chained — one run_next can process multiple)
  * - medium/high-difficulty nodes launch asynchronously in parallel
  */
-export async function runNext(
-	pi: ExtensionAPI,
-	blueprintId: string,
-	ctx: any,
-): Promise<string> {
+export async function runNext(pi: ExtensionAPI, blueprintId: string, ctx: any): Promise<string> {
 	const bp = loadBlueprint(blueprintId);
 	if (!bp) return `Blueprint "${blueprintId}" not found.`;
-	if (bp.status === "completed") return `Blueprint "${bp.title}" is already completed.\n\n\`\`\`\n${renderBlueprintDAGText(bp)}\n\`\`\``;
+	if (bp.status === "completed")
+		return `Blueprint "${bp.title}" is already completed.\n\n\`\`\`\n${renderBlueprintDAGText(bp)}\n\`\`\``;
 	if (bp.status === "aborted") return `Blueprint "${bp.title}" was aborted.`;
 
 	// Transition from confirmed → running
@@ -663,8 +681,15 @@ export async function runNext(
 			const fullTask = buildNodeTask(node, currentBp);
 
 			const result = await executeSyncNode(
-				blueprintId, node, agentName, fullTask,
-				agents, mainContextText, mainSessionFile, totalMessageCount, ctx,
+				blueprintId,
+				node,
+				agentName,
+				fullTask,
+				agents,
+				mainContextText,
+				mainSessionFile,
+				totalMessageCount,
+				ctx,
 			);
 
 			const label = result.success ? "✅" : "❌";
@@ -714,7 +739,13 @@ export async function runNext(
 
 	// Build auto-advance context for async node completions
 	const advCtx: AutoAdvanceContext = {
-		pi, blueprintId, agents, mainContextText, mainSessionFile, totalMessageCount, ctx,
+		pi,
+		blueprintId,
+		agents,
+		mainContextText,
+		mainSessionFile,
+		totalMessageCount,
+		ctx,
 	};
 
 	for (let i = 0; i < asyncNodes.length; i++) {
@@ -748,9 +779,19 @@ export async function runNext(
 		const sessionFile = makeSubagentSessionFile(Date.now());
 
 		void executeNodeAsync(
-			pi, blueprintId, node, agentName, fullTask,
-			agents, mainContextText, mainSessionFile, totalMessageCount,
-			sessionFile, abortController, ctx, advCtx,
+			pi,
+			blueprintId,
+			node,
+			agentName,
+			fullTask,
+			agents,
+			mainContextText,
+			mainSessionFile,
+			totalMessageCount,
+			sessionFile,
+			abortController,
+			ctx,
+			advCtx,
 		);
 	}
 
@@ -763,9 +804,10 @@ export async function runNext(
 	).length;
 	const remainingMsg = remaining > 0 ? `\n(${remaining} more node(s) queued, will start after current batch)` : "";
 
-	const autoAdvanceNote = asyncNodes.length > 0
-		? "\n\n⚡ Auto-advance 활성: 후속 노드는 자동으로 실행됩니다. Blueprint 완료/실패 알림을 기다려주세요."
-		: "";
+	const autoAdvanceNote =
+		asyncNodes.length > 0
+			? "\n\n⚡ Auto-advance 활성: 후속 노드는 자동으로 실행됩니다. Blueprint 완료/실패 알림을 기다려주세요."
+			: "";
 	return `${resultLines.join("\n")}${remainingMsg}\n\n\`\`\`\n${renderBlueprintDAGText(updatedBp)}\n\`\`\`${autoAdvanceNote}`;
 }
 
@@ -824,9 +866,8 @@ async function executeSyncNode(
 			? result.errorMessage || result.stderr || getFinalOutput(result.messages) || "(no output)"
 			: getFinalOutput(result.messages) || "(no output)";
 
-		const storedResult = output.length > NODE_RESULT_MAX_CHARS
-			? `${output.slice(0, NODE_RESULT_MAX_CHARS)}\n...[truncated]`
-			: output;
+		const storedResult =
+			output.length > NODE_RESULT_MAX_CHARS ? `${output.slice(0, NODE_RESULT_MAX_CHARS)}\n...[truncated]` : output;
 
 		let resultPath: string | undefined;
 		if (!isError) {
@@ -905,7 +946,8 @@ async function executeNodeAsync(
 			: getFinalOutput(result.messages) || "(no output)";
 
 		// Truncate result for in-memory storage
-		const storedResult = output.length > NODE_RESULT_MAX_CHARS ? `${output.slice(0, NODE_RESULT_MAX_CHARS)}\n...[truncated]` : output;
+		const storedResult =
+			output.length > NODE_RESULT_MAX_CHARS ? `${output.slice(0, NODE_RESULT_MAX_CHARS)}\n...[truncated]` : output;
 
 		// Persist full result to .md file (survives compaction/session restart)
 		let resultPath: string | undefined;
