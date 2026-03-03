@@ -555,7 +555,7 @@ async function handleNodeCompletion(
 		const runKey = makeNodeRunKey(blueprintId, aNode.id);
 		activeNodeRuns.set(runKey, abortController);
 
-		const sessionFile = makeSubagentSessionFile(Date.now());
+		const sessionFile = makeToolSessionFile("intent-node");
 
 		void executeNodeAsync(
 			pi,
@@ -652,7 +652,7 @@ export async function runSingleIntent(
 	// Build main context for the subagent (respects INTENT_INHERIT_MAIN_CONTEXT flag)
 	const { mainContextText, mainSessionFile, totalMessageCount } = buildIntentMainContext(ctx);
 
-	const sessionFile = makeSubagentSessionFile(Date.now());
+	const sessionFile = makeToolSessionFile("intent-node");
 	// Store sessionFile in the tracking record so /sub:history can switch into it
 	if (_runRecord) {
 		_runRecord.sessionFile = sessionFile;
@@ -1002,7 +1002,7 @@ export async function runNext(pi: ExtensionAPI, blueprintId: string, ctx: any, s
 		const runKey = makeNodeRunKey(blueprintId, node.id);
 		activeNodeRuns.set(runKey, abortController);
 
-		const sessionFile = makeSubagentSessionFile(Date.now());
+		const sessionFile = makeToolSessionFile("intent-node");
 
 		void executeNodeAsync(
 			pi,
@@ -1063,7 +1063,7 @@ async function executeSyncNode(
 	});
 	trackBlueprintNodeChanged(blueprintId);
 
-	const sessionFile = makeSubagentSessionFile(Date.now());
+	const sessionFile = makeToolSessionFile("intent-node");
 	const abortController = new AbortController();
 	const runKey = makeNodeRunKey(blueprintId, node.id);
 	activeNodeRuns.set(runKey, abortController);
