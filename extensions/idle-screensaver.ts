@@ -14,7 +14,7 @@ import { Blueprint } from "./intent/types";
  * If a blueprint is active (running/confirmed), shows its progress.
  */
 
-const IDLE_MS = 30 * 60 * 1000; // 30 minutes
+const IDLE_MS = 5 * 60 * 1000; // 5 minutes
 const EDITOR_POLL_INTERVAL_MS = 300;
 const PURPOSE_ENTRY_TYPE = "purpose:set";
 
@@ -151,7 +151,7 @@ async function showScreensaver() {
       blueprints.find((b) => b.status === "running" || b.status === "confirmed") ?? null;
   } catch {}
 
-  await latestCtx.ui.custom((width, height) =>
+  await latestCtx.ui.custom?.((width, height) =>
     renderScreensaver(width, height, title, activeBlueprint)
   );
 
