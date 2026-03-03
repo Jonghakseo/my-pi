@@ -2,7 +2,7 @@
  * injectChallengerGates — 5개 케이스 검증
  * decide-1 기준 케이스 + 보완 케이스 포함
  */
-import { describe, it, expect } from "vitest";
+import { describe, expect, it } from "vitest";
 import { injectChallengerGates } from "./blueprint.js";
 import type { Blueprint, BlueprintNode } from "./types.js";
 

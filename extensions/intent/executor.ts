@@ -1140,7 +1140,9 @@ async function executeSyncNode(
 			result: storedResult,
 			resultPath,
 			error: effectiveIsError
-				? (isEmptyOutput ? "Output was empty — task may not have been executed" : output.slice(0, 500))
+				? isEmptyOutput
+					? "Output was empty — task may not have been executed"
+					: output.slice(0, 500)
 				: undefined,
 			completedAt: new Date().toISOString(),
 		});
@@ -1276,7 +1278,9 @@ async function executeNodeAsync(
 			result: storedResult,
 			resultPath,
 			error: effectiveIsError
-				? (isEmptyOutput ? "Output was empty — task may not have been executed" : output.slice(0, 500))
+				? isEmptyOutput
+					? "Output was empty — task may not have been executed"
+					: output.slice(0, 500)
 				: undefined,
 			completedAt: new Date().toISOString(),
 		});
