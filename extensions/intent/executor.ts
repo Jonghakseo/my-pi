@@ -37,7 +37,7 @@ import {
 	updateNodeStatus,
 } from "./blueprint.js";
 import { resolveAgent } from "./mapping.js";
-import type { Blueprint, BlueprintNode, SingleIntentRun } from "./types.js";
+import type { Blueprint, BlueprintNode, EscalationRecord, SingleIntentRun } from "./types.js";
 import { renderBlueprintDAGText } from "./viewer.js";
 import {
 	initWidgetCtx,
@@ -178,8 +178,10 @@ function persistRuns(runsMap?: Map<string, SingleIntentRun>): void {
 	try {
 		const dir = path.dirname(SINGLE_RUNS_YAML);
 		if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-		// Keep last 200 runs
-		const arr = Array.from((runsMap ?? singleIntentRuns).values()).slice(-200);
+		// Keep last 200 runs, exclude abort function before serialization
+		const arr = Array.from((runsMap ?? singleIntentRuns).values())
+			.slice(-200)
+			.map(({ abort, ...rest }) => rest);
 		fs.writeFileSync(SINGLE_RUNS_YAML, stringifyYaml(arr), "utf-8");
 	} catch (err) {
 		console.warn("[intent] Failed to persist single-runs:", err);
@@ -510,6 +512,7 @@ export async function runSingleIntent(
 	task: string,
 	context: string | undefined,
 	ctx: any,
+	signal?: AbortSignal,
 ): Promise<string> {
 	const agentName = resolveAgent(purpose, difficulty);
 	const discovery = discoverAgents(ctx.cwd, "user");
@@ -545,6 +548,15 @@ export async function runSingleIntent(
 	// Inject abort handle into the tracking record so cancelSingleRun() can reach it
 	const _runRecord = singleIntentRuns.get(statusRunId);
 	if (_runRecord) _runRecord.abort = () => abortController.abort();
+
+	// Bridge external signal (Esc) → internal AbortController
+	if (signal) {
+		if (signal.aborted) {
+			abortController.abort();
+		} else {
+			signal.addEventListener("abort", () => abortController.abort(), { once: true });
+		}
+	}
 
 	// Build main context for the subagent (respects INTENT_INHERIT_MAIN_CONTEXT flag)
 	const { mainContextText, mainSessionFile, totalMessageCount } = buildIntentMainContext(ctx);
@@ -592,11 +604,18 @@ export async function runSingleIntent(
 			const { isError, output } = await executeCore();
 			trackSingleEnd(widgetRunId, !isError);
 			trackSingleRunEnd(statusRunId, !isError, output);
+			// Detect user cancellation (Esc) — signal was bridged to abortController
+			if (signal?.aborted && isError) {
+				return `⚠️ 취소됨 (사용자 중단 / Esc) — ${purpose}/${difficulty} → ${agentName}`;
+			}
 			const statusLabel = isError ? "실패" : "완료";
 			return `[Intent ${statusLabel}] ${purpose}/${difficulty} → ${agentName} (동기)\n\n${output}`;
 		} catch (err: any) {
 			trackSingleEnd(widgetRunId, false);
 			trackSingleRunEnd(statusRunId, false, undefined, err?.message || String(err));
+			if (signal?.aborted) {
+				return `⚠️ 취소됨 (사용자 중단 / Esc) — ${purpose}/${difficulty} → ${agentName}`;
+			}
 			return `[Intent 오류] ${purpose}/${difficulty} → ${agentName}\n\n${err?.message || String(err)}`;
 		}
 	} else {
@@ -653,7 +672,7 @@ export async function runSingleIntent(
  * - low-difficulty nodes execute synchronously (chained — one run_next can process multiple)
  * - medium/high-difficulty nodes launch asynchronously in parallel
  */
-export async function runNext(pi: ExtensionAPI, blueprintId: string, ctx: any): Promise<string> {
+export async function runNext(pi: ExtensionAPI, blueprintId: string, ctx: any, signal?: AbortSignal): Promise<string> {
 	const bp = loadBlueprint(blueprintId);
 	if (!bp) return `Blueprint "${blueprintId}" not found.`;
 	if (bp.status === "completed")
@@ -682,12 +701,15 @@ export async function runNext(pi: ExtensionAPI, blueprintId: string, ctx: any): 
 	let currentBp = loadBlueprint(blueprintId)!;
 
 	while (syncExecuted < MAX_SYNC_CHAIN) {
+		if (signal?.aborted) break;
+
 		const runnable = getRunnableNodes(currentBp);
 		const syncNodes = runnable.filter((n) => n.difficulty === "low");
 		if (syncNodes.length === 0) break;
 
 		for (const node of syncNodes.slice(0, MAX_PARALLEL_NODES)) {
 			if (syncExecuted >= MAX_SYNC_CHAIN) break;
+			if (signal?.aborted) break;
 
 			const agentName = resolveAgent(node.purpose, node.difficulty);
 			const fullTask = buildNodeTask(node, currentBp);
@@ -702,6 +724,7 @@ export async function runNext(pi: ExtensionAPI, blueprintId: string, ctx: any): 
 				mainSessionFile,
 				totalMessageCount,
 				ctx,
+				signal,
 			);
 
 			const label = result.success ? "✅" : "❌";
@@ -712,6 +735,13 @@ export async function runNext(pi: ExtensionAPI, blueprintId: string, ctx: any): 
 		// Refresh blueprint to see newly runnable nodes from sync completions
 		currentBp = loadBlueprint(blueprintId)!;
 		if (currentBp.status === "completed" || currentBp.status === "aborted" || currentBp.status === "failed") break;
+	}
+
+	// Early return if aborted by signal (Esc) during sync phase
+	if (signal?.aborted) {
+		const abortedBp = loadBlueprint(blueprintId) || currentBp;
+		const syncSummary = resultLines.length > 0 ? `${resultLines.join("\n")}\n\n` : "";
+		return `${syncSummary}⚠️ 취소됨 (사용자 중단 / Esc).\n\n\`\`\`\n${renderBlueprintDAGText(abortedBp)}\n\`\`\``;
 	}
 
 	// ── Phase 2: Async launch (medium/high-difficulty nodes) ──
@@ -761,6 +791,8 @@ export async function runNext(pi: ExtensionAPI, blueprintId: string, ctx: any): 
 	};
 
 	for (let i = 0; i < asyncNodes.length; i++) {
+		if (signal?.aborted) break;
+
 		// Stagger parallel launches to avoid lock file contention
 		if (i > 0) await sleep(PARALLEL_LAUNCH_STAGGER_MS);
 
@@ -839,6 +871,7 @@ async function executeSyncNode(
 	mainSessionFile: string | undefined,
 	totalMessageCount: number,
 	ctx: any,
+	signal?: AbortSignal,
 ): Promise<{ success: boolean; output: string }> {
 	// Mark as running
 	updateNodeStatus(blueprintId, node.id, {
@@ -852,6 +885,17 @@ async function executeSyncNode(
 	const abortController = new AbortController();
 	const runKey = makeNodeRunKey(blueprintId, node.id);
 	activeNodeRuns.set(runKey, abortController);
+
+	// Bridge external signal (Esc) → internal AbortController; track for cleanup
+	let signalAbortHandler: (() => void) | undefined;
+	if (signal) {
+		if (signal.aborted) {
+			abortController.abort();
+		} else {
+			signalAbortHandler = () => abortController.abort();
+			signal.addEventListener("abort", signalAbortHandler, { once: true });
+		}
+	}
 
 	try {
 		const result = await runSingleAgent(
@@ -874,9 +918,12 @@ async function executeSyncNode(
 		);
 
 		const isError = result.exitCode !== 0 || result.stopReason === "error" || result.stopReason === "aborted";
-		const output = isError
-			? result.errorMessage || result.stderr || getFinalOutput(result.messages) || "(no output)"
-			: getFinalOutput(result.messages) || "(no output)";
+		const isUserCancelled = signal?.aborted && result.stopReason === "aborted";
+		const output = isUserCancelled
+			? "❌ 취소됨 (사용자 중단 / Esc)"
+			: isError
+				? result.errorMessage || result.stderr || getFinalOutput(result.messages) || "(no output)"
+				: getFinalOutput(result.messages) || "(no output)";
 
 		const storedResult =
 			output.length > NODE_RESULT_MAX_CHARS ? `${output.slice(0, NODE_RESULT_MAX_CHARS)}\n...[truncated]` : output;
@@ -901,15 +948,23 @@ async function executeSyncNode(
 		trackBlueprintNodeChanged(blueprintId);
 		return { success: !isError, output: storedResult };
 	} catch (err: any) {
+		const isUserCancelled = signal?.aborted;
 		updateNodeStatus(blueprintId, node.id, {
 			status: "failed",
-			error: err?.message || String(err),
+			error: isUserCancelled ? "취소됨 (사용자 중단 / Esc)" : err?.message || String(err),
 			completedAt: new Date().toISOString(),
 		});
 		trackBlueprintNodeChanged(blueprintId);
-		return { success: false, output: err?.message || String(err) };
+		return {
+			success: false,
+			output: isUserCancelled ? "❌ 취소됨 (사용자 중단 / Esc)" : err?.message || String(err),
+		};
 	} finally {
 		activeNodeRuns.delete(runKey);
+		// Remove signal listener to prevent ghost callbacks after node completes
+		if (signalAbortHandler) {
+			signal!.removeEventListener("abort", signalAbortHandler);
+		}
 	}
 }
 
