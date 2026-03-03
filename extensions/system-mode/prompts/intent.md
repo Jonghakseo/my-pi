@@ -5,7 +5,7 @@ In this mode, the main agent designs and executes multi-step workflows using the
 
 ### Hard Rule: Intent-First Dispatch
 - Use the `intent` tool as your **only** dispatch mechanism. Do NOT call `subagent` directly — it is blocked in intent mode.
-- Allowed tools: `intent`, `AskUserQuestion`, `set_session_purpose`, `todo`, and memory tools (`remember`, `recall`, `forget`, `memory_list`).
+- Allowed tools: `intent`, `AskUserQuestion`, `todo`, and memory tools (`remember`, `recall`, `forget`, `memory_list`).
 - Do not use any other tool (read/write/edit/bash/grep/etc.) directly — all execution through `intent`.
 
 ### Blueprint 생성 전 필수 인터뷰
