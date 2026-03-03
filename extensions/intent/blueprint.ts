@@ -299,6 +299,24 @@ const PLAN_PURPOSES = new Set(["plan", "explore"]);
 const IMPL_PURPOSES = new Set(["implement"]);
 const REVIEW_PURPOSES = new Set(["review", "verify"]);
 
+/** 주어진 노드의 모든 transitive ancestor ID 집합을 반환 (BFS) */
+function getTransitiveAncestors(nodeId: string, nodes: BlueprintNode[]): Set<string> {
+	const visited = new Set<string>();
+	const queue = [nodeId];
+	while (queue.length > 0) {
+		const current = queue.shift()!;
+		const node = nodes.find((n) => n.id === current);
+		if (!node) continue;
+		for (const dep of node.dependsOn) {
+			if (!visited.has(dep)) {
+				visited.add(dep);
+				queue.push(dep);
+			}
+		}
+	}
+	return visited;
+}
+
 /**
  * Auto-inject challenger gate nodes into a Blueprint.
  * Called after chainFrom→dependsOn normalization, before DAG validation.
@@ -344,40 +362,76 @@ export function injectChallengerGates(blueprint: Blueprint): void {
 		);
 
 		if (implNodesDependingOnPlan.length > 0) {
-			// Check if Gate 1 is already covered: all impl nodes have a challenge in their dependsOn
-			const gate1Covered = implNodesDependingOnPlan.every((implNode) =>
-				implNode.dependsOn.some((dep) => {
-					const depNode = blueprint.nodes.find((n) => n.id === dep);
-					return depNode?.purpose === "challenge";
-				}),
-			);
+			// Check if Gate 1 is already covered: challenge C가 impl의 transitive ancestor이고 C의 ancestor에 plan이 있으면 covered
+			const gate1Covered = implNodesDependingOnPlan.every((implNode) => {
+				const implAncestors = getTransitiveAncestors(implNode.id, blueprint.nodes);
+				return [...implAncestors].some((ancestorId) => {
+					const ancestor = blueprint.nodes.find((n) => n.id === ancestorId);
+					if (ancestor?.purpose !== "challenge") return false;
+					const challengeAncestors = getTransitiveAncestors(ancestorId, blueprint.nodes);
+					return (
+						ancestor.dependsOn.some((dep) => planNodeIds.has(dep)) ||
+						[...challengeAncestors].some((id) => planNodeIds.has(id))
+					);
+				});
+			});
 
 			// Inject Gate 1 if not covered and under the max challenge limit
 			if (!gate1Covered && existingChallengeCount < 2) {
-				// Collect the plan node IDs that are being depended on
-				const gateDeps = [
-					...new Set(implNodesDependingOnPlan.flatMap((n) => n.dependsOn.filter((dep) => planNodeIds.has(dep)))),
-				];
+				// 수동 추가된 sibling challenge (plan에 의존하지만 impl의 ancestor가 아닌 것) 가 있으면
+				// 새 gate 삽입 대신 impl을 그 challenge를 거치도록 rewire
+				const siblingChallenge = blueprint.nodes.find(
+					(n) =>
+						n.purpose === "challenge" &&
+						n.dependsOn.some((dep) => planNodeIds.has(dep)) &&
+						!getTransitiveAncestors(implNodesDependingOnPlan[0].id, blueprint.nodes).has(n.id),
+				);
 
-				const gate1: BlueprintNode = {
-					id: "challenge-gate1",
-					purpose: "challenge",
-					difficulty: "medium",
-					task: "이전 단계의 계획/탐색 결과를 검증하세요. 가정이 틀렸거나, 누락된 리스크가 있거나, 더 나은 접근법이 있는지 stress-test하세요.",
-					dependsOn: gateDeps,
-					chainFrom: gateDeps[gateDeps.length - 1],
-					status: "pending",
-				};
+				if (siblingChallenge) {
+					for (const implNode of implNodesDependingOnPlan) {
+						implNode.dependsOn = [
+							...new Set(
+								implNode.dependsOn.map((dep) => (planNodeIds.has(dep) ? siblingChallenge.id : dep)),
+							),
+						];
+						if (implNode.chainFrom && planNodeIds.has(implNode.chainFrom)) {
+							implNode.chainFrom = siblingChallenge.id;
+						}
+					}
+				} else {
+					// 기존 gate1 삽입 로직 (변경 없이 유지)
+					const gateDeps = [
+						...new Set(implNodesDependingOnPlan.flatMap((n) => n.dependsOn.filter((dep) => planNodeIds.has(dep)))),
+					];
 
-				// Rewire: impl nodes' plan dependencies → challenge-gate1
-				for (const implNode of implNodesDependingOnPlan) {
-					implNode.dependsOn = [...new Set(implNode.dependsOn.map((dep) => (planNodeIds.has(dep) ? gate1.id : dep)))];
-					if (implNode.chainFrom && planNodeIds.has(implNode.chainFrom)) {
-						implNode.chainFrom = gate1.id;
+					const gate1: BlueprintNode = {
+						id: "challenge-gate1",
+						purpose: "challenge",
+						difficulty: "medium",
+						task: "이전 단계의 계획/탐색 결과를 검증하세요. 가정이 틀렸거나, 누락된 리스크가 있거나, 더 나은 접근법이 있는지 stress-test하세요.",
+						dependsOn: gateDeps,
+						chainFrom: gateDeps[gateDeps.length - 1],
+						status: "pending",
+					};
+
+					for (const implNode of implNodesDependingOnPlan) {
+						implNode.dependsOn = [
+							...new Set(implNode.dependsOn.map((dep) => (planNodeIds.has(dep) ? gate1.id : dep))),
+						];
+						if (implNode.chainFrom && planNodeIds.has(implNode.chainFrom)) {
+							implNode.chainFrom = gate1.id;
+						}
+					}
+
+					const firstImplIdx = blueprint.nodes.findIndex((n) =>
+						implNodesDependingOnPlan.some((i) => i.id === n.id),
+					);
+					if (firstImplIdx !== -1) {
+						blueprint.nodes.splice(firstImplIdx, 0, gate1);
+					} else {
+						blueprint.nodes.push(gate1);
 					}
 				}
-
-				blueprint.nodes.push(gate1);
 			}
 		}
 	}
@@ -389,43 +443,78 @@ export function injectChallengerGates(blueprint: Blueprint): void {
 		);
 
 		if (reviewNodesDependingOnImpl.length > 0) {
-			// Check if Gate 2 is already covered: all review nodes have a challenge in their dependsOn
-			const gate2Covered = reviewNodesDependingOnImpl.every((reviewNode) =>
-				reviewNode.dependsOn.some((dep) => {
-					const depNode = blueprint.nodes.find((n) => n.id === dep);
-					return depNode?.purpose === "challenge";
-				}),
-			);
+			// Check if Gate 2 is already covered: challenge C가 review의 transitive ancestor이고 C의 ancestor에 impl이 있으면 covered
+			const gate2Covered = reviewNodesDependingOnImpl.every((reviewNode) => {
+				const reviewAncestors = getTransitiveAncestors(reviewNode.id, blueprint.nodes);
+				return [...reviewAncestors].some((ancestorId) => {
+					const ancestor = blueprint.nodes.find((n) => n.id === ancestorId);
+					if (ancestor?.purpose !== "challenge") return false;
+					const challengeAncestors = getTransitiveAncestors(ancestorId, blueprint.nodes);
+					return (
+						ancestor.dependsOn.some((dep) => implNodeIds.has(dep)) ||
+						[...challengeAncestors].some((id) => implNodeIds.has(id))
+					);
+				});
+			});
 
 			// Inject Gate 2 if not covered and under the max challenge limit
 			// Count how many challenges exist after potential Gate 1 injection
 			const challengeCountAfterInjections = blueprint.nodes.filter((n) => n.purpose === "challenge").length;
 			if (!gate2Covered && challengeCountAfterInjections < 2) {
-				const gateDeps = [
-					...new Set(reviewNodesDependingOnImpl.flatMap((n) => n.dependsOn.filter((dep) => implNodeIds.has(dep)))),
-				];
+				const siblingChallenge2 = blueprint.nodes.find(
+					(n) =>
+						n.purpose === "challenge" &&
+						n.dependsOn.some((dep) => implNodeIds.has(dep)) &&
+						!getTransitiveAncestors(reviewNodesDependingOnImpl[0].id, blueprint.nodes).has(n.id),
+				);
 
-				const gate2: BlueprintNode = {
-					id: "challenge-gate2",
-					purpose: "challenge",
-					difficulty: "medium",
-					task: "구현 결과를 검증하세요. 빠진 엣지 케이스, 보안 이슈, 성능 문제가 없는지 stress-test하세요.",
-					dependsOn: gateDeps,
-					chainFrom: gateDeps[gateDeps.length - 1],
-					status: "pending",
-				};
-
-				// Rewire: review nodes' impl dependencies → challenge-gate2
-				for (const reviewNode of reviewNodesDependingOnImpl) {
-					reviewNode.dependsOn = [
-						...new Set(reviewNode.dependsOn.map((dep) => (implNodeIds.has(dep) ? gate2.id : dep))),
+				if (siblingChallenge2) {
+					for (const reviewNode of reviewNodesDependingOnImpl) {
+						reviewNode.dependsOn = [
+							...new Set(
+								reviewNode.dependsOn.map((dep) => (implNodeIds.has(dep) ? siblingChallenge2.id : dep)),
+							),
+						];
+						if (reviewNode.chainFrom && implNodeIds.has(reviewNode.chainFrom)) {
+							reviewNode.chainFrom = siblingChallenge2.id;
+						}
+					}
+				} else {
+					// 기존 gate2 삽입 로직 (변경 없이 유지)
+					const gateDeps = [
+						...new Set(
+							reviewNodesDependingOnImpl.flatMap((n) => n.dependsOn.filter((dep) => implNodeIds.has(dep))),
+						),
 					];
-					if (reviewNode.chainFrom && implNodeIds.has(reviewNode.chainFrom)) {
-						reviewNode.chainFrom = gate2.id;
+
+					const gate2: BlueprintNode = {
+						id: "challenge-gate2",
+						purpose: "challenge",
+						difficulty: "medium",
+						task: "구현 결과를 검증하세요. 빠진 엣지 케이스, 보안 이슈, 성능 문제가 없는지 stress-test하세요.",
+						dependsOn: gateDeps,
+						chainFrom: gateDeps[gateDeps.length - 1],
+						status: "pending",
+					};
+
+					for (const reviewNode of reviewNodesDependingOnImpl) {
+						reviewNode.dependsOn = [
+							...new Set(reviewNode.dependsOn.map((dep) => (implNodeIds.has(dep) ? gate2.id : dep))),
+						];
+						if (reviewNode.chainFrom && implNodeIds.has(reviewNode.chainFrom)) {
+							reviewNode.chainFrom = gate2.id;
+						}
+					}
+
+					const firstReviewIdx = blueprint.nodes.findIndex((n) =>
+						reviewNodesDependingOnImpl.some((r) => r.id === n.id),
+					);
+					if (firstReviewIdx !== -1) {
+						blueprint.nodes.splice(firstReviewIdx, 0, gate2);
+					} else {
+						blueprint.nodes.push(gate2);
 					}
 				}
-
-				blueprint.nodes.push(gate2);
 			}
 		}
 	}

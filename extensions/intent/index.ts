@@ -7,10 +7,10 @@
  *
  * Supports two usage patterns:
  *
- * 1. **Single Intent** (mode: "run")
+ * 1. **Single Intent** (intent tool)
  *    Quick one-off dispatch: intent → agent resolution → async execution
  *
- * 2. **Blueprint** (mode: "create_blueprint" → "run_next")
+ * 2. **Blueprint** (blueprint tool, mode: "create_blueprint" → "run_next")
  *    DAG of intent nodes: create → user confirm → step-by-step execution
  *    Master calls run_next repeatedly; nodes run async and notify on completion.
  *
@@ -38,13 +38,13 @@ import {
 import { abortAllBlueprintRuns, cancelSingleRun, listSingleRuns, runNext, runSingleIntent } from "./executor.js";
 import { getMappingDescription, resolveAgent } from "./mapping.js";
 import type { Blueprint, BlueprintNode } from "./types.js";
-import { IntentParams, type IntentParamsType } from "./types.js";
+import { BlueprintParams, type BlueprintParamsType, IntentRunParams, type IntentRunParamsType } from "./types.js";
 import { BlueprintDagViewer, type BlueprintDagViewerOptions, renderBlueprintDAGText } from "./viewer.js";
 import { clearIntentWidget } from "./widget.js";
 
 export default function (pi: ExtensionAPI) {
-	// ─── Intent Tool Failure Auto-Retry ──────────────────────────────────────
-	// When intent tool call fails (e.g. JSON parse error in LLM-generated params),
+	// ─── Intent/Blueprint Tool Failure Auto-Retry ────────────────────────────
+	// When intent/blueprint tool call fails (e.g. JSON parse error in LLM-generated params),
 	// append retry instructions to the error so the master LLM retries automatically.
 	const MAX_INTENT_RETRIES_PER_TURN = 2;
 	let intentErrorsThisTurn = 0;
@@ -54,7 +54,7 @@ export default function (pi: ExtensionAPI) {
 	});
 
 	pi.on("tool_result", async (event) => {
-		if (event.toolName !== "intent" || !event.isError) return;
+		if ((event.toolName !== "intent" && event.toolName !== "blueprint") || !event.isError) return;
 
 		intentErrorsThisTurn++;
 		const errorText = event.content
@@ -69,7 +69,7 @@ export default function (pi: ExtensionAPI) {
 						text:
 							`${errorText}\n\n` +
 							`⚠️ [Intent 자동 재시도 ${intentErrorsThisTurn}/${MAX_INTENT_RETRIES_PER_TURN}] ` +
-							`intent 호출이 실패했습니다. 동일한 파라미터로 다시 호출하세요. ` +
+							`도구 호출이 실패했습니다. 동일한 파라미터로 다시 호출하세요. ` +
 							`task/context 내 백슬래시(\\\\) 또는 특수 문자가 있다면 JSON에서 올바르게 이스케이프하세요.`,
 					},
 				],
@@ -78,21 +78,13 @@ export default function (pi: ExtensionAPI) {
 		// Max retries reached — leave error unchanged, let master escalate to user
 	});
 
+	// ─── Intent Tool — Single Task Dispatch ──────────────────────────────────
+
 	pi.registerTool({
 		name: "intent",
 		label: "Intent",
 		description: [
-			"Category-based task dispatch tool. Automatically selects the best subagent based on purpose and difficulty.",
-			"",
-			"Modes:",
-			"  create_blueprint — Create a DAG of tasks as a Blueprint. Automatically shows confirm UI to user (set need_confirm=false to skip for small/low-risk blueprints).",
-			"  run_next — Execute next runnable node(s) in a confirmed Blueprint. Call repeatedly until complete.",
-			"  run — Execute a single intent directly (no Blueprint needed).",
-			"  status — Show current Blueprint progress.",
-			"  abort — Abort a running Blueprint and its active nodes.",
-			"  abort_run — Cancel a single intent run by runId. Omit runId to list running intents.",
-			"  retry_node — Reset a failed/skipped node to pending and re-run it immediately.",
-			"  edit_blueprint — Edit pending nodes in a confirmed/running Blueprint.",
+			"Single-task dispatch tool. Automatically selects the best subagent based on purpose and difficulty.",
 			"",
 			"Purpose options: explore, search, plan, challenge, decide, implement, review, verify, browse",
 			"Difficulty options: low, medium, high",
@@ -105,11 +97,63 @@ export default function (pi: ExtensionAPI) {
 			"Note: commit/PR/execute 작업은 implement/low 로 표현하세요.",
 			"",
 			"Note: 비동기 실행된 intent는 완료 시 자동으로 결과가 전달됩니다. 같은 작업을 반복 호출하지 마세요.",
+			"",
+			"Note: Blueprint DAG 작업(create_blueprint, run_next, status, abort 등)은 blueprint 도구를 사용하세요.",
 		].join("\n"),
-		parameters: IntentParams,
+		parameters: IntentRunParams,
 
 		execute: async (toolCallId, rawParams, signal, onUpdate, ctx) => {
-			const params = rawParams as IntentParamsType;
+			const params = rawParams as IntentRunParamsType;
+
+			if (!params.purpose || !params.difficulty || !params.task) {
+				return {
+					content: [{ type: "text" as const, text: "Error: intent requires purpose, difficulty, and task." }],
+					details: undefined,
+				};
+			}
+
+			const result = await runSingleIntent(
+				pi,
+				params.purpose,
+				params.difficulty,
+				params.task,
+				params.context,
+				ctx,
+				signal,
+			);
+			return {
+				content: [{ type: "text" as const, text: result }],
+				details: undefined,
+			};
+		},
+
+		renderResult(result, _options, _theme) {
+			const text = (result.content.find((c: any) => c.type === "text") as any)?.text ?? "";
+			return new Text(text, 1, 0);
+		},
+	});
+
+	// ─── Blueprint Tool — DAG Management ─────────────────────────────────────
+
+	pi.registerTool({
+		name: "blueprint",
+		label: "Blueprint",
+		description: [
+			"Blueprint DAG management tool. Creates and executes multi-step task graphs.",
+			"",
+			"Modes:",
+			"  create_blueprint — Create a DAG of tasks as a Blueprint. Automatically shows confirm UI to user (set need_confirm=false to skip for small/low-risk blueprints).",
+			"  run_next — Execute next runnable node(s) in a confirmed Blueprint. Call repeatedly until complete.",
+			"  status — Show current Blueprint progress.",
+			"  abort — Abort a running Blueprint and its active nodes.",
+			"  abort_run — Cancel a single intent run by runId. Omit runId to list running intents.",
+			"  retry_node — Reset a failed/skipped node to pending and re-run it immediately.",
+			"  edit_blueprint — Edit pending nodes in a confirmed/running Blueprint.",
+		].join("\n"),
+		parameters: BlueprintParams,
+
+		execute: async (toolCallId, rawParams, signal, onUpdate, ctx) => {
+			const params = rawParams as BlueprintParamsType;
 
 			switch (params.mode) {
 				// ─── Create Blueprint ─────────────────────────────────────
@@ -202,7 +246,7 @@ export default function (pi: ExtensionAPI) {
 							content: [
 								{
 									type: "text" as const,
-									text: `Blueprint "${blueprint.title}" (${blueprint.id}) 생성 완료 (자동 확인).\n\`intent({ mode: "run_next", blueprintId: "${blueprint.id}" })\`를 호출해 실행을 시작하세요.`,
+									text: `Blueprint "${blueprint.title}" (${blueprint.id}) 생성 완료 (자동 확인).\n\`blueprint({ mode: "run_next", blueprintId: "${blueprint.id}" })\`를 호출해 실행을 시작하세요.`,
 								},
 							],
 							details: { blueprintId: blueprint.id },
@@ -242,7 +286,7 @@ export default function (pi: ExtensionAPI) {
 						content: [
 							{
 								type: "text" as const,
-								text: `Blueprint "${blueprint.title}" (${blueprint.id}) 확인됨.\n\`intent({ mode: "run_next", blueprintId: "${blueprint.id}" })\`를 호출해 실행을 시작하세요.`,
+								text: `Blueprint "${blueprint.title}" (${blueprint.id}) 확인됨.\n\`blueprint({ mode: "run_next", blueprintId: "${blueprint.id}" })\`를 호출해 실행을 시작하세요.`,
 							},
 						],
 						details: { blueprintId: blueprint.id },
@@ -259,27 +303,6 @@ export default function (pi: ExtensionAPI) {
 					}
 
 					const result = await runNext(pi, params.blueprintId, ctx, signal);
-					return {
-						content: [{ type: "text" as const, text: result }],
-						details: undefined,
-					};
-				}
-
-				// ─── Single Intent ───────────────────────────────────────
-				case "run": {
-					if (!params.purpose || !params.difficulty || !params.task) {
-						return {
-							content: [
-								{
-									type: "text" as const,
-									text: "Error: run mode requires purpose, difficulty, and task.",
-								},
-							],
-							details: undefined,
-						};
-					}
-
-					const result = await runSingleIntent(pi, params.purpose, params.difficulty, params.task, params.context, ctx, signal);
 					return {
 						content: [{ type: "text" as const, text: result }],
 						details: undefined,
@@ -404,7 +427,7 @@ export default function (pi: ExtensionAPI) {
 							content: [
 								{
 									type: "text" as const,
-									text: `실행 중인 Intent:\n${lines.join("\n")}\n\nrunId를 지정해서 취소하세요:\n\`intent({ mode: "abort_run", runId: "intent-xxx" })\``,
+									text: `실행 중인 Intent:\n${lines.join("\n")}\n\nrunId를 지정해서 취소하세요:\n\`blueprint({ mode: "abort_run", runId: "intent-xxx" })\``,
 								},
 							],
 							details: undefined,
@@ -460,7 +483,7 @@ export default function (pi: ExtensionAPI) {
 					};
 				}
 
-				// ─── Edit Blueprint ──────────────────────────────────
+				// ─── Edit Blueprint ──────────────────────────────────────
 				case "edit_blueprint": {
 					if (!params.blueprintId) {
 						return {
@@ -625,25 +648,21 @@ export default function (pi: ExtensionAPI) {
 			const details = result.details as any;
 			const text = (result.content.find((c: any) => c.type === "text") as any)?.text ?? "";
 
-			// Blueprint creation result → show DAG visually
 			if (details?.blueprintId) {
 				const bp = loadBlueprint(details.blueprintId);
 				if (bp) {
 					const fullText = renderBlueprintDAGText(bp);
 					const lines = fullText.split("\n");
-					// Show only the DAG portion (skip node-summary list after ─── separator)
 					const sepIdx = lines.findIndex((l, i) => i >= 2 && /^─+/.test(l));
 					const dagLines = sepIdx > 0 ? lines.slice(0, sepIdx) : lines;
 					return new Text(dagLines.join("\n").trim(), 1, 0);
 				}
 			}
 
-			// Cancelled → show brief message
 			if (details?.cancelled) {
 				return new Text(theme.fg("muted", "Blueprint 취소됨"), 1, 0);
 			}
 
-			// All other modes (run, run_next, status, etc.) → default text
 			return new Text(text, 1, 0);
 		},
 	});

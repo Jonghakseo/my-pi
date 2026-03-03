@@ -238,7 +238,7 @@ class SideBySideDiffView {
 		let rowsToShow: DiffRow[];
 		let hasMore = false;
 
-		if (this.maxRows) {
+		if (this.maxRows != null) {
 			// Skip leading context — start from first actual change
 			const firstChangeIdx = this.rows.findIndex((r) => r.left.type === "removed" || r.right.type === "added");
 			const startIdx = firstChangeIdx >= 1 ? firstChangeIdx - 1 : 0;
@@ -261,8 +261,9 @@ class SideBySideDiffView {
 			}
 		}
 
-		if (hasMore) {
-			lines.push(t.fg("muted", `… +${this.rows.length - this.maxRows!} rows`));
+		if (hasMore && this.maxRows != null) {
+			const remaining = this.rows.length - this.maxRows;
+			lines.push(t.fg("muted", `… +${remaining} rows`));
 		}
 
 		this.cachedWidth = width;
@@ -449,10 +450,14 @@ export default function (pi: ExtensionAPI) {
 			};
 
 			// Collapsed → summary + first 5 rows
-			if (!expanded) return new SideBySideDiffView(details.diff, theme, makeSummary, 5) as any;
+			if (!expanded) {
+				const diffView = new SideBySideDiffView(details.diff, theme, makeSummary, 5);
+				return diffView as SideBySideDiffView & Text;
+			}
 
 			// Expanded → full side-by-side diff
-			return new SideBySideDiffView(details.diff, theme, makeSummary) as any;
+			const diffView = new SideBySideDiffView(details.diff, theme, makeSummary);
+			return diffView as SideBySideDiffView & Text;
 		},
 	});
 

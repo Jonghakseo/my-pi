@@ -475,9 +475,7 @@ async function handleNodeCompletion(
 	// Escalated node during auto-advance sync chain → wake master
 	if (syncEscalated) {
 		const escalatedNodes = currentBp.nodes.filter((n) => n.status === "escalated");
-		const escDetails = escalatedNodes
-			.map((n) => `**${n.id}**: ${n.escalationMessage ?? "(메시지 없음)"}`)
-			.join("\n");
+		const escDetails = escalatedNodes.map((n) => `**${n.id}**: ${n.escalationMessage ?? "(메시지 없음)"}`).join("\n");
 		pi.sendMessage(
 			{
 				customType: "intent-blueprint",
@@ -862,9 +860,7 @@ export async function runNext(pi: ExtensionAPI, blueprintId: string, ctx: any, s
 			);
 
 			if (result.isEscalation) {
-				resultLines.push(
-					`🆘 **${node.id}** [${node.purpose}/${node.difficulty}] → ${agentName} (에스컬레이션)`,
-				);
+				resultLines.push(`🆘 **${node.id}** [${node.purpose}/${node.difficulty}] → ${agentName} (에스컬레이션)`);
 				syncEscalated = true;
 				syncExecuted++;
 				break;
@@ -893,9 +889,7 @@ export async function runNext(pi: ExtensionAPI, blueprintId: string, ctx: any, s
 	if (syncEscalated) {
 		const freshBp = loadBlueprint(blueprintId)!;
 		const escalatedNodes = freshBp.nodes.filter((n) => n.status === "escalated");
-		const escDetails = escalatedNodes
-			.map((n) => `- **${n.id}**: ${n.escalationMessage ?? "(메시지 없음)"}`)
-			.join("\n");
+		const escDetails = escalatedNodes.map((n) => `- **${n.id}**: ${n.escalationMessage ?? "(메시지 없음)"}`).join("\n");
 		return [
 			...resultLines,
 			"",

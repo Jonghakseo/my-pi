@@ -123,6 +123,16 @@ export default function uploadImageUrl(pi: ExtensionAPI) {
 			}
 
 			const { url, filename } = params;
+
+			// Validate url parameter is a string before calling string methods
+			if (typeof url !== "string") {
+				return {
+					content: [{ type: "text", text: "URL must be a string" }],
+					details: undefined,
+					isError: true,
+				};
+			}
+
 			const isLocal = !url.startsWith("http://") && !url.startsWith("https://");
 
 			try {

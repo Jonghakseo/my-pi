@@ -116,13 +116,17 @@ export default function commandTypoAssist(pi: ExtensionAPI) {
 		if (bestDist <= threshold && bestMatch) {
 			// Close match found — suggest + prefill
 			const corrected = `/${bestMatch}${cmdArgs}`;
-			ctx.ui.notify(`Did you mean /${bestMatch}?`, "warning");
-			ctx.ui.setEditorText(corrected);
+			if (ctx.hasUI) {
+				ctx.ui.notify(`Did you mean /${bestMatch}?`, "warning");
+				ctx.ui.setEditorText(corrected);
+			}
 			return { action: "handled" };
 		}
 
 		// No close match — warn and swallow (don't send garbage to LLM)
-		ctx.ui.notify(`Unknown command: /${cmdName}`, "warning");
+		if (ctx.hasUI) {
+			ctx.ui.notify(`Unknown command: /${cmdName}`, "warning");
+		}
 		return { action: "handled" };
 	});
 }

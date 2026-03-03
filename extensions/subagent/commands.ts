@@ -7,9 +7,9 @@
 
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { parse as parseYaml } from "yaml";
 import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
 import { Container, Key, matchesKey, Spacer, Text, truncateToWidth } from "@mariozechner/pi-tui";
+import { parse as parseYaml } from "yaml";
 import type { AgentScope } from "./agents.js";
 import { discoverAgents } from "./agents.js";
 import {
@@ -29,6 +29,7 @@ import {
 	SUBVIEW_OVERLAY_WIDTH,
 } from "./constants.js";
 import { formatUsageStats, truncateLines } from "./format.js";
+import { updatePixelWidget } from "./pixel-widget.js";
 import { readSessionReplayItems, SubagentSessionReplayOverlay } from "./replay.js";
 import { getLatestRun, removeRun, trimCommandRunHistory } from "./run-utils.js";
 import {
@@ -45,7 +46,6 @@ import { renderSubagentToolCall, renderSubagentToolResult } from "./tool-render.
 import type { CommandRunState, SingleResult, SubagentDetails } from "./types.js";
 import { ListAgentsParams, SubagentParams } from "./types.js";
 import { updateCommandRunsWidget } from "./widget.js";
-import { updatePixelWidget } from "./pixel-widget.js";
 
 /**
  * Capture switchSession from an ExtensionCommandContext into the shared store.

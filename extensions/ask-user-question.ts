@@ -1,4 +1,4 @@
-import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
+import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
 import { Text } from "@mariozechner/pi-tui";
 import { Type } from "@sinclair/typebox";
 
@@ -90,7 +90,7 @@ type MultiSelectPromptResult = {
 };
 
 async function askMultipleOptions(
-	ctx: any,
+	ctx: ExtensionContext,
 	question: string,
 	context: string | undefined,
 	options: string[],
@@ -199,7 +199,7 @@ export default function askUserQuestionExtension(pi: ExtensionAPI) {
 			"Ask the user a question and wait for their response. Use this when you need explicit user input before proceeding.",
 		parameters: AskUserQuestionParams,
 
-		async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
+		async execute(_toolCallId, params, _signal, _onUpdate, ctx: ExtensionContext) {
 			const question = typeof params.question === "string" ? params.question.trim() : "";
 			const context = typeof params.context === "string" ? params.context.trim() : undefined;
 			const options = normalizeOptions(params.options);
