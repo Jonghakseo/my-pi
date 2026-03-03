@@ -51,6 +51,9 @@ export default function (pi: ExtensionAPI) {
 		execute: async (_toolCallId, rawParams, _signal, _onUpdate, ctx) => {
 			const params = rawParams as { message: string; context?: string };
 
+			// Subagent session directory — must match session.ts:SUBAGENT_SESSION_DIR
+			const subagentSessionDir = path.join(os.homedir(), ".pi", "agent", "sessions", "subagents");
+
 			// Derive session file path for IPC correlation
 			let sessionFile: string | undefined;
 			try {
@@ -65,6 +68,25 @@ export default function (pi: ExtensionAPI) {
 				}
 			} catch {
 				/* ignore — will use timestamp fallback */
+			}
+
+			// Guard: escalate must only be called from a subagent session.
+			// If the current session file is NOT inside the subagent sessions directory,
+			// this tool was invoked from the main session — do NOT exit the process.
+			const isSubagentSession = sessionFile
+				? sessionFile.startsWith(subagentSessionDir + path.sep) || sessionFile.startsWith(subagentSessionDir + "/")
+				: false;
+
+			if (!isSubagentSession) {
+				return {
+					content: [
+						{
+							type: "text" as const,
+							text: "escalate 도구는 서브에이전트 세션에서만 사용할 수 있습니다. 메인 세션에서는 호출할 수 없습니다.",
+						},
+					],
+					details: undefined,
+				};
 			}
 
 			// Write escalation file synchronously (guaranteed before process.exit)
