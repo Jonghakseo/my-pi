@@ -25,7 +25,12 @@ import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
 import type { AgentConfig } from "../subagent/agents.js";
 import { discoverAgents } from "../subagent/agents.js";
 import { getFinalOutput, runSingleAgent } from "../subagent/runner.js";
-import { buildMainContextText, makeSubagentSessionFile, wrapTaskWithMainContext } from "../subagent/session.js";
+import {
+	buildMainContextText,
+	makeSubagentSessionFile,
+	makeToolSessionFile,
+	wrapTaskWithMainContext,
+} from "../subagent/session.js";
 import {
 	formatBlueprintProgress,
 	formatBlueprintSummary,
@@ -685,9 +690,13 @@ export async function runSingleIntent(
 		}
 
 		const isError = result.exitCode !== 0 || result.stopReason === "error" || result.stopReason === "aborted";
-		const output = isError
-			? result.errorMessage || result.stderr || getFinalOutput(result.messages) || "(no output)"
-			: getFinalOutput(result.messages) || "(no output)";
+		const rawOutput = isError
+			? result.errorMessage || result.stderr || getFinalOutput(result.messages) || ""
+			: getFinalOutput(result.messages) || "";
+		// implement 노드에서 출력이 비어있으면 실패로 처리
+		const isEmptyImpl = !isError && node.purpose === "implement" && !rawOutput.trim();
+		const effectiveIsError = isError || isEmptyImpl;
+		const output = rawOutput || "(no output)";
 		return { isError, output };
 	};
 
@@ -1105,11 +1114,15 @@ async function executeSyncNode(
 
 		const isError = result.exitCode !== 0 || result.stopReason === "error" || result.stopReason === "aborted";
 		const isUserCancelled = signal?.aborted && result.stopReason === "aborted";
-		const output = isUserCancelled
+		const rawOutput = isUserCancelled
 			? "❌ 취소됨 (사용자 중단 / Esc)"
 			: isError
-				? result.errorMessage || result.stderr || getFinalOutput(result.messages) || "(no output)"
-				: getFinalOutput(result.messages) || "(no output)";
+				? result.errorMessage || result.stderr || getFinalOutput(result.messages) || ""
+				: getFinalOutput(result.messages) || "";
+		// implement 노드에서 출력이 비어있으면 실패로 처리
+		const isEmptyImpl = !isError && !isUserCancelled && node.purpose === "implement" && !rawOutput.trim();
+		const effectiveIsError = isError || isEmptyImpl;
+		const output = rawOutput || "(no output)";
 
 		const storedResult =
 			output.length > NODE_RESULT_MAX_CHARS ? `${output.slice(0, NODE_RESULT_MAX_CHARS)}\n...[truncated]` : output;
@@ -1124,15 +1137,17 @@ async function executeSyncNode(
 		}
 
 		updateNodeStatus(blueprintId, node.id, {
-			status: isError ? "failed" : "completed",
+			status: effectiveIsError ? "failed" : "completed",
 			result: storedResult,
 			resultPath,
-			error: isError ? output.slice(0, 500) : undefined,
+			error: effectiveIsError
+				? (isEmptyImpl ? "Output was empty — task may not have been executed" : output.slice(0, 500))
+				: undefined,
 			completedAt: new Date().toISOString(),
 		});
 
 		trackBlueprintNodeChanged(blueprintId);
-		return { success: !isError, output: storedResult };
+		return { success: !effectiveIsError, output: storedResult };
 	} catch (err: any) {
 		const isUserCancelled = signal?.aborted;
 		updateNodeStatus(blueprintId, node.id, {
@@ -1254,10 +1269,12 @@ async function executeNodeAsync(
 		}
 
 		updateNodeStatus(blueprintId, node.id, {
-			status: isError ? "failed" : "completed",
+			status: effectiveIsError ? "failed" : "completed",
 			result: storedResult,
 			resultPath,
-			error: isError ? output.slice(0, 500) : undefined,
+			error: effectiveIsError
+				? (isEmptyImpl ? "Output was empty — task may not have been executed" : output.slice(0, 500))
+				: undefined,
 			completedAt: new Date().toISOString(),
 		});
 
@@ -1265,7 +1282,7 @@ async function executeNodeAsync(
 		trackBlueprintNodeChanged(blueprintId);
 
 		// Auto-advance: handle node completion and auto-launch next runnable nodes
-		await handleNodeCompletion(advCtx, node.id, isError);
+		await handleNodeCompletion(advCtx, node.id, effectiveIsError);
 	} catch (err: any) {
 		updateNodeStatus(blueprintId, node.id, {
 			status: "failed",
