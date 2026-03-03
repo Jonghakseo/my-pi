@@ -45,6 +45,7 @@ import { renderSubagentToolCall, renderSubagentToolResult } from "./tool-render.
 import type { CommandRunState, SingleResult, SubagentDetails } from "./types.js";
 import { ListAgentsParams, SubagentParams } from "./types.js";
 import { updateCommandRunsWidget } from "./widget.js";
+import { updatePixelWidget } from "./pixel-widget.js";
 
 /**
  * Capture switchSession from an ExtensionCommandContext into the shared store.
@@ -1393,6 +1394,9 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 		handler: async (_args, ctx) => {
 			captureSwitchSession(store, ctx);
 
+			// Track synthetic IDs for cleanup after overlay closes
+			const syntheticIds: number[] = [];
+
 			// ── Merge intent-based runs (they bypass store.commandRuns) ──────────
 			// Intent runs are persisted to ~/.pi/blueprints/single-runs.yaml by
 			// executor.ts on each run start/end. Read directly from file to avoid
@@ -1449,7 +1453,7 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 							id: nextNegId--,
 							agent: ir.agent ?? ir.purpose ?? "intent",
 							task: ir.task,
-							status: ir.status === "completed" ? "done" : ir.status === "failed" ? "error" : "running",
+							status: ir.status === "completed" ? "done" : "error",
 							startedAt: startedMs,
 							lastActivityAt: doneMs,
 							elapsedMs: doneMs - startedMs,
@@ -1461,6 +1465,7 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 							source: "tool" as const,
 						};
 						store.commandRuns.set(synthetic.id, synthetic);
+						syntheticIds.push(synthetic.id);
 						if (ir.sessionFile) existingSessionFiles.add(ir.sessionFile);
 					} catch (itemErr) {
 						console.warn(`[sub:history] Failed to process intent run:`, itemErr, ir);
@@ -1492,6 +1497,8 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 				return;
 			}
 
+			ctx.ui.setWidget("pixel-subagents", undefined);
+
 			await ctx.ui.custom(
 				(tui, theme, _kb, done) => {
 					const overlay = new SubagentHistoryOverlay(
@@ -1521,6 +1528,13 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 					overlayOptions: { width: SUBVIEW_OVERLAY_WIDTH, maxHeight: SUBVIEW_OVERLAY_MAX_HEIGHT, anchor: "center" },
 				},
 			);
+
+			// Cleanup synthetic runs from hang detection
+			for (const id of syntheticIds) {
+				store.commandRuns.delete(id);
+			}
+
+			updatePixelWidget(store, ctx);
 		},
 	});
 
