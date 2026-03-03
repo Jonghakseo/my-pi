@@ -1,5 +1,5 @@
 /**
- * Minimal Mode — Compact tool output rendering
+ * Override Built-in Tools — Compact tool output rendering
  *
  * Overrides built-in tools to provide cleaner, less noisy output:
  *   - Collapsed (ctrl+o): Only the tool call summary, no output
@@ -10,7 +10,7 @@
 
 import { homedir } from "node:os";
 import { isAbsolute, relative } from "node:path";
-import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
+import type { EditToolDetails, ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import {
 	createBashTool,
 	createEditTool,
@@ -20,7 +20,7 @@ import {
 	createReadTool,
 	createWriteTool,
 } from "@mariozechner/pi-coding-agent";
-import { Text } from "@mariozechner/pi-tui";
+import { Text, truncateToWidth, visibleWidth } from "@mariozechner/pi-tui";
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -91,6 +91,174 @@ function renderFullOutput(text: string, theme: any): Text {
 		.map((line) => theme.fg("toolOutput", line))
 		.join("\n");
 	return output ? new Text(`\n${output}`, 0, 0) : new Text("", 0, 0);
+}
+
+// ── Side-by-Side Diff ──────────────────────────────────────────────────────
+
+interface DiffLine {
+	type: "added" | "removed" | "context" | "ellipsis";
+	lineNum: string;
+	content: string;
+}
+
+interface RowSide {
+	type: "added" | "removed" | "context" | "ellipsis" | "empty";
+	lineNum: string;
+	content: string;
+}
+
+interface DiffRow {
+	left: RowSide;
+	right: RowSide;
+}
+
+const REMOVED_STYLE = "\x1b[48;2;55;15;15m\x1b[38;2;235;120;120m";
+const ADDED_STYLE = "\x1b[48;2;15;42;15m\x1b[38;2;120;235;120m";
+const ANSI_RESET = "\x1b[0m";
+
+function parseDiffLines(diffText: string): DiffLine[] {
+	const lines = diffText.split("\n");
+	const result: DiffLine[] = [];
+	for (const line of lines) {
+		const match = line.match(/^([+-\s])(\s*\d*)\s(.*)$/);
+		if (!match) {
+			if (line.includes("...")) {
+				result.push({ type: "ellipsis", lineNum: "", content: "···" });
+			}
+			continue;
+		}
+		const [, prefix, lineNum, content] = match;
+		if (prefix === "+") result.push({ type: "added", lineNum: lineNum.trim(), content });
+		else if (prefix === "-") result.push({ type: "removed", lineNum: lineNum.trim(), content });
+		else result.push({ type: "context", lineNum: lineNum.trim(), content });
+	}
+	return result;
+}
+
+function buildDiffRows(parsed: DiffLine[]): DiffRow[] {
+	const rows: DiffRow[] = [];
+	let i = 0;
+	let offset = 0;
+
+	while (i < parsed.length) {
+		const line = parsed[i];
+		if (line.type === "context") {
+			const oldNum = line.lineNum;
+			const newNum = oldNum ? String(parseInt(oldNum, 10) + offset) : "";
+			rows.push({
+				left: { type: "context", lineNum: oldNum, content: line.content },
+				right: { type: "context", lineNum: newNum, content: line.content },
+			});
+			i++;
+		} else if (line.type === "ellipsis") {
+			rows.push({
+				left: { type: "ellipsis", lineNum: "", content: line.content },
+				right: { type: "ellipsis", lineNum: "", content: line.content },
+			});
+			i++;
+		} else if (line.type === "removed") {
+			const removed: DiffLine[] = [];
+			while (i < parsed.length && parsed[i].type === "removed") {
+				removed.push(parsed[i]);
+				i++;
+			}
+			const added: DiffLine[] = [];
+			while (i < parsed.length && parsed[i].type === "added") {
+				added.push(parsed[i]);
+				i++;
+			}
+			offset += added.length - removed.length;
+			const maxLen = Math.max(removed.length, added.length);
+			for (let j = 0; j < maxLen; j++) {
+				const r = removed[j];
+				const a = added[j];
+				rows.push({
+					left: r ? { type: "removed", lineNum: r.lineNum, content: r.content } : { type: "empty", lineNum: "", content: "" },
+					right: a ? { type: "added", lineNum: a.lineNum, content: a.content } : { type: "empty", lineNum: "", content: "" },
+				});
+			}
+		} else if (line.type === "added") {
+			offset += 1;
+			rows.push({
+				left: { type: "empty", lineNum: "", content: "" },
+				right: { type: "added", lineNum: line.lineNum, content: line.content },
+			});
+			i++;
+		}
+	}
+	return rows;
+}
+
+class SideBySideDiffView {
+	private rows: DiffRow[];
+	private lineNumWidth: number;
+	private theme: any;
+	private summaryFn: (t: any) => string;
+	private cachedWidth?: number;
+	private cachedLines?: string[];
+
+	constructor(diffText: string, theme: any, summaryFn: (t: any) => string) {
+		const parsed = parseDiffLines(diffText);
+		this.rows = buildDiffRows(parsed);
+		this.theme = theme;
+		this.summaryFn = summaryFn;
+		let maxNum = 0;
+		for (const row of this.rows) {
+			if (row.left.lineNum) maxNum = Math.max(maxNum, parseInt(row.left.lineNum, 10));
+			if (row.right.lineNum) maxNum = Math.max(maxNum, parseInt(row.right.lineNum, 10));
+		}
+		this.lineNumWidth = Math.max(String(maxNum).length, 3);
+	}
+
+	render(width: number): string[] {
+		if (this.cachedLines && this.cachedWidth === width) return this.cachedLines;
+		const t = this.theme;
+		const lines: string[] = [this.summaryFn(t)];
+		const halfWidth = Math.floor((width - 1) / 2);
+		const rightWidth = width - halfWidth - 1;
+
+		if (halfWidth < 20) {
+			for (const row of this.rows) {
+				if (row.left.type === "removed") lines.push(t.fg("toolDiffRemoved", `- ${row.left.content}`));
+				if (row.right.type === "added") lines.push(t.fg("toolDiffAdded", `+ ${row.right.content}`));
+				if (row.left.type === "context") lines.push(t.fg("toolDiffContext", `  ${row.left.content}`));
+				if (row.left.type === "ellipsis") lines.push(t.fg("toolDiffContext", `  ${row.left.content}`));
+			}
+		} else {
+			for (const row of this.rows) {
+				lines.push(this.formatSide(row.left, halfWidth) + t.fg("dim", "│") + this.formatSide(row.right, rightWidth));
+			}
+		}
+
+		this.cachedWidth = width;
+		this.cachedLines = lines;
+		return lines;
+	}
+
+	private formatSide(side: RowSide, width: number): string {
+		if (side.type === "empty") return " ".repeat(width);
+		const lnw = this.lineNumWidth;
+		const num = side.lineNum ? side.lineNum.padStart(lnw) : " ".repeat(lnw);
+		const content = side.content.replace(/\t/g, "   ");
+		const rawLine = `${num}  ${content}`;
+		const truncated = truncateToWidth(rawLine, width, "");
+		const vw = visibleWidth(truncated);
+		const padded = truncated + " ".repeat(Math.max(0, width - vw));
+
+		switch (side.type) {
+			case "removed":
+				return REMOVED_STYLE + padded + ANSI_RESET;
+			case "added":
+				return ADDED_STYLE + padded + ANSI_RESET;
+			default:
+				return this.theme.fg("toolDiffContext", padded);
+		}
+	}
+
+	invalidate(): void {
+		this.cachedWidth = undefined;
+		this.cachedLines = undefined;
+	}
 }
 
 // ── Extension ──────────────────────────────────────────────────────────────
@@ -216,15 +384,42 @@ export default function (pi: ExtensionAPI) {
 			return new Text(`${theme.fg("toolTitle", theme.bold("edit"))} ${display}`, 0, 0);
 		},
 
-		renderResult(result, { expanded }, theme) {
-			if (!expanded) return new Text("", 0, 0);
+		renderResult(result, { expanded, isPartial }, theme) {
+			const details = result.details as EditToolDetails | undefined;
 			const tc = result.content.find((c) => c.type === "text");
-			if (!tc || tc.type !== "text") return new Text("", 0, 0);
-			const text = tc.text;
-			if (text.includes("Error") || text.includes("error")) {
-				return new Text(`\n${theme.fg("error", text)}`, 0, 0);
+
+			// Error
+			if (!isPartial && tc?.type === "text" && (tc.text.includes("Error") || tc.text.includes("error"))) {
+				return new Text(theme.fg("error", tc.text.split("\n")[0]), 0, 0);
 			}
-			return new Text(`\n${theme.fg("toolOutput", text)}`, 0, 0);
+
+			// No diff available yet
+			if (!details?.diff) {
+				return new Text(isPartial ? theme.fg("warning", "Editing...") : theme.fg("success", "Applied"), 0, 0);
+			}
+
+			// Stats
+			const diffLines = details.diff.split("\n");
+			let additions = 0;
+			let removals = 0;
+			for (const line of diffLines) {
+				if (line.startsWith("+")) additions++;
+				if (line.startsWith("-")) removals++;
+			}
+
+			const makeSummary = (t: any) => {
+				let s = t.fg("success", `+${additions}`);
+				s += t.fg("dim", " / ");
+				s += t.fg("error", `-${removals}`);
+				if (isPartial) s += t.fg("warning", " (preview)");
+				return s;
+			};
+
+			// Collapsed → summary only
+			if (!expanded) return new Text(makeSummary(theme), 0, 0);
+
+			// Expanded → side-by-side diff
+			return new SideBySideDiffView(details.diff, theme, makeSummary) as any;
 		},
 	});
 

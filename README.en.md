@@ -98,7 +98,7 @@ Over 20 custom TypeScript extensions organized by domain:
 | **diff-overlay.ts** | `/diff` — split-pane git diff viewer overlay |
 | **github-overlay.ts** | GitHub PR view directly in the terminal |
 | **status-overlay.ts** | `/status` — extension and skill status dashboard |
-| **minimal-mode.ts** | Collapse/expand verbose tool output for cleaner sessions |
+| **override-builtin-tools.ts** | Collapse/expand verbose tool output for cleaner sessions |
 
 ### Developer Tools
 
