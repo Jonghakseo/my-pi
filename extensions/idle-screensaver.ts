@@ -24,6 +24,7 @@ let lastEditorText = "";
 let latestCtx: ExtensionContext | null = null;
 let agentRunning = false;
 let overlayActive = false;
+let askUserQuestionActive = false;
 let globalPi: ExtensionAPI;
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
@@ -223,13 +224,13 @@ function clearIdleTimer() {
 
 function scheduleIdleTimer() {
 	clearIdleTimer();
-	if (agentRunning || overlayActive || !latestCtx?.hasUI) return;
+	if (agentRunning || overlayActive || askUserQuestionActive || !latestCtx?.hasUI) return;
 	idleTimer = setTimeout(() => void showScreensaver(), IDLE_MS);
 }
 
 async function showScreensaver(): Promise<void> {
 	const ctx = latestCtx;
-	if (!ctx?.hasUI || overlayActive || agentRunning) return;
+	if (!ctx?.hasUI || overlayActive || agentRunning || askUserQuestionActive) return;
 	overlayActive = true;
 
 	const purpose = readPurpose(ctx);
@@ -293,9 +294,23 @@ export default function idleScreensaver(pi: ExtensionAPI) {
 
 	pi.on("agent_end", async (_event, ctx) => {
 		agentRunning = false;
+		askUserQuestionActive = false;
 		latestCtx = ctx;
 		ensureEditorPoller(ctx);
 		scheduleIdleTimer();
+	});
+
+	pi.on("tool_execution_start", async (event) => {
+		if (event.toolName === "AskUserQuestion") {
+			askUserQuestionActive = true;
+			clearIdleTimer();
+		}
+	});
+
+	pi.on("tool_execution_end", async (event) => {
+		if (event.toolName === "AskUserQuestion") {
+			askUserQuestionActive = false;
+		}
 	});
 
 	pi.on("session_start", async (_event, ctx) => {
@@ -320,6 +335,7 @@ export default function idleScreensaver(pi: ExtensionAPI) {
 		lastEditorText = "";
 		agentRunning = false;
 		overlayActive = false;
+		askUserQuestionActive = false;
 		latestCtx = null;
 	});
 }
