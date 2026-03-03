@@ -1,7 +1,7 @@
 ---
 name: worker-fast
 description: Fast implementation agent for simple, single-file changes — use for quick fixes, minor edits, simple additions
-model: anthropic/claude-haiku-4-6
+model: anthropic/claude-haiku-4-5
 tools: read, grep, find, ls, bash, edit, write
 ---
 
