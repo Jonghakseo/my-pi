@@ -77,7 +77,11 @@ async function detectPurposeFromMessage(userMessage: string): Promise<string> {
 		];
 
 		let output = "";
-		const proc = spawn("pi", args, { env: process.env });
+		const proc = spawn("pi", args, {
+			env: process.env,
+			// child pi가 stdin을 기다리며 hang 되는 현상 방지
+			stdio: ["ignore", "pipe", "pipe"],
+		});
 
 		const timer = setTimeout(() => {
 			proc.kill();
