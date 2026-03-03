@@ -7,6 +7,7 @@
 
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { parse as parseYaml } from "yaml";
 import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
 import { Container, Key, matchesKey, Spacer, Text, truncateToWidth } from "@mariozechner/pi-tui";
 import type { AgentScope } from "./agents.js";
@@ -1393,7 +1394,7 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 			captureSwitchSession(store, ctx);
 
 			// ── Merge intent-based runs (they bypass store.commandRuns) ──────────
-			// Intent runs are persisted to ~/.pi/blueprints/single-runs.json by
+			// Intent runs are persisted to ~/.pi/blueprints/single-runs.yaml by
 			// executor.ts on each run start/end. Read directly from file to avoid
 			// ESM module cache isolation issues (dynamic import can return a different
 			// instance than the one the intent tool uses).
@@ -1402,12 +1403,12 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 					process.env.HOME ?? process.env.USERPROFILE ?? "/tmp",
 					".pi",
 					"blueprints",
-					"single-runs.json",
+					"single-runs.yaml",
 				);
 				let intentRuns: any[] = [];
 				if (fs.existsSync(singleRunsFile)) {
 					try {
-						intentRuns = JSON.parse(fs.readFileSync(singleRunsFile, "utf-8")) ?? [];
+						intentRuns = parseYaml(fs.readFileSync(singleRunsFile, "utf-8")) ?? [];
 					} catch {
 						intentRuns = [];
 					}
