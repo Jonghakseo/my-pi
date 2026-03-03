@@ -115,7 +115,7 @@ function buildBlueprintLines(blueprint: Blueprint, maxWidth: number): string[] {
 }
 
 async function showScreensaver() {
-  if (!latestCtx) return;
+  if (!latestCtx || !latestCtx.ui) return;
 
   overlayActive = true;
   clearIdleTimer();
