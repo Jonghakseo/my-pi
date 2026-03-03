@@ -235,10 +235,12 @@ export default function purposeExtension(pi: ExtensionAPI) {
 
 	// ── Auto Purpose (async) ──────────────────────────────────────
 
-	pi.on("input", async (event, ctx) => {
-		if (event.source !== "interactive") return { action: "continue" as const };
-		const text = event.text.trim();
-		if (!text) return { action: "continue" as const };
+	pi.on("before_agent_start", async (event, ctx) => {
+		// purpose가 이미 있으면 스킵
+		if (hasPurpose()) return;
+
+		const text = event.prompt.trim();
+		if (!text) return;
 
 		// Fire-and-forget: 비동기로 purpose 감지 후 설정
 		(async () => {
@@ -251,8 +253,6 @@ export default function purposeExtension(pi: ExtensionAPI) {
 				// 실패 시 무시
 			}
 		})();
-
-		return { action: "continue" as const };
 	});
 
 	// ── Lifecycle ─────────────────────────────────────────────────
