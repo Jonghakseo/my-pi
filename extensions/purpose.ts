@@ -24,7 +24,7 @@ function formatPurposeStatus(purpose: string): string {
 	const singleLine = normalizePurpose(purpose);
 	const maxChars = 90;
 	const clipped = singleLine.length > maxChars ? `${singleLine.slice(0, maxChars - 1)}…` : singleLine;
-	return `🎯 ${clipped}`;
+	return clipped;
 }
 
 function readPurposeFromSession(ctx: ExtensionContext): string {
