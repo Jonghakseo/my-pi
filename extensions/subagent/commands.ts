@@ -8,7 +8,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
-import { matchesKey } from "@mariozechner/pi-tui";
+import { Container, Key, matchesKey, Spacer, Text, truncateToWidth } from "@mariozechner/pi-tui";
 import type { AgentScope } from "./agents.js";
 import { discoverAgents } from "./agents.js";
 import {
@@ -109,6 +109,144 @@ function ensureSessionFileMaterialized(ctx: any, sessionFile: string | null): vo
 		// Ignore materialization errors; fallback messaging will handle missing parent.
 	}
 }
+
+// ─── SubagentHistoryOverlay ───────────────────────────────────────────────────
+
+/**
+ * TUI overlay that lists all subagent runs (including removed) and lets the
+ * user select one to switch into via sub:trans.
+ *
+ * Keys: ↑↓ / j k  navigate · Enter  switch session · q / Esc  close
+ */
+class SubagentHistoryOverlay {
+	private selectedIndex = 0;
+	private scrollOffset = 0;
+
+	constructor(
+		private runs: CommandRunState[],
+		private onSelect: (run: CommandRunState) => void,
+		private onDone: () => void,
+	) {}
+
+	private getViewport(): number {
+		const rows = Math.max(10, (process.stdout as any).rows || 24);
+		return Math.max(4, rows - 8);
+	}
+
+	private ensureVisible(): void {
+		const vp = this.getViewport();
+		if (this.selectedIndex < this.scrollOffset) {
+			this.scrollOffset = this.selectedIndex;
+		} else if (this.selectedIndex >= this.scrollOffset + vp) {
+			this.scrollOffset = this.selectedIndex - vp + 1;
+		}
+	}
+
+	handleInput(data: string, tui: any): void {
+		if (matchesKey(data, Key.up) || data === "k") {
+			this.selectedIndex = Math.max(0, this.selectedIndex - 1);
+			this.ensureVisible();
+		} else if (matchesKey(data, Key.down) || data === "j") {
+			this.selectedIndex = Math.min(this.runs.length - 1, this.selectedIndex + 1);
+			this.ensureVisible();
+		} else if (matchesKey(data, Key.enter)) {
+			const run = this.runs[this.selectedIndex];
+			if (run) this.onSelect(run);
+			return; // onSelect will close overlay
+		} else if (matchesKey(data, Key.escape) || data === "q" || data === "Q") {
+			this.onDone();
+			return;
+		}
+		tui.requestRender();
+	}
+
+	render(width: number, _height: number, theme: any): string[] {
+		const container = new Container();
+		const pad = "  ";
+		const innerWidth = Math.max(20, width - 6);
+		const viewport = this.getViewport();
+		const total = this.runs.length;
+
+		this.ensureVisible();
+
+		container.addChild(new Spacer(1));
+		container.addChild(
+			new Text(
+				pad + theme.bold("Subagent Run History") + theme.fg("dim", `  (${total} total)`),
+				0,
+				0,
+			),
+		);
+		container.addChild(new Text(pad + theme.fg("muted", "─".repeat(Math.max(10, innerWidth))), 0, 0));
+
+		for (let row = 0; row < viewport; row++) {
+			const idx = this.scrollOffset + row;
+			const run = this.runs[idx];
+			if (!run) {
+				container.addChild(new Text("", 0, 0));
+				continue;
+			}
+
+			const isSelected = idx === this.selectedIndex;
+			const marker = isSelected ? "▸" : " ";
+
+			// Status color
+			let statusColor: "success" | "error" | "warning" | "dim" = "dim";
+			if (run.status === "done") statusColor = "success";
+			else if (run.status === "error") statusColor = "error";
+			else if (run.status === "running") statusColor = "warning";
+
+			const timeLabel = new Date(run.startedAt).toLocaleTimeString([], {
+				hour: "2-digit",
+				minute: "2-digit",
+				second: "2-digit",
+			});
+
+			const removedBadge = run.removed ? theme.fg("dim", " [removed]") : "";
+			const statusStr = theme.fg(statusColor, `[${run.status}]`);
+			const agentStr = theme.fg("accent", run.agent);
+			const taskPreview = run.task
+				.replace(/\s*\n+\s*/g, " ")
+				.replace(/\s{2,}/g, " ")
+				.trim()
+				.slice(0, COMMAND_TASK_PREVIEW_CHARS);
+
+			let line =
+				`${marker} #${run.id} ${statusStr}${removedBadge} ${agentStr}  ` +
+				`${theme.fg("dim", timeLabel)}  ${theme.fg("muted", taskPreview)}`;
+
+			line = truncateToWidth(line, innerWidth);
+			if (run.removed) line = theme.fg("dim", line);
+			if (isSelected) line = theme.bg("selectedBg", line);
+
+			container.addChild(new Text(pad + line, 0, 0));
+		}
+
+		container.addChild(new Text(pad + theme.fg("muted", "─".repeat(Math.max(10, innerWidth))), 0, 0));
+
+		const listStart = total === 0 ? 0 : this.scrollOffset + 1;
+		const listEnd = Math.min(total, this.scrollOffset + viewport);
+		const range = `${listStart}-${listEnd}/${total}`;
+		container.addChild(
+			new Text(
+				pad +
+					truncateToWidth(
+						theme.fg("dim", "↑↓/jk navigate · Enter switch session · q/Esc close") +
+							"  " +
+							theme.fg("accent", range),
+						innerWidth,
+					),
+				0,
+				0,
+			),
+		);
+		container.addChild(new Spacer(1));
+
+		return container.render(width);
+	}
+}
+
+// ─── subTransHandler ─────────────────────────────────────────────────────────
 
 /**
  * Shared handler for switching to a subagent session (used by both /sub:trans and <>).
@@ -1252,6 +1390,110 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 		handler: async (args, ctx) => {
 			captureSwitchSession(store, ctx);
 			await subTransHandler(args, ctx, store, pi);
+		},
+	});
+
+	pi.registerCommand("sub:history", {
+		description: "Show all subagent run history (including removed) in an overlay: /sub:history",
+		handler: async (_args, ctx) => {
+			captureSwitchSession(store, ctx);
+
+			// ── Merge intent-based runs (they bypass store.commandRuns) ──────────
+			// Intent runs are tracked separately in the intent executor's in-memory
+			// registry. Inject them as synthetic CommandRunState entries with
+			// negative IDs so subTransHandler can look them up by ID.
+			try {
+				const { listSingleRuns } = (await import("../intent/executor.js")) as any;
+				const intentRuns: any[] = listSingleRuns();
+
+				// Find the minimum existing negative ID to avoid collisions
+				let nextNegId = -1;
+				for (const [id] of store.commandRuns) {
+					if (id < 0 && id <= nextNegId) nextNegId = id - 1;
+				}
+
+				// Index existing session files to avoid duplicates
+				const existingSessionFiles = new Set(
+					Array.from(store.commandRuns.values())
+						.filter((r) => r.sessionFile)
+						.map((r) => r.sessionFile!),
+				);
+
+				for (const ir of intentRuns) {
+					if (!ir.sessionFile) continue;
+					if (existingSessionFiles.has(ir.sessionFile)) continue;
+
+					const startedMs = new Date(ir.startedAt).getTime();
+					const doneMs = ir.completedAt ? new Date(ir.completedAt).getTime() : Date.now();
+					const synthetic: CommandRunState = {
+						id: nextNegId--,
+						agent: ir.agent,
+						task: ir.task,
+						status:
+							ir.status === "completed" ? "done" : ir.status === "failed" ? "error" : "running",
+						startedAt: startedMs,
+						lastActivityAt: doneMs,
+						elapsedMs: doneMs - startedMs,
+						toolCalls: 0,
+						turnCount: 1,
+						lastLine:
+							(ir.result?.split("\n").filter(Boolean).pop() ?? ir.error ?? "") ||
+							"(intent run)",
+						lastOutput: ir.result,
+						sessionFile: ir.sessionFile,
+						source: "tool" as const,
+					};
+					store.commandRuns.set(synthetic.id, synthetic);
+					existingSessionFiles.add(ir.sessionFile);
+				}
+			} catch {
+				// intent executor not available — no-op
+			}
+
+			const allRuns = Array.from(store.commandRuns.values()).sort(
+				(a, b) => b.startedAt - a.startedAt,
+			);
+
+			if (allRuns.length === 0) {
+				ctx.ui.notify("No subagent run history yet.", "info");
+				return;
+			}
+
+			if (!ctx.hasUI) {
+				// Fallback: plain text list
+				const lines = allRuns.map((r) => {
+					const removed = r.removed ? " [removed]" : "";
+					const task = r.task
+						.replace(/\s*\n+\s*/g, " ")
+						.trim()
+						.slice(0, COMMAND_TASK_PREVIEW_CHARS);
+					return `#${r.id} [${r.status}]${removed} ${r.agent}: ${task}`;
+				});
+				ctx.ui.notify(lines.join("\n"), "info");
+				return;
+			}
+
+			await ctx.ui.custom(
+				(tui, theme, _kb, done) => {
+					const overlay = new SubagentHistoryOverlay(
+						allRuns,
+						async (run) => {
+							done(undefined);
+							await subTransHandler(run.id.toString(), ctx, store, pi);
+						},
+						() => done(undefined),
+					);
+					return {
+						render: (w) => overlay.render(w, 0, theme),
+						handleInput: (data) => overlay.handleInput(data, tui),
+						invalidate: () => {},
+					};
+				},
+				{
+					overlay: true,
+					overlayOptions: { width: SUBVIEW_OVERLAY_WIDTH, maxHeight: SUBVIEW_OVERLAY_MAX_HEIGHT, anchor: "center" },
+				},
+			);
 		},
 	});
 

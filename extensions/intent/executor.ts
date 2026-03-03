@@ -40,9 +40,6 @@ const MAX_SYNC_CHAIN = 10;
 /** Truncation limit for node result text stored in Blueprint */
 const NODE_RESULT_MAX_CHARS = 4000;
 
-/** Auto-cleanup single intent run records after this duration (ms) */
-const SINGLE_RUN_TTL_MS = 5 * 60 * 1000; // 5 minutes
-
 /** Stagger delay between parallel async node launches to avoid lock file contention (ms) */
 const PARALLEL_LAUNCH_STAGGER_MS = 300;
 
@@ -102,11 +99,7 @@ function trackSingleRunEnd(runId: string, success: boolean, result?: string, err
 	run.completedAt = new Date().toISOString();
 	if (result) run.result = result.length > 500 ? `${result.slice(0, 500)}...` : result;
 	if (error) run.error = error.length > 500 ? `${error.slice(0, 500)}...` : error;
-
-	// Auto-cleanup after TTL
-	setTimeout(() => {
-		singleIntentRuns.delete(runId);
-	}, SINGLE_RUN_TTL_MS);
+	// No auto-cleanup: keep runs for the session lifetime so /sub:history can display them.
 }
 
 /** List all tracked single intent runs (for status queries). */
@@ -128,10 +121,7 @@ export function cancelSingleRun(runId: string): boolean {
 	run.status = "failed";
 	run.error = "User cancelled";
 	run.completedAt = new Date().toISOString();
-	// Schedule cleanup after TTL
-	setTimeout(() => {
-		singleIntentRuns.delete(runId);
-	}, SINGLE_RUN_TTL_MS);
+	// Keep run in registry (no auto-cleanup) so /sub:history can display it.
 	return true;
 }
 
@@ -445,6 +435,8 @@ export async function runSingleIntent(
 	}
 
 	const sessionFile = makeSubagentSessionFile(Date.now());
+	// Store sessionFile in the tracking record so /sub:history can switch into it
+	if (_runRecord) _runRecord.sessionFile = sessionFile;
 
 	// Core execution closure (shared between sync and async paths)
 	const executeCore = async (): Promise<{ isError: boolean; output: string }> => {

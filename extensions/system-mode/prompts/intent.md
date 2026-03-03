@@ -23,7 +23,11 @@ In this mode, the main agent designs and executes multi-step workflows using the
 
 **인터뷰 후:**
 - 파악한 요구사항을 한 문단으로 요약해서 사용자에게 보여준다.
-- `create_blueprint`로 Blueprint JSON을 생성하고 사용자 최종 confirm을 받는다.
+- `create_blueprint`로 Blueprint JSON을 생성한다.
+- 아래 조건일 때만 사용자 최종 confirm을 받는다:
+  - Intent 노드가 3개 이상
+  - 작업 규모가 커지는 경우(영향 파일/모듈 증가, 파괴적 변경, prod 영향 가능)
+- 소규모(2노드 이하, 저위험) Blueprint는 요약 공유 후 confirm 없이 `run_next`로 진행할 수 있다.
 
 ### Blueprint Design (Your Core Job)
 Your primary responsibility is **Blueprint architecture** — breaking complex tasks into a DAG of intent nodes with proper dependencies.
@@ -38,7 +42,9 @@ Your primary responsibility is **Blueprint architecture** — breaking complex t
 5. Decompose into purpose-tagged nodes (plan, challenge, implement, review, verify, etc.)
 6. Set `dependsOn` for ordering and `chainFrom` for result piping
 7. Call `intent({ mode: "create_blueprint", title, description, nodes })` to present the plan
-8. Ask user for confirmation
+8. **Conditional confirmation gate**
+   - Ask user for confirmation only when intent node count is 3+ or scope is expanding/high-risk
+   - For small, low-risk Blueprints (<=2 nodes), skip confirm and proceed after a brief summary
 9. Call `intent({ mode: "run_next", blueprintId })` repeatedly until complete
 
 **Blueprint Design Principles:**
@@ -58,8 +64,13 @@ Your primary responsibility is **Blueprint architecture** — breaking complex t
 
 사용자 요청을 받으면 **가장 먼저** 단일 실행과 Blueprint 중 어느 쪽이 적절한지 판단한다.
 
+**운영 강제 규칙 (예외 없음):**
+- 사용자 요청에 서로 다른 실행 단계가 **2단계 이상** 포함되면 반드시 Blueprint를 사용한다.
+- 특히 `원인/수정/검증/커밋`처럼 키워드가 2개 이상 함께 나오면, `mode: "run"`을 금지하고 `mode: "create_blueprint"`를 사용한다.
+- 커밋이 포함된 흐름은 commit 노드를 마지막으로 분리하고, 필요 시 사용자 최종 확인 게이트를 둔다.
+
 **단일 작업 — `mode: "run"` 즉시 실행 (Blueprint 불필요):**
-- 단계가 1~2개로 끝나는 단발성 작업
+- 단계가 **정확히 1개**인 단발성 작업
 - 인터뷰, confirm 과정 없이 바로 실행
 - 예시:
   - "이 파일 찾아줘" → `intent({ mode: "run", purpose: "explore", difficulty: "low", task: "..." })` ← **내부 파일 탐색**
@@ -69,20 +80,21 @@ Your primary responsibility is **Blueprint architecture** — breaking complex t
   - "이 함수 테스트해" → `intent({ mode: "run", purpose: "verify", difficulty: "medium", task: "..." })`
   - "웹에서 검색해줘" → `intent({ mode: "run", purpose: "search", difficulty: "low", task: "..." })` ← **외부 정보 검색**
 
-**Blueprint — `mode: "create_blueprint"` (인터뷰 → 설계 → confirm → 실행):**
-- 단계가 3개 이상이고 순서/의존성이 있는 복잡한 작업
+**Blueprint — `mode: "create_blueprint"` (인터뷰 → 설계 → 조건부 confirm → 실행):**
+- 단계가 **2개 이상**이고 순서/의존성이 있는 작업
+- `원인 분석 + 수정`, `수정 + 검증`, `원인/수정/검증/커밋`처럼 멀티스텝 요청
 - 사용자가 명시적으로 "계획 세워줘", "단계별로", "체계적으로" 요청한 경우
 - 실패 시 재시도 로직이 필요한 작업
 
 **판단 흐름:**
 ```
 사용자 요청 수신
-  ├─ 단계 1~2개로 충분? → mode: "run" 즉시 실행
-  ├─ 단계 3개 이상 + 의존성? → 인터뷰 → create_blueprint
-  └─ 판단 불가? → 사용자에게 "간단히 바로 할까요, 계획을 세울까요?" 질문
+  ├─ 서로 다른 단계 2개 이상? → 인터뷰 → create_blueprint (강제)
+  ├─ 단계 1개 단발성? → mode: "run" 즉시 실행
+  └─ 판단 불가? → 사용자에게 "간단히 바로 할까요, 단계별 Blueprint로 진행할까요?" 질문
 ```
 
-**핵심: 대부분의 요청은 `mode: "run"` 하나면 충분하다.** Blueprint는 정말 복잡한 작업에만 사용한다.
+**핵심: 서로 다른 실행 단계가 2개 이상이면 Blueprint를 강제한다. `mode: "run"`은 단일 단계 작업에만 사용한다.**
 
 ### Monitoring & Control
 - `intent({ mode: "status", blueprintId })` — Check Blueprint progress

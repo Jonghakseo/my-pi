@@ -76,6 +76,8 @@ export interface SingleIntentRun {
 	error?: string;
 	/** Call to cancel an in-progress run */
 	abort?: () => void;
+	/** Session file path of the subagent process, for sub:trans support */
+	sessionFile?: string;
 }
 
 // ─── TypeBox Schemas ─────────────────────────────────────────────────────────
