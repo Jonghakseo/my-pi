@@ -1,3 +1,4 @@
+import { spawn } from "child_process";
 import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
 import { Type } from "@sinclair/typebox";
 import { PURPOSE_STATUS_KEY } from "./utils/status-keys.ts";
@@ -11,9 +12,22 @@ const WIDGET_KEY = LEGACY_WIDGET_KEY;
 
 type PurposeEntryData = {
 	purpose: string;
-	source: "tool" | "command";
+	source: "tool" | "command" | "auto";
 	updatedAt: string;
 };
+
+type CustomEntry = {
+	type: "custom";
+	customType: string;
+	data: Record<string, unknown>;
+	[key: string]: unknown;
+};
+
+function isCustomEntry(entry: unknown): entry is CustomEntry {
+	if (typeof entry !== "object" || entry === null) return false;
+	const e = entry as Record<string, unknown>;
+	return e.type === "custom" && typeof e.customType === "string";
+}
 
 function normalizePurpose(raw: unknown): string {
 	if (typeof raw !== "string") return "";
@@ -31,13 +45,59 @@ function readPurposeFromSession(ctx: ExtensionContext): string {
 	const branch = ctx.sessionManager.getBranch();
 
 	for (let i = branch.length - 1; i >= 0; i--) {
-		const entry = branch[i] as any;
-		if (entry?.type !== "custom") continue;
-		if (entry?.customType !== PURPOSE_ENTRY_TYPE) continue;
-		return normalizePurpose(entry?.data?.purpose);
+		const entry = branch[i];
+		if (!isCustomEntry(entry)) continue;
+		if (entry.customType !== PURPOSE_ENTRY_TYPE) continue;
+		const data = entry.data;
+		if (typeof data !== "object" || data === null) continue;
+		const dataObj = data as Record<string, unknown>;
+		const purpose = dataObj.purpose;
+		if (typeof purpose === "string") {
+			return normalizePurpose(purpose);
+		}
 	}
 
 	return "";
+}
+
+async function detectPurposeFromMessage(userMessage: string): Promise<string> {
+	return new Promise((resolve) => {
+		const systemPrompt =
+			"사용자 메시지를 분석해서 세션의 목적을 20자 이내 한 줄로 추출해. 오직 목적 텍스트만 출력하고, 설명이나 다른 텍스트는 절대 출력하지 마.";
+
+		const args = [
+			"--no-extensions",
+			"--no-skills",
+			"--no-prompt-templates",
+			"--no-session",
+			"--system-prompt",
+			systemPrompt,
+			"-p",
+			`사용자 메시지: ${userMessage.slice(0, 500)}`,
+		];
+
+		let output = "";
+		const proc = spawn("pi", args, { env: process.env });
+
+		const timer = setTimeout(() => {
+			proc.kill();
+			resolve("");
+		}, 15000);
+
+		proc.stdout.on("data", (chunk: Buffer) => {
+			output += chunk.toString();
+		});
+
+		proc.on("close", () => {
+			clearTimeout(timer);
+			resolve(output.trim().slice(0, 30));
+		});
+
+		proc.on("error", () => {
+			clearTimeout(timer);
+			resolve("");
+		});
+	});
 }
 
 export default function purposeExtension(pi: ExtensionAPI) {
@@ -171,6 +231,28 @@ export default function purposeExtension(pi: ExtensionAPI) {
 			const normalized = persistPurpose(ctx, raw, "command");
 			notify(ctx, `세션 목적 설정 완료: ${normalized}`, "info");
 		},
+	});
+
+	// ── Auto Purpose (async) ──────────────────────────────────────
+
+	pi.on("input", async (event, ctx) => {
+		if (event.source !== "interactive") return { action: "continue" as const };
+		const text = event.text.trim();
+		if (!text) return { action: "continue" as const };
+
+		// Fire-and-forget: 비동기로 purpose 감지 후 설정
+		(async () => {
+			try {
+				const detected = await detectPurposeFromMessage(text);
+				if (detected) {
+					persistPurpose(ctx, detected, "auto");
+				}
+			} catch {
+				// 실패 시 무시
+			}
+		})();
+
+		return { action: "continue" as const };
 	});
 
 	// ── Lifecycle ─────────────────────────────────────────────────
