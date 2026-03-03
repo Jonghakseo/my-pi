@@ -108,7 +108,7 @@ If official documentation cannot be cited, explicitly state that findings are ba
 
 ## 7. HTML Report Deliverables (Required)
 
-After completion, generate **three Korean** HTML reports under `/Users/creatrip/Documents/`.
+After completion, generate **three Korean** HTML reports under `~/Documents/`.
 
 Delegate via `implement` intent to a worker using the to-html skill.  
 The worker inherits main context, so it can reflect the full work details.
