@@ -38,6 +38,9 @@ import {
 } from "./blueprint.js";
 import { resolveAgent } from "./mapping.js";
 import type { Blueprint, BlueprintNode, EscalationRecord, SingleIntentRun } from "./types.js";
+
+type PersistedSingleIntentRun = Omit<SingleIntentRun, "abort">;
+
 import { renderBlueprintDAGText } from "./viewer.js";
 import {
 	initWidgetCtx,
@@ -48,6 +51,16 @@ import {
 } from "./widget.js";
 
 // ─── Constants ───────────────────────────────────────────────────────────────
+
+/**
+ * Subagent exit code that signals an escalation request.
+ * When a subagent calls the `escalate` tool, it writes a YAML file and exits with this code.
+ * The executor detects this code and routes the escalation to the master.
+ */
+const ESCALATION_EXIT_CODE = 42;
+
+/** Directory where escalation IPC files are written by subagents */
+const ESCALATIONS_DIR = path.join(os.homedir(), ".pi", "agent", "escalations");
 
 /** Max parallel node executions per run_next call */
 const MAX_PARALLEL_NODES = 5;
@@ -64,6 +77,50 @@ const PARALLEL_LAUNCH_STAGGER_MS = 300;
 // ─── Utilities ───────────────────────────────────────────────────────────────
 
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+// ─── Escalation Helpers ───────────────────────────────────────────────────────
+
+/**
+ * Inject 'escalate' into agent tool whitelists so all subagents can call it.
+ * Agents with no whitelist already have access to all tools (escalate included).
+ */
+function injectEscalateTool(agents: AgentConfig[]): AgentConfig[] {
+	return agents.map((a) => {
+		if (!a.tools || a.tools.length === 0) return a; // no whitelist → all tools available
+		if (a.tools.includes("escalate")) return a; // already whitelisted
+		return { ...a, tools: [...a.tools, "escalate"] };
+	});
+}
+
+/**
+ * Derive the escalation IPC file path from a subagent session file.
+ * e.g. ~/.pi/sessions/subagent-1234.jsonl → ~/.pi/agent/escalations/subagent-1234.yaml
+ */
+function getEscalationFilePath(sessionFile: string): string {
+	const basename = path.basename(sessionFile, ".jsonl");
+	return path.join(ESCALATIONS_DIR, `${basename}.yaml`);
+}
+
+/**
+ * Read the escalation IPC file and delete it immediately (consume-once pattern).
+ * Returns null if the file does not exist or cannot be parsed.
+ */
+function readAndConsumeEscalation(sessionFile: string): EscalationRecord | null {
+	try {
+		const filePath = getEscalationFilePath(sessionFile);
+		if (!fs.existsSync(filePath)) return null;
+		const content = fs.readFileSync(filePath, "utf-8");
+		const record = parseYaml(content) as EscalationRecord;
+		try {
+			fs.unlinkSync(filePath);
+		} catch {
+			/* ignore deletion errors */
+		}
+		return record;
+	} catch {
+		return null;
+	}
+}
 
 /**
  * Intent defaults to isolated context injection.
@@ -181,7 +238,7 @@ function persistRuns(runsMap?: Map<string, SingleIntentRun>): void {
 		// Keep last 200 runs, exclude abort function before serialization
 		const arr = Array.from((runsMap ?? singleIntentRuns).values())
 			.slice(-200)
-			.map(({ abort, ...rest }) => rest);
+			.map(({ abort: _abort, ...rest }): PersistedSingleIntentRun => rest);
 		fs.writeFileSync(SINGLE_RUNS_YAML, stringifyYaml(arr), "utf-8");
 	} catch (err) {
 		console.warn("[intent] Failed to persist single-runs:", err);
@@ -364,6 +421,7 @@ async function handleNodeCompletion(
 	let syncExecuted = 0;
 	let currentBp = bp;
 	let syncFailed = false;
+	let syncEscalated = false;
 
 	while (syncExecuted < MAX_SYNC_CHAIN) {
 		const runnable = getRunnableNodes(currentBp);
@@ -389,13 +447,17 @@ async function handleNodeCompletion(
 			);
 
 			syncExecuted++;
+			if (result.isEscalation) {
+				syncEscalated = true;
+				break;
+			}
 			if (!result.success) {
 				syncFailed = true;
 				break;
 			}
 		}
 
-		if (syncFailed) break;
+		if (syncFailed || syncEscalated) break;
 		currentBp = loadBlueprint(blueprintId)!;
 		if (
 			!currentBp ||
@@ -409,6 +471,31 @@ async function handleNodeCompletion(
 	// Re-check Blueprint status after sync phase
 	currentBp = loadBlueprint(blueprintId)!;
 	if (!currentBp || currentBp.status === "aborted") return;
+
+	// Escalated node during auto-advance sync chain → wake master
+	if (syncEscalated) {
+		const escalatedNodes = currentBp.nodes.filter((n) => n.status === "escalated");
+		const escDetails = escalatedNodes
+			.map((n) => `**${n.id}**: ${n.escalationMessage ?? "(메시지 없음)"}`)
+			.join("\n");
+		pi.sendMessage(
+			{
+				customType: "intent-blueprint",
+				content: [
+					"[Intent Blueprint 에스컬레이션]",
+					escDetails,
+					"",
+					formatBlueprintProgress(currentBp),
+					"",
+					"판단 후 `retry_node`로 재개하거나 `abort`로 중단하세요.",
+				].join("\n"),
+				display: true,
+				details: { blueprintId, blueprintStatus: "running" },
+			},
+			{ deliverAs: "followUp", triggerTurn: true },
+		);
+		return;
+	}
 
 	if (currentBp.status === "completed") {
 		pi.sendMessage(
@@ -516,7 +603,8 @@ export async function runSingleIntent(
 ): Promise<string> {
 	const agentName = resolveAgent(purpose, difficulty);
 	const discovery = discoverAgents(ctx.cwd, "user");
-	const agents = discovery.agents;
+	// Inject 'escalate' into every agent's tool whitelist so subagents can escalate
+	const agents = injectEscalateTool(discovery.agents);
 
 	const agent = agents.find((a) => a.name === agentName);
 	if (!agent) {
@@ -569,7 +657,7 @@ export async function runSingleIntent(
 	}
 
 	// Core execution closure (shared between sync and async paths)
-	const executeCore = async (): Promise<{ isError: boolean; output: string }> => {
+	const executeCore = async (): Promise<{ isError: boolean; output: string; isEscalation?: boolean }> => {
 		const result = await runSingleAgent(
 			ctx.cwd,
 			agents,
@@ -589,6 +677,15 @@ export async function runSingleIntent(
 			sessionFile,
 		);
 
+		// Check for escalation (exit code 42) before treating as error
+		if (result.exitCode === ESCALATION_EXIT_CODE) {
+			const escalation = readAndConsumeEscalation(sessionFile);
+			const message = escalation?.message ?? "(escalation message missing)";
+			const ctx2 = escalation?.context;
+			const output = ctx2 ? `${message}\n\n컨텍스트:\n${ctx2}` : message;
+			return { isError: false, output, isEscalation: true };
+		}
+
 		const isError = result.exitCode !== 0 || result.stopReason === "error" || result.stopReason === "aborted";
 		const output = isError
 			? result.errorMessage || result.stderr || getFinalOutput(result.messages) || "(no output)"
@@ -601,7 +698,19 @@ export async function runSingleIntent(
 	if (isSync) {
 		// ── Synchronous: await and return result directly ──
 		try {
-			const { isError, output } = await executeCore();
+			const { isError, output, isEscalation } = await executeCore();
+			if (isEscalation) {
+				trackSingleEnd(widgetRunId, false);
+				trackSingleRunEnd(statusRunId, false, undefined, `Escalation: ${output}`);
+				return [
+					`[Intent 에스컬레이션] ${purpose}/${difficulty} → ${agentName}`,
+					"",
+					`**에스컬레이션 메시지:**`,
+					output,
+					"",
+					"마스터 판단이 필요합니다. (단발 intent는 재실행하거나 다른 방법을 선택하세요)",
+				].join("\n");
+			}
 			trackSingleEnd(widgetRunId, !isError);
 			trackSingleRunEnd(statusRunId, !isError, output);
 			// Detect user cancellation (Esc) — signal was bridged to abortController
@@ -622,7 +731,30 @@ export async function runSingleIntent(
 		// ── Asynchronous: fire and forget, notify on completion ──
 		void (async () => {
 			try {
-				const { isError, output } = await executeCore();
+				const { isError, output, isEscalation } = await executeCore();
+
+				if (isEscalation) {
+					trackSingleEnd(widgetRunId, false);
+					trackSingleRunEnd(statusRunId, false, undefined, `Escalation: ${output}`);
+					pi.sendMessage(
+						{
+							customType: "intent-single",
+							content: [
+								`[Intent 에스컬레이션] ${purpose}/${difficulty} → ${agentName}`,
+								"",
+								`**에스컬레이션 메시지:**`,
+								output,
+								"",
+								"마스터 판단이 필요합니다. (단발 intent는 재실행하거나 다른 방법을 선택하세요)",
+							].join("\n"),
+							display: true,
+							details: { purpose, difficulty, agent: agentName, isEscalation: true },
+						},
+						{ deliverAs: "followUp", triggerTurn: true },
+					);
+					return;
+				}
+
 				trackSingleEnd(widgetRunId, !isError);
 				trackSingleRunEnd(statusRunId, !isError, output);
 
@@ -691,7 +823,8 @@ export async function runNext(pi: ExtensionAPI, blueprintId: string, ctx: any, s
 
 	// Discover agents and build context once for all nodes
 	const discovery = discoverAgents(ctx.cwd, "user");
-	const agents = discovery.agents;
+	// Inject 'escalate' into every agent's tool whitelist so subagents can escalate
+	const agents = injectEscalateTool(discovery.agents);
 	const { mainContextText, mainSessionFile, totalMessageCount } = buildIntentMainContext(ctx);
 
 	const resultLines: string[] = [];
@@ -699,6 +832,7 @@ export async function runNext(pi: ExtensionAPI, blueprintId: string, ctx: any, s
 	// ── Phase 1: Synchronous chain (low-difficulty nodes) ──
 	let syncExecuted = 0;
 	let currentBp = loadBlueprint(blueprintId)!;
+	let syncEscalated = false;
 
 	while (syncExecuted < MAX_SYNC_CHAIN) {
 		if (signal?.aborted) break;
@@ -727,10 +861,21 @@ export async function runNext(pi: ExtensionAPI, blueprintId: string, ctx: any, s
 				signal,
 			);
 
+			if (result.isEscalation) {
+				resultLines.push(
+					`🆘 **${node.id}** [${node.purpose}/${node.difficulty}] → ${agentName} (에스컬레이션)`,
+				);
+				syncEscalated = true;
+				syncExecuted++;
+				break;
+			}
+
 			const label = result.success ? "✅" : "❌";
 			resultLines.push(`${label} **${node.id}** [${node.purpose}/${node.difficulty}] → ${agentName} (동기)`);
 			syncExecuted++;
 		}
+
+		if (syncEscalated) break;
 
 		// Refresh blueprint to see newly runnable nodes from sync completions
 		currentBp = loadBlueprint(blueprintId)!;
@@ -742,6 +887,25 @@ export async function runNext(pi: ExtensionAPI, blueprintId: string, ctx: any, s
 		const abortedBp = loadBlueprint(blueprintId) || currentBp;
 		const syncSummary = resultLines.length > 0 ? `${resultLines.join("\n")}\n\n` : "";
 		return `${syncSummary}⚠️ 취소됨 (사용자 중단 / Esc).\n\n\`\`\`\n${renderBlueprintDAGText(abortedBp)}\n\`\`\``;
+	}
+
+	// Early return if a sync node escalated — surface the escalation message to the master LLM
+	if (syncEscalated) {
+		const freshBp = loadBlueprint(blueprintId)!;
+		const escalatedNodes = freshBp.nodes.filter((n) => n.status === "escalated");
+		const escDetails = escalatedNodes
+			.map((n) => `- **${n.id}**: ${n.escalationMessage ?? "(메시지 없음)"}`)
+			.join("\n");
+		return [
+			...resultLines,
+			"",
+			"🆘 **에스컬레이션 발생** — 마스터 판단이 필요합니다:",
+			escDetails,
+			"",
+			"판단 후 `retry_node`로 재개하거나 `abort`로 중단하세요.",
+			"",
+			`\`\`\`\n${renderBlueprintDAGText(freshBp)}\n\`\`\``,
+		].join("\n");
 	}
 
 	// ── Phase 2: Async launch (medium/high-difficulty nodes) ──
@@ -766,6 +930,21 @@ export async function runNext(pi: ExtensionAPI, blueprintId: string, ctx: any, s
 		const running = currentBp.nodes.filter((n) => n.status === "running");
 		if (running.length > 0) {
 			return `${running.length} node(s) still running. Waiting for completion...\n\n\`\`\`\n${renderBlueprintDAGText(currentBp)}\n\`\`\``;
+		}
+
+		const escalatedNodes = currentBp.nodes.filter((n) => n.status === "escalated");
+		if (escalatedNodes.length > 0) {
+			const escDetails = escalatedNodes
+				.map((n) => `- **${n.id}**: ${n.escalationMessage ?? "(메시지 없음)"}`)
+				.join("\n");
+			return [
+				`🆘 Blueprint 에스컬레이션 대기 중 (${escalatedNodes.length}개 노드):`,
+				escDetails,
+				"",
+				"판단 후 `retry_node`로 재개하거나 `abort`로 중단하세요.",
+				"",
+				`\`\`\`\n${renderBlueprintDAGText(currentBp)}\n\`\`\``,
+			].join("\n");
 		}
 
 		const failed = currentBp.nodes.filter((n) => n.status === "failed");
@@ -872,7 +1051,7 @@ async function executeSyncNode(
 	totalMessageCount: number,
 	ctx: any,
 	signal?: AbortSignal,
-): Promise<{ success: boolean; output: string }> {
+): Promise<{ success: boolean; output: string; isEscalation?: boolean }> {
 	// Mark as running
 	updateNodeStatus(blueprintId, node.id, {
 		status: "running",
@@ -916,6 +1095,19 @@ async function executeSyncNode(
 			}),
 			sessionFile,
 		);
+
+		// Check for escalation (exit code 42) before standard error handling
+		if (result.exitCode === ESCALATION_EXIT_CODE) {
+			const escalation = readAndConsumeEscalation(sessionFile);
+			const escalationMsg = escalation?.message ?? "(escalation message missing)";
+			updateNodeStatus(blueprintId, node.id, {
+				status: "escalated",
+				escalationMessage: escalationMsg,
+				completedAt: new Date().toISOString(),
+			});
+			trackBlueprintNodeChanged(blueprintId);
+			return { success: false, output: escalationMsg, isEscalation: true };
+		}
 
 		const isError = result.exitCode !== 0 || result.stopReason === "error" || result.stopReason === "aborted";
 		const isUserCancelled = signal?.aborted && result.stopReason === "aborted";
@@ -1006,6 +1198,47 @@ async function executeNodeAsync(
 			}),
 			sessionFile,
 		);
+
+		// Check for escalation (exit code 42) — subagent asked for master judgment
+		if (result.exitCode === ESCALATION_EXIT_CODE) {
+			const escalation = readAndConsumeEscalation(sessionFile);
+			const escalationMsg = escalation?.message ?? "(escalation message missing)";
+			const escalationCtx = escalation?.context;
+
+			updateNodeStatus(blueprintId, node.id, {
+				status: "escalated",
+				escalationMessage: escalationMsg,
+				completedAt: new Date().toISOString(),
+			});
+			trackBlueprintNodeChanged(blueprintId);
+
+			const freshBp = loadBlueprint(blueprintId);
+			pi.sendMessage(
+				{
+					customType: "intent-blueprint",
+					content: [
+						`[Intent Blueprint 에스컬레이션]`,
+						`노드 **${node.id}** (${agentName})가 마스터 판단을 요청합니다:`,
+						"",
+						`**에스컬레이션 메시지:**`,
+						escalationMsg,
+						escalationCtx ? `\n**컨텍스트:**\n${escalationCtx}` : "",
+						"",
+						freshBp ? formatBlueprintProgress(freshBp) : "",
+						"",
+						"마스터는 다음 중 하나를 선택하세요:",
+						`- \`retry_node\`로 **${node.id}** 재실행 (필요 시 \`edit_blueprint\`로 context 추가 후)`,
+						"- `abort`로 Blueprint 중단",
+					]
+						.filter((l) => l !== undefined)
+						.join("\n"),
+					display: true,
+					details: { blueprintId, nodeId: node.id, blueprintStatus: "running", escalationMessage: escalationMsg },
+				},
+				{ deliverAs: "followUp", triggerTurn: true },
+			);
+			return; // Don't call handleNodeCompletion — escalation is a terminal-for-now state
+		}
 
 		const isError = result.exitCode !== 0 || result.stopReason === "error" || result.stopReason === "aborted";
 		const output = isError
