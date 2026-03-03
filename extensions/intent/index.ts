@@ -582,7 +582,14 @@ export default function (pi: ExtensionAPI) {
 						}
 
 						// Apply explicit dependsOn if provided
-						if (update.dependsOn !== undefined) node.dependsOn = update.dependsOn;
+						if (update.dependsOn !== undefined) {
+							node.dependsOn = update.dependsOn;
+							// Invariant: chainFrom must be included in dependsOn.
+							// If the new dependsOn no longer contains the current chainFrom, reset it.
+							if (node.chainFrom && !node.dependsOn.includes(node.chainFrom)) {
+								node.chainFrom = undefined;
+							}
+						}
 
 						// Handle chainFrom change → sync dependsOn
 						if (update.chainFrom !== undefined) {
