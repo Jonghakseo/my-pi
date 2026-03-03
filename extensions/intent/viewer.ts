@@ -182,6 +182,21 @@ export class BlueprintDagViewer {
 		this.viewerOptions = options;
 	}
 
+	private getSelectedPosition(): { stageIdx: number; nodeIdx: number } {
+		const selectedNode = this.layout.flatOrder[this.selectedIndex];
+		for (let s = 0; s < this.layout.stages.length; s++) {
+			const idx = this.layout.stages[s].indexOf(selectedNode);
+			if (idx >= 0) return { stageIdx: s, nodeIdx: idx };
+		}
+		return { stageIdx: 0, nodeIdx: 0 };
+	}
+
+	private getFlatIndexAt(stageIdx: number, nodeIdx: number): number {
+		const node = this.layout.stages[stageIdx]?.[nodeIdx];
+		if (!node) return this.selectedIndex;
+		return this.layout.flatOrder.indexOf(node);
+	}
+
 	handleInput(data: string, tui: any): void {
 		// Confirm mode key handling
 		if (this.confirmMode) {
@@ -201,14 +216,26 @@ export class BlueprintDagViewer {
 			}
 		}
 		// Navigation (both modes)
-		if (matchesKey(data, Key.up) || data === "k") {
-			this.selectedIndex = Math.max(0, this.selectedIndex - 1);
+		// ←→: within same stage (parallel nodes)
+		if (matchesKey(data, Key.left) || data === "h") {
+			const { stageIdx, nodeIdx } = this.getSelectedPosition();
+			this.selectedIndex = this.getFlatIndexAt(stageIdx, Math.max(0, nodeIdx - 1));
+		} else if (matchesKey(data, Key.right) || data === "l") {
+			const { stageIdx, nodeIdx } = this.getSelectedPosition();
+			const stageLen = this.layout.stages[stageIdx]?.length ?? 1;
+			this.selectedIndex = this.getFlatIndexAt(stageIdx, Math.min(stageLen - 1, nodeIdx + 1));
+		}
+		// ↑↓: between stages (preserve within-stage position when possible)
+		else if (matchesKey(data, Key.up) || data === "k") {
+			const { stageIdx, nodeIdx } = this.getSelectedPosition();
+			const newStage = Math.max(0, stageIdx - 1);
+			const newNodeIdx = Math.min(nodeIdx, (this.layout.stages[newStage]?.length ?? 1) - 1);
+			this.selectedIndex = this.getFlatIndexAt(newStage, newNodeIdx);
 		} else if (matchesKey(data, Key.down) || data === "j") {
-			this.selectedIndex = Math.min(this.layout.flatOrder.length - 1, this.selectedIndex + 1);
-		} else if (!this.confirmMode && data === "g") {
-			this.selectedIndex = 0;
-		} else if (!this.confirmMode && data === "G") {
-			this.selectedIndex = Math.max(0, this.layout.flatOrder.length - 1);
+			const { stageIdx, nodeIdx } = this.getSelectedPosition();
+			const newStage = Math.min(this.layout.stages.length - 1, stageIdx + 1);
+			const newNodeIdx = Math.min(nodeIdx, (this.layout.stages[newStage]?.length ?? 1) - 1);
+			this.selectedIndex = this.getFlatIndexAt(newStage, newNodeIdx);
 		} else if (!this.confirmMode && data === "r") {
 			const reloaded = loadBlueprint(this.blueprint.id);
 			if (reloaded) {
@@ -250,7 +277,8 @@ export class BlueprintDagViewer {
 			container.addChild(
 				new Text(
 					pad +
-						theme.fg("dim", "↑↓/jk select  ") +
+						theme.fg("dim", "↑↓ 스테이지  ") +
+						theme.fg("dim", "←→ 병렬  ") +
 						theme.fg("success", "Enter/y 실행") +
 						theme.fg("dim", "  ") +
 						theme.fg("error", "n/Esc 취소"),
@@ -259,7 +287,7 @@ export class BlueprintDagViewer {
 				),
 			);
 		} else {
-			container.addChild(new Text(pad + theme.fg("dim", "↑↓/jk select  g/G top/end  r refresh  q/Esc close"), 0, 0));
+			container.addChild(new Text(pad + theme.fg("dim", "↑↓ 스테이지  ←→ 병렬  r refresh  q/Esc close"), 0, 0));
 		}
 		container.addChild(new Spacer(1));
 
@@ -311,25 +339,28 @@ export class BlueprintDagViewer {
 		const sepIdx = allLines.findIndex((line, i) => i >= 2 && /^─+/.test(line));
 		const dagLines = allLines.slice(2, sepIdx > 0 ? sepIdx : allLines.length);
 
+		const selectedNode = this.layout.flatOrder[this.selectedIndex];
+
 		for (const line of dagLines) {
 			if (line.trim() === "") {
 				container.addChild(new Spacer(1));
-			} else {
-				// Highlight selected node: if the line contains the selected node's ID, mark it
-				const selectedNode = this.layout.flatOrder[this.selectedIndex];
-				const isSelectedLine = selectedNode
-					? line.includes(` ${selectedNode.id}`) ||
-						line.includes(`○ ${selectedNode.id}`) ||
-						line.includes(`✓ ${selectedNode.id}`) ||
-						line.includes(`⟳ ${selectedNode.id}`) ||
-						line.includes(`✗ ${selectedNode.id}`)
-					: false;
-
-				const rendered = isSelectedLine
-					? theme.bg("selectedBg", truncateToWidth(line, innerW))
-					: truncateToWidth(line, innerW);
-				container.addChild(new Text(pad + rendered, 0, 0));
+				continue;
 			}
+
+			let rendered = line;
+			if (selectedNode) {
+				// Match plain-text icon variants so we cover all statuses
+				const plainIcons = ["○", "⟳", "✓", "✗", "⏭"];
+				for (const icon of plainIcons) {
+					const nodeText = `${icon} ${selectedNode.id}`;
+					if (rendered.includes(nodeText)) {
+						rendered = rendered.replace(nodeText, theme.bg("selectedBg", nodeText));
+						break;
+					}
+				}
+			}
+
+			container.addChild(new Text(pad + truncateToWidth(rendered, innerW), 0, 0));
 		}
 	}
 
