@@ -10,9 +10,9 @@
  */
 
 import { Box, Text, truncateToWidth } from "@mariozechner/pi-tui";
-import type { Blueprint, BlueprintNode } from "./types.js";
-import { loadBlueprint } from "./blueprint.js";
 import { formatDuration } from "../utils/time-utils.js";
+import { loadBlueprint } from "./blueprint.js";
+import type { Blueprint, BlueprintNode } from "./types.js";
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -51,12 +51,7 @@ export function initWidgetCtx(ctx: any): void {
 }
 
 /** Start tracking a single intent run. Returns a run ID for later completion. */
-export function trackSingleStart(
-	purpose: string,
-	difficulty: string,
-	agent: string,
-	task: string,
-): number {
+export function trackSingleStart(purpose: string, difficulty: string, agent: string, task: string): number {
 	cancelHideTimer();
 	const id = ++runIdCounter;
 	activeSingleRuns.set(id, {
@@ -141,9 +136,7 @@ function cancelHideTimer(): void {
 }
 
 function maybeScheduleHide(): void {
-	const hasRunningSingle = Array.from(activeSingleRuns.values()).some(
-		(r) => r.status === "running",
-	);
+	const hasRunningSingle = Array.from(activeSingleRuns.values()).some((r) => r.status === "running");
 	const bpDone =
 		cachedBlueprint &&
 		(cachedBlueprint.status === "completed" ||
@@ -221,28 +214,14 @@ function renderWidget(): void {
 
 // ─── Blueprint Rendering ─────────────────────────────────────────────────────
 
-function renderBlueprintBlock(
-	bp: Blueprint,
-	width: number,
-	theme: any,
-	lines: string[],
-): void {
+function renderBlueprintBlock(bp: Blueprint, width: number, theme: any, lines: string[]): void {
 	const completed = bp.nodes.filter((n) => n.status === "completed").length;
 	const total = bp.nodes.length;
 
 	// Header with status-colored title
 	const statusColor =
-		bp.status === "completed"
-			? "success"
-			: bp.status === "aborted" || bp.status === "failed"
-				? "error"
-				: "accent";
-	lines.push(
-		truncateToWidth(
-			theme.fg(statusColor, `📋 ${bp.title} [${completed}/${total}]`),
-			width,
-		),
-	);
+		bp.status === "completed" ? "success" : bp.status === "aborted" || bp.status === "failed" ? "error" : "accent";
+	lines.push(truncateToWidth(theme.fg(statusColor, `📋 ${bp.title} [${completed}/${total}]`), width));
 
 	// Node rows
 	for (const node of bp.nodes) {
@@ -251,10 +230,7 @@ function renderBlueprintBlock(
 }
 
 function renderNodeLine(node: BlueprintNode, theme: any): string {
-	const spinner =
-		SPINNER_FRAMES[
-			Math.floor(Date.now() / SPINNER_INTERVAL_MS) % SPINNER_FRAMES.length
-		];
+	const spinner = SPINNER_FRAMES[Math.floor(Date.now() / SPINNER_INTERVAL_MS) % SPINNER_FRAMES.length];
 
 	// Status icon — all 1-column characters for consistent alignment
 	let icon: string;
@@ -292,16 +268,10 @@ function renderNodeLine(node: BlueprintNode, theme: any): string {
 			statusText = theme.fg("warning", elapsedFromIso(node.startedAt));
 			break;
 		case "completed":
-			statusText = theme.fg(
-				"success",
-				durationBetweenIso(node.startedAt, node.completedAt),
-			);
+			statusText = theme.fg("success", durationBetweenIso(node.startedAt, node.completedAt));
 			break;
 		case "failed":
-			statusText = theme.fg(
-				"error",
-				durationBetweenIso(node.startedAt, node.completedAt),
-			);
+			statusText = theme.fg("error", durationBetweenIso(node.startedAt, node.completedAt));
 			break;
 		default:
 			statusText = "";
@@ -313,16 +283,8 @@ function renderNodeLine(node: BlueprintNode, theme: any): string {
 
 // ─── Single Intent Rendering ─────────────────────────────────────────────────
 
-function renderSingleBlock(
-	run: SingleIntentRun,
-	width: number,
-	theme: any,
-	lines: string[],
-): void {
-	const spinner =
-		SPINNER_FRAMES[
-			Math.floor(Date.now() / SPINNER_INTERVAL_MS) % SPINNER_FRAMES.length
-		];
+function renderSingleBlock(run: SingleIntentRun, width: number, theme: any, lines: string[]): void {
+	const spinner = SPINNER_FRAMES[Math.floor(Date.now() / SPINNER_INTERVAL_MS) % SPINNER_FRAMES.length];
 	const elapsed = formatDuration((run.completedAt ?? Date.now()) - run.startedAt);
 
 	let headerLine: string;
@@ -349,8 +311,7 @@ function renderSingleBlock(
 	// Task preview (single line, collapsed whitespace)
 	const taskText = run.task.replace(/\s*\n+\s*/g, " ").trim();
 	const maxLen = Math.max(1, width - 4);
-	const truncated =
-		taskText.length > maxLen ? `${taskText.slice(0, maxLen - 3)}...` : taskText;
+	const truncated = taskText.length > maxLen ? `${taskText.slice(0, maxLen - 3)}...` : taskText;
 	lines.push(truncateToWidth(theme.fg("dim", `   ${truncated}`), width));
 }
 

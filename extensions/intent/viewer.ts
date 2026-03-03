@@ -27,8 +27,8 @@
  */
 
 import { Container, Key, matchesKey, Spacer, Text, truncateToWidth, visibleWidth } from "@mariozechner/pi-tui";
-import type { Blueprint, BlueprintNode } from "./types.js";
 import { loadBlueprint } from "./blueprint.js";
+import type { Blueprint, BlueprintNode } from "./types.js";
 
 // ─── DAG Layout Computation ──────────────────────────────────────────────────
 
@@ -45,26 +45,39 @@ interface StageLayout {
  * Compute topological depths and group nodes into stages.
  * Nodes with no dependencies → stage 0.
  * Otherwise → max(dependency depths) + 1.
+ *
+ * Cycle guard: each top-level call starts with a fresh `visiting` Set.
+ * Recursive DFS calls pass a growing Set so cycles are detected and
+ * broken by returning depth 0 (rather than infinite-looping).
  */
 function computeLayout(blueprint: Blueprint): StageLayout {
 	const nodeMap = new Map(blueprint.nodes.map((n) => [n.id, n]));
 	const depths = new Map<string, number>();
 
-	function getDepth(id: string): number {
+	function getDepth(id: string, visiting = new Set<string>()): number {
+		// Already computed — return cached result
 		if (depths.has(id)) return depths.get(id)!;
+		// Cycle detected — break it by assigning depth 0
+		if (visiting.has(id)) {
+			depths.set(id, 0);
+			return 0;
+		}
 		const node = nodeMap.get(id);
 		if (!node || node.dependsOn.length === 0) {
 			depths.set(id, 0);
 			return 0;
 		}
-		const parentDepths = node.dependsOn
-			.filter((d) => nodeMap.has(d))
-			.map((d) => getDepth(d));
+		// Pass a new Set with the current id added to detect back-edges
+		const nextVisiting = new Set(visiting);
+		nextVisiting.add(id);
+		const parentDepths = node.dependsOn.filter((d) => nodeMap.has(d)).map((d) => getDepth(d, nextVisiting));
 		const depth = parentDepths.length > 0 ? Math.max(...parentDepths) + 1 : 0;
 		depths.set(id, depth);
 		return depth;
 	}
 
+	// Each top-level call starts with a fresh `visiting` Set (default param),
+	// so there is no cross-node contamination between loop iterations.
 	for (const n of blueprint.nodes) {
 		getDepth(n.id);
 	}
@@ -206,13 +219,7 @@ export class BlueprintDagViewer {
 		}
 
 		// ═══ HELP ═══
-		container.addChild(
-			new Text(
-				pad + theme.fg("dim", "↑↓/jk select  g/G top/end  r refresh  q/Esc close"),
-				0,
-				0,
-			),
-		);
+		container.addChild(new Text(pad + theme.fg("dim", "↑↓/jk select  g/G top/end  r refresh  q/Esc close"), 0, 0));
 		container.addChild(new Spacer(1));
 
 		return container.render(width);
@@ -262,11 +269,20 @@ export class BlueprintDagViewer {
 			return;
 		}
 
-		// Calculate column widths
+		// Calculate column widths — min 14 to keep at least ~11 chars of node ID visible
 		const arrowW = 4; // " ─→ "
 		const totalArrowSpace = Math.max(0, numStages - 1) * arrowW;
 		const availableForCols = innerW - totalArrowSpace;
-		const colW = Math.max(8, Math.floor(availableForCols / numStages));
+		const colW = Math.max(14, Math.floor(availableForCols / numStages));
+
+		// ── Adaptive layout: fall back to compact vertical when horizontal overflows ──
+		// When numStages × colW + arrowSpace > innerW, the rightmost stage columns
+		// would be truncated. Switch to a vertical per-stage layout instead.
+		const neededW = numStages * colW + totalArrowSpace;
+		if (neededW > innerW) {
+			this.renderDagGridCompact(container, innerW, pad, theme);
+			return;
+		}
 
 		// Stage headers
 		const headerParts: string[] = [];
@@ -346,6 +362,54 @@ export class BlueprintDagViewer {
 	}
 
 	/**
+	 * Compact vertical fallback layout used when terminal is too narrow for
+	 * the horizontal grid (numStages × colW + arrowSpace > innerW).
+	 *
+	 * Renders one stage per line-group:
+	 *   [S1]  ✓ plan-1
+	 *   [S2]  ✓ challenge-1
+	 *   [S3]  ⠹ impl-A  ⠹ impl-B
+	 *   [S4]  ○ review
+	 */
+	private renderDagGridCompact(container: Container, innerW: number, pad: string, theme: any): void {
+		const { stages } = this.layout;
+
+		// Stage label width: "[S99]" = 5 chars + 1 space = 6
+		const labelW = 6;
+		const nodeAreaW = Math.max(20, innerW - labelW);
+
+		for (let s = 0; s < stages.length; s++) {
+			const nodes = stages[s];
+			const label = theme.fg("accent", `[S${s + 1}]`);
+
+			// Build node cells for this stage
+			// Each cell: icon(1) + space(1) + id; cells separated by "  "
+			const cellGap = "  ";
+			const cells: string[] = [];
+
+			for (const node of nodes) {
+				const flatIdx = this.layout.flatOrder.indexOf(node);
+				const isSelected = flatIdx === this.selectedIndex;
+				const icon = getStatusIcon(node.status, theme);
+				// Max name length: remaining area (rough estimate per node)
+				const maxName = Math.max(4, Math.floor(nodeAreaW / Math.max(1, nodes.length)) - 4);
+				const name = node.id.length > maxName ? node.id.slice(0, Math.max(1, maxName - 1)) + "…" : node.id;
+				let cell = `${icon} ${name}`;
+				if (isSelected) {
+					cell = theme.bg("selectedBg", cell);
+				}
+				cells.push(cell);
+			}
+
+			const nodesStr = cells.join(cellGap);
+			// Truncate only the node area (label is outside the truncation)
+			const nodeLine = truncateToWidth(nodesStr, nodeAreaW);
+
+			container.addChild(new Text(pad + label + " " + nodeLine, 0, 0));
+		}
+	}
+
+	/**
 	 * Check if there should be a merge arrow at position (stageIdx, row).
 	 * This happens when a node above in the next stage depends on a node
 	 * above in the current stage, creating a visual merge.
@@ -405,15 +469,17 @@ export class BlueprintDagViewer {
 
 		// Chain from
 		if (node.chainFrom) {
-			container.addChild(
-				new Text(truncateToWidth(pad + theme.fg("dim", `  Chain ← ${node.chainFrom}`), innerW), 0, 0),
-			);
+			container.addChild(new Text(truncateToWidth(pad + theme.fg("dim", `  Chain ← ${node.chainFrom}`), innerW), 0, 0));
 		}
 
 		// Timing info
 		if (node.status === "running" && node.startedAt) {
 			container.addChild(
-				new Text(truncateToWidth(pad + theme.fg("warning", `  ⏱ ${elapsedSince(node.startedAt)} elapsed`), innerW), 0, 0),
+				new Text(
+					truncateToWidth(pad + theme.fg("warning", `  ⏱ ${elapsedSince(node.startedAt)} elapsed`), innerW),
+					0,
+					0,
+				),
 			);
 		} else if (node.status === "completed" && node.startedAt) {
 			container.addChild(
@@ -428,9 +494,7 @@ export class BlueprintDagViewer {
 			);
 		} else if (node.status === "failed") {
 			const errMsg = node.error ? `: ${node.error.slice(0, 80)}` : "";
-			container.addChild(
-				new Text(truncateToWidth(pad + theme.fg("error", `  ✗ Failed${errMsg}`), innerW), 0, 0),
-			);
+			container.addChild(new Text(truncateToWidth(pad + theme.fg("error", `  ✗ Failed${errMsg}`), innerW), 0, 0));
 		}
 
 		// Result preview (if available)
@@ -438,16 +502,12 @@ export class BlueprintDagViewer {
 			const preview = node.result.replace(/\s*\n+\s*/g, " ").trim();
 			const maxLen = Math.max(20, innerW - 14);
 			const resultTrunc = preview.length > maxLen ? `${preview.slice(0, maxLen - 3)}...` : preview;
-			container.addChild(
-				new Text(truncateToWidth(pad + theme.fg("muted", `  Result: ${resultTrunc}`), innerW), 0, 0),
-			);
+			container.addChild(new Text(truncateToWidth(pad + theme.fg("muted", `  Result: ${resultTrunc}`), innerW), 0, 0));
 		}
 
 		// Result file path
 		if (node.resultPath) {
-			container.addChild(
-				new Text(truncateToWidth(pad + theme.fg("dim", `  📄 ${node.resultPath}`), innerW), 0, 0),
-			);
+			container.addChild(new Text(truncateToWidth(pad + theme.fg("dim", `  📄 ${node.resultPath}`), innerW), 0, 0));
 		}
 	}
 }
@@ -505,18 +565,20 @@ export function renderBlueprintDAGText(blueprint: Blueprint, _width: number = 80
 	// ── Vertical DAG flow ──────────────────────────────────────────────────
 	// Each stage is a row of nodes rendered top-to-bottom with connector lines between stages.
 
-	const NODE_COL_W = 16; // characters per node column (label + padding)
+	// Dynamic column width: icon(1) + space(1) + longest-id + 1 margin, min 20
+	const maxNodeIdLen = Math.max(...blueprint.nodes.map((n) => n.id.length));
+	const NODE_COL_W = Math.max(20, maxNodeIdLen + 3);
 	const NODE_GAP = 2; // spaces between adjacent node columns
+
+	const maxNodesInAnyStage = stages.reduce((m, s) => Math.max(m, s.length), 0);
+	const canvasW = maxNodesInAnyStage * NODE_COL_W + Math.max(0, maxNodesInAnyStage - 1) * NODE_GAP;
 
 	/** Get the center X position of the k-th node in a stage of `count` nodes. */
 	function nodeCenter(k: number, count: number): number {
-		const totalW = count * NODE_COL_W + (count - 1) * NODE_GAP;
-		const startX = Math.floor(((stages.reduce((m, s) => Math.max(m, s.length), 0) * NODE_COL_W + (stages.reduce((m, s) => Math.max(m, s.length), 0) - 1) * NODE_GAP) - totalW) / 2);
+		const totalW = count * NODE_COL_W + Math.max(0, count - 1) * NODE_GAP;
+		const startX = Math.floor((canvasW - totalW) / 2);
 		return startX + k * (NODE_COL_W + NODE_GAP) + Math.floor(NODE_COL_W / 2);
 	}
-
-	const maxNodesInAnyStage = stages.reduce((m, s) => Math.max(m, s.length), 0);
-	const canvasW = maxNodesInAnyStage * NODE_COL_W + (maxNodesInAnyStage - 1) * NODE_GAP;
 
 	/** Build a line of `canvasW` spaces, then stamp a string at position x (clamped). */
 	function blankLine(): string[] {
@@ -530,7 +592,7 @@ export function renderBlueprintDAGText(blueprint: Blueprint, _width: number = 80
 		}
 	}
 
-	/** Render one stage (row of nodes). Returns array of line-char-arrays. */
+	/** Render one stage (row of nodes). Returns a trimmed string. */
 	function renderStageRow(stageIdx: number): string {
 		const nodes = stages[stageIdx];
 		const count = nodes.length;
@@ -538,9 +600,13 @@ export function renderBlueprintDAGText(blueprint: Blueprint, _width: number = 80
 		for (let k = 0; k < count; k++) {
 			const node = nodes[k];
 			const icon = TEXT_ICONS[node.status] || "○";
-			const label = `${icon} ${node.id}`;
+			const rawLabel = `${icon} ${node.id}`;
+			// Truncate label to fit within column width (with ellipsis for overflow)
+			const maxLabelW = NODE_COL_W - 1;
+			const label = rawLabel.length > maxLabelW ? `${rawLabel.slice(0, maxLabelW - 1)}…` : rawLabel;
 			const cx = nodeCenter(k, count);
-			const startX = cx - Math.floor(label.length / 2);
+			// Clamp startX so label never extends past the left canvas edge
+			const startX = Math.max(0, cx - Math.floor(label.length / 2));
 			stamp(chars, startX, label);
 		}
 		return chars.join("").trimEnd();
@@ -634,10 +700,8 @@ export function renderBlueprintDAGText(blueprint: Blueprint, _width: number = 80
 
 			outputLines.push(c.join("").trimEnd());
 
-			// Line 3: vertical bars down to each active destination (only if different from src positions)
-			const diffDst = activeDstCenters.filter((x) => !activeSrcCenters.includes(x));
-			const keepDst = activeDstCenters.filter((x) => activeSrcCenters.includes(x));
-			if (diffDst.length > 0 || keepDst.length > 0) {
+			// Line 3: vertical bars down to each active destination
+			if (activeDstCenters.length > 0) {
 				const c2 = blankLine();
 				for (const x of activeDstCenters) stamp(c2, x, "│");
 				outputLines.push(c2.join("").trimEnd());
@@ -657,16 +721,21 @@ export function renderBlueprintDAGText(blueprint: Blueprint, _width: number = 80
 	}
 
 	// ── Node summary list ───────────────────────────────────────────────────
+	const sepW = Math.max(48, canvasW);
 	lines.push("");
-	lines.push("─".repeat(45));
+	lines.push("─".repeat(sepW));
 	for (const node of blueprint.nodes) {
 		const stageNum = stages.findIndex((s) => s.some((n) => n.id === node.id)) + 1;
 		const icon = TEXT_ICONS[node.status] || "○";
 		const agent = node.agent ? ` → ${node.agent}` : "";
 		const deps = node.dependsOn.length > 0 ? `  (deps: ${node.dependsOn.join(", ")})` : "";
 		const chain = node.chainFrom ? ` [chain←${node.chainFrom}]` : "";
-		const taskPreview = node.task.length > 60 ? node.task.slice(0, 60) + "..." : node.task;
-		lines.push(`[${stageNum}] ${icon} ${node.id.padEnd(18)} ${node.purpose}/${node.difficulty}${agent}${deps}${chain}`);
+		// Align node IDs using dynamic padding
+		const idPadded = node.id.padEnd(maxNodeIdLen);
+		lines.push(`[${stageNum}] ${icon} ${idPadded}  ${node.purpose}/${node.difficulty}${agent}${deps}${chain}`);
+		// Collapse newlines in task text, then truncate to 90 chars for readability
+		const taskText = node.task.replace(/\n+\s*/g, " ").trim();
+		const taskPreview = taskText.length > 90 ? `${taskText.slice(0, 87)}...` : taskText;
 		lines.push(`    ${taskPreview}`);
 	}
 

@@ -17,8 +17,8 @@ import type { Difficulty, Purpose } from "./types.js";
  * search  = external (웹/문서/외부 정보 검색)    → searcher
  */
 const PURPOSE_TO_AGENT: Record<Purpose, (difficulty: Difficulty) => string> = {
-	explore: () => "finder",   // internal: 코드베이스/파일 탐색
-	search: () => "searcher",  // external: 웹/문서/외부 검색
+	explore: () => "finder", // internal: 코드베이스/파일 탐색
+	search: () => "searcher", // external: 웹/문서/외부 검색
 	plan: () => "planner",
 	challenge: () => "challenger",
 	decide: () => "decider",

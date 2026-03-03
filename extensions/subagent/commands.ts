@@ -171,11 +171,7 @@ class SubagentHistoryOverlay {
 
 		container.addChild(new Spacer(1));
 		container.addChild(
-			new Text(
-				pad + theme.bold("Subagent Run History") + theme.fg("dim", `  (${total} total)`),
-				0,
-				0,
-			),
+			new Text(pad + theme.bold("Subagent Run History") + theme.fg("dim", `  (${total} total)`), 0, 0),
 		);
 		container.addChild(new Text(pad + theme.fg("muted", "─".repeat(Math.max(10, innerWidth))), 0, 0));
 
@@ -231,9 +227,7 @@ class SubagentHistoryOverlay {
 			new Text(
 				pad +
 					truncateToWidth(
-						theme.fg("dim", "↑↓/jk navigate · Enter switch session · q/Esc close") +
-							"  " +
-							theme.fg("accent", range),
+						theme.fg("dim", "↑↓/jk navigate · Enter switch session · q/Esc close") + "  " + theme.fg("accent", range),
 						innerWidth,
 					),
 				0,
@@ -1406,7 +1400,9 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 			try {
 				const singleRunsFile = path.join(
 					process.env.HOME ?? process.env.USERPROFILE ?? "/tmp",
-					".pi", "blueprints", "single-runs.json",
+					".pi",
+					"blueprints",
+					"single-runs.json",
 				);
 				let intentRuns: any[] = [];
 				if (fs.existsSync(singleRunsFile)) {
@@ -1452,16 +1448,13 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 							id: nextNegId--,
 							agent: ir.agent ?? ir.purpose ?? "intent",
 							task: ir.task,
-							status:
-								ir.status === "completed" ? "done" : ir.status === "failed" ? "error" : "running",
+							status: ir.status === "completed" ? "done" : ir.status === "failed" ? "error" : "running",
 							startedAt: startedMs,
 							lastActivityAt: doneMs,
 							elapsedMs: doneMs - startedMs,
 							toolCalls: 0,
 							turnCount: 1,
-							lastLine:
-								(ir.result?.split("\n").filter(Boolean).pop() ?? ir.error ?? "") ||
-								"(intent run)",
+							lastLine: (ir.result?.split("\n").filter(Boolean).pop() ?? ir.error ?? "") || "(intent run)",
 							lastOutput: ir.result,
 							sessionFile: ir.sessionFile,
 							source: "tool" as const,
@@ -1474,15 +1467,10 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 				}
 			} catch (err) {
 				// intent executor not available — show notification so it's diagnosable
-				ctx.ui.notify(
-					`[sub:history] intent merge error: ${String(err)} (check console for details)`,
-					"error",
-				);
+				ctx.ui.notify(`[sub:history] intent merge error: ${String(err)} (check console for details)`, "error");
 			}
 
-			const allRuns = Array.from(store.commandRuns.values()).sort(
-				(a, b) => b.startedAt - a.startedAt,
-			);
+			const allRuns = Array.from(store.commandRuns.values()).sort((a, b) => b.startedAt - a.startedAt);
 
 			if (allRuns.length === 0) {
 				ctx.ui.notify("No subagent run history yet.", "info");

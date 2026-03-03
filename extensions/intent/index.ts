@@ -23,21 +23,21 @@
  */
 
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
-import { IntentParams, type IntentParamsType } from "./types.js";
 import {
 	generateBlueprintId,
-	saveBlueprint,
-	loadBlueprint,
-	validateBlueprint,
-	listBlueprints,
 	injectChallengerGates,
+	listBlueprints,
+	loadBlueprint,
 	resetNodeStatus,
+	saveBlueprint,
+	validateBlueprint,
 } from "./blueprint.js";
-import { abortAllBlueprintRuns, runNext, runSingleIntent, listSingleRuns, cancelSingleRun } from "./executor.js";
-import { resolveAgent, getMappingDescription } from "./mapping.js";
+import { abortAllBlueprintRuns, cancelSingleRun, listSingleRuns, runNext, runSingleIntent } from "./executor.js";
+import { getMappingDescription, resolveAgent } from "./mapping.js";
 import type { Blueprint } from "./types.js";
-import { clearIntentWidget } from "./widget.js";
+import { IntentParams, type IntentParamsType } from "./types.js";
 import { BlueprintDagViewer, renderBlueprintDAGText } from "./viewer.js";
+import { clearIntentWidget } from "./widget.js";
 
 export default function (pi: ExtensionAPI) {
 	pi.registerTool({
@@ -78,7 +78,9 @@ export default function (pi: ExtensionAPI) {
 				case "create_blueprint": {
 					if (!params.title || !params.nodes || params.nodes.length === 0) {
 						return {
-							content: [{ type: "text" as const, text: "Error: create_blueprint requires title and at least one node." }],
+							content: [
+								{ type: "text" as const, text: "Error: create_blueprint requires title and at least one node." },
+							],
 							details: undefined,
 						};
 					}
@@ -180,14 +182,7 @@ export default function (pi: ExtensionAPI) {
 						};
 					}
 
-					const result = await runSingleIntent(
-						pi,
-						params.purpose,
-						params.difficulty,
-						params.task,
-						params.context,
-						ctx,
-					);
+					const result = await runSingleIntent(pi, params.purpose, params.difficulty, params.task, params.context, ctx);
 					return {
 						content: [{ type: "text" as const, text: result }],
 						details: undefined,
@@ -487,9 +482,7 @@ export default function (pi: ExtensionAPI) {
 						lines.push("\n(수정된 노드 없음)");
 					}
 					if (skippedNodes.length > 0) {
-						const skippedDescs = skippedNodes.map(
-							(s) => `${s.id} (status: ${s.status} — pending 노드만 수정 가능)`,
-						);
+						const skippedDescs = skippedNodes.map((s) => `${s.id} (status: ${s.status} — pending 노드만 수정 가능)`);
 						lines.push(`⚠️ skip된 노드 (${skippedNodes.length}개): ${skippedDescs.join(", ")}`);
 					}
 
@@ -539,13 +532,7 @@ export default function (pi: ExtensionAPI) {
 						const completed = b.nodes.filter((n) => n.status === "completed").length;
 						const total = b.nodes.length;
 						const statusIcon =
-							b.status === "completed"
-								? "✅"
-								: b.status === "running"
-									? "🔄"
-									: b.status === "failed"
-										? "❌"
-										: "⬜";
+							b.status === "completed" ? "✅" : b.status === "running" ? "🔄" : b.status === "failed" ? "❌" : "⬜";
 						const label = `${statusIcon} ${b.title} [${completed}/${total}] ${b.status}`;
 						labelToId.set(label, b.id);
 						return label;

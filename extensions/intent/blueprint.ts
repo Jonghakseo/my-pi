@@ -304,7 +304,7 @@ export function injectChallengerGates(blueprint: Blueprint): void {
 				implNode.dependsOn.some((dep) => {
 					const depNode = blueprint.nodes.find((n) => n.id === dep);
 					return depNode?.purpose === "challenge";
-				})
+				}),
 			);
 
 			// Inject Gate 1 if not covered and under the max challenge limit
@@ -349,7 +349,7 @@ export function injectChallengerGates(blueprint: Blueprint): void {
 				reviewNode.dependsOn.some((dep) => {
 					const depNode = blueprint.nodes.find((n) => n.id === dep);
 					return depNode?.purpose === "challenge";
-				})
+				}),
 			);
 
 			// Inject Gate 2 if not covered and under the max challenge limit
@@ -511,9 +511,7 @@ export function formatBlueprintProgress(blueprint: Blueprint): string {
 function formatNodeStatusText(node: BlueprintNode, blueprint: Blueprint): string {
 	switch (node.status) {
 		case "completed": {
-			const dur = node.startedAt && node.completedAt
-				? ` ${formatIsoDuration(node.startedAt, node.completedAt)}`
-				: "";
+			const dur = node.startedAt && node.completedAt ? ` ${formatIsoDuration(node.startedAt, node.completedAt)}` : "";
 			return `완료${dur}`;
 		}
 		case "running": {
