@@ -302,177 +302,35 @@ export class BlueprintDagViewer {
 	// ─── DAG Grid ────────────────────────────────────────────────────────────
 
 	private renderDagGrid(container: Container, innerW: number, pad: string, theme: any): void {
-		const { stages } = this.layout;
-		const numStages = stages.length;
+		// Reuse the plain-text renderer — it already produces the correct top-down ASCII art
+		const fullText = renderBlueprintDAGText(this.blueprint, innerW);
+		const allLines = fullText.split("\n");
 
-		if (numStages === 0) {
-			container.addChild(new Text(pad + theme.fg("muted", "(no nodes)"), 0, 0));
-			return;
-		}
+		// Skip the header line (title+progress) and its trailing blank — renderHeader() already shows these
+		// Stop before the node-summary separator (─────) — renderDetailPanel() covers that
+		const sepIdx = allLines.findIndex((line, i) => i >= 2 && /^─+/.test(line));
+		const dagLines = allLines.slice(2, sepIdx > 0 ? sepIdx : allLines.length);
 
-		// Calculate column widths — min 14 to keep at least ~11 chars of node ID visible
-		const arrowW = 4; // " ─→ "
-		const totalArrowSpace = Math.max(0, numStages - 1) * arrowW;
-		const availableForCols = innerW - totalArrowSpace;
-		const colW = Math.max(14, Math.floor(availableForCols / numStages));
+		for (const line of dagLines) {
+			if (line.trim() === "") {
+				container.addChild(new Spacer(1));
+			} else {
+				// Highlight selected node: if the line contains the selected node's ID, mark it
+				const selectedNode = this.layout.flatOrder[this.selectedIndex];
+				const isSelectedLine = selectedNode
+					? line.includes(` ${selectedNode.id}`) ||
+						line.includes(`○ ${selectedNode.id}`) ||
+						line.includes(`✓ ${selectedNode.id}`) ||
+						line.includes(`⟳ ${selectedNode.id}`) ||
+						line.includes(`✗ ${selectedNode.id}`)
+					: false;
 
-		// ── Adaptive layout: fall back to compact vertical when horizontal overflows ──
-		// When numStages × colW + arrowSpace > innerW, the rightmost stage columns
-		// would be truncated. Switch to a vertical per-stage layout instead.
-		const neededW = numStages * colW + totalArrowSpace;
-		if (neededW > innerW) {
-			this.renderDagGridCompact(container, innerW, pad, theme);
-			return;
-		}
-
-		// Stage headers
-		const headerParts: string[] = [];
-		for (let s = 0; s < numStages; s++) {
-			headerParts.push(padRight(`STAGE ${s + 1}`, colW));
-			if (s < numStages - 1) headerParts.push("    ");
-		}
-		container.addChild(new Text(pad + theme.fg("accent", truncateToWidth(headerParts.join(""), innerW)), 0, 0));
-
-		// Underlines
-		const underParts: string[] = [];
-		for (let s = 0; s < numStages; s++) {
-			underParts.push("─".repeat(Math.max(1, colW - 1)) + " ");
-			if (s < numStages - 1) underParts.push("    ");
-		}
-		container.addChild(new Text(pad + theme.fg("dim", truncateToWidth(underParts.join(""), innerW)), 0, 0));
-
-		// Node rows
-		const maxRows = Math.max(...stages.map((s) => s.length));
-
-		for (let row = 0; row < maxRows; row++) {
-			const lineParts: string[] = [];
-
-			for (let s = 0; s < numStages; s++) {
-				const node = stages[s][row];
-
-				if (node) {
-					const flatIdx = this.layout.flatOrder.indexOf(node);
-					const isSelected = flatIdx === this.selectedIndex;
-					const icon = getStatusIcon(node.status, theme);
-
-					// Truncate node name to fit column
-					const nameMax = colW - 3; // icon(1-2) + space(1) + name
-					const name = node.id.length > nameMax ? node.id.slice(0, Math.max(1, nameMax - 1)) + "…" : node.id;
-
-					let cell = `${icon} ${name}`;
-
-					// Pad cell to column width (account for ANSI in icon)
-					const cellVis = visibleWidth(cell);
-					if (cellVis < colW) {
-						cell += " ".repeat(colW - cellVis);
-					}
-
-					if (isSelected) {
-						cell = theme.bg("selectedBg", cell);
-					}
-
-					lineParts.push(cell);
-				} else {
-					lineParts.push(" ".repeat(colW));
-				}
-
-				// Arrow connector between stages
-				if (s < numStages - 1) {
-					if (node) {
-						// Check if this node connects forward
-						const hasForwardEdge = stages[s + 1]?.some((next) => next.dependsOn.includes(node.id));
-						if (hasForwardEdge) {
-							lineParts.push(theme.fg("accent", " ─→ "));
-						} else {
-							lineParts.push(theme.fg("dim", " ── "));
-						}
-					} else {
-						// Check if there's a merge arrow from a node above in this stage
-						const hasUpwardMerge = this.checkMergeArrow(s, row);
-						if (hasUpwardMerge) {
-							lineParts.push(theme.fg("dim", " ─↗ "));
-						} else {
-							lineParts.push("    ");
-						}
-					}
-				}
-			}
-
-			container.addChild(new Text(pad + truncateToWidth(lineParts.join(""), innerW), 0, 0));
-		}
-	}
-
-	/**
-	 * Compact vertical fallback layout used when terminal is too narrow for
-	 * the horizontal grid (numStages × colW + arrowSpace > innerW).
-	 *
-	 * Renders one stage per line-group:
-	 *   [S1]  ✓ plan-1
-	 *   [S2]  ✓ challenge-1
-	 *   [S3]  ⠹ impl-A  ⠹ impl-B
-	 *   [S4]  ○ review
-	 */
-	private renderDagGridCompact(container: Container, innerW: number, pad: string, theme: any): void {
-		const { stages } = this.layout;
-
-		// Stage label width: "[S99]" = 5 chars + 1 space = 6
-		const labelW = 6;
-		const nodeAreaW = Math.max(20, innerW - labelW);
-
-		for (let s = 0; s < stages.length; s++) {
-			const nodes = stages[s];
-			const label = theme.fg("accent", `[S${s + 1}]`);
-
-			// Build node cells for this stage
-			// Each cell: icon(1) + space(1) + id; cells separated by "  "
-			const cellGap = "  ";
-			const cells: string[] = [];
-
-			for (const node of nodes) {
-				const flatIdx = this.layout.flatOrder.indexOf(node);
-				const isSelected = flatIdx === this.selectedIndex;
-				const icon = getStatusIcon(node.status, theme);
-				// Max name length: remaining area (rough estimate per node)
-				const maxName = Math.max(4, Math.floor(nodeAreaW / Math.max(1, nodes.length)) - 4);
-				const name = node.id.length > maxName ? node.id.slice(0, Math.max(1, maxName - 1)) + "…" : node.id;
-				let cell = `${icon} ${name}`;
-				if (isSelected) {
-					cell = theme.bg("selectedBg", cell);
-				}
-				cells.push(cell);
-			}
-
-			const nodesStr = cells.join(cellGap);
-			// Truncate only the node area (label is outside the truncation)
-			const nodeLine = truncateToWidth(nodesStr, nodeAreaW);
-
-			container.addChild(new Text(pad + label + " " + nodeLine, 0, 0));
-		}
-	}
-
-	/**
-	 * Check if there should be a merge arrow at position (stageIdx, row).
-	 * This happens when a node above in the next stage depends on a node
-	 * above in the current stage, creating a visual merge.
-	 */
-	private checkMergeArrow(stageIdx: number, row: number): boolean {
-		const { stages } = this.layout;
-		const nextStage = stages[stageIdx + 1];
-		const currStage = stages[stageIdx];
-		if (!nextStage || !currStage) return false;
-
-		// Check if any node above in next stage depends on a node above in current stage
-		for (let r = 0; r < row; r++) {
-			const currNode = currStage[r];
-			if (!currNode) continue;
-			for (const nextNode of nextStage) {
-				if (nextNode.dependsOn.includes(currNode.id)) {
-					// There's a connection that passes through this row
-					return false; // Actually this is already handled in the main row
-				}
+				const rendered = isSelectedLine
+					? theme.bg("selectedBg", truncateToWidth(line, innerW))
+					: truncateToWidth(line, innerW);
+				container.addChild(new Text(pad + rendered, 0, 0));
 			}
 		}
-		return false;
 	}
 
 	// ─── Detail Panel ────────────────────────────────────────────────────────
