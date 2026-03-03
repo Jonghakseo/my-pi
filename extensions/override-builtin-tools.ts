@@ -237,7 +237,7 @@ class SideBySideDiffView {
 		if (this.maxRows) {
 			// Skip leading context — start from first actual change
 			const firstChangeIdx = this.rows.findIndex((r) => r.left.type === "removed" || r.right.type === "added");
-			const startIdx = firstChangeIdx >= 0 ? firstChangeIdx : 0;
+			const startIdx = firstChangeIdx >= 1 ? firstChangeIdx - 1 : 0;
 			rowsToShow = this.rows.slice(startIdx, startIdx + this.maxRows);
 			hasMore = startIdx + this.maxRows < this.rows.length;
 		} else {
