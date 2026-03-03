@@ -179,6 +179,10 @@ export default function (pi: ExtensionAPI) {
 				if (newMode !== "intent" && tools.includes("list-agents")) {
 					allowedTools.push("list-agents");
 				}
+				// blueprint is allowed in intent mode only
+				if (newMode === "intent" && tools.includes("blueprint")) {
+					allowedTools.push("blueprint");
+				}
 				// Memory tools are allowed in hard modes for cross-session knowledge
 				for (const memTool of MEMORY_TOOLS) {
 					if (tools.includes(memTool)) {
@@ -340,6 +344,10 @@ export default function (pi: ExtensionAPI) {
 						"Intent mode does not allow list-agents. Agent selection is automatic based on purpose/difficulty. Use the intent tool.",
 				};
 			}
+			return;
+		}
+		// blueprint is allowed in intent mode only
+		if (isToolCallEventType("blueprint", event) && mode === "intent") {
 			return;
 		}
 		// Allow memory-layer tools in hard modes
