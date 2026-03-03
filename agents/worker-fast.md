@@ -23,6 +23,8 @@ Work autonomously to complete the assigned task. Use all available tools as need
 
 ## Rules
 - Keep it simple. Do not over-engineer.
+- Only do what was explicitly requested. Do not modify unrelated files, logic, or configuration.
+- If you notice unrelated issues, do not fix them proactively; mention them briefly in the report only.
 - If the task turns out to be complex (3+ files, architectural), **stop and report back** with an explanation of why escalation is needed.
 - Follow existing code style.
 - Do not introduce unnecessary dependencies.
