@@ -51,14 +51,15 @@ function main() {
   for (const file of mdFiles) {
     const src = path.join(sourceDir, file);
     const dst = path.join(targetDir, file);
+    const existedBefore = fs.existsSync(dst);
 
-    if (fs.existsSync(dst) && !forceOverwrite) {
+    if (existedBefore && !forceOverwrite) {
       console.log(`  skipped  ${file}  (already exists)`);
       skipped++;
     } else {
       fs.copyFileSync(src, dst);
-      const label = forceOverwrite && fs.existsSync(dst) ? "overwrote" : "copied ";
-      console.log(`  ${label} ${file}`);
+      const label = existedBefore ? "overwrote" : "copied  ";
+      console.log(`  ${label}${file}`);
       copied++;
     }
   }

@@ -62,14 +62,15 @@ function main() {
   for (const dir of skillDirs) {
     const src = path.join(sourceDir, dir.name);
     const dst = path.join(targetDir, dir.name);
+    const existedBefore = fs.existsSync(dst);
 
-    if (fs.existsSync(dst) && !forceOverwrite) {
+    if (existedBefore && !forceOverwrite) {
       console.log(`  skipped  ${dir.name}/  (already exists)`);
       skipped++;
     } else {
       copyDirRecursive(src, dst);
-      const label = forceOverwrite && fs.existsSync(dst) ? "overwrote" : "copied ";
-      console.log(`  ${label} ${dir.name}/`);
+      const label = existedBefore ? "overwrote" : "copied  ";
+      console.log(`  ${label}${dir.name}/`);
       copied++;
     }
   }

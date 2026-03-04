@@ -1,16 +1,19 @@
 import { defineConfig } from "vitest/config";
 
 const coverageCanaryInclude = [
-	// Start with pure utility modules that have stable, deterministic tests.
-	// Expand this list gradually as other lanes complete refactors.
+	// Utility modules with stable deterministic tests.
 	"agent-utils.ts",
 	"data-utils.ts",
 	"format-utils.ts",
+	"git-utils.ts",
 	"memory-parse-utils.ts",
 	"message-utils.ts",
 	"parse-utils.ts",
 	"path-utils.ts",
+	"shell-utils.ts",
 	"string-utils.ts",
+	"subagent-format-bridge.ts",
+	"subagent-invocation-queue.ts",
 	"text-utils.ts",
 	"time-utils.ts",
 	"todo-utils.ts",

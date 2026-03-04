@@ -6,11 +6,11 @@
 
 **A personal AI operating system built on [pi](https://github.com/mariozechner/pi-coding-agent)**
 
-*11 specialized agents · 20+ extensions · one developer's opinionated setup*
+*10 specialized agents · 20+ extensions · one developer's opinionated setup*
 
 <br/>
 
-`🤖 11 Agents` &nbsp; `🧩 20+ Extensions` &nbsp; `🎨 5 Themes`
+`🤖 10 Agents` &nbsp; `🧩 20+ Extensions` &nbsp; `🎨 5 Themes`
 
 <br/>
 
@@ -34,7 +34,7 @@ The system is organized in **four layers**:
 |---|---|
 | **User / pi TUI** | Interactive terminal interface |
 | **Extensions** | 20+ TypeScript plugins — subagent management, voice I/O, MCP bridge, UI overlays, safety guards |
-| **Agent Orchestra** | 11 purpose-built agents with distinct models and roles |
+| **Agent Orchestra** | 10 purpose-built agents with distinct models and roles |
 | **Infrastructure** | MCP tool integrations via [claude-mcp-bridge](./extensions/claude-mcp-bridge/) — reuses your existing Claude Code MCP setup (Jira, Slack, Gmail, Calendar, GA4, Figma, DB, etc.) |
 
 ---
@@ -45,30 +45,29 @@ The system is organized in **four layers**:
   <img src="./tmp/agents.en.svg" alt="Agent Orchestra" width="800"/>
 </p>
 
-Eleven agents, three models, one orchestrator. Each agent has a specific mandate, its own system prompt, and a model chosen for its strengths:
+Ten agents, three models, one orchestrator. Each agent has a specific mandate, its own system prompt, and a model chosen for its strengths:
 
 | Agent | Model | Role | When to Use |
 |---|---|---|---|
-| 🔍 **finder** | `claude-sonnet-4-6` | Fast file & code locator | Quick lookups, grep-like tasks |
-| ⚡ **worker** | `claude-sonnet-4-6` | General-purpose executor | Implementation, writing, fixes (complex multi-file) |
-| 🏃 **worker-fast** | `claude-haiku-4-5` | Lightweight simple executor | Single-file edits, quick changes |
+| 🔍 **finder** | `gpt-5.3-codex-spark` | Fast file & code locator | Quick lookups, grep-like tasks |
+| ⚡ **worker** | `gpt-5.3-codex` | General-purpose executor | Implementation, writing, fixes (complex multi-file) |
+| 🏃 **worker-fast** | `gpt-5.3-codex-spark` | Lightweight simple executor | Single-file edits, quick changes |
 | 📐 **planner** | `gpt-5.3-codex` | Implementation architect | Breaking down complex tasks |
 | 🔎 **reviewer** | `gpt-5.3-codex` | Code review (P0–P3 severity) | PR reviews, quality checks |
-| 🥊 **challenger** | `claude-sonnet-4-6` | Pressure tester | Stress-test plans before execution |
-| ✅ **verifier** | `claude-sonnet-4-6` | 3-tier evidence validation | Verify claims, check correctness |
-| 🔬 **deep-verify** | `gpt-5.3-codex` | High-risk deep validation | Risky operations (delete, deploy, migrate) |
+| 🥊 **challenger** | `gpt-5.3-codex` | Pressure tester | Stress-test plans before execution |
+| ✅ **verifier** | `gpt-5.3-codex` | 3-tier evidence validation | Verify claims, check correctness |
 | ⚖️ **decider** | `gpt-5.3-codex` | Technical decision maker | Architecture choices, trade-offs |
-| 🌐 **searcher** | `claude-sonnet-4-6` | Research & web search | Documentation lookup, exploration |
-| 🖥️ **browser** | `claude-sonnet-4-6` | Browser automation & UI testing | E2E testing, visual verification |
+| 🌐 **searcher** | `anthropic/claude-sonnet-4-6` | Research & web search | Documentation lookup, exploration |
+| 🖥️ **browser** | `gpt-5.3-codex` | Browser automation & UI testing | E2E testing, visual verification |
 
 <details>
 <summary><strong>Model Selection Philosophy</strong></summary>
 
-- **claude-haiku-4-5** — Ultra-fast lightweight tasks (simple single-file changes)
-- **claude-sonnet-4-6** — General-purpose tasks (file search, quick lookups, implementation, analysis, creative work)
-- **gpt-5.3-codex** — Structured reasoning tasks (planning, reviewing, decision-making, deep validation)
+- **gpt-5.3-codex-spark** — Ultra-fast lightweight tasks (simple single-file changes, quick exploration)
+- **gpt-5.3-codex** — Structured reasoning tasks (planning, reviewing, decision-making, implementation)
+- **anthropic/claude-sonnet-4-6** — Research and documentation-heavy tasks
 
-The orchestrator (main agent) runs on `claude-sonnet-4-6`, ensuring optimal reasoning depth for delegation decisions.
+The orchestrator (main agent) runs on `gpt-5.3-codex`, ensuring strong reasoning depth for delegation decisions.
 
 </details>
 
@@ -268,7 +267,7 @@ This is not a demo project. It's a **living configuration** used daily for produ
 | Metric | Value |
 |---|---|
 | Active extensions | 20+ |
-| Agent definitions | 11 |
+| Agent definitions | 10 |
 | Themes | 5 |
 
 ---
