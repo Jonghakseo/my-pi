@@ -184,6 +184,9 @@ export function wrapTaskWithMainContext(
 	if (!contextText && !sessionFile) return task;
 
 	const sections: string[] = [];
+	sections.push(
+		"[Instruction]\nYou are a sub-agent invoked within the conversational context between a Main Agent and User. Please focus on the task at hand by referencing the context provided above.",
+	);
 	if (contextText) {
 		sections.push(`[Main Session Context]\n${contextText}`);
 	}

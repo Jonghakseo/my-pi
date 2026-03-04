@@ -426,6 +426,22 @@ async function subBackHandler(ctx: any, store: SubagentStore): Promise<void> {
 	}
 }
 
+function toValidTimestampMs(value: unknown): number | undefined {
+	if (typeof value === "number" && Number.isFinite(value) && value > 0) {
+		return value;
+	}
+	if (typeof value === "string" && value.trim()) {
+		const parsed = Date.parse(value);
+		if (Number.isFinite(parsed) && parsed > 0) return parsed;
+	}
+	return undefined;
+}
+
+function toNonNegativeNumber(value: unknown): number | undefined {
+	if (typeof value !== "number" || !Number.isFinite(value) || value < 0) return undefined;
+	return value;
+}
+
 /**
  * Clear commandRuns and restore from current session entries.
  * Used by both session_start and session_switch handlers.
@@ -505,6 +521,10 @@ function restoreRunsFromSession(store: SubagentStore, ctx: any, pi?: ExtensionAP
 			if (runId > maxRunId) maxRunId = runId;
 
 			const existing = restoredRuns.get(runId);
+			const entryTimestampMs = toValidTimestampMs((entry as any).timestamp);
+			const startedAtFromDetails = toValidTimestampMs(d.startedAt);
+			const elapsedFromDetails = toNonNegativeNumber(d.elapsedMs);
+			const lastActivityAtFromDetails = toValidTimestampMs(d.lastActivityAt);
 
 			// Determine final status primarily from structured metadata.
 			const content = typeof cm.content === "string" ? cm.content : "";
@@ -534,14 +554,22 @@ function restoreRunsFromSession(store: SubagentStore, ctx: any, pi?: ExtensionAP
 
 			if (finalStatus) {
 				// Final message — create or overwrite with done/error state
+				const startedAt = startedAtFromDetails ?? existing?.startedAt ?? entryTimestampMs ?? Date.now();
+				const elapsedMs =
+					elapsedFromDetails ??
+					(existing?.elapsedMs && existing.elapsedMs > 0 ? existing.elapsedMs : undefined) ??
+					(entryTimestampMs !== undefined ? Math.max(0, entryTimestampMs - startedAt) : 0);
+				const lastActivityAt =
+					lastActivityAtFromDetails ?? entryTimestampMs ?? existing?.lastActivityAt ?? startedAt + elapsedMs;
+
 				const run: CommandRunState = {
 					id: runId,
 					agent: d.agent ?? existing?.agent ?? "unknown",
 					task: d.task ?? existing?.task ?? "",
 					status: finalStatus,
-					startedAt: existing?.startedAt ?? Date.now(),
-					lastActivityAt: existing?.lastActivityAt ?? Date.now(),
-					elapsedMs: existing?.elapsedMs ?? 0,
+					startedAt,
+					lastActivityAt,
+					elapsedMs,
 					toolCalls: existing?.toolCalls ?? 0,
 					lastLine: "",
 					lastOutput: "",
@@ -572,14 +600,17 @@ function restoreRunsFromSession(store: SubagentStore, ctx: any, pi?: ExtensionAP
 				// Started/resumed message — always update so we track the latest continuation.
 				// If a completion message follows, it will overwrite this.
 				// If not (crash/abort), this "interrupted" state persists.
+				const startedAt = startedAtFromDetails ?? entryTimestampMs ?? existing?.startedAt ?? Date.now();
+				const lastActivityAt = lastActivityAtFromDetails ?? entryTimestampMs ?? existing?.lastActivityAt ?? startedAt;
+
 				restoredRuns.set(runId, {
 					id: runId,
 					agent: d.agent ?? existing?.agent ?? "unknown",
 					task: d.task ?? existing?.task ?? "",
 					status: "error",
-					startedAt: existing?.startedAt ?? Date.now(),
-					lastActivityAt: existing?.lastActivityAt ?? Date.now(),
-					elapsedMs: existing?.elapsedMs ?? 0,
+					startedAt,
+					lastActivityAt,
+					elapsedMs: elapsedFromDetails ?? 0,
 					toolCalls: existing?.toolCalls ?? 0,
 					lastLine: "(interrupted — started but no completion found)",
 					lastOutput: existing?.lastOutput,
@@ -1037,6 +1068,9 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 						contextMode: runState.contextMode,
 						sessionFile: runState.sessionFile,
 						status: startedState,
+						startedAt: runState.startedAt,
+						elapsedMs: runState.elapsedMs,
+						lastActivityAt: runState.lastActivityAt,
 						thoughtText: runState.thoughtText,
 					},
 				},
@@ -1119,6 +1153,9 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 							turnCount: runState.turnCount,
 							contextMode: runState.contextMode,
 							sessionFile: runState.sessionFile,
+							startedAt: runState.startedAt,
+							elapsedMs: runState.elapsedMs,
+							lastActivityAt: runState.lastActivityAt,
 							exitCode: result.exitCode,
 							usage: result.usage,
 							model: result.model,
@@ -1187,6 +1224,9 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 							turnCount: runState.turnCount,
 							contextMode: runState.contextMode,
 							sessionFile: runState.sessionFile,
+							startedAt: runState.startedAt,
+							elapsedMs: runState.elapsedMs,
+							lastActivityAt: runState.lastActivityAt,
 							error: runState.lastLine,
 							thoughtText: runState.thoughtText,
 							status: runState.status,

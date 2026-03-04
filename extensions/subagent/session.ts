@@ -90,7 +90,7 @@ export function buildMainContextText(ctx: any): { text: string; totalMessageCoun
 			if (role === "assistant") {
 				const content = msg.content;
 				if (typeof content === "string") {
-					if (content) messageParts.push(`Assistant: ${content}`);
+					if (content) messageParts.push(`Main agent: ${content}`);
 					continue;
 				}
 
@@ -98,14 +98,14 @@ export function buildMainContextText(ctx: any): { text: string; totalMessageCoun
 					for (const part of content) {
 						if (!part || typeof part !== "object") continue;
 						if (part.type === "text" && typeof (part as any).text === "string" && (part as any).text) {
-							messageParts.push(`Assistant: ${(part as any).text}`);
+							messageParts.push(`Main agent: ${(part as any).text}`);
 							continue;
 						}
 						if (part.type === "toolCall") {
 							const toolName = typeof (part as any).name === "string" ? (part as any).name : "tool";
 							const argsText = stringifyToolCallArguments((part as any).arguments);
 							messageParts.push(
-								argsText ? `Assistant ToolCall (${toolName}): ${argsText}` : `Assistant ToolCall (${toolName})`,
+								argsText ? `Main agent ToolCall (${toolName}): ${argsText}` : `Main agent ToolCall (${toolName})`,
 							);
 						}
 					}
@@ -113,7 +113,7 @@ export function buildMainContextText(ctx: any): { text: string; totalMessageCoun
 				}
 
 				const text = extractTextFromContent(content);
-				if (text) messageParts.push(`Assistant: ${text}`);
+				if (text) messageParts.push(`Main agent: ${text}`);
 			}
 			// Skip toolResult, custom, and other role types
 		}
@@ -173,6 +173,9 @@ export function wrapTaskWithMainContext(
 	if (!contextText && !sessionFile) return task;
 
 	const sections: string[] = [];
+	sections.push(
+		"[Instruction]\nYou are a sub-agent invoked within the conversational context between a Main Agent and User. Please focus on the task at hand by referencing the context provided above.",
+	);
 	if (contextText) {
 		sections.push(`[Main Session Context]\n${contextText}`);
 	}

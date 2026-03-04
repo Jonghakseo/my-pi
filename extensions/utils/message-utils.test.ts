@@ -240,8 +240,16 @@ describe("wrapTaskWithMainContext", () => {
 		expect(wrapTaskWithMainContext("do something", "")).toBe("do something");
 	});
 
+	it("should include sub-agent instruction when wrapping", () => {
+		const result = wrapTaskWithMainContext("do something", "User: hi\nMain agent: hello");
+		expect(result).toContain("[Instruction]");
+		expect(result).toContain(
+			"You are a sub-agent invoked within the conversational context between a Main Agent and User.",
+		);
+	});
+
 	it("should wrap with context text", () => {
-		const result = wrapTaskWithMainContext("do something", "User: hi\nAssistant: hello");
+		const result = wrapTaskWithMainContext("do something", "User: hi\nMain agent: hello");
 		expect(result).toContain("[Main Session Context]");
 		expect(result).toContain("User: hi");
 		expect(result).toContain("[Request]");
