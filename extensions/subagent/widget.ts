@@ -34,6 +34,20 @@ function manageSpinnerTimer(store: SubagentStore): void {
 	}
 }
 
+function readPurposeFromSession(ctx: any): string {
+	try {
+		const entries = ctx?.sessionManager?.getEntries?.() ?? [];
+		for (let i = entries.length - 1; i >= 0; i--) {
+			const entry = entries[i] as any;
+			if (entry?.type !== "custom" || entry?.customType !== "purpose:set") continue;
+			return typeof entry?.data?.purpose === "string" ? entry.data.purpose.replace(/\s+/g, " ").trim() : "";
+		}
+	} catch {
+		// Ignore purpose parsing errors
+	}
+	return "";
+}
+
 export function updateCommandRunsWidget(store: SubagentStore, ctx?: any): void {
 	const activeCtx = ctx ?? store.commandWidgetCtx;
 	if (!activeCtx || !activeCtx.hasUI) return;
@@ -77,6 +91,8 @@ export function updateCommandRunsWidget(store: SubagentStore, ctx?: any): void {
 			if (startedDiff !== 0) return startedDiff;
 			return b.id - a.id;
 		});
+	const currentPurpose = readPurposeFromSession(activeCtx);
+	const purposeSuffix = currentPurpose ? ` {${currentPurpose}}` : "";
 	const visibleRunIds = new Set<number>(runs.map((run) => run.id));
 
 	for (const id of Array.from(store.renderedRunWidgetIds)) {
@@ -130,7 +146,6 @@ export function updateCommandRunsWidget(store: SubagentStore, ctx?: any): void {
 								? theme.fg(contextBarColor, contextBar)
 								: theme.fg("dim", contextBar)
 							: "";
-						const turnLabel = run.turnCount > 1 ? theme.fg("dim", ` · Turn ${run.turnCount}`) : "";
 						const modeLabel = run.contextMode === "main" ? theme.fg("warning", " · MainCtx") : "";
 
 						// Idle indicator for running runs
@@ -149,7 +164,7 @@ export function updateCommandRunsWidget(store: SubagentStore, ctx?: any): void {
 							modeLabel +
 							`\x1b[38;5;${AGENT_NAME_PALETTE[agentBgIndex(run.agent)]}m ${run.agent}\x1b[39m` +
 							theme.fg("dim", `  (${elapsedSec}s)`) +
-							turnLabel +
+							theme.fg("dim", purposeSuffix) +
 							idleLabel;
 
 						if (contextShort) {
@@ -165,13 +180,6 @@ export function updateCommandRunsWidget(store: SubagentStore, ctx?: any): void {
 						} else {
 							lines.push(truncateToWidth(statusLeft, innerWidth));
 						}
-
-						const normalizedTask = run.task
-							.replace(/\s*\n+\s*/g, " ")
-							.replace(/\s{2,}/g, " ")
-							.trim();
-						const taskLine = truncateText(normalizedTask, Math.max(1, innerWidth - 4));
-						lines.push(theme.fg("dim", `  ${taskLine}`));
 
 						if (run.thoughtText) {
 							const thoughtLine = truncateText(run.thoughtText, Math.max(1, innerWidth - 4));
