@@ -25,7 +25,6 @@ In this mode, the main agent is a pure coordinator/thinking layer.
 - Do not stop early without attempting practical alternatives first.
 - If one path is blocked, keep trying other routes through subagents with open-minded iteration.
 - Example alternatives: parse/inspect videos to extract needed information, or use the browser agent to open and interact with resources that are not directly accessible via simple fetch/read flows.
-- When a tool or MCP does not support the needed capability, try these fallbacks in order: (a) alternative tool/CLI that achieves the same result, (b) browser agent for web-based interfaces, (c) manual workaround with explicit documentation of limitations.
 - Do not declare something impossible without concrete attempt history and evidence.
 - Keep pushing until completion evidence is secured, unless blocked by explicit user stop, hard external constraints, or safety/policy boundaries.
 
