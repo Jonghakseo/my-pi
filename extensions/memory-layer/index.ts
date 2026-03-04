@@ -74,7 +74,12 @@ export default function memoryLayerExtension(pi: ExtensionAPI) {
 	}> {
 		if (scope === "user") return [{ scope: "user" }];
 		if (scope === "project") return projectId ? [{ scope: "project", projectId }] : [];
-		return [{ scope: "user" }, ...(projectId ? [{ scope: "project", projectId }] : [])];
+
+		const targets: Array<{ scope: MemoryScope; projectId?: string }> = [{ scope: "user" }];
+		if (projectId) {
+			targets.push({ scope: "project", projectId });
+		}
+		return targets;
 	}
 
 	async function promptTopic(
