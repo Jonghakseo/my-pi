@@ -25,7 +25,8 @@ export const SUBAGENT_CLI_HELP_TEXT = [
 	"",
 	"2. RUN vs CONTINUE:",
 	"   • run:      Start a NEW subagent execution (must specify agent name)",
-	"   • continue: Resume an EXISTING run by its runId (task text will be appended)",
+	"   • continue: Resume an EXISTING run's session by its runId; reuses conversation context",
+	"              but does NOT automatically sync the latest main context (provide it explicitly if needed)",
 	"",
 	"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
 	"COMMANDS",
@@ -54,7 +55,7 @@ export const SUBAGENT_CLI_HELP_TEXT = [
 	"    subagent run planner --async -- 로그인 성능 개선 계획 수립",
 	"",
 	"  Continue existing run (runId 22):",
-	"    subagent continue 22 -- 위 계획 기준으로 구현 태스크를 세분화해줘",
+	"    subagent continue 22 -- 아까 진행하던거 마무리해서 커밋해줘",
 	"",
 	"  Sync execution (wait for result):",
 	"    subagent run worker-fast --sync -- 버그 수정",
@@ -72,6 +73,7 @@ export const SUBAGENT_CLI_HELP_TEXT = [
 	"  • Async runs (~--async~, default) notify you when done; do not block.",
 	"  • Sync runs (~--sync~) block and show real-time output.",
 	"  • Use `--main` to share context with the main agent; `--isolated` for a fresh scope.",
+	"  • When using `continue`, the main context is NOT auto-synced. Include recent changes in the task text.",
 	"",
 ].join("\n");
 
