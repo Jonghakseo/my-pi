@@ -36,7 +36,6 @@ function managePixelTimer(store: SubagentStore): void {
 	}
 }
 
-
 function getToolRuns(store: SubagentStore): CommandRunState[] {
 	const statusPriority = (status: "running" | "done" | "error") =>
 		status === "running" ? 0 : status === "done" ? 1 : 2;
@@ -114,7 +113,9 @@ export function updatePixelWidget(store: SubagentStore, ctx?: any): void {
 							: theme.fg("dim", contextBar)
 						: "";
 
-					const taskSnippet = run.task ? theme.fg("dim", ` · ${run.task.replace(/\s+/g, " ").trim().slice(0, 60)}`) : "";
+					const taskSnippet = run.task
+						? theme.fg("dim", ` · ${run.task.replace(/\s+/g, " ").trim().slice(0, 60)}`)
+						: "";
 					const statusLeft =
 						`${icon} #${run.id}` + modeLabel + agentStr + theme.fg("dim", `  (${elapsed})`) + taskSnippet;
 
