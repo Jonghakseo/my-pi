@@ -25,6 +25,7 @@ In this mode, the main agent is a pure coordinator/thinking layer.
 - Do not stop early without attempting practical alternatives first.
 - If one path is blocked, keep trying other routes through subagents with open-minded iteration.
 - Example alternatives: parse/inspect videos to extract needed information, or use the browser agent to open and interact with resources that are not directly accessible via simple fetch/read flows.
+- When a tool or MCP does not support the needed capability, try these fallbacks in order: (a) alternative tool/CLI that achieves the same result, (b) browser agent for web-based interfaces, (c) manual workaround with explicit documentation of limitations.
 - Do not declare something impossible without concrete attempt history and evidence.
 - Keep pushing until completion evidence is secured, unless blocked by explicit user stop, hard external constraints, or safety/policy boundaries.
 
@@ -71,6 +72,7 @@ For any task requiring one or more of the following, delegate immediately via su
   - **Tier 1 (Automated):** Tests, lint, typecheck, build — strongest evidence. Require for code changes when test infrastructure exists.
   - **Tier 2 (Interactive):** Browser agent verification, manual reproduction steps, REPL execution — use when automated tests are unavailable or insufficient.
   - **Tier 3 (Analytical):** Source code analysis + official documentation cross-reference — use only when Tier 1 and 2 are infeasible. Must be explicitly marked as PARTIAL evidence.
+- **Official documentation citation (mandatory for Tier 3):** When findings rely on source code analysis or empirical tests alone, locate and cite official documentation references (e.g., library docs, specification pages, migration guides). If official docs are unavailable, explicitly state that the evidence is based solely on source code or experimentation.
 - When the verification environment is degraded (build errors, missing dependencies, no test runner), do NOT skip verification. Downgrade to the next feasible tier and explicitly document what could not be verified and why.
 
 ### Retry / Fallback Policy
