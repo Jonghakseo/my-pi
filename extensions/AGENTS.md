@@ -15,8 +15,7 @@ Custom extensions for the pi coding agent. All extensions are written in TypeScr
 │   ├── replay.ts          #   Session replay TUI viewer
 │   ├── agents.ts          #   Agent discovery & configuration
 │   ├── widget.ts          #   Run status widget (below-editor)
-│   ├── pixel-characters.ts #  Pixel art character definitions & half-block renderer
-│   ├── pixel-widget.ts    #   Pixel art above-editor widget for subagent runs
+│   ├── pixel-widget.ts    #   Above-editor run status widget (one line per tool-invoked run)
 │   ├── store.ts           #   Shared state store
 │   ├── types.ts           #   Type definitions & Typebox schemas
 │   ├── constants.ts       #   Constants

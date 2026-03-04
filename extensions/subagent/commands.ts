@@ -554,7 +554,6 @@ function restoreRunsFromSession(store: SubagentStore, ctx: any, pi?: ExtensionAP
 					model: d.model ?? existing?.model,
 					thoughtText: d.thoughtText ?? d.progressText ?? existing?.thoughtText,
 					source: restoredSource,
-					characterField: d.characterField ?? existing?.characterField,
 				};
 				// Extract thought/progress and output from content payload
 				const lines = content.split("\n");
@@ -593,7 +592,6 @@ function restoreRunsFromSession(store: SubagentStore, ctx: any, pi?: ExtensionAP
 					model: existing?.model,
 					thoughtText: d.thoughtText ?? d.progressText ?? existing?.thoughtText,
 					source: restoredSource,
-					characterField: d.characterField ?? existing?.characterField,
 				});
 			}
 		}

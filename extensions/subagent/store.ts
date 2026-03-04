@@ -20,7 +20,7 @@ export interface SubagentStore {
 	renderedRunWidgetIds: Set<number>;
 	nextCommandRunId: number;
 	commandWidgetCtx: any;
-	/** Context reference for the above-editor pixel art widget (tool-invoked runs). */
+	/** Context reference for the above-editor run status widget (tool-invoked runs). */
 	pixelWidgetCtx: any;
 	/** @deprecated Kept for backward compat; persistent parent link now used instead. */
 	sessionStack: string[];
