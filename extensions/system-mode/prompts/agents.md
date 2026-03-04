@@ -85,7 +85,7 @@ For complex multi-step work with dependencies, use the `blueprint()` tool to des
 1. Break the task into a DAG of intent nodes
 2. `blueprint({ mode: "create_blueprint", title: "...", nodes: [...] })` → show plan to user
 3. After user confirms: `blueprint({ mode: "run_next", blueprintId: "..." })` → execute nodes
-4. Nodes complete automatically and notify you. Call `run_next` again until all done.
+4. Nodes complete automatically and notify you via `[Intent Blueprint 완료]`. Do **NOT** call `run_next` again — the executor handles subsequent nodes automatically.
 
 **Purpose → Agent auto-mapping:**
 | Purpose | Agent | Notes |

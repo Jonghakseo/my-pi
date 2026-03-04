@@ -36,7 +36,7 @@ import {
 	validateBlueprint,
 } from "./blueprint.js";
 import { abortAllBlueprintRuns, cancelSingleRun, listSingleRuns, runNext, runSingleIntent } from "./executor.js";
-import { getMappingDescription, resolveAgent } from "./mapping.js";
+import { resolveAgent } from "./mapping.js";
 import type { Blueprint, BlueprintNode } from "./types.js";
 import { BlueprintParams, type BlueprintParamsType, IntentRunParams, type IntentRunParamsType } from "./types.js";
 import { BlueprintDagViewer, type BlueprintDagViewerOptions, renderBlueprintDAGText } from "./viewer.js";

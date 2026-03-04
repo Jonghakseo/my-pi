@@ -14,7 +14,7 @@ Use the requirements above as the work objective and execute the workflow below.
 
 When requirements are received, **decide execution mode first** - single `intent()` or Blueprint.
 
-- **Single task (1 purpose)**: run immediately with `intent({ mode: "run", purpose: "...", difficulty: "...", task: "..." })`
+- **Single task (1 purpose)**: run immediately with `intent({ purpose: "...", difficulty: "...", task: "..." })`
   - Examples: single explore, single implement, single verify
 - **Multi-step (2+ purposes or dependencies)**: proceed with Blueprint workflow below
   - Examples: explore → implement, plan → implement → review, or anything with explicit dependencies
@@ -29,8 +29,8 @@ Once execution mode is decided, apply the research-first principle as needed:
 - For single `explore` or `search` tasks: execute directly
 - For `implement` without prior research: run `explore` or `search` first within the Blueprint
 - Examples:
-  - Explore inside the codebase → `intent({ mode: "run", purpose: "explore", ... })`
-  - Search external docs/web information → `intent({ mode: "run", purpose: "search", ... })`
+  - Explore inside the codebase → `intent({ purpose: "explore", ... })`
+  - Search external docs/web information → `intent({ purpose: "search", ... })`
 - Do not start implementation before sufficient research
 
 ---
@@ -68,7 +68,7 @@ Call `run_next` only once; the executor will automatically process subsequent no
 Wait until the `[Intent Blueprint 완료]` notification arrives.
 
 ### 3-4. Failure Recovery
-- If a node fails → rerun that node with `intent({ mode: "retry_node", blueprintId, nodeId })`
+- If a node fails → rerun that node with `blueprint({ mode: "retry_node", blueprintId, nodeId })`
 - If the same failure repeats, modify/redesign the Blueprint
 - If the same failure happens 2+ times, escalate to the user
 
@@ -78,7 +78,7 @@ Wait until the `[Intent Blueprint 완료]` notification arrives.
 
 Do not converge on a single solution too early. Compare options during design.
 
-- `intent({ mode: "run", purpose: "decide", task: "Compare trade-offs: A vs B" })`
+- `intent({ purpose: "decide", difficulty: "medium", task: "Compare trade-offs: A vs B" })`
 - Prefer approaches with smaller changes and fewer hidden side effects
 - Record rejected alternatives in the HTML report as well
 
@@ -104,7 +104,7 @@ Run the highest practical verification tier:
 - **Tier 3** - source analysis + official documentation citations (must be marked PARTIAL)
 
 ```
-intent({ mode: "run", purpose: "verify", difficulty: "medium", task: "Validate the changes - prioritize Tier 1" })
+intent({ purpose: "verify", difficulty: "medium", task: "Validate the changes - prioritize Tier 1" })
 ```
 
 If official documentation cannot be cited, explicitly state that findings are based on source-code analysis.
@@ -119,7 +119,6 @@ Delegate via `implement` intent using the `to-html` skill:
 
 ```
 intent({
-  mode: "run",
   purpose: "implement",
   difficulty: "medium",
   task: "Use the to-html skill to generate three Korean HTML reports:\n1. Result Report — problem understanding, executed work, resolution method\n2. Alternatives Report — trade-offs, adoption/rejection rationale\n3. Retrospective Report — blocking points, improvements for tools/prompts"

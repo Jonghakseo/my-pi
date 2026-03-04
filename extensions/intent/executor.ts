@@ -165,6 +165,9 @@ function buildIntentMainContext(ctx: any): {
 /** Track abort controllers for active Blueprint node runs */
 const activeNodeRuns = new Map<string, AbortController>();
 
+/** Prevents duplicate completion notifications when multiple async nodes complete simultaneously */
+const blueprintCompletionNotified = new Set<string>();
+
 function makeNodeRunKey(blueprintId: string, nodeId: string): string {
 	return `${blueprintId}:${nodeId}`;
 }
@@ -300,6 +303,7 @@ export function cancelSingleRun(runId: string): boolean {
 	run.status = "failed";
 	run.error = "User cancelled";
 	run.completedAt = new Date().toISOString();
+	persistRuns();
 	// Keep run in registry (no auto-cleanup) so /sub:history can display it.
 	return true;
 }
@@ -344,6 +348,7 @@ interface AutoAdvanceContext {
 	mainSessionFile: string | undefined;
 	totalMessageCount: number;
 	ctx: any;
+	projectAgentsDir: string | null;
 }
 
 /**
@@ -374,15 +379,19 @@ async function handleNodeCompletion(
 
 	// Blueprint fully completed → wake master
 	if (bp.status === "completed") {
-		pi.sendMessage(
-			{
-				customType: "intent-blueprint",
-				content: `[Intent Blueprint 완료]\n${formatBlueprintProgress(bp)}`,
-				display: true,
-				details: { blueprintId, blueprintStatus: "completed" },
-			},
-			{ deliverAs: "followUp", triggerTurn: true },
-		);
+		if (!blueprintCompletionNotified.has(blueprintId)) {
+			blueprintCompletionNotified.add(blueprintId);
+			setTimeout(() => blueprintCompletionNotified.delete(blueprintId), 60000);
+			pi.sendMessage(
+				{
+					customType: "intent-blueprint",
+					content: `[Intent Blueprint 완료]\n${formatBlueprintProgress(bp)}`,
+					display: true,
+					details: { blueprintId, blueprintStatus: "completed" },
+				},
+				{ deliverAs: "followUp", triggerTurn: true },
+			);
+		}
 		return;
 	}
 
@@ -449,6 +458,7 @@ async function handleNodeCompletion(
 				mainSessionFile,
 				totalMessageCount,
 				ctx,
+				advCtx.projectAgentsDir,
 			);
 
 			syncExecuted++;
@@ -501,19 +511,23 @@ async function handleNodeCompletion(
 	}
 
 	if (currentBp.status === "completed") {
-		pi.sendMessage(
-			{
-				customType: "intent-blueprint",
-				content: `[Intent Blueprint 완료]\n${formatBlueprintProgress(currentBp)}`,
-				display: true,
-				details: { blueprintId, blueprintStatus: "completed" },
-			},
-			{ deliverAs: "followUp", triggerTurn: true },
-		);
+		if (!blueprintCompletionNotified.has(blueprintId)) {
+			blueprintCompletionNotified.add(blueprintId);
+			setTimeout(() => blueprintCompletionNotified.delete(blueprintId), 60000);
+			pi.sendMessage(
+				{
+					customType: "intent-blueprint",
+					content: `[Intent Blueprint 완료]\n${formatBlueprintProgress(currentBp)}`,
+					display: true,
+					details: { blueprintId, blueprintStatus: "completed" },
+				},
+				{ deliverAs: "followUp", triggerTurn: true },
+			);
+		}
 		return;
 	}
 
-	if (currentBp.status === "failed" || syncFailed) {
+	if (currentBp.status === "failed" || (syncFailed && !currentBp.nodes.some((n) => n.status === "running"))) {
 		pi.sendMessage(
 			{
 				customType: "intent-blueprint",
@@ -693,9 +707,9 @@ export async function runSingleIntent(
 		const rawOutput = isError
 			? result.errorMessage || result.stderr || getFinalOutput(result.messages) || ""
 			: getFinalOutput(result.messages) || "";
-		// 성공인데 출력이 비어있으면 에러로 처리 (서브에이전트가 결과를 반환하지 않은 것)
+		// 출력이 비어있어도 성공으로 처리 (서브에이전트가 파일 작성 등 텍스트 없이 완료할 수 있음)
 		const isEmptyOutput = !isError && !rawOutput.trim();
-		const output = rawOutput || "(no output)";
+		const output = rawOutput || (isEmptyOutput ? "(작업이 완료되었으나 출력 텍스트가 없습니다)" : "(no output)");
 		return { isError: isError || isEmptyOutput, output };
 	};
 
@@ -864,6 +878,7 @@ export async function runNext(pi: ExtensionAPI, blueprintId: string, ctx: any, s
 				mainSessionFile,
 				totalMessageCount,
 				ctx,
+				discovery.projectAgentsDir,
 				signal,
 			);
 
@@ -969,6 +984,7 @@ export async function runNext(pi: ExtensionAPI, blueprintId: string, ctx: any, s
 		mainSessionFile,
 		totalMessageCount,
 		ctx,
+		projectAgentsDir: discovery.projectAgentsDir,
 	};
 
 	for (let i = 0; i < asyncNodes.length; i++) {
@@ -1052,6 +1068,7 @@ async function executeSyncNode(
 	mainSessionFile: string | undefined,
 	totalMessageCount: number,
 	ctx: any,
+	projectAgentsDir: string | null,
 	signal?: AbortSignal,
 ): Promise<{ success: boolean; output: string; isEscalation?: boolean }> {
 	// Mark as running
@@ -1092,7 +1109,7 @@ async function executeSyncNode(
 				mode: "single" as const,
 				agentScope: "user" as const,
 				inheritMainContext: INTENT_INHERIT_MAIN_CONTEXT,
-				projectAgentsDir: null,
+				projectAgentsDir: projectAgentsDir,
 				results,
 			}),
 			sessionFile,
@@ -1118,10 +1135,10 @@ async function executeSyncNode(
 			: isError
 				? result.errorMessage || result.stderr || getFinalOutput(result.messages) || ""
 				: getFinalOutput(result.messages) || "";
-		// 출력이 비어있으면 실패로 처리 (서브에이전트가 결과를 반환하지 않은 것)
+		// 출력이 비어있어도 성공으로 처리 (서브에이전트가 파일 작성 등 텍스트 없이 완료할 수 있음)
 		const isEmptyOutput = !isError && !isUserCancelled && !rawOutput.trim();
 		const effectiveIsError = isError || isEmptyOutput;
-		const output = rawOutput || "(no output)";
+		const output = rawOutput || (isEmptyOutput ? "(작업이 완료되었으나 출력 텍스트가 없습니다)" : "(no output)");
 
 		const storedResult =
 			output.length > NODE_RESULT_MAX_CHARS ? `${output.slice(0, NODE_RESULT_MAX_CHARS)}\n...[truncated]` : output;
@@ -1139,11 +1156,7 @@ async function executeSyncNode(
 			status: effectiveIsError ? "failed" : "completed",
 			result: storedResult,
 			resultPath,
-			error: effectiveIsError
-				? isEmptyOutput
-					? "Output was empty — task may not have been executed"
-					: output.slice(0, 500)
-				: undefined,
+			error: effectiveIsError ? output.slice(0, 500) : undefined,
 			completedAt: new Date().toISOString(),
 		});
 
@@ -1203,7 +1216,7 @@ async function executeNodeAsync(
 				mode: "single" as const,
 				agentScope: "user" as const,
 				inheritMainContext: INTENT_INHERIT_MAIN_CONTEXT,
-				projectAgentsDir: null,
+				projectAgentsDir: advCtx.projectAgentsDir,
 				results,
 			}),
 			sessionFile,
@@ -1254,10 +1267,10 @@ async function executeNodeAsync(
 		const rawOutput = isError
 			? result.errorMessage || result.stderr || getFinalOutput(result.messages) || ""
 			: getFinalOutput(result.messages) || "";
-		// 출력이 비어있으면 실패로 처리 (서브에이전트가 결과를 반환하지 않은 것)
+		// 출력이 비어있어도 성공으로 처리 (서브에이전트가 파일 작성 등 텍스트 없이 완료할 수 있음)
 		const isEmptyOutput = !isError && !rawOutput.trim();
 		const effectiveIsError = isError || isEmptyOutput;
-		const output = rawOutput || "(no output)";
+		const output = rawOutput || (isEmptyOutput ? "(작업이 완료되었으나 출력 텍스트가 없습니다)" : "(no output)");
 
 		// Truncate result for in-memory storage
 		const storedResult =
@@ -1277,11 +1290,7 @@ async function executeNodeAsync(
 			status: effectiveIsError ? "failed" : "completed",
 			result: storedResult,
 			resultPath,
-			error: effectiveIsError
-				? isEmptyOutput
-					? "Output was empty — task may not have been executed"
-					: output.slice(0, 500)
-				: undefined,
+			error: effectiveIsError ? output.slice(0, 500) : undefined,
 			completedAt: new Date().toISOString(),
 		});
 
