@@ -6,6 +6,7 @@
  *   2) thought/progress line
  */
 
+import * as fs from "node:fs";
 import { Box, Text, truncateToWidth, visibleWidth } from "@mariozechner/pi-tui";
 import {
 	AGENT_NAME_PALETTE,
@@ -24,6 +25,7 @@ const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", 
 const SPINNER_INTERVAL_MS = 120;
 
 let pixelAnimTimer: ReturnType<typeof setInterval> | undefined;
+const purposeCache = new Map<string, { mtimeMs: number; size: number; value: string }>();
 
 function managePixelTimer(store: SubagentStore): void {
 	const toolRuns = getToolRuns(store);
@@ -36,14 +38,29 @@ function managePixelTimer(store: SubagentStore): void {
 	}
 }
 
-function readPurposeFromSession(ctx: any): string {
+function readPurposeFromSessionFile(sessionFile?: string): string {
+	if (!sessionFile) return "";
 	try {
-		const entries = ctx?.sessionManager?.getEntries?.() ?? [];
-		for (let i = entries.length - 1; i >= 0; i--) {
-			const entry = entries[i] as any;
-			if (entry?.type !== "custom" || entry?.customType !== "purpose:set") continue;
-			return typeof entry?.data?.purpose === "string" ? entry.data.purpose.replace(/\s+/g, " ").trim() : "";
+		const stat = fs.statSync(sessionFile);
+		const cached = purposeCache.get(sessionFile);
+		if (cached && cached.mtimeMs === stat.mtimeMs && cached.size === stat.size) {
+			return cached.value;
 		}
+
+		const raw = fs.readFileSync(sessionFile, "utf-8");
+		const lines = raw.split(/\r?\n/);
+		let value = "";
+		for (let i = lines.length - 1; i >= 0; i--) {
+			const line = lines[i]?.trim();
+			if (!line) continue;
+			const entry = JSON.parse(line) as any;
+			if (entry?.type !== "custom" || entry?.customType !== "purpose:set") continue;
+			value = typeof entry?.data?.purpose === "string" ? entry.data.purpose.replace(/\s+/g, " ").trim() : "";
+			break;
+		}
+
+		purposeCache.set(sessionFile, { mtimeMs: stat.mtimeMs, size: stat.size, value });
+		return value;
 	} catch {
 		// Ignore purpose parsing errors
 	}
@@ -98,8 +115,6 @@ export function updatePixelWidget(store: SubagentStore, ctx?: any): void {
 				const innerWidth = Math.max(1, width);
 				const now = Date.now();
 				const spinnerFrame = SPINNER_FRAMES[Math.floor(now / SPINNER_INTERVAL_MS) % SPINNER_FRAMES.length];
-				const currentPurpose = readPurposeFromSession(activeCtx);
-				const purposeSuffix = currentPurpose ? ` {${currentPurpose}}` : "";
 				const outputLines: string[] = [];
 
 				for (const [idx, run] of toolRuns.entries()) {
@@ -114,7 +129,7 @@ export function updatePixelWidget(store: SubagentStore, ctx?: any): void {
 								: theme.fg("warning", spinnerFrame);
 					const agentColor = AGENT_NAME_PALETTE[agentBgIndex(run.agent)];
 					const agentStr = `\x1b[38;5;${agentColor}m ${run.agent}\x1b[39m`;
-					const modeLabel = run.contextMode === "main" ? theme.fg("warning", " · MainCtx") : "";
+					const modeLabel = run.contextMode === "main" ? theme.fg("warning", " · Main") : "";
 
 					const contextWindow = resolveContextWindow(activeCtx, run.model);
 					const usedContextPercent = getUsedContextPercent(run.usage?.contextTokens, contextWindow);
@@ -128,12 +143,14 @@ export function updatePixelWidget(store: SubagentStore, ctx?: any): void {
 							: theme.fg("dim", contextBar)
 						: "";
 
+					const runPurpose = readPurposeFromSessionFile(run.sessionFile);
+					const purposeLabel = runPurpose ? theme.fg("dim", ` · ${runPurpose}`) : "";
 					const statusLeft =
 						`${icon} #${run.id}` +
 						modeLabel +
 						agentStr +
 						theme.fg("dim", `  (${elapsed})`) +
-						theme.fg("dim", purposeSuffix);
+						purposeLabel;
 
 					if (contextShort) {
 						const contextWidth = visibleWidth(contextShort);

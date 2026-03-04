@@ -2,6 +2,7 @@
  * Subagent run status widget — renders per-run status boxes below the editor.
  */
 
+import * as fs from "node:fs";
 import { Box, Text, truncateToWidth, visibleWidth } from "@mariozechner/pi-tui";
 import { HANG_WARNING_IDLE_MS, PARENT_HINT } from "./constants.js";
 import {
@@ -13,7 +14,7 @@ import {
 	getUsedContextPercent,
 	resolveContextWindow,
 } from "./format.js";
-import { updatePixelWidget } from "./pixel-widget.js";
+import { updatePixelWidget } from "./above-widget.js";
 
 const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"] as const;
 const SPINNER_INTERVAL_MS = 120;
@@ -23,6 +24,7 @@ import { type SubagentStore, truncateText } from "./store.js";
 
 /** Fast timer that drives spinner animation while any run is active. */
 let spinnerTimer: ReturnType<typeof setInterval> | undefined;
+const purposeCache = new Map<string, { mtimeMs: number; size: number; value: string }>();
 
 function manageSpinnerTimer(store: SubagentStore): void {
 	const hasRunning = Array.from(store.commandRuns.values()).some((r) => r.status === "running");
@@ -34,14 +36,29 @@ function manageSpinnerTimer(store: SubagentStore): void {
 	}
 }
 
-function readPurposeFromSession(ctx: any): string {
+function readPurposeFromSessionFile(sessionFile?: string): string {
+	if (!sessionFile) return "";
 	try {
-		const entries = ctx?.sessionManager?.getEntries?.() ?? [];
-		for (let i = entries.length - 1; i >= 0; i--) {
-			const entry = entries[i] as any;
-			if (entry?.type !== "custom" || entry?.customType !== "purpose:set") continue;
-			return typeof entry?.data?.purpose === "string" ? entry.data.purpose.replace(/\s+/g, " ").trim() : "";
+		const stat = fs.statSync(sessionFile);
+		const cached = purposeCache.get(sessionFile);
+		if (cached && cached.mtimeMs === stat.mtimeMs && cached.size === stat.size) {
+			return cached.value;
 		}
+
+		const raw = fs.readFileSync(sessionFile, "utf-8");
+		const lines = raw.split(/\r?\n/);
+		let value = "";
+		for (let i = lines.length - 1; i >= 0; i--) {
+			const line = lines[i]?.trim();
+			if (!line) continue;
+			const entry = JSON.parse(line) as any;
+			if (entry?.type !== "custom" || entry?.customType !== "purpose:set") continue;
+			value = typeof entry?.data?.purpose === "string" ? entry.data.purpose.replace(/\s+/g, " ").trim() : "";
+			break;
+		}
+
+		purposeCache.set(sessionFile, { mtimeMs: stat.mtimeMs, size: stat.size, value });
+		return value;
 	} catch {
 		// Ignore purpose parsing errors
 	}
@@ -91,8 +108,6 @@ export function updateCommandRunsWidget(store: SubagentStore, ctx?: any): void {
 			if (startedDiff !== 0) return startedDiff;
 			return b.id - a.id;
 		});
-	const currentPurpose = readPurposeFromSession(activeCtx);
-	const purposeSuffix = currentPurpose ? ` {${currentPurpose}}` : "";
 	const visibleRunIds = new Set<number>(runs.map((run) => run.id));
 
 	for (const id of Array.from(store.renderedRunWidgetIds)) {
@@ -146,7 +161,7 @@ export function updateCommandRunsWidget(store: SubagentStore, ctx?: any): void {
 								? theme.fg(contextBarColor, contextBar)
 								: theme.fg("dim", contextBar)
 							: "";
-						const modeLabel = run.contextMode === "main" ? theme.fg("warning", " · MainCtx") : "";
+						const modeLabel = run.contextMode === "main" ? theme.fg("warning", " · Main") : "";
 
 						// Idle indicator for running runs
 						let idleLabel = "";
@@ -159,12 +174,14 @@ export function updateCommandRunsWidget(store: SubagentStore, ctx?: any): void {
 							}
 						}
 
+						const runPurpose = readPurposeFromSessionFile(run.sessionFile);
+						const purposeLabel = runPurpose ? theme.fg("dim", ` · ${runPurpose}`) : "";
 						const statusLeft =
 							theme.fg(statusColor, `${statusIcon} #${run.id}`) +
 							modeLabel +
 							`\x1b[38;5;${AGENT_NAME_PALETTE[agentBgIndex(run.agent)]}m ${run.agent}\x1b[39m` +
 							theme.fg("dim", `  (${elapsedSec}s)`) +
-							theme.fg("dim", purposeSuffix) +
+							purposeLabel +
 							idleLabel;
 
 						if (contextShort) {

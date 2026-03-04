@@ -29,7 +29,7 @@ import {
 	SUBVIEW_OVERLAY_WIDTH,
 } from "./constants.js";
 import { formatUsageStats, truncateLines } from "./format.js";
-import { updatePixelWidget } from "./pixel-widget.js";
+import { updatePixelWidget } from "./above-widget.js";
 import { readSessionReplayItems, SubagentSessionReplayOverlay } from "./replay.js";
 import { getLatestRun, removeRun, trimCommandRunHistory } from "./run-utils.js";
 import {
