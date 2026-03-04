@@ -622,7 +622,6 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 				runState.contextMode = runState.contextMode ?? (inheritMainContext ? "main" : "sub");
 				runState.sessionFile = runState.sessionFile ?? makeSubagentSessionFile(runId);
 				runState.source = "tool";
-				runState.characterField = runState.characterField ?? resolvedAgentConfig?.character;
 				sessionFileForRun = runState.sessionFile;
 			} else {
 				runId = store.nextCommandRunId++;
@@ -645,7 +644,6 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 					removed: false,
 					contextMode: inheritMainContext ? "main" : "sub",
 					source: "tool",
-					characterField: resolvedAgentConfig?.character,
 				};
 				store.commandRuns.set(runId, runState);
 			}
@@ -691,7 +689,6 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 						sessionFile: runState.sessionFile,
 						status: startedState,
 						thoughtText: runState.thoughtText,
-						characterField: runState.characterField,
 					},
 				},
 				{ deliverAs: "followUp", triggerTurn: false },
@@ -800,7 +797,6 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 							source: result.agentSource,
 							thoughtText: runState.thoughtText,
 							status: runState.status,
-							characterField: runState.characterField,
 						},
 					};
 					const completionOptions = { deliverAs: "followUp" as const, triggerTurn: true };
@@ -866,7 +862,6 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 							error: runState.lastLine,
 							thoughtText: runState.thoughtText,
 							status: runState.status,
-							characterField: runState.characterField,
 						},
 					};
 
