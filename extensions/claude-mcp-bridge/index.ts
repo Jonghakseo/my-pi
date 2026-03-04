@@ -543,6 +543,55 @@ function mimeToExt(mimeType: string): string {
 
 type FormattedToolResult = { text: string; imagePaths: string[] };
 
+type PreparedPayload = {
+	text: string;
+	truncated: boolean;
+	fullPayloadPath?: string;
+	originalLength: number;
+};
+
+const LARGE_PAYLOAD_THRESHOLD_CHARS = 30_000;
+const LARGE_PAYLOAD_PREVIEW_CHARS = 1_000;
+
+function preparePayloadForClient(text: string, serverName: string, toolName: string): PreparedPayload {
+	const originalLength = text.length;
+	if (originalLength <= LARGE_PAYLOAD_THRESHOLD_CHARS) {
+		return { text, truncated: false, originalLength };
+	}
+
+	const preview = text.slice(0, LARGE_PAYLOAD_PREVIEW_CHARS);
+	const fileName = `mcp-payload-${sanitizeName(serverName) || "server"}-${sanitizeName(toolName) || "tool"}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.txt`;
+	const filePath = path.join(os.tmpdir(), fileName);
+
+	try {
+		fs.writeFileSync(filePath, text, "utf-8");
+		return {
+			text: [
+				preview,
+				"",
+				`[Truncated output: first ${LARGE_PAYLOAD_PREVIEW_CHARS} chars shown, ${originalLength - LARGE_PAYLOAD_PREVIEW_CHARS} chars omitted]`,
+				`[Full payload saved to: ${filePath}]`,
+				"Use Read tool (or another file reader) to inspect the full payload.",
+			].join("\n"),
+			truncated: true,
+			fullPayloadPath: filePath,
+			originalLength,
+		};
+	} catch (error) {
+		const message = error instanceof Error ? error.message : String(error);
+		return {
+			text: [
+				preview,
+				"",
+				`[Truncated output: first ${LARGE_PAYLOAD_PREVIEW_CHARS} chars shown, ${originalLength - LARGE_PAYLOAD_PREVIEW_CHARS} chars omitted]`,
+				`[Failed to save full payload: ${message}]`,
+			].join("\n"),
+			truncated: true,
+			originalLength,
+		};
+	}
+}
+
 function formatToolResult(result: unknown): FormattedToolResult {
 	const imagePaths: string[] = [];
 
@@ -1001,16 +1050,25 @@ export default async function claudeMcpBridge(pi: ExtensionAPI) {
 					try {
 						const result = await manager.callTool(serverName, tool.name, params as Record<string, unknown>);
 						const formatted = formatToolResult(result);
-						const content: Array<{ type: "text"; text: string }> = [{ type: "text", text: formatted.text }];
+						const prepared = preparePayloadForClient(formatted.text, serverName, tool.name);
+
+						const content: Array<{ type: "text"; text: string }> = [{ type: "text", text: prepared.text }];
 						for (const imgPath of formatted.imagePaths) {
 							content.push({ type: "text", text: `📎 Use Read tool to view: ${imgPath}` });
 						}
+						if (prepared.fullPayloadPath) {
+							content.push({ type: "text", text: `📄 Full payload file: ${prepared.fullPayloadPath}` });
+						}
+
 						return {
 							content,
 							details: {
 								server: serverName,
 								tool: tool.name,
-								raw: result,
+								raw: prepared.truncated ? undefined : result,
+								payloadTruncated: prepared.truncated,
+								payloadOriginalLength: prepared.originalLength,
+								payloadFilePath: prepared.fullPayloadPath,
 								isError: Boolean((result as { isError?: boolean })?.isError),
 							},
 						};
