@@ -6,9 +6,15 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { parseFrontmatter } from "@mariozechner/pi-coding-agent";
+import {
+	AGENT_THINKING_LEVELS,
+	normalizeModel,
+	normalizeThinkingLevel,
+	normalizeTools,
+	type AgentThinkingLevel,
+} from "../utils/agent-utils.js";
 
-export const THINKING_LEVELS = ["off", "minimal", "low", "medium", "high", "xhigh"] as const;
-export type AgentThinkingLevel = (typeof THINKING_LEVELS)[number];
+export const THINKING_LEVELS = AGENT_THINKING_LEVELS;
 
 export interface AgentConfig {
 	name: string;
@@ -39,25 +45,6 @@ const COMMON_SUBAGENT_NO_RECURSION_RULE = [
 	"- Never trigger subagent commands/shorthands such as `/sub:*` or `>>` or `>>>`.",
 	"- If delegation is requested, explain that recursive subagent invocation is disabled and continue with available tools.",
 ].join("\n");
-
-const CLAUDE_TOOL_MAP: Record<string, string | undefined> = {
-	bash: "bash",
-	read: "read",
-	edit: "edit",
-	write: "write",
-	grep: "grep",
-	glob: "find",
-	ls: "ls",
-	todowrite: "todo",
-	todoread: "todo",
-	skill: undefined,
-};
-
-const CLAUDE_MODEL_ALIAS_MAP: Record<string, string> = {
-	opus: "claude-opus-4-6",
-	sonnet: "claude-sonnet-4-5",
-	haiku: "claude-haiku-4-5",
-};
 
 function attachCommonSubagentRule(systemPrompt: string): string {
 	const trimmed = systemPrompt.trimEnd();
@@ -93,46 +80,6 @@ function listMarkdownFiles(dir: string, recursive: boolean): string[] {
 
 	files.sort((a, b) => a.localeCompare(b));
 	return files;
-}
-
-function normalizeTools(rawTools: string | undefined, format: "pi" | "claude"): string[] | undefined {
-	if (!rawTools) return undefined;
-
-	const parsed = rawTools
-		.split(",")
-		.map((t) => t.trim())
-		.filter(Boolean);
-
-	if (parsed.length === 0) return undefined;
-	if (format === "pi") return parsed;
-
-	const mapped = parsed
-		.map((tool) => CLAUDE_TOOL_MAP[tool.toLowerCase()] ?? undefined)
-		.filter((tool): tool is string => Boolean(tool));
-
-	if (mapped.length === 0) return undefined;
-	return Array.from(new Set(mapped));
-}
-
-function normalizeModel(rawModel: string | undefined, format: "pi" | "claude"): string | undefined {
-	if (!rawModel) return undefined;
-	const model = rawModel.trim();
-	if (!model) return undefined;
-
-	if (format === "claude") {
-		if (model.includes("/")) return model;
-		return CLAUDE_MODEL_ALIAS_MAP[model.toLowerCase()] ?? model;
-	}
-
-	return model;
-}
-
-function normalizeThinkingLevel(rawThinking: string | undefined): AgentThinkingLevel | undefined {
-	if (!rawThinking) return undefined;
-	const thinking = rawThinking.trim().toLowerCase();
-	if (!thinking) return undefined;
-	if ((THINKING_LEVELS as readonly string[]).includes(thinking)) return thinking as AgentThinkingLevel;
-	return undefined;
 }
 
 function loadAgentsFromDir(dir: string, source: "user" | "project", options: LoadAgentsOptions = {}): AgentConfig[] {

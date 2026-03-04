@@ -1,6 +1,6 @@
 /**
  * Pure utility functions extracted from subagent/agents.ts and subagent/runner.ts.
- * These handle agent discovery helpers, matching, and alias computation.
+ * These handle agent discovery helpers, normalization, matching, and alias computation.
  */
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -13,10 +13,13 @@ export interface AgentConfigLike {
 	model?: string;
 }
 
-export interface AgentAliasMatch {
-	matchedAgent?: AgentConfigLike;
-	ambiguousAgents: AgentConfigLike[];
+export interface AgentAliasMatch<T extends AgentConfigLike = AgentConfigLike> {
+	matchedAgent?: T;
+	ambiguousAgents: T[];
 }
+
+export const AGENT_THINKING_LEVELS = ["off", "minimal", "low", "medium", "high", "xhigh"] as const;
+export type AgentThinkingLevel = (typeof AGENT_THINKING_LEVELS)[number];
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
@@ -39,7 +42,7 @@ export const CLAUDE_MODEL_ALIAS_MAP: Record<string, string> = {
 	haiku: "claude-haiku-4-5",
 };
 
-// ── Tool / Model Normalization ───────────────────────────────────────────────
+// ── Tool / Model / Thinking Normalization ───────────────────────────────────
 
 /**
  * Normalize a comma-separated tool list according to the given format.
@@ -81,6 +84,17 @@ export function normalizeModel(rawModel: string | undefined, format: "pi" | "cla
 	return model;
 }
 
+/**
+ * Normalize and validate thinking level.
+ */
+export function normalizeThinkingLevel(rawThinking: string | undefined): AgentThinkingLevel | undefined {
+	if (!rawThinking) return undefined;
+	const thinking = rawThinking.trim().toLowerCase();
+	if (!thinking) return undefined;
+	if ((AGENT_THINKING_LEVELS as readonly string[]).includes(thinking)) return thinking as AgentThinkingLevel;
+	return undefined;
+}
+
 // ── Agent Alias / Initials ───────────────────────────────────────────────────
 
 /**
@@ -120,7 +134,7 @@ export function uniqueAgentsByName<T extends { name: string }>(candidates: T[]):
  * Match a user-supplied token against a list of agents using fuzzy matching.
  * Priority: exact match → prefix match → initials match → contains match.
  */
-export function matchSubCommandAgent(agents: AgentConfigLike[], token: string): AgentAliasMatch {
+export function matchSubCommandAgent<T extends AgentConfigLike>(agents: T[], token: string): AgentAliasMatch<T> {
 	const raw = token.trim().toLowerCase();
 	if (!raw) return { ambiguousAgents: [] };
 
@@ -183,8 +197,8 @@ export function matchSubCommandAgent(agents: AgentConfigLike[], token: string): 
 /**
  * Get tab-completion candidates for an agent name prefix.
  */
-export function getSubCommandAgentCompletions(
-	agents: AgentConfigLike[],
+export function getSubCommandAgentCompletions<T extends AgentConfigLike>(
+	agents: T[],
 	argumentPrefix: string,
 ): { value: string; label: string; description?: string }[] | null {
 	const trimmedStart = argumentPrefix.trimStart();
@@ -230,7 +244,7 @@ export function getSubCommandAgentCompletions(
  * Compute shortest usable alias for each agent and return a formatted hint string.
  * e.g. "f→finder  w→worker  s→searcher  p→planner  r→reviewer  v→verifier"
  */
-export function computeAgentAliasHints(agents: AgentConfigLike[]): string {
+export function computeAgentAliasHints<T extends AgentConfigLike>(agents: T[]): string {
 	const hints: string[] = [];
 
 	for (const agent of agents) {

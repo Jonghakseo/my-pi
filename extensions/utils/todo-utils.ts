@@ -297,8 +297,8 @@ export function resolveTodoMetadataOverrides(params: Record<string, unknown>): T
 		if (typeof dueDateRaw !== "string") {
 			return { ...overrides, error: "dueDate must be a string (YYYY-MM-DD)" };
 		}
-		if ((dueDateRaw as string).trim()) {
-			const normalized = normalizeDueDate(dueDateRaw as string);
+		if (dueDateRaw.trim()) {
+			const normalized = normalizeDueDate(dueDateRaw);
 			if (!normalized) {
 				return { ...overrides, error: "Invalid dueDate. Expected YYYY-MM-DD." };
 			}
@@ -342,11 +342,17 @@ export function sortTodos(todos: TodoFrontMatter[]): TodoFrontMatter[] {
 export function buildTodoSearchText(todo: TodoFrontMatter): string {
 	const tags = todo.tags.join(" ");
 	const assignment = todo.assigned_to_session ? `assigned:${todo.assigned_to_session}` : "";
-	const priorityLabel = todo.priority ? `P:${todo.priority}` : "";
+	const priorityKorMap: Record<TodoPriority, "상" | "중" | "하"> = {
+		high: "상",
+		medium: "중",
+		low: "하",
+	};
+	const priorityKor = todo.priority ? priorityKorMap[todo.priority] : "";
+	const priorityTokens = todo.priority ? `P:${todo.priority} P:${priorityKor} ${priorityKor}` : "";
 	const dueDateLabel = todo.due_date ? `due:${todo.due_date}` : "";
 	const estimateLabel = todo.estimate ? `est:${todo.estimate}` : "";
-	const rawMetadata = `${todo.priority ?? ""} ${todo.due_date ?? ""} ${todo.estimate ?? ""}`;
-	return `${TODO_ID_PREFIX}${todo.id} ${todo.id} ${todo.title} ${tags} ${priorityLabel} ${dueDateLabel} ${estimateLabel} ${rawMetadata} ${todo.status} ${assignment}`.trim();
+	const rawMetadata = `${todo.priority ?? ""} ${priorityKor} ${todo.due_date ?? ""} ${todo.estimate ?? ""}`;
+	return `${TODO_ID_PREFIX}${todo.id} ${todo.id} ${todo.title} ${tags} ${priorityTokens} ${dueDateLabel} ${estimateLabel} ${rawMetadata} ${todo.status} ${assignment}`.trim();
 }
 
 // ── Classification ───────────────────────────────────────────────────────────
@@ -485,4 +491,215 @@ export function parseTodoFrontMatter(text: string, idFallback: string): TodoFron
 	}
 
 	return data;
+}
+
+export function clearAssignmentIfClosed(todo: TodoFrontMatter): void {
+	if (isTodoClosed(getTodoStatus(todo))) {
+		todo.assigned_to_session = undefined;
+	}
+}
+
+function sameStringArray(a: string[], b: string[]): boolean {
+	if (a.length !== b.length) return false;
+	for (let i = 0; i < a.length; i += 1) {
+		if (a[i] !== b[i]) return false;
+	}
+	return true;
+}
+
+export function normalizeTodoMetadata(
+	todo: TodoFrontMatter,
+	options: { inferFromText?: boolean; bodyText?: string; extractFromTags?: boolean } = {},
+): boolean {
+	let changed = false;
+
+	const normalizedTags = normalizeTodoTags(todo.tags);
+	if (!sameStringArray(todo.tags, normalizedTags)) {
+		todo.tags = normalizedTags;
+		changed = true;
+	}
+
+	const normalizedPriority = normalizePriority(todo.priority);
+	if (todo.priority !== normalizedPriority) {
+		todo.priority = normalizedPriority;
+		changed = true;
+	}
+
+	const normalizedDueDate = normalizeDueDate(todo.due_date);
+	if (todo.due_date !== normalizedDueDate) {
+		todo.due_date = normalizedDueDate;
+		changed = true;
+	}
+
+	const normalizedEstimate = normalizeEstimate(todo.estimate);
+	if (todo.estimate !== normalizedEstimate) {
+		todo.estimate = normalizedEstimate;
+		changed = true;
+	}
+
+	if (options.extractFromTags ?? true) {
+		const remainingTags: string[] = [];
+		let extractedPriority: TodoPriority | undefined;
+		let extractedDueDate: string | undefined;
+		let extractedEstimate: string | undefined;
+
+		for (const tag of todo.tags) {
+			const parsed = parseStructuredTag(tag);
+			if (!parsed) {
+				remainingTags.push(tag);
+				continue;
+			}
+			if (parsed.field === "priority" && !extractedPriority) {
+				extractedPriority = normalizePriority(parsed.value);
+				continue;
+			}
+			if (parsed.field === "due_date" && !extractedDueDate) {
+				extractedDueDate = normalizeDueDate(parsed.value);
+				continue;
+			}
+			if (parsed.field === "estimate" && !extractedEstimate) {
+				extractedEstimate = normalizeEstimate(parsed.value);
+			}
+		}
+
+		if (!sameStringArray(todo.tags, remainingTags)) {
+			todo.tags = remainingTags;
+			changed = true;
+		}
+
+		if (!todo.priority && extractedPriority) {
+			todo.priority = extractedPriority;
+			changed = true;
+		}
+		if (!todo.due_date && extractedDueDate) {
+			todo.due_date = extractedDueDate;
+			changed = true;
+		}
+		if (!todo.estimate && extractedEstimate) {
+			todo.estimate = extractedEstimate;
+			changed = true;
+		}
+	}
+
+	if (options.inferFromText) {
+		const inferred = inferMetadataFromText(`${todo.title ?? ""}\n${options.bodyText ?? ""}`);
+		if (!todo.priority && inferred.priority) {
+			todo.priority = inferred.priority;
+			changed = true;
+		}
+		if (!todo.due_date && inferred.due_date) {
+			todo.due_date = inferred.due_date;
+			changed = true;
+		}
+		if (!todo.estimate && inferred.estimate) {
+			todo.estimate = inferred.estimate;
+			changed = true;
+		}
+	}
+
+	return changed;
+}
+
+export function applyTodoMetadataOverrides(todo: TodoFrontMatter, overrides: TodoMetadataOverrides): void {
+	if (overrides.priorityProvided) {
+		todo.priority = overrides.priority;
+	}
+	if (overrides.dueDateProvided) {
+		todo.due_date = overrides.due_date;
+	}
+	if (overrides.estimateProvided) {
+		todo.estimate = overrides.estimate;
+	}
+}
+
+export function parseTodoContent(content: string, idFallback: string): TodoRecord {
+	const { frontMatter, body } = splitFrontMatter(content);
+	const parsed = parseTodoFrontMatter(frontMatter, idFallback);
+	const todo: TodoRecord = {
+		id: idFallback,
+		title: parsed.title,
+		tags: parsed.tags ?? [],
+		status: parsed.status,
+		created_at: parsed.created_at,
+		assigned_to_session: parsed.assigned_to_session,
+		priority: parsed.priority,
+		due_date: parsed.due_date,
+		estimate: parsed.estimate,
+		body: body ?? "",
+	};
+	normalizeTodoMetadata(todo, { inferFromText: true, bodyText: todo.body });
+	return todo;
+}
+
+export function serializeTodo(todo: TodoRecord): string {
+	normalizeTodoMetadata(todo, { inferFromText: true, bodyText: todo.body });
+	const frontMatter = JSON.stringify(
+		{
+			id: todo.id,
+			title: todo.title,
+			tags: todo.tags ?? [],
+			status: todo.status,
+			created_at: todo.created_at,
+			assigned_to_session: todo.assigned_to_session || undefined,
+			priority: todo.priority || undefined,
+			due_date: todo.due_date || undefined,
+			estimate: todo.estimate || undefined,
+		},
+		null,
+		2,
+	);
+
+	const body = todo.body ?? "";
+	const trimmedBody = body.replace(/^\n+/, "").replace(/\s+$/, "");
+	if (!trimmedBody) return `${frontMatter}\n`;
+	return `${frontMatter}\n\n${trimmedBody}\n`;
+}
+
+export interface FuzzyMatchResult {
+	matches: boolean;
+	score: number;
+}
+
+export type TodoMatcher = (token: string, text: string) => FuzzyMatchResult;
+
+export function filterTodos(todos: TodoFrontMatter[], query: string, matcher: TodoMatcher): TodoFrontMatter[] {
+	const trimmed = query.trim();
+	if (!trimmed) return todos;
+
+	const tokens = trimmed
+		.split(/\s+/)
+		.map((token) => token.trim())
+		.filter(Boolean);
+
+	if (tokens.length === 0) return todos;
+
+	const matches: Array<{ todo: TodoFrontMatter; score: number }> = [];
+	for (const todo of todos) {
+		const text = buildTodoSearchText(todo);
+		let totalScore = 0;
+		let matched = true;
+		for (const token of tokens) {
+			const result = matcher(token, text);
+			if (!result.matches) {
+				matched = false;
+				break;
+			}
+			totalScore += result.score;
+		}
+		if (matched) {
+			matches.push({ todo, score: totalScore });
+		}
+	}
+
+	return matches
+		.sort((a, b) => {
+			const aClosed = isTodoClosed(a.todo.status);
+			const bClosed = isTodoClosed(b.todo.status);
+			if (aClosed !== bClosed) return aClosed ? 1 : -1;
+			const aAssigned = !aClosed && Boolean(a.todo.assigned_to_session);
+			const bAssigned = !bClosed && Boolean(b.todo.assigned_to_session);
+			if (aAssigned !== bAssigned) return aAssigned ? -1 : 1;
+			return a.score - b.score;
+		})
+		.map((match) => match.todo);
 }
