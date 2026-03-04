@@ -208,7 +208,6 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 		const inheritMainContext = contextMode === "main";
 		const discovery = discoverAgents(ctx.cwd, agentScope);
 		const agents = discovery.agents;
-		const confirmProjectAgents = params.confirmProjectAgents ?? true;
 		const asyncActionRequested = params.asyncAction ?? "run";
 		const rawMainSessionFile = inheritMainContext ? (ctx.sessionManager.getSessionFile() ?? undefined) : undefined;
 		const mainSessionFile =
@@ -494,30 +493,6 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 				],
 				details: makeDetails("single")([]),
 			};
-		}
-
-		if ((agentScope === "project" || agentScope === "both") && confirmProjectAgents && ctx.hasUI) {
-			const requestedAgentNames = new Set<string>();
-			if (params.chain) for (const step of params.chain as ChainItemFields[]) requestedAgentNames.add(step.agent);
-			if (params.agent) requestedAgentNames.add(params.agent);
-
-			const projectAgentsRequested = Array.from(requestedAgentNames)
-				.map((name) => agents.find((a) => a.name === name))
-				.filter((a): a is AgentConfig => a?.source === "project");
-
-			if (projectAgentsRequested.length > 0) {
-				const names = projectAgentsRequested.map((a) => a.name).join(", ");
-				const dir = discovery.projectAgentsDir ?? "(unknown)";
-				const ok = await ctx.ui.confirm(
-					"Run project-local agents?",
-					`Agents: ${names}\nSource: ${dir}\n\nProject agents are repo-controlled. Only continue for trusted repositories.`,
-				);
-				if (!ok)
-					return {
-						content: [{ type: "text", text: "Canceled: project-local agents not approved." }],
-						details: makeDetails(hasChain ? "chain" : "single")([]),
-					};
-			}
 		}
 
 		const runAsync = params.runAsync ?? true;
