@@ -6,7 +6,6 @@
  *   2) thought/progress line
  */
 
-import * as fs from "node:fs";
 import { Box, Text, truncateToWidth, visibleWidth } from "@mariozechner/pi-tui";
 import {
 	AGENT_NAME_PALETTE,
@@ -25,7 +24,6 @@ const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", 
 const SPINNER_INTERVAL_MS = 120;
 
 let pixelAnimTimer: ReturnType<typeof setInterval> | undefined;
-const purposeCache = new Map<string, { mtimeMs: number; size: number; value: string }>();
 
 function managePixelTimer(store: SubagentStore): void {
 	const toolRuns = getToolRuns(store);
@@ -38,34 +36,6 @@ function managePixelTimer(store: SubagentStore): void {
 	}
 }
 
-function readPurposeFromSessionFile(sessionFile?: string): string {
-	if (!sessionFile) return "";
-	try {
-		const stat = fs.statSync(sessionFile);
-		const cached = purposeCache.get(sessionFile);
-		if (cached && cached.mtimeMs === stat.mtimeMs && cached.size === stat.size) {
-			return cached.value;
-		}
-
-		const raw = fs.readFileSync(sessionFile, "utf-8");
-		const lines = raw.split(/\r?\n/);
-		let value = "";
-		for (let i = lines.length - 1; i >= 0; i--) {
-			const line = lines[i]?.trim();
-			if (!line) continue;
-			const entry = JSON.parse(line) as any;
-			if (entry?.type !== "custom" || entry?.customType !== "purpose:set") continue;
-			value = typeof entry?.data?.purpose === "string" ? entry.data.purpose.replace(/\s+/g, " ").trim() : "";
-			break;
-		}
-
-		purposeCache.set(sessionFile, { mtimeMs: stat.mtimeMs, size: stat.size, value });
-		return value;
-	} catch {
-		// Ignore purpose parsing errors
-	}
-	return "";
-}
 
 function getToolRuns(store: SubagentStore): CommandRunState[] {
 	const statusPriority = (status: "running" | "done" | "error") =>
@@ -144,10 +114,9 @@ export function updatePixelWidget(store: SubagentStore, ctx?: any): void {
 							: theme.fg("dim", contextBar)
 						: "";
 
-					const runPurpose = readPurposeFromSessionFile(run.sessionFile);
-					const purposeLabel = runPurpose ? theme.fg("dim", ` · ${runPurpose}`) : "";
+					const taskSnippet = run.task ? theme.fg("dim", ` · ${run.task.replace(/\s+/g, " ").trim().slice(0, 60)}`) : "";
 					const statusLeft =
-						`${icon} #${run.id}` + modeLabel + agentStr + theme.fg("dim", `  (${elapsed})`) + purposeLabel;
+						`${icon} #${run.id}` + modeLabel + agentStr + theme.fg("dim", `  (${elapsed})`) + taskSnippet;
 
 					if (contextShort) {
 						const contextWidth = visibleWidth(contextShort);

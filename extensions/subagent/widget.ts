@@ -2,7 +2,6 @@
  * Subagent run status widget — renders per-run status boxes below the editor.
  */
 
-import * as fs from "node:fs";
 import { Box, Text, truncateToWidth, visibleWidth } from "@mariozechner/pi-tui";
 import { updatePixelWidget } from "./above-widget.js";
 import { HANG_WARNING_IDLE_MS, PARENT_HINT } from "./constants.js";
@@ -24,7 +23,6 @@ import { type SubagentStore, truncateText } from "./store.js";
 
 /** Fast timer that drives spinner animation while any run is active. */
 let spinnerTimer: ReturnType<typeof setInterval> | undefined;
-const purposeCache = new Map<string, { mtimeMs: number; size: number; value: string }>();
 
 function manageSpinnerTimer(store: SubagentStore): void {
 	const hasRunning = Array.from(store.commandRuns.values()).some((r) => r.status === "running");
@@ -36,34 +34,6 @@ function manageSpinnerTimer(store: SubagentStore): void {
 	}
 }
 
-function readPurposeFromSessionFile(sessionFile?: string): string {
-	if (!sessionFile) return "";
-	try {
-		const stat = fs.statSync(sessionFile);
-		const cached = purposeCache.get(sessionFile);
-		if (cached && cached.mtimeMs === stat.mtimeMs && cached.size === stat.size) {
-			return cached.value;
-		}
-
-		const raw = fs.readFileSync(sessionFile, "utf-8");
-		const lines = raw.split(/\r?\n/);
-		let value = "";
-		for (let i = lines.length - 1; i >= 0; i--) {
-			const line = lines[i]?.trim();
-			if (!line) continue;
-			const entry = JSON.parse(line) as any;
-			if (entry?.type !== "custom" || entry?.customType !== "purpose:set") continue;
-			value = typeof entry?.data?.purpose === "string" ? entry.data.purpose.replace(/\s+/g, " ").trim() : "";
-			break;
-		}
-
-		purposeCache.set(sessionFile, { mtimeMs: stat.mtimeMs, size: stat.size, value });
-		return value;
-	} catch {
-		// Ignore purpose parsing errors
-	}
-	return "";
-}
 
 export function updateCommandRunsWidget(store: SubagentStore, ctx?: any): void {
 	const activeCtx = ctx ?? store.commandWidgetCtx;
@@ -174,14 +144,13 @@ export function updateCommandRunsWidget(store: SubagentStore, ctx?: any): void {
 							}
 						}
 
-						const runPurpose = readPurposeFromSessionFile(run.sessionFile);
-						const purposeLabel = runPurpose ? theme.fg("dim", ` · ${runPurpose}`) : "";
+						const taskSnippet = run.task ? theme.fg("dim", ` · ${run.task.replace(/\s+/g, " ").trim().slice(0, 60)}`) : "";
 						const statusLeft =
 							theme.fg(statusColor, `${statusIcon} #${run.id}`) +
 							modeLabel +
 							`\x1b[38;5;${AGENT_NAME_PALETTE[agentBgIndex(run.agent)]}m ${run.agent}\x1b[39m` +
 							theme.fg("dim", `  (${elapsedSec}s)`) +
-							purposeLabel +
+							taskSnippet +
 							idleLabel;
 
 						if (contextShort) {
