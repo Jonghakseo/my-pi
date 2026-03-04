@@ -65,9 +65,9 @@
     <text x="123" y="250" text-anchor="middle" fill="#e6edf3" font-size="8">빠른 파일 탐색</text>
     <text x="123" y="261" text-anchor="middle" fill="#484f58" font-size="8">🔍</text>
 
-    <rect x="198" y="206" width="126" height="60" rx="6" fill="rgba(188,140,255,0.1)" stroke="#bc8cff" stroke-width="1"/>
-    <text x="261" y="222" text-anchor="middle" fill="#bc8cff" font-size="12" font-weight="bold">worker</text>
-    <text x="261" y="236" text-anchor="middle" fill="#8b949e" font-size="8">opus</text>
+    <rect x="198" y="206" width="126" height="60" rx="6" fill="rgba(88,166,255,0.1)" stroke="#58a6ff" stroke-width="1"/>
+    <text x="261" y="222" text-anchor="middle" fill="#58a6ff" font-size="12" font-weight="bold">worker</text>
+    <text x="261" y="236" text-anchor="middle" fill="#8b949e" font-size="8">sonnet</text>
     <text x="261" y="250" text-anchor="middle" fill="#e6edf3" font-size="8">작업 실행기</text>
     <text x="261" y="261" text-anchor="middle" fill="#484f58" font-size="8">⚡</text>
 
@@ -83,16 +83,16 @@
     <text x="537" y="250" text-anchor="middle" fill="#e6edf3" font-size="8">코드 리뷰</text>
     <text x="537" y="261" text-anchor="middle" fill="#484f58" font-size="8">🔎</text>
 
-    <rect x="612" y="206" width="126" height="60" rx="6" fill="rgba(188,140,255,0.1)" stroke="#bc8cff" stroke-width="1"/>
-    <text x="675" y="222" text-anchor="middle" fill="#bc8cff" font-size="12" font-weight="bold">challenger</text>
-    <text x="675" y="236" text-anchor="middle" fill="#8b949e" font-size="8">opus</text>
+    <rect x="612" y="206" width="126" height="60" rx="6" fill="rgba(88,166,255,0.1)" stroke="#58a6ff" stroke-width="1"/>
+    <text x="675" y="222" text-anchor="middle" fill="#58a6ff" font-size="12" font-weight="bold">challenger</text>
+    <text x="675" y="236" text-anchor="middle" fill="#8b949e" font-size="8">sonnet</text>
     <text x="675" y="250" text-anchor="middle" fill="#e6edf3" font-size="8">스트레스 테스트</text>
     <text x="675" y="261" text-anchor="middle" fill="#484f58" font-size="8">🥊</text>
 
     <!-- Row 2 -->
-    <rect x="130" y="278" width="126" height="60" rx="6" fill="rgba(188,140,255,0.1)" stroke="#bc8cff" stroke-width="1"/>
-    <text x="193" y="294" text-anchor="middle" fill="#bc8cff" font-size="12" font-weight="bold">verifier</text>
-    <text x="193" y="308" text-anchor="middle" fill="#8b949e" font-size="8">opus</text>
+    <rect x="130" y="278" width="126" height="60" rx="6" fill="rgba(88,166,255,0.1)" stroke="#58a6ff" stroke-width="1"/>
+    <text x="193" y="294" text-anchor="middle" fill="#58a6ff" font-size="12" font-weight="bold">verifier</text>
+    <text x="193" y="308" text-anchor="middle" fill="#8b949e" font-size="8">sonnet</text>
     <text x="193" y="322" text-anchor="middle" fill="#e6edf3" font-size="8">검증</text>
     <text x="193" y="333" text-anchor="middle" fill="#484f58" font-size="8">✅</text>
 
@@ -108,12 +108,15 @@
     <text x="469" y="322" text-anchor="middle" fill="#e6edf3" font-size="8">리서치</text>
     <text x="469" y="333" text-anchor="middle" fill="#484f58" font-size="8">🌐</text>
 
-    <rect x="544" y="278" width="126" height="60" rx="6" fill="rgba(188,140,255,0.1)" stroke="#bc8cff" stroke-width="1"/>
-    <text x="607" y="294" text-anchor="middle" fill="#bc8cff" font-size="12" font-weight="bold">browser</text>
-    <text x="607" y="308" text-anchor="middle" fill="#8b949e" font-size="8">opus</text>
+    <rect x="544" y="278" width="126" height="60" rx="6" fill="rgba(88,166,255,0.1)" stroke="#58a6ff" stroke-width="1"/>
+    <text x="607" y="294" text-anchor="middle" fill="#58a6ff" font-size="12" font-weight="bold">browser</text>
+    <text x="607" y="308" text-anchor="middle" fill="#8b949e" font-size="8">sonnet</text>
     <text x="607" y="322" text-anchor="middle" fill="#e6edf3" font-size="8">UI 테스트</text>
     <text x="607" y="333" text-anchor="middle" fill="#484f58" font-size="8">🖥️</text>
   </g>
+
+  <!-- Additional agents note -->
+  <text x="400" y="349" text-anchor="middle" fill="#8b949e" font-family="monospace, 'Noto Sans KR', sans-serif" font-size="8">+ worker-fast (haiku), deep-verify (codex)</text>
 
   <!-- Arrow down -->
   <line x1="400" y1="356" x2="400" y2="370" stroke="#484f58" stroke-width="1.5"/>
@@ -154,8 +157,8 @@
     <rect x="0" y="0" width="185" height="36" rx="5" fill="rgba(255,255,255,0.03)" stroke="#30363d" stroke-width="0.5"/>
     <circle cx="14" cy="11" r="4" fill="#58a6ff"/>
     <text x="24" y="14" fill="#8b949e">sonnet</text>
-    <circle cx="80" cy="11" r="4" fill="#bc8cff"/>
-    <text x="90" y="14" fill="#8b949e">opus</text>
+    <circle cx="80" cy="11" r="4" fill="#79c0ff"/>
+    <text x="90" y="14" fill="#8b949e">haiku</text>
     <circle cx="140" cy="11" r="4" fill="#f0883e"/>
     <text x="150" y="14" fill="#8b949e">codex</text>
     <text x="93" y="30" text-anchor="middle" fill="#484f58" font-size="7">모델 색상 범례</text>
