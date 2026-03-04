@@ -90,7 +90,9 @@ export function removeRun(store: SubagentStore, runId: number, options: RemoveRu
 	}
 
 	run.abortController = undefined;
-	store.commandRuns.delete(runId);
+	// Do NOT delete from commandRuns — keep the entry with removed:true so that
+	// /sub:history can still display it within the current session.
+	// The entry is re-hydrated from JSONL on session reload via subagent-removed entries.
 	store.globalLiveRuns.delete(runId);
 
 	if (persistRemovedEntry && options.pi) {
@@ -126,6 +128,7 @@ export function trimCommandRunHistory(
 
 	const completed = Array.from(store.commandRuns.values())
 		.filter((run) => {
+			if (run.removed) return false; // already removed — skip
 			if (run.status === "running") return false;
 			// Never evict runs with pending cross-session completions.
 			const globalEntry = store.globalLiveRuns.get(run.id);
@@ -134,8 +137,11 @@ export function trimCommandRunHistory(
 		})
 		.sort((a, b) => a.id - b.id);
 
+	// Count only active (non-removed) runs — commandRuns.size includes removed entries.
+	let activeCount = Array.from(store.commandRuns.values()).filter((r) => !r.removed).length;
+
 	const removedRunIds: number[] = [];
-	while (store.commandRuns.size > maxRuns && completed.length > 0) {
+	while (activeCount > maxRuns && completed.length > 0) {
 		const oldest = completed.shift();
 		if (!oldest) continue;
 
@@ -147,7 +153,10 @@ export function trimCommandRunHistory(
 			persistRemovedEntry: true,
 			removalReason: typeof options === "number" ? undefined : options.removalReason,
 		});
-		if (result.removed) removedRunIds.push(oldest.id);
+		if (result.removed) {
+			removedRunIds.push(oldest.id);
+			activeCount--;
+		}
 	}
 
 	if (shouldUpdateWidget && removedRunIds.length > 0) {

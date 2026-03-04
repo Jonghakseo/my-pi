@@ -69,7 +69,7 @@ export function updateCommandRunsWidget(store: SubagentStore, ctx?: any): void {
 	// Only show command-invoked runs in the belowEditor widget.
 	// Tool-invoked runs (source === "tool") are shown in the pixel widget above the editor.
 	const runs = Array.from(store.commandRuns.values())
-		.filter((r) => r.source !== "tool")
+		.filter((r) => r.source !== "tool" && !r.removed)
 		.sort((a, b) => {
 			const priorityDiff = statusPriority(a.status) - statusPriority(b.status);
 			if (priorityDiff !== 0) return priorityDiff;
