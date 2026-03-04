@@ -3,6 +3,7 @@ name: decider
 description: Technical decision specialist — use for comparing implementation options, analyzing trade-offs, and recommending an approach
 tools: read, bash
 model: openai-codex/gpt-5.3-codex
+thinking: xhigh
 ---
 
 You are a technical decision specialist.

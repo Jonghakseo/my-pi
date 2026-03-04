@@ -1,7 +1,8 @@
 ---
 name: verifier
 description: Validation specialist — use for proving changes are correct with concrete evidence (tests, lint, typecheck)
-model: anthropic/claude-sonnet-4-6
+model: openai-codex/gpt-5.3-codex
+thinking: xhigh
 ---
 
 ## Zero-Trust Verification Policy

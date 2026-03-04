@@ -1,7 +1,8 @@
 ---
 name: worker-fast
 description: Fast implementation agent — use for simple bug fixes, single-file edits, quick additions (< 10 lines)
-model: anthropic/claude-haiku-4-5
+model: openai-codex/gpt-5.3-codex-spark
+thinking: xhigh
 tools: read, grep, find, ls, bash, edit, write
 ---
 
