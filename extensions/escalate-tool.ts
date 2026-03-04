@@ -6,13 +6,11 @@
  *   1. Writes escalation info to ~/.pi/agent/escalations/<session-basename>.yaml
  *   2. Exits with code 42 (ESCALATION_EXIT_CODE)
  *
- * The executor.ts in the intent extension detects exit code 42 and:
+ * The subagent runner detects exit code 42 and:
  *   - Reads + deletes the escalation file (IPC)
- *   - Sets the Blueprint node status to "escalated"
- *   - Sends a triggerTurn: true message to the master
+ *   - Surfaces the escalation message to the master
  *
- * The master can then retry_node (with optional context via edit_blueprint)
- * or abort the Blueprint.
+ * The master can then review the escalation and respond appropriately.
  */
 
 import * as fs from "node:fs";
@@ -29,7 +27,7 @@ export default function (pi: ExtensionAPI) {
 		description: [
 			"에스컬레이션: 현재 작업에서 마스터의 판단이 필요할 때 호출.",
 			"마스터에게 메시지를 전달하고 현재 실행을 즉시 중단합니다.",
-			"마스터는 판단 후 retry_node로 재개하거나 abort로 중단할 수 있습니다.",
+			"마스터가 에스컬레이션 메시지를 확인하고 적절히 대응합니다.",
 			"",
 			"사용 시점:",
 			"- 진행 방향에 대한 결정이 필요한 경우",

@@ -282,6 +282,7 @@ export async function runSingleAgent(
 		usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0, contextTokens: 0, turns: 0 },
 		model: agent.model,
 		step,
+		sessionFile,
 	};
 
 	const emitUpdate = () => {

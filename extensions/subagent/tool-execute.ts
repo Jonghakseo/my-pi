@@ -27,6 +27,7 @@ import { getFinalOutput, getLastNonEmptyLine, runSingleAgent } from "./runner.js
 import { buildMainContextText, makeSubagentSessionFile, wrapTaskWithMainContext } from "./session.js";
 import { type SubagentStore, updateRunFromResult } from "./store.js";
 import type { ChainItemFields, CommandRunState, OnUpdateCallback, SingleResult, SubagentDetails } from "./types.js";
+import { ESCALATION_EXIT_CODE, readAndConsumeEscalation } from "./escalation.js";
 import { updateCommandRunsWidget } from "./widget.js";
 
 type SessionToolCall = {
@@ -754,6 +755,40 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 					if (runState.removed) return;
 
 					updateRunFromResult(runState, result);
+
+					// Escalation detection: subagent used escalate tool (exit code 42)
+					if (result.exitCode === ESCALATION_EXIT_CODE && runState.sessionFile) {
+						const escalation = readAndConsumeEscalation(runState.sessionFile);
+						const escalationMsg = escalation?.message ?? "Subagent escalated without a message.";
+						runState.status = "error";
+						runState.elapsedMs = Date.now() - runState.startedAt;
+						runState.lastOutput = `[ESCALATION] ${escalationMsg}`;
+						runState.lastLine = `[ESCALATION] ${escalationMsg}`;
+						updateCommandRunsWidget(store);
+
+						const usage = formatUsageStats(result.usage, result.model);
+						const completionMessage = {
+							customType: "subagent-tool" as const,
+							content:
+								`[subagent:${resolvedAgent}#${runId}] escalated` +
+								`\nPrompt: ${truncateLines(taskForDisplay, 2)}` +
+								(usage ? `\nUsage: ${usage}` : "") +
+								`\n\n[ESCALATION] ${escalationMsg}`,
+							display: true,
+							details: {
+								runId,
+								agent: resolvedAgent,
+								task: taskForDisplay,
+								status: "error" as const,
+								exitCode: result.exitCode,
+								usage: result.usage,
+								model: result.model,
+							},
+						};
+						pi.sendMessage(completionMessage, { triggerTurn: true });
+						return;
+					}
+
 					const isError = result.exitCode !== 0 || result.stopReason === "error" || result.stopReason === "aborted";
 					runState.status = isError ? "error" : "done";
 					runState.elapsedMs = Date.now() - runState.startedAt;
@@ -955,6 +990,18 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 				);
 				results.push(result);
 
+				// Escalation detection in chain
+				if (result.exitCode === ESCALATION_EXIT_CODE) {
+					const sessionFile = result.sessionFile;
+					const escalation = sessionFile ? readAndConsumeEscalation(sessionFile) : null;
+					const escalationMsg = escalation?.message ?? "Subagent escalated without a message.";
+					return {
+						content: [{ type: "text", text: `[ESCALATION] Chain step ${i + 1} (${step.agent}): ${escalationMsg}` }],
+						details: makeDetails("chain")(results),
+						isError: true,
+					};
+				}
+
 				const isError = result.exitCode !== 0 || result.stopReason === "error" || result.stopReason === "aborted";
 				if (isError) {
 					const errorMsg = result.errorMessage || result.stderr || getFinalOutput(result.messages) || "(no output)";
@@ -985,6 +1032,19 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 				makeDetails("single"),
 				undefined,
 			);
+
+			// Escalation detection in single run
+			if (result.exitCode === ESCALATION_EXIT_CODE) {
+				const sessionFile = result.sessionFile;
+				const escalation = sessionFile ? readAndConsumeEscalation(sessionFile) : null;
+				const escalationMsg = escalation?.message ?? "Subagent escalated without a message.";
+				return {
+					content: [{ type: "text", text: `[ESCALATION] ${escalationMsg}` }],
+					details: makeDetails("single")([result]),
+					isError: true,
+				};
+			}
+
 			const isError = result.exitCode !== 0 || result.stopReason === "error" || result.stopReason === "aborted";
 			if (isError) {
 				const errorMsg = result.errorMessage || result.stderr || getFinalOutput(result.messages) || "(no output)";

@@ -1,6 +1,6 @@
 ---
 name: deep-verify
-description: Deep verification specialist for high-risk validations
+description: Deep verification specialist — use for high-risk validations requiring thorough automated + interactive evidence
 model: openai-codex/gpt-5.3-codex
 ---
 

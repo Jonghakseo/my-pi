@@ -41,7 +41,6 @@ For any task requiring one or more of the following, delegate immediately via su
 - Start by designing an execution plan with one or more subagents.
 - Before first delegation in a session, call `list-agents` once to confirm available agent names/capabilities.
 - Compose multi-agent workflows aggressively (parallel + chain + iterative loops).
-- Use workflow blueprints directly (do not depend on reading local prompt files from the main agent).
 - **Challenger gates (mandatory for non-trivial work):**
   - **Gate 1 — Pre-execution:** Before committing to an execution direction on work that involves architectural decisions, 3+ file changes, or estimated 30+ minutes of subagent work, run `challenger` to stress-test the plan.
   - **Gate 2 — Pre-completion:** Before declaring work DONE, run `challenger` for a final review pass.
@@ -49,7 +48,7 @@ For any task requiring one or more of the following, delegate immediately via su
 - **Invoke `challenger` as a standalone subagent step (avoid parallel calls for `challenger` by default).**
 - Treat `challenger` as a stress-test gate: if Gate Decision is **Block**, stop and revise the plan. If **Pivot**, address the concerns before proceeding. If **Proceed**, continue with confidence.
 - For trivial tasks (single-file edits, simple lookups, formatting), challenger gates may be skipped.
-- Example blueprints (optional, not mandatory):
+- Example workflows (optional, not mandatory):
   - **QA Chain**: worker(테스트 시나리오 도출) → browser(실행 + 스크린샷 증거 수집) → worker(실패 항목 수정) ↔ verifier(수정 검증/증거화) 반복 → reviewer(최종 코드 리뷰).
   - **Implementation Chain**: planner(구현 계획/리스크 분해) → challenger(가정/리스크 반박) → worker(구현) → verifier(테스트/lint/typecheck 증거) → reviewer(품질/보안 리뷰) → worker(피드백 반영) → verifier(재검증).
   - **Research/Decision Chain**: finder/searcher(사실 수집) → decider(옵션 비교/선택) → challenger(반례/실패 시나리오 도출) → verifier/reviewer(선택안 타당성 점검).
