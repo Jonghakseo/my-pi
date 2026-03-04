@@ -34,7 +34,6 @@ function manageSpinnerTimer(store: SubagentStore): void {
 	}
 }
 
-
 export function updateCommandRunsWidget(store: SubagentStore, ctx?: any): void {
 	const activeCtx = ctx ?? store.commandWidgetCtx;
 	if (!activeCtx || !activeCtx.hasUI) return;
@@ -144,7 +143,9 @@ export function updateCommandRunsWidget(store: SubagentStore, ctx?: any): void {
 							}
 						}
 
-						const taskSnippet = run.task ? theme.fg("dim", ` · ${run.task.replace(/\s+/g, " ").trim().slice(0, 60)}`) : "";
+						const taskSnippet = run.task
+							? theme.fg("dim", ` · ${run.task.replace(/\s+/g, " ").trim().slice(0, 60)}`)
+							: "";
 						const statusLeft =
 							theme.fg(statusColor, `${statusIcon} #${run.id}`) +
 							modeLabel +
