@@ -266,6 +266,7 @@ export async function runSingleAgent(
 	if (sessionFile) args.push("--session", sessionFile);
 	else args.push("--no-session");
 	if (agent.model) args.push("--model", agent.model);
+	if (agent.thinking) args.push("--thinking", agent.thinking);
 	if (agent.tools && agent.tools.length > 0) args.push("--tools", agent.tools.join(","));
 
 	let tmpPromptDir: string | null = null;

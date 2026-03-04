@@ -715,7 +715,7 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 		name: "list-agents",
 		label: "List Agents",
 		description:
-			"List available subagent definitions (name, source, model, tools, description). Useful before planning delegation.",
+			"List available subagent definitions (name, source, model, thinking, tools, description). Useful before planning delegation.",
 		parameters: ListAgentsParams,
 		execute: async (_toolCallId, _params: Record<string, any>, _signal, _onUpdate, ctx) => {
 			const discovery = discoverAgents(ctx.cwd);
@@ -733,9 +733,10 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 
 			const lines = agents.map((agent) => {
 				const model = agent.model ?? "(inherit current model)";
+				const thinking = agent.thinking ?? "(inherit current thinking)";
 				const tools = agent.tools && agent.tools.length > 0 ? agent.tools.join(",") : "default";
 				const description = agent.description ? ` · ${agent.description}` : "";
-				return `${agent.name} [${agent.source}] · model: ${model} · tools: ${tools}${description}`;
+				return `${agent.name} [${agent.source}] · model: ${model} · thinking: ${thinking} · tools: ${tools}${description}`;
 			});
 
 			return {
@@ -746,6 +747,7 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 						name: agent.name,
 						source: agent.source,
 						model: agent.model,
+						thinking: agent.thinking,
 						tools: agent.tools ?? [],
 						description: agent.description,
 					})),
@@ -1289,7 +1291,7 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 	});
 
 	pi.registerCommand("subagents", {
-		description: "List available subagents and their model/tool settings",
+		description: "List available subagents and their model/thinking/tool settings",
 		handler: async (_args, ctx) => {
 			captureSwitchSession(store, ctx);
 			const discovery = discoverAgents(ctx.cwd);
@@ -1302,8 +1304,12 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 			const lines = agents.map((a) => {
 				const tools = a.tools?.join(",") ?? "default";
 				const model = a.model ?? "(inherit current model)";
+				const thinking = a.thinking ?? "(inherit current thinking)";
 				const description = a.description ? ` · ${a.description}` : "";
-				return truncateText(`${a.name} [${a.source}] · model: ${model} · tools: ${tools}${description}`, 220);
+				return truncateText(
+					`${a.name} [${a.source}] · model: ${model} · thinking: ${thinking} · tools: ${tools}${description}`,
+					220,
+				);
 			});
 
 			ctx.ui.notify(`Available subagents\n${lines.map((line) => `• ${line}`).join("\n")}`, "info");

@@ -247,9 +247,10 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 
 			const lines = agents.map((agent) => {
 				const model = agent.model ?? "(inherit current model)";
+				const thinking = agent.thinking ?? "(inherit current thinking)";
 				const tools = agent.tools && agent.tools.length > 0 ? agent.tools.join(",") : "default";
 				const description = agent.description ? ` · ${agent.description}` : "";
-				return `${agent.name} [${agent.source}] · model: ${model} · tools: ${tools}${description}`;
+				return `${agent.name} [${agent.source}] · model: ${model} · thinking: ${thinking} · tools: ${tools}${description}`;
 			});
 
 			return {

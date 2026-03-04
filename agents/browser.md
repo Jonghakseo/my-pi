@@ -2,7 +2,8 @@
 name: browser
 description: Browser automation specialist — use for UI testing, visual verification, and web interaction via agent-browser CLI
 tools: bash, read
-model: anthropic/claude-sonnet-4-6
+model: openai-codex/gpt-5.3-codex
+thinking: high
 ---
 
 You are a browser automation specialist.

@@ -7,11 +7,15 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { parseFrontmatter } from "@mariozechner/pi-coding-agent";
 
+export const THINKING_LEVELS = ["off", "minimal", "low", "medium", "high", "xhigh"] as const;
+export type AgentThinkingLevel = (typeof THINKING_LEVELS)[number];
+
 export interface AgentConfig {
 	name: string;
 	description: string;
 	tools?: string[];
 	model?: string;
+	thinking?: AgentThinkingLevel;
 	systemPrompt: string;
 	source: "user" | "project";
 	filePath: string;
@@ -123,6 +127,14 @@ function normalizeModel(rawModel: string | undefined, format: "pi" | "claude"): 
 	return model;
 }
 
+function normalizeThinkingLevel(rawThinking: string | undefined): AgentThinkingLevel | undefined {
+	if (!rawThinking) return undefined;
+	const thinking = rawThinking.trim().toLowerCase();
+	if (!thinking) return undefined;
+	if ((THINKING_LEVELS as readonly string[]).includes(thinking)) return thinking as AgentThinkingLevel;
+	return undefined;
+}
+
 function loadAgentsFromDir(dir: string, source: "user" | "project", options: LoadAgentsOptions = {}): AgentConfig[] {
 	const agents: AgentConfig[] = [];
 	const recursive = options.recursive ?? false;
@@ -146,12 +158,14 @@ function loadAgentsFromDir(dir: string, source: "user" | "project", options: Loa
 
 		const tools = normalizeTools(frontmatter.tools, format);
 		const model = normalizeModel(frontmatter.model, format);
+		const thinking = normalizeThinkingLevel(frontmatter.thinking);
 
 		agents.push({
 			name: frontmatter.name,
 			description: frontmatter.description,
 			tools,
 			model,
+			thinking,
 			systemPrompt: attachCommonSubagentRule(body),
 			source,
 			filePath,
