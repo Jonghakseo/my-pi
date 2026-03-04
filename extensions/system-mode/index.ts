@@ -104,7 +104,7 @@ function getAllToolNames(pi: ExtensionAPI): string[] {
 const MEMORY_TOOLS = ["remember", "recall", "forget", "memory_list"] as const;
 
 /** Extra tools allowed in intent mode (intent itself is the base dispatch tool, not listed here). */
-const INTENT_MODE_EXTRA_TOOLS = ["AskUserQuestion"] as const;
+const INTENT_MODE_EXTRA_TOOLS = ["AskUserQuestion", "todo"] as const;
 
 export default function (pi: ExtensionAPI) {
 	let mode: SystemMode = "default";
@@ -179,8 +179,8 @@ export default function (pi: ExtensionAPI) {
 				if (newMode !== "intent" && tools.includes("list-agents")) {
 					allowedTools.push("list-agents");
 				}
-				// blueprint is allowed in intent mode only
-				if (newMode === "intent" && tools.includes("blueprint")) {
+				// blueprint is allowed in intent mode and master mode (for abort/status in master)
+				if ((newMode === "intent" || newMode === "master") && tools.includes("blueprint")) {
 					allowedTools.push("blueprint");
 				}
 				// Memory tools are allowed in hard modes for cross-session knowledge
@@ -346,8 +346,8 @@ export default function (pi: ExtensionAPI) {
 			}
 			return;
 		}
-		// blueprint is allowed in intent mode only
-		if (isToolCallEventType("blueprint", event) && mode === "intent") {
+		// blueprint is allowed in intent mode and master mode (abort/status/abort_run operations)
+		if (isToolCallEventType("blueprint", event) && (mode === "intent" || mode === "master")) {
 			return;
 		}
 		// Allow memory-layer tools in hard modes
@@ -369,8 +369,8 @@ export default function (pi: ExtensionAPI) {
 		const modeLabel = mode === "intent" ? "Intent master" : "Master";
 		const allowedLabel =
 			mode === "intent"
-				? "intent, AskUserQuestion, todo, and memory tools"
-				: "subagent, list-agents, and memory tools (remember/recall/forget/memory_list)";
+				? "intent, blueprint, AskUserQuestion, todo, and memory tools"
+				: "subagent, list-agents, blueprint, and memory tools (remember/recall/forget/memory_list)";
 		return {
 			block: true,
 			reason:
@@ -380,7 +380,7 @@ export default function (pi: ExtensionAPI) {
 	});
 
 	pi.on("tool_result", async (event, ctx) => {
-		if (mode !== "master" && mode !== "agents" && mode !== "intent") return;
+		if (mode !== "master" && mode !== "agents") return;
 		if (event.toolName !== "subagent") return;
 		if (event.isError) return;
 		const input = event.input as Record<string, unknown> | undefined;
@@ -388,8 +388,6 @@ export default function (pi: ExtensionAPI) {
 		if (firstAsyncLaunchAbortTriggeredInSession) return;
 
 		firstAsyncLaunchAbortTriggeredInSession = true;
-		// Hard-stop only once per session: immediately after the first async subagent launch.
-		// Persist both in-session marker entry and file-backed guard so reload/switch still keeps once-per-session behavior.
 		persistFirstAbortForSession(ctx);
 		pi.appendEntry(FIRST_ASYNC_ABORT_MARKER_ENTRY_TYPE, { triggeredAt: Date.now(), mode });
 		if (ctx.hasUI) {
@@ -400,7 +398,7 @@ export default function (pi: ExtensionAPI) {
 
 	pi.on("before_agent_start", async (event, _ctx) => {
 		if (mode === "default") return;
-		const modePrompt = loadPrompt(mode); // "agents" | "master"
+		const modePrompt = loadPrompt(mode); // "agents" | "master" | "intent"
 		if (!modePrompt) return;
 		return {
 			systemPrompt: modePrompt + "\n\n" + event.systemPrompt,
