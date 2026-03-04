@@ -1,5 +1,7 @@
+import { spawn } from "node:child_process";
+import * as os from "node:os";
+import * as path from "node:path";
 import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
-import { spawn } from "child_process";
 import { PURPOSE_STATUS_KEY } from "./utils/status-keys.ts";
 
 const PURPOSE_ENTRY_TYPE = "purpose:set";
@@ -7,6 +9,9 @@ const PURPOSE_COMMAND_NAME = "purpose";
 const LEGACY_WIDGET_KEY = "purpose";
 // Backward-compat alias for old builds that referenced WIDGET_KEY directly.
 const WIDGET_KEY = LEGACY_WIDGET_KEY;
+
+// Subagent session directory — must match subagent/session.ts:SUBAGENT_SESSION_DIR
+const SUBAGENT_SESSION_DIR = path.join(os.homedir(), ".pi", "agent", "sessions", "subagents");
 
 type PurposeEntryData = {
 	purpose: string;
@@ -25,6 +30,28 @@ function isCustomEntry(entry: unknown): entry is CustomEntry {
 	if (typeof entry !== "object" || entry === null) return false;
 	const e = entry as Record<string, unknown>;
 	return e.type === "custom" && typeof e.customType === "string";
+}
+
+function isSubagentSession(ctx: ExtensionContext): boolean {
+	try {
+		const sessionManager = ctx.sessionManager;
+		if (sessionManager && typeof sessionManager === "object" && "getSessionFile" in sessionManager) {
+			const getSessionFile = (sessionManager as Record<string, unknown>).getSessionFile;
+			if (typeof getSessionFile === "function") {
+				const raw = String(getSessionFile() ?? "");
+				const sessionFile = raw.replace(/[\r\n\t]+/g, "").trim() || undefined;
+				if (sessionFile) {
+					return (
+						sessionFile.startsWith(SUBAGENT_SESSION_DIR + path.sep) ||
+						sessionFile.startsWith(`${SUBAGENT_SESSION_DIR}/`)
+					);
+				}
+			}
+		}
+	} catch {
+		// Ignore errors — treat as not a subagent session
+	}
+	return false;
 }
 
 function normalizePurpose(raw: unknown): string {
@@ -184,6 +211,9 @@ export default function purposeExtension(pi: ExtensionAPI) {
 	// ── Auto Purpose (async) ──────────────────────────────────────
 
 	pi.on("before_agent_start", async (event, ctx) => {
+		// Do not auto-generate purpose in subagent sessions
+		if (isSubagentSession(ctx)) return;
+
 		// purpose가 이미 있으면 스킵
 		if (hasPurpose()) return;
 
