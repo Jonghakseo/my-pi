@@ -66,15 +66,37 @@ import {
 	visibleWidth,
 } from "@mariozechner/pi-tui";
 import { Type } from "@sinclair/typebox";
+import {
+	applyTodoMetadataOverrides as applyTodoMetadataOverridesUtil,
+	buildRefinePrompt as buildRefinePromptUtil,
+	buildTodoSearchText as buildTodoSearchTextUtil,
+	clearAssignmentIfClosed as clearAssignmentIfClosedUtil,
+	filterTodos as filterTodosUtil,
+	getTodoStatus as getTodoStatusUtil,
+	getTodoTitle as getTodoTitleUtil,
+	inferMetadataFromText as inferMetadataFromTextUtil,
+	isTodoClosed as isTodoClosedUtil,
+	normalizeDueDate as normalizeDueDateUtil,
+	normalizeEstimate as normalizeEstimateUtil,
+	normalizePriority as normalizePriorityUtil,
+	normalizeTodoId as normalizeTodoIdUtil,
+	normalizeTodoMetadata as normalizeTodoMetadataUtil,
+	normalizeTodoSettings as normalizeTodoSettingsUtil,
+	normalizeTodoTags as normalizeTodoTagsUtil,
+	parseStructuredTag as parseStructuredTagUtil,
+	parseTodoContent as parseTodoContentUtil,
+	parseTodoFrontMatter as parseTodoFrontMatterUtil,
+	resolveTodoMetadataOverrides as resolveTodoMetadataOverridesUtil,
+	serializeTodo as serializeTodoUtil,
+	sortTodos as sortTodosUtil,
+	splitFrontMatter as splitFrontMatterUtil,
+	splitTodosByAssignment as splitTodosByAssignmentUtil,
+	validateTodoId as validateTodoIdUtil,
+} from "./utils/todo-utils.ts";
 
 const TODO_PATH_ENV = "PI_TODO_PATH";
 const TODO_SETTINGS_NAME = "settings.json";
 const TODO_ID_PREFIX = "TODO-";
-const TODO_ID_PATTERN = /^[a-f0-9]{8}$/i;
-const DEFAULT_TODO_SETTINGS = {
-	gc: true,
-	gcDays: 7,
-};
 const LOCK_TTL_MS = 30 * 60 * 1000;
 
 type TodoPriority = "high" | "medium" | "low";
@@ -151,22 +173,11 @@ function formatTodoId(id: string): string {
 }
 
 function normalizeTodoId(id: string): string {
-	let trimmed = id.trim();
-	if (trimmed.startsWith("#")) {
-		trimmed = trimmed.slice(1);
-	}
-	if (trimmed.toUpperCase().startsWith(TODO_ID_PREFIX)) {
-		trimmed = trimmed.slice(TODO_ID_PREFIX.length);
-	}
-	return trimmed;
+	return normalizeTodoIdUtil(id);
 }
 
 function validateTodoId(id: string): { id: string } | { error: string } {
-	const normalized = normalizeTodoId(id);
-	if (!normalized || !TODO_ID_PATTERN.test(normalized)) {
-		return { error: "Invalid todo id. Expected TODO-<hex>." };
-	}
-	return { id: normalized.toLowerCase() };
+	return validateTodoIdUtil(id);
 }
 
 function displayTodoId(id: string): string {
@@ -174,13 +185,11 @@ function displayTodoId(id: string): string {
 }
 
 function isTodoClosed(status: string): boolean {
-	return ["closed", "done"].includes(status.toLowerCase());
+	return isTodoClosedUtil(status);
 }
 
 function clearAssignmentIfClosed(todo: TodoFrontMatter): void {
-	if (isTodoClosed(getTodoStatus(todo))) {
-		todo.assigned_to_session = undefined;
-	}
+	clearAssignmentIfClosedUtil(todo);
 }
 
 interface TodoMetadataOverrides {
@@ -194,47 +203,11 @@ interface TodoMetadataOverrides {
 }
 
 function normalizeTodoTags(tags: string[] | undefined): string[] {
-	if (!Array.isArray(tags)) return [];
-	const normalized: string[] = [];
-	for (const rawTag of tags) {
-		if (typeof rawTag !== "string") continue;
-		const tag = rawTag.trim();
-		if (!tag || normalized.includes(tag)) continue;
-		normalized.push(tag);
-	}
-	return normalized;
-}
-
-function sameStringArray(a: string[], b: string[]): boolean {
-	if (a.length !== b.length) return false;
-	for (let i = 0; i < a.length; i += 1) {
-		if (a[i] !== b[i]) return false;
-	}
-	return true;
+	return normalizeTodoTagsUtil(tags);
 }
 
 function normalizePriority(value: string | undefined): TodoPriority | undefined {
-	if (typeof value !== "string") return undefined;
-	const trimmed = value.trim().toLowerCase();
-	if (!trimmed) return undefined;
-
-	const compact = trimmed.replace(/\s+/g, "");
-	const candidate = compact
-		.replace(/^priority[:=]/, "")
-		.replace(/^우선순위[:=]/, "")
-		.replace(/^p[-_:]/, "")
-		.replace(/^p([0-3])$/, "$1");
-
-	if (["상", "high", "highest", "urgent", "긴급", "0", "1"].includes(candidate)) {
-		return "high";
-	}
-	if (["중", "medium", "normal", "2"].includes(candidate)) {
-		return "medium";
-	}
-	if (["하", "low", "lowest", "3"].includes(candidate)) {
-		return "low";
-	}
-	return undefined;
+	return normalizePriorityUtil(value);
 }
 
 function formatPriority(priority: TodoPriority | undefined): string {
@@ -243,37 +216,11 @@ function formatPriority(priority: TodoPriority | undefined): string {
 }
 
 function normalizeDueDate(value: string | undefined): string | undefined {
-	if (typeof value !== "string") return undefined;
-	const trimmed = value.trim();
-	if (!trimmed) return undefined;
-	const normalized = trimmed.replace(/[./]/g, "-");
-	const match = normalized.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
-	if (!match) return undefined;
-
-	const year = Number(match[1]);
-	const month = Number(match[2]);
-	const day = Number(match[3]);
-	if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) {
-		return undefined;
-	}
-	if (month < 1 || month > 12 || day < 1 || day > 31) {
-		return undefined;
-	}
-
-	const date = new Date(Date.UTC(year, month - 1, day));
-	if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) {
-		return undefined;
-	}
-
-	const monthText = String(month).padStart(2, "0");
-	const dayText = String(day).padStart(2, "0");
-	return `${year}-${monthText}-${dayText}`;
+	return normalizeDueDateUtil(value);
 }
 
 function normalizeEstimate(value: string | undefined): string | undefined {
-	if (typeof value !== "string") return undefined;
-	const normalized = value.trim().replace(/\s+/g, " ");
-	return normalized || undefined;
+	return normalizeEstimateUtil(value);
 }
 
 function parseStructuredTag(
@@ -283,224 +230,26 @@ function parseStructuredTag(
 	| { field: "due_date"; value: string }
 	| { field: "estimate"; value: string }
 	| null {
-	const trimmed = tag.trim();
-	if (!trimmed) return null;
-
-	const priorityShort = trimmed.match(/^p[-_:]?(상|중|하)$/i);
-	if (priorityShort) {
-		return { field: "priority", value: priorityShort[1] };
-	}
-
-	const priorityMatch = trimmed.match(/^(?:priority|prio|우선순위)\s*[:=]\s*(.+)$/i);
-	if (priorityMatch) {
-		return { field: "priority", value: priorityMatch[1] };
-	}
-
-	const dueMatch = trimmed.match(/^(?:due|deadline|마감(?:일)?)\s*[:=]\s*(.+)$/i);
-	if (dueMatch) {
-		return { field: "due_date", value: dueMatch[1] };
-	}
-
-	const estimateMatch = trimmed.match(
-		/^(?:est|estimate|eta|duration|소요(?:시간)?|예상\s*소요(?:시간)?)\s*[:=]\s*(.+)$/i,
-	);
-	if (estimateMatch) {
-		return { field: "estimate", value: estimateMatch[1] };
-	}
-
-	return null;
+	return parseStructuredTagUtil(tag);
 }
 
 function inferMetadataFromText(text: string): Partial<Pick<TodoFrontMatter, "priority" | "due_date" | "estimate">> {
-	const metadata: Partial<Pick<TodoFrontMatter, "priority" | "due_date" | "estimate">> = {};
-
-	const dueMatch = text.match(/(?:마감(?:일)?|due(?:\s*date)?|deadline)\s*[:=]\s*(\d{4}[./-]\d{1,2}[./-]\d{1,2})/i);
-	if (dueMatch) {
-		const normalized = normalizeDueDate(dueMatch[1]);
-		if (normalized) metadata.due_date = normalized;
-	}
-
-	const priorityMatch = text.match(/(?:우선순위|priority)\s*[:=]\s*(상|중|하|high|medium|low)/i);
-	if (priorityMatch) {
-		const normalized = normalizePriority(priorityMatch[1]);
-		if (normalized) metadata.priority = normalized;
-	}
-
-	if (!metadata.priority) {
-		const compactPriority = text.match(/\bP[-_:]?(상|중|하|0|1|2|3)\b/i);
-		if (compactPriority) {
-			const normalized = normalizePriority(compactPriority[1]);
-			if (normalized) metadata.priority = normalized;
-		}
-	}
-
-	const estimateMatch = text.match(/(?:예상\s*소요(?:시간)?|소요(?:시간)?|estimate|est)\s*[:=]\s*([^\n,;]+)/i);
-	if (estimateMatch) {
-		const normalized = normalizeEstimate(estimateMatch[1]);
-		if (normalized) metadata.estimate = normalized;
-	}
-
-	return metadata;
+	return inferMetadataFromTextUtil(text);
 }
 
 function normalizeTodoMetadata(
 	todo: TodoFrontMatter,
 	options: { inferFromText?: boolean; bodyText?: string; extractFromTags?: boolean } = {},
 ): boolean {
-	let changed = false;
-
-	const normalizedTags = normalizeTodoTags(todo.tags);
-	if (!sameStringArray(todo.tags, normalizedTags)) {
-		todo.tags = normalizedTags;
-		changed = true;
-	}
-
-	const normalizedPriority = normalizePriority(todo.priority);
-	if (todo.priority !== normalizedPriority) {
-		todo.priority = normalizedPriority;
-		changed = true;
-	}
-
-	const normalizedDueDate = normalizeDueDate(todo.due_date);
-	if (todo.due_date !== normalizedDueDate) {
-		todo.due_date = normalizedDueDate;
-		changed = true;
-	}
-
-	const normalizedEstimate = normalizeEstimate(todo.estimate);
-	if (todo.estimate !== normalizedEstimate) {
-		todo.estimate = normalizedEstimate;
-		changed = true;
-	}
-
-	if (options.extractFromTags ?? true) {
-		const remainingTags: string[] = [];
-		let extractedPriority: TodoPriority | undefined;
-		let extractedDueDate: string | undefined;
-		let extractedEstimate: string | undefined;
-
-		for (const tag of todo.tags) {
-			const parsed = parseStructuredTag(tag);
-			if (!parsed) {
-				remainingTags.push(tag);
-				continue;
-			}
-			if (parsed.field === "priority" && !extractedPriority) {
-				extractedPriority = normalizePriority(parsed.value);
-				continue;
-			}
-			if (parsed.field === "due_date" && !extractedDueDate) {
-				extractedDueDate = normalizeDueDate(parsed.value);
-				continue;
-			}
-			if (parsed.field === "estimate" && !extractedEstimate) {
-				extractedEstimate = normalizeEstimate(parsed.value);
-			}
-		}
-
-		if (!sameStringArray(todo.tags, remainingTags)) {
-			todo.tags = remainingTags;
-			changed = true;
-		}
-
-		if (!todo.priority && extractedPriority) {
-			todo.priority = extractedPriority;
-			changed = true;
-		}
-		if (!todo.due_date && extractedDueDate) {
-			todo.due_date = extractedDueDate;
-			changed = true;
-		}
-		if (!todo.estimate && extractedEstimate) {
-			todo.estimate = extractedEstimate;
-			changed = true;
-		}
-	}
-
-	if (options.inferFromText) {
-		const inferred = inferMetadataFromText(`${todo.title ?? ""}\n${options.bodyText ?? ""}`);
-		if (!todo.priority && inferred.priority) {
-			todo.priority = inferred.priority;
-			changed = true;
-		}
-		if (!todo.due_date && inferred.due_date) {
-			todo.due_date = inferred.due_date;
-			changed = true;
-		}
-		if (!todo.estimate && inferred.estimate) {
-			todo.estimate = inferred.estimate;
-			changed = true;
-		}
-	}
-
-	return changed;
+	return normalizeTodoMetadataUtil(todo, options);
 }
 
 function resolveTodoMetadataOverrides(params: Record<string, unknown>): TodoMetadataOverrides {
-	const overrides: TodoMetadataOverrides = {
-		priorityProvided: false,
-		dueDateProvided: false,
-		estimateProvided: false,
-	};
-
-	if (Object.hasOwn(params, "priority")) {
-		overrides.priorityProvided = true;
-		if (typeof params.priority !== "string") {
-			return { ...overrides, error: "priority must be a string" };
-		}
-		if (params.priority.trim()) {
-			const normalized = normalizePriority(params.priority);
-			if (!normalized) {
-				return { ...overrides, error: "Invalid priority. Use high/medium/low or 상/중/하." };
-			}
-			overrides.priority = normalized;
-		}
-	}
-
-	let dueDateProvided = false;
-	let dueDateRaw: unknown;
-	for (const key of ["dueDate", "due_date", "duedate"]) {
-		if (Object.hasOwn(params, key)) {
-			dueDateProvided = true;
-			dueDateRaw = params[key];
-			break;
-		}
-	}
-	if (dueDateProvided) {
-		overrides.dueDateProvided = true;
-		if (typeof dueDateRaw !== "string") {
-			return { ...overrides, error: "dueDate must be a string (YYYY-MM-DD)" };
-		}
-		if (dueDateRaw.trim()) {
-			const normalized = normalizeDueDate(dueDateRaw);
-			if (!normalized) {
-				return { ...overrides, error: "Invalid dueDate. Expected YYYY-MM-DD." };
-			}
-			overrides.due_date = normalized;
-		}
-	}
-
-	if (Object.hasOwn(params, "estimate")) {
-		overrides.estimateProvided = true;
-		if (typeof params.estimate !== "string") {
-			return { ...overrides, error: "estimate must be a string" };
-		}
-		overrides.estimate = normalizeEstimate(params.estimate);
-	}
-
-	return overrides;
+	return resolveTodoMetadataOverridesUtil(params);
 }
 
 function applyTodoMetadataOverrides(todo: TodoFrontMatter, overrides: TodoMetadataOverrides): void {
-	if (overrides.priorityProvided) {
-		todo.priority = overrides.priority;
-	}
-	if (overrides.dueDateProvided) {
-		todo.due_date = overrides.due_date;
-	}
-	if (overrides.estimateProvided) {
-		todo.estimate = overrides.estimate;
-	}
+	applyTodoMetadataOverridesUtil(todo, overrides);
 }
 
 function formatTodoMetadataParts(todo: Pick<TodoFrontMatter, "priority" | "due_date" | "estimate">): string[] {
@@ -563,65 +312,15 @@ async function migrateTodosToStructuredMetadata(todosDir: string): Promise<numbe
 }
 
 function sortTodos(todos: TodoFrontMatter[]): TodoFrontMatter[] {
-	return [...todos].sort((a, b) => {
-		const aClosed = isTodoClosed(a.status);
-		const bClosed = isTodoClosed(b.status);
-		if (aClosed !== bClosed) return aClosed ? 1 : -1;
-		const aAssigned = !aClosed && Boolean(a.assigned_to_session);
-		const bAssigned = !bClosed && Boolean(b.assigned_to_session);
-		if (aAssigned !== bAssigned) return aAssigned ? -1 : 1;
-		return (a.created_at || "").localeCompare(b.created_at || "");
-	});
+	return sortTodosUtil(todos);
 }
 
 function buildTodoSearchText(todo: TodoFrontMatter): string {
-	const tags = todo.tags.join(" ");
-	const assignment = todo.assigned_to_session ? `assigned:${todo.assigned_to_session}` : "";
-	const metadata = formatTodoMetadataParts(todo).join(" ");
-	const rawMetadata = `${todo.priority ?? ""} ${todo.due_date ?? ""} ${todo.estimate ?? ""}`;
-	return `${formatTodoId(todo.id)} ${todo.id} ${todo.title} ${tags} ${metadata} ${rawMetadata} ${todo.status} ${assignment}`.trim();
+	return buildTodoSearchTextUtil(todo);
 }
 
 function filterTodos(todos: TodoFrontMatter[], query: string): TodoFrontMatter[] {
-	const trimmed = query.trim();
-	if (!trimmed) return todos;
-
-	const tokens = trimmed
-		.split(/\s+/)
-		.map((token) => token.trim())
-		.filter(Boolean);
-
-	if (tokens.length === 0) return todos;
-
-	const matches: Array<{ todo: TodoFrontMatter; score: number }> = [];
-	for (const todo of todos) {
-		const text = buildTodoSearchText(todo);
-		let totalScore = 0;
-		let matched = true;
-		for (const token of tokens) {
-			const result = fuzzyMatch(token, text);
-			if (!result.matches) {
-				matched = false;
-				break;
-			}
-			totalScore += result.score;
-		}
-		if (matched) {
-			matches.push({ todo, score: totalScore });
-		}
-	}
-
-	return matches
-		.sort((a, b) => {
-			const aClosed = isTodoClosed(a.todo.status);
-			const bClosed = isTodoClosed(b.todo.status);
-			if (aClosed !== bClosed) return aClosed ? 1 : -1;
-			const aAssigned = !aClosed && Boolean(a.todo.assigned_to_session);
-			const bAssigned = !bClosed && Boolean(b.todo.assigned_to_session);
-			if (aAssigned !== bAssigned) return aAssigned ? -1 : 1;
-			return a.score - b.score;
-		})
-		.map((match) => match.todo);
+	return filterTodosUtil(todos, query, (token, text) => fuzzyMatch(token, text));
 }
 
 class TodoSelectorComponent extends Container implements Focusable {
@@ -1104,13 +803,7 @@ function getTodoSettingsPath(todosDir: string): string {
 }
 
 function normalizeTodoSettings(raw: Partial<TodoSettings>): TodoSettings {
-	const gc = raw.gc ?? DEFAULT_TODO_SETTINGS.gc;
-	const gcDays =
-		(Number.isFinite(raw.gcDays) ? raw.gcDays : DEFAULT_TODO_SETTINGS.gcDays) ?? DEFAULT_TODO_SETTINGS.gcDays;
-	return {
-		gc: Boolean(gc),
-		gcDays: Math.max(0, Math.floor(gcDays)),
-	};
+	return normalizeTodoSettingsUtil(raw);
 }
 
 async function readTodoSettings(todosDir: string): Promise<TodoSettings> {
@@ -1170,149 +863,21 @@ function getLockPath(todosDir: string, id: string): string {
 }
 
 function parseFrontMatter(text: string, idFallback: string): TodoFrontMatter {
-	const data: TodoFrontMatter = {
-		id: idFallback,
-		title: "",
-		tags: [],
-		status: "open",
-		created_at: "",
-		assigned_to_session: undefined,
-		priority: undefined,
-		due_date: undefined,
-		estimate: undefined,
-	};
-
-	const trimmed = text.trim();
-	if (!trimmed) return data;
-
-	try {
-		const parsed = JSON.parse(trimmed) as Partial<TodoFrontMatter> | null;
-		if (!parsed || typeof parsed !== "object") return data;
-		if (typeof parsed.id === "string" && parsed.id) data.id = parsed.id;
-		if (typeof parsed.title === "string") data.title = parsed.title;
-		if (typeof parsed.status === "string" && parsed.status) data.status = parsed.status;
-		if (typeof parsed.created_at === "string") data.created_at = parsed.created_at;
-		if (typeof parsed.assigned_to_session === "string" && parsed.assigned_to_session.trim()) {
-			data.assigned_to_session = parsed.assigned_to_session;
-		}
-		if (Array.isArray(parsed.tags)) {
-			data.tags = parsed.tags.filter((tag): tag is string => typeof tag === "string");
-		}
-		if (typeof parsed.priority === "string") {
-			data.priority = normalizePriority(parsed.priority);
-		}
-		if (typeof parsed.due_date === "string") {
-			data.due_date = normalizeDueDate(parsed.due_date);
-		}
-		if (typeof parsed.estimate === "string") {
-			data.estimate = normalizeEstimate(parsed.estimate);
-		}
-	} catch {
-		return data;
-	}
-
+	const data = parseTodoFrontMatterUtil(text, idFallback);
 	normalizeTodoMetadata(data, { inferFromText: false });
 	return data;
 }
 
-function findJsonObjectEnd(content: string): number {
-	let depth = 0;
-	let inString = false;
-	let escaped = false;
-
-	for (let i = 0; i < content.length; i += 1) {
-		const char = content[i];
-
-		if (inString) {
-			if (escaped) {
-				escaped = false;
-				continue;
-			}
-			if (char === "\\") {
-				escaped = true;
-				continue;
-			}
-			if (char === '"') {
-				inString = false;
-			}
-			continue;
-		}
-
-		if (char === '"') {
-			inString = true;
-			continue;
-		}
-
-		if (char === "{") {
-			depth += 1;
-			continue;
-		}
-
-		if (char === "}") {
-			depth -= 1;
-			if (depth === 0) return i;
-		}
-	}
-
-	return -1;
-}
-
 function splitFrontMatter(content: string): { frontMatter: string; body: string } {
-	if (!content.startsWith("{")) {
-		return { frontMatter: "", body: content };
-	}
-
-	const endIndex = findJsonObjectEnd(content);
-	if (endIndex === -1) {
-		return { frontMatter: "", body: content };
-	}
-
-	const frontMatter = content.slice(0, endIndex + 1);
-	const body = content.slice(endIndex + 1).replace(/^\r?\n+/, "");
-	return { frontMatter, body };
+	return splitFrontMatterUtil(content);
 }
 
 function parseTodoContent(content: string, idFallback: string): TodoRecord {
-	const { frontMatter, body } = splitFrontMatter(content);
-	const parsed = parseFrontMatter(frontMatter, idFallback);
-	const todo: TodoRecord = {
-		id: idFallback,
-		title: parsed.title,
-		tags: parsed.tags ?? [],
-		status: parsed.status,
-		created_at: parsed.created_at,
-		assigned_to_session: parsed.assigned_to_session,
-		priority: parsed.priority,
-		due_date: parsed.due_date,
-		estimate: parsed.estimate,
-		body: body ?? "",
-	};
-	normalizeTodoMetadata(todo, { inferFromText: true, bodyText: todo.body });
-	return todo;
+	return parseTodoContentUtil(content, idFallback);
 }
 
 function serializeTodo(todo: TodoRecord): string {
-	normalizeTodoMetadata(todo, { inferFromText: true, bodyText: todo.body });
-	const frontMatter = JSON.stringify(
-		{
-			id: todo.id,
-			title: todo.title,
-			tags: todo.tags ?? [],
-			status: todo.status,
-			created_at: todo.created_at,
-			assigned_to_session: todo.assigned_to_session || undefined,
-			priority: todo.priority || undefined,
-			due_date: todo.due_date || undefined,
-			estimate: todo.estimate || undefined,
-		},
-		null,
-		2,
-	);
-
-	const body = todo.body ?? "";
-	const trimmedBody = body.replace(/^\n+/, "").replace(/\s+$/, "");
-	if (!trimmedBody) return `${frontMatter}\n`;
-	return `${frontMatter}\n\n${trimmedBody}\n`;
+	return serializeTodoUtil(todo);
 }
 
 async function ensureTodosDir(todosDir: string) {
@@ -1492,11 +1057,11 @@ function listTodosSync(todosDir: string): TodoFrontMatter[] {
 }
 
 function getTodoTitle(todo: TodoFrontMatter): string {
-	return todo.title || "(untitled)";
+	return getTodoTitleUtil(todo);
 }
 
 function getTodoStatus(todo: TodoFrontMatter): string {
-	return todo.status || "open";
+	return getTodoStatusUtil(todo);
 }
 
 function formatAssignmentSuffix(todo: TodoFrontMatter): string {
@@ -1518,12 +1083,7 @@ function formatTodoHeading(todo: TodoFrontMatter): string {
 }
 
 function buildRefinePrompt(todoId: string, title: string): string {
-	return (
-		`let's refine task ${formatTodoId(todoId)} "${title}": ` +
-		"Ask me for the missing details needed to refine the todo together. Do not rewrite the todo yet and do not make assumptions. " +
-		"Make sure to clarify priority, due date, and estimate as structured fields. " +
-		"Ask clear, concrete questions and wait for my answers before drafting any structured description.\n\n"
-	);
+	return buildRefinePromptUtil(todoId, title);
 }
 
 function splitTodosByAssignment(todos: TodoFrontMatter[]): {
@@ -1531,21 +1091,7 @@ function splitTodosByAssignment(todos: TodoFrontMatter[]): {
 	openTodos: TodoFrontMatter[];
 	closedTodos: TodoFrontMatter[];
 } {
-	const assignedTodos: TodoFrontMatter[] = [];
-	const openTodos: TodoFrontMatter[] = [];
-	const closedTodos: TodoFrontMatter[] = [];
-	for (const todo of todos) {
-		if (isTodoClosed(getTodoStatus(todo))) {
-			closedTodos.push(todo);
-			continue;
-		}
-		if (todo.assigned_to_session) {
-			assignedTodos.push(todo);
-		} else {
-			openTodos.push(todo);
-		}
-	}
-	return { assignedTodos, openTodos, closedTodos };
+	return splitTodosByAssignmentUtil(todos);
 }
 
 function formatTodoList(todos: TodoFrontMatter[]): string {

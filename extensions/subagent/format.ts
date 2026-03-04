@@ -3,52 +3,22 @@
  */
 
 import * as os from "node:os";
+import { normalizeModelRef as normalizeModelRefUtil } from "../utils/format-utils.js";
 
-// ─── Token / Usage Formatting ────────────────────────────────────────────────
-
-export function formatTokens(count: number): string {
-	if (count < 1000) return count.toString();
-	if (count < 10000) return `${(count / 1000).toFixed(1)}k`;
-	if (count < 1000000) return `${Math.round(count / 1000)}k`;
-	return `${(count / 1000000).toFixed(1)}M`;
-}
-
-export function formatUsageStats(
-	usage: {
-		input: number;
-		output: number;
-		cacheRead: number;
-		cacheWrite: number;
-		cost: number;
-		contextTokens?: number;
-		turns?: number;
-	},
-	model?: string,
-): string {
-	const parts: string[] = [];
-	if (usage.turns) parts.push(`${usage.turns} turn${usage.turns > 1 ? "s" : ""}`);
-	if (usage.input) parts.push(`↑${formatTokens(usage.input)}`);
-	if (usage.output) parts.push(`↓${formatTokens(usage.output)}`);
-	if (usage.cacheRead) parts.push(`R${formatTokens(usage.cacheRead)}`);
-	if (usage.cacheWrite) parts.push(`W${formatTokens(usage.cacheWrite)}`);
-	if (usage.cost) parts.push(`$${usage.cost.toFixed(4)}`);
-	if (usage.contextTokens && usage.contextTokens > 0) {
-		parts.push(`ctx:${formatTokens(usage.contextTokens)}`);
-	}
-	if (model) parts.push(model);
-	return parts.join(" ");
-}
+export {
+	AGENT_NAME_PALETTE,
+	agentBgIndex,
+	formatContextUsageBar,
+	formatTokens,
+	formatUsageStats,
+	getContextBarColorByRemaining,
+	getRemainingContextPercent,
+	getUsedContextPercent,
+	truncateLines,
+} from "../utils/format-utils.js";
+export const normalizeModelRef = normalizeModelRefUtil;
 
 // ─── Context Usage ───────────────────────────────────────────────────────────
-
-export function normalizeModelRef(modelRef: string): { provider?: string; id: string } {
-	const cleaned = modelRef.trim().split(":")[0] ?? modelRef.trim();
-	if (cleaned.includes("/")) {
-		const [provider, ...idParts] = cleaned.split("/");
-		return { provider, id: idParts.join("/") };
-	}
-	return { id: cleaned };
-}
 
 export function resolveContextWindow(ctx: any, modelRef?: string): number | undefined {
 	const fallback = ctx?.model?.contextWindow;
@@ -66,44 +36,6 @@ export function resolveContextWindow(ctx: any, modelRef?: string): number | unde
 	if (byId?.contextWindow) return byId.contextWindow;
 
 	return fallback;
-}
-
-export function getUsedContextPercent(contextTokens?: number, contextWindow?: number): number | undefined {
-	if (!contextWindow || contextWindow <= 0) return undefined;
-	if (contextTokens === undefined || contextTokens === null || contextTokens < 0) return undefined;
-	return Math.max(0, Math.min(100, Math.round((contextTokens / contextWindow) * 100)));
-}
-
-export function getRemainingContextPercent(usedPercent?: number): number | undefined {
-	if (usedPercent === undefined || usedPercent === null) return undefined;
-	return Math.max(0, Math.min(100, 100 - usedPercent));
-}
-
-export function formatContextUsageBar(percent: number, width = 10): string {
-	const clamped = Math.max(0, Math.min(100, Math.round(percent)));
-	const barWidth = Math.max(4, width);
-	const filled = Math.round((clamped / 100) * barWidth);
-	return `[${"#".repeat(filled)}${"-".repeat(barWidth - filled)}] ${clamped}%`;
-}
-
-export function getContextBarColorByRemaining(remainingPercent: number): "warning" | "error" | undefined {
-	if (remainingPercent <= 15) return "error";
-	if (remainingPercent <= 40) return "warning";
-	return undefined;
-}
-
-// ─── Agent Name Coloring ─────────────────────────────────────────────────────
-
-// Vibrant ANSI-256 foreground colors for per-agent name coloring
-// High saturation, diverse hues — readable on dark backgrounds
-export const AGENT_NAME_PALETTE = [39, 208, 114, 204, 220, 141, 81, 209, 156, 177];
-
-export function agentBgIndex(name: string): number {
-	let h = 0;
-	for (let i = 0; i < name.length; i++) {
-		h = ((h << 5) - h + name.charCodeAt(i)) | 0;
-	}
-	return Math.abs(h) % AGENT_NAME_PALETTE.length;
 }
 
 // ─── Tool Call Formatting ────────────────────────────────────────────────────
@@ -229,13 +161,4 @@ export function formatToolCallPlain(toolName: string, args: Record<string, unkno
 			return `${toolName} ${preview}`;
 		}
 	}
-}
-
-// ─── Text Truncation ─────────────────────────────────────────────────────────
-
-/** Truncate text to at most `maxLines` lines, appending "..." if truncated. */
-export function truncateLines(text: string, maxLines = 2): string {
-	const lines = text.split("\n");
-	if (lines.length <= maxLines) return text;
-	return lines.slice(0, maxLines).join("\n") + "\n...";
 }

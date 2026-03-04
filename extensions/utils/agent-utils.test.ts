@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
 	type AgentConfigLike,
+	AGENT_THINKING_LEVELS,
 	CLAUDE_MODEL_ALIAS_MAP,
 	CLAUDE_TOOL_MAP,
 	computeAgentAliasHints,
@@ -9,6 +10,7 @@ import {
 	matchSubCommandAgent,
 	normalizeAgentAlias,
 	normalizeModel,
+	normalizeThinkingLevel,
 	normalizeTools,
 	uniqueAgentsByName,
 } from "./agent-utils.ts";
@@ -79,6 +81,28 @@ describe("normalizeModel", () => {
 
 	it("should pass through slash-containing Claude models", () => {
 		expect(normalizeModel("openai/gpt-4o", "claude")).toBe("openai/gpt-4o");
+	});
+});
+
+// ── normalizeThinkingLevel ───────────────────────────────────────────────────
+
+describe("normalizeThinkingLevel", () => {
+	it("should return undefined for undefined input", () => {
+		expect(normalizeThinkingLevel(undefined)).toBeUndefined();
+	});
+
+	it("should normalize case and trim", () => {
+		expect(normalizeThinkingLevel("  HIGH  ")).toBe("high");
+	});
+
+	it("should reject invalid values", () => {
+		expect(normalizeThinkingLevel("extreme")).toBeUndefined();
+	});
+
+	it("should accept all known levels", () => {
+		for (const level of AGENT_THINKING_LEVELS) {
+			expect(normalizeThinkingLevel(level)).toBe(level);
+		}
 	});
 });
 

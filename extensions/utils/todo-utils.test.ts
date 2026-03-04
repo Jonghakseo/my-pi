@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
+	applyTodoMetadataOverrides,
 	buildRefinePrompt,
 	buildTodoSearchText,
+	clearAssignmentIfClosed,
+	filterTodos,
 	getTodoStatus,
 	getTodoTitle,
 	inferMetadataFromText,
@@ -10,11 +13,14 @@ import {
 	normalizeEstimate,
 	normalizePriority,
 	normalizeTodoId,
+	normalizeTodoMetadata,
 	normalizeTodoSettings,
 	normalizeTodoTags,
 	parseStructuredTag,
+	parseTodoContent,
 	parseTodoFrontMatter,
 	resolveTodoMetadataOverrides,
+	serializeTodo,
 	sortTodos,
 	splitFrontMatter,
 	splitTodosByAssignment,
@@ -411,6 +417,8 @@ describe("buildTodoSearchText", () => {
 	it("should include metadata", () => {
 		const text = buildTodoSearchText(mkTodo({ priority: "high", due_date: "2026-03-15", estimate: "2h" }));
 		expect(text).toContain("P:high");
+		expect(text).toContain("P:상");
+		expect(text).toContain("상");
 		expect(text).toContain("due:2026-03-15");
 		expect(text).toContain("est:2h");
 	});
@@ -561,5 +569,97 @@ describe("parseTodoFrontMatter", () => {
 		const result = parseTodoFrontMatter(json, "id");
 		expect(result.priority).toBe("high");
 		expect(result.due_date).toBe("2026-03-15");
+	});
+});
+
+describe("normalizeTodoMetadata/applyTodoMetadataOverrides", () => {
+	it("extracts structured metadata from tags and keeps plain tags", () => {
+		const todo = mkTodo({ tags: ["frontend", "P-상", "due:2026-03-15", "est:2h"] });
+		const changed = normalizeTodoMetadata(todo);
+		expect(changed).toBe(true);
+		expect(todo.tags).toEqual(["frontend"]);
+		expect(todo.priority).toBe("high");
+		expect(todo.due_date).toBe("2026-03-15");
+		expect(todo.estimate).toBe("2h");
+	});
+
+	it("infers metadata from title/body when inferFromText is enabled", () => {
+		const todo = mkTodo({ title: "우선순위: 중", tags: [] });
+		normalizeTodoMetadata(todo, { inferFromText: true, bodyText: "마감일: 2026/03/20\n소요시간: 반나절" });
+		expect(todo.priority).toBe("medium");
+		expect(todo.due_date).toBe("2026-03-20");
+		expect(todo.estimate).toBe("반나절");
+	});
+
+	it("applies explicit override fields including clear", () => {
+		const todo = mkTodo({ priority: "high", due_date: "2026-03-01", estimate: "2h" });
+		applyTodoMetadataOverrides(todo, {
+			priorityProvided: true,
+			priority: undefined,
+			dueDateProvided: true,
+			due_date: "2026-04-01",
+			estimateProvided: true,
+			estimate: "반나절",
+		});
+		expect(todo.priority).toBeUndefined();
+		expect(todo.due_date).toBe("2026-04-01");
+		expect(todo.estimate).toBe("반나절");
+	});
+});
+
+describe("parseTodoContent/serializeTodo/clearAssignmentIfClosed", () => {
+	it("parses and serializes todo content with inferred metadata", () => {
+		const content =
+			'{"id":"abc","title":"Task","tags":["feature","P-상"],"status":"open","created_at":"2026-01-01T00:00:00Z"}\n\n마감일: 2026-03-31\n소요시간: 1d';
+		const todo = parseTodoContent(content, "fallback");
+		expect(todo.id).toBe("fallback");
+		expect(todo.tags).toEqual(["feature"]);
+		expect(todo.priority).toBe("high");
+		expect(todo.due_date).toBe("2026-03-31");
+		expect(todo.estimate).toBe("1d");
+
+		const serialized = serializeTodo(todo);
+		expect(serialized).toContain('"priority": "high"');
+		expect(serialized).toContain("마감일: 2026-03-31");
+	});
+
+	it("clears assignment when status is closed/done", () => {
+		const todo = mkTodo({ status: "closed", assigned_to_session: "session-1" });
+		clearAssignmentIfClosed(todo);
+		expect(todo.assigned_to_session).toBeUndefined();
+	});
+});
+
+describe("filterTodos", () => {
+	const exactMatcher = (token: string, text: string) => {
+		const haystack = text.toLowerCase();
+		const needle = token.toLowerCase();
+		const idx = haystack.indexOf(needle);
+		return { matches: idx >= 0, score: idx >= 0 ? idx : Number.MAX_SAFE_INTEGER };
+	};
+
+	it("returns matching todos ranked by score and status grouping", () => {
+		const todos = [
+			mkTodo({ id: "11111111", title: "alpha", created_at: "2026-01-01T00:00:00Z" }),
+			mkTodo({ id: "22222222", title: "alpha assigned", assigned_to_session: "s1", created_at: "2026-01-02T00:00:00Z" }),
+			mkTodo({ id: "33333333", title: "alpha closed", status: "closed", created_at: "2026-01-03T00:00:00Z" }),
+		];
+		const result = filterTodos(todos, "alpha", exactMatcher);
+		expect(result.map((todo) => todo.id)).toEqual(["22222222", "11111111", "33333333"]);
+	});
+
+	it("matches legacy Korean priority tokens and English priority tokens", () => {
+		const todos = [
+			mkTodo({ id: "11111111", title: "high prio", priority: "high" }),
+			mkTodo({ id: "22222222", title: "medium prio", priority: "medium" }),
+		];
+		expect(filterTodos(todos, "P:상", exactMatcher).map((todo) => todo.id)).toEqual(["11111111"]);
+		expect(filterTodos(todos, "상", exactMatcher).map((todo) => todo.id)).toEqual(["11111111"]);
+		expect(filterTodos(todos, "P:high", exactMatcher).map((todo) => todo.id)).toEqual(["11111111"]);
+	});
+
+	it("returns original array for blank query", () => {
+		const todos = [mkTodo({ id: "11111111" })];
+		expect(filterTodos(todos, "   ", exactMatcher)).toBe(todos);
 	});
 });

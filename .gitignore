@@ -14,6 +14,14 @@ daily-retrospective*.log
 pi-crash.log
 .last-pi-retro-*
 
+# Coverage outputs / reports
+coverage/
+*coverage*.log
+*coverage*-summary*.json
+coverage-final.json
+lcov.info
+*.lcov
+
 # Scripts (local automation)
 bin/
 

@@ -5,6 +5,8 @@
  * stay focused on behavior.
  */
 
+export { AGENT_SYMBOL_MAP, formatSymbolHints } from "../utils/format-utils.js";
+
 // ─── Shared ────────────────────────────────────────────────────────────────
 
 export const MS_PER_SECOND = 1_000;
@@ -17,29 +19,6 @@ export const SUBAGENT_STARTED_STATUS_FOOTER =
 
 /** Maximum age (ms) for pending cross-session completions before eviction. */
 export const STALE_PENDING_COMPLETION_MS = 30 * 60 * 1_000;
-
-/**
- * Special-character shortcuts for the >> prefix input.
- * `>>/ task` → finder, `>>? task` → searcher, `>># task` → planner,
- * `>>* task` → reviewer, `>>+ task` → verifier, `>>% task` → challenger, etc.
- */
-export const AGENT_SYMBOL_MAP: Record<string, string> = {
-	"/": "finder",
-	"?": "searcher",
-	"#": "planner",
-	"*": "reviewer",
-	"+": "verifier",
-	"%": "challenger",
-	"!": "decider",
-	"@": "browser",
-};
-
-/** Format symbol hints for display, e.g. ">>/ finder  >>? searcher  >># planner ..." */
-export function formatSymbolHints(prefix = ">>"): string {
-	return Object.entries(AGENT_SYMBOL_MAP)
-		.map(([sym, agent]) => `${prefix}${sym} ${agent}`)
-		.join("  ");
-}
 
 /** Short label shown in the widget when inside a child session. */
 export const PARENT_HINT = "↩ parent (><)";
