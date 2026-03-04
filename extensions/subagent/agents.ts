@@ -7,8 +7,6 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { parseFrontmatter } from "@mariozechner/pi-coding-agent";
 
-export type AgentScope = "user" | "project" | "both";
-
 export interface AgentConfig {
 	name: string;
 	description: string;
@@ -196,34 +194,23 @@ function findNearestClaudeAgentsDir(cwd: string): string | null {
 	}
 }
 
-export function discoverAgents(cwd: string, scope: AgentScope): AgentDiscoveryResult {
+export function discoverAgents(cwd: string): AgentDiscoveryResult {
 	const userDir = path.join(os.homedir(), ".pi", "agent", "agents");
 	const projectAgentsDir = findNearestProjectAgentsDir(cwd);
 	const claudeAgentsDir = findNearestClaudeAgentsDir(cwd);
 
-	const userAgents = scope === "project" ? [] : loadAgentsFromDir(userDir, "user", { format: "pi" });
-
-	const projectPiAgents =
-		scope === "user" || !projectAgentsDir ? [] : loadAgentsFromDir(projectAgentsDir, "project", { format: "pi" });
-
-	const projectClaudeAgents =
-		scope === "user" || !claudeAgentsDir
-			? []
-			: loadAgentsFromDir(claudeAgentsDir, "project", { format: "claude", recursive: true });
+	const userAgents = loadAgentsFromDir(userDir, "user", { format: "pi" });
+	const projectPiAgents = projectAgentsDir ? loadAgentsFromDir(projectAgentsDir, "project", { format: "pi" }) : [];
+	const projectClaudeAgents = claudeAgentsDir
+		? loadAgentsFromDir(claudeAgentsDir, "project", { format: "claude", recursive: true })
+		: [];
 
 	// 우선순위: user < .claude/agents < .pi/agents
 	const projectAgents = [...projectClaudeAgents, ...projectPiAgents];
 
 	const agentMap = new Map<string, AgentConfig>();
-
-	if (scope === "both") {
-		for (const agent of userAgents) agentMap.set(agent.name, agent);
-		for (const agent of projectAgents) agentMap.set(agent.name, agent);
-	} else if (scope === "user") {
-		for (const agent of userAgents) agentMap.set(agent.name, agent);
-	} else {
-		for (const agent of projectAgents) agentMap.set(agent.name, agent);
-	}
+	for (const agent of userAgents) agentMap.set(agent.name, agent);
+	for (const agent of projectAgents) agentMap.set(agent.name, agent);
 
 	const projectSources = [projectAgentsDir, claudeAgentsDir].filter((dir): dir is string => Boolean(dir));
 

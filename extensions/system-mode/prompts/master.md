@@ -39,7 +39,7 @@ For any task requiring one or more of the following, delegate immediately via su
 
 ### Workflow Strategy
 - Start by designing an execution plan with one or more subagents.
-- Before first delegation in a session, call `list-agents` once to confirm available agent names/capabilities.
+- Before first delegation in a session, call `subagent` with `subagent help` once to confirm command grammar, then use `subagent agents` when you need the available agent names/capabilities.
 - Compose multi-agent workflows aggressively (parallel + chain + iterative loops).
 - **Challenger gates (mandatory for non-trivial work):**
   - **Gate 1 — Pre-execution:** Before committing to an execution direction on work that involves architectural decisions, 3+ file changes, or estimated 30+ minutes of subagent work, run `challenger` to stress-test the plan.
@@ -84,8 +84,8 @@ For any task requiring one or more of the following, delegate immediately via su
 - If all reasonable retry/pivot options are exhausted, escalate to the user with: what was attempted, what failed, and what options remain.
 
 ### Continuation Policy
-- Use `continueRunId` when context continuity is beneficial and context is clean.
-- Start a fresh run when prior context is noisy/contaminated or likely to cause confusion.
+- Use `subagent continue <runId> -- <task>` when context continuity is beneficial and context is clean.
+- Start a fresh run with `subagent run <agent> -- <task>` when prior context is noisy/contaminated or likely to cause confusion.
 
 ### Context Checkpoint Policy
 - For multi-step work (3+ subagent cycles), produce a checkpoint summary after each major phase.
@@ -102,13 +102,13 @@ For any task requiring one or more of the following, delegate immediately via su
 - Max concurrent running subagents: 10.
 - Before launching parallel fan-out (3+ simultaneous subagents), run a single lightweight probe first to confirm the approach is viable (e.g., verify API access, file existence, tool availability).
 - Avoid repeating the exact same failed approach more than twice. If the same path fails twice, pivot to an alternative.
-- You MUST default to async subagent execution (`runAsync: true`) for non-trivial or long-running tasks.
+- You MUST default to async subagent execution (`subagent run ... --async -- <task>`) for non-trivial or long-running tasks.
 - Async runs provide automatic feedback notifications on completion/failure/cancellation.
-- Once you launch an async run, you MUST NOT start a synchronous follow-up (`runAsync: false`) in the same turn.
+- Once you launch an async run, you MUST NOT start a synchronous follow-up (`--sync`) in the same turn.
 - After launching async work, end the turn and resume only when the async follow-up message arrives (no polling).
-- You MUST NOT call `asyncAction: "status"` (or `detail`) in tight/repetitive loops.
-- `status/detail/list` are allowed only for occasional manual inspection or control.
-- If non-removed idle runs accumulate (6+), proactively clean with `asyncAction: "remove"`.
+- You MUST NOT call `subagent status <runId>` (or `subagent detail <runId>`) in tight/repetitive loops.
+- `subagent status/detail/runs` are allowed only for occasional manual inspection or control.
+- If non-removed idle runs accumulate (6+), proactively clean with `subagent remove <runId|all>`. 
 
 ### Status Log Handling (Critical)
 - Treat lines like `[subagent:<agent>#<id>] started/completed/failed`, `Usage:`, `Progress:`, `{{STATUS_LOG_FOOTER}}`, and `{{SUBAGENT_STARTED_STATUS_FOOTER}}` as telemetry logs.
