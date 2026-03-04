@@ -58,6 +58,25 @@ export default function memoryLayerExtension(pi: ExtensionAPI) {
 			.join(" ");
 	}
 
+	/**
+	 * Normalize topic input from tool callers.
+	 * Accepts both `general` and `general.md` and always returns a safe slug.
+	 */
+	function normalizeTopicInput(topic: string): string {
+		const trimmed = topic.trim();
+		const withoutMd = trimmed.replace(/\.md$/i, "").trim();
+		return sanitizeTopic(withoutMd);
+	}
+
+	function scopeTargets(scope: MemoryScope | undefined, projectId: string | undefined): Array<{
+		scope: MemoryScope;
+		projectId?: string;
+	}> {
+		if (scope === "user") return [{ scope: "user" }];
+		if (scope === "project") return projectId ? [{ scope: "project", projectId }] : [];
+		return [{ scope: "user" }, ...(projectId ? [{ scope: "project", projectId }] : [])];
+	}
+
 	async function promptTopic(
 		ctx: ExtensionContext,
 		scope: MemoryScope,
@@ -419,46 +438,81 @@ export default function memoryLayerExtension(pi: ExtensionAPI) {
 		description:
 			"Search the user's long-term memory for relevant information. " +
 			"Use this when you need to check if there are stored rules, preferences, or lessons " +
-			"related to the current task. You can search by keywords, or retrieve a full topic file by name.",
+			"related to the current task. You can search by keywords, retrieve a full topic file by name, and optionally filter by scope.",
 		parameters: RecallParams,
 
 		renderCall(args, theme) {
 			const query = typeof args.query === "string" ? args.query : undefined;
 			const topic = typeof args.topic === "string" ? args.topic : undefined;
+			const scope = typeof args.scope === "string" ? args.scope : undefined;
 			let text = theme.fg("toolTitle", theme.bold("recall"));
 			if (query) text += " " + theme.fg("accent", `"${query}"`);
 			if (topic) text += " " + theme.fg("accent", `topic:${topic}`);
+			if (scope) text += " " + theme.fg("accent", `scope:${scope}`);
 			if (!query && !topic) text += " " + theme.fg("muted", "(index)");
 			return new Text(text, 0, 0);
 		},
 
 		async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
 			try {
-				const { query, topic } = params as { query?: string; topic?: string };
+				const { query, topic, scope } = params as { query?: string; topic?: string; scope?: MemoryScope };
 				currentProjectId = resolveCurrentProjectId(ctx.cwd);
+
+				if (scope === "project" && !currentProjectId) {
+					return {
+						content: [
+							{ type: "text" as const, text: "project scope recall requires project context (projectId not resolved)" },
+						],
+						details: undefined,
+						isError: true,
+					};
+				}
+
+				const targets = scopeTargets(scope, currentProjectId);
 
 				// By topic — return full topic file
 				if (topic) {
-					// Try user scope first, then project
-					let content = await readTopicFile("user", undefined, topic);
-					if (!content && currentProjectId) {
-						content = await readTopicFile("project", currentProjectId, topic);
-					}
-					if (!content) {
+					let normalizedTopic: string;
+					try {
+						normalizedTopic = normalizeTopicInput(topic);
+					} catch {
 						return {
-							content: [{ type: "text" as const, text: `Topic not found: ${topic}` }],
+							content: [{ type: "text" as const, text: `Invalid topic: ${topic}` }],
+							details: undefined,
+							isError: true,
+						};
+					}
+
+					for (const target of targets) {
+						const content = await readTopicFile(target.scope, target.projectId, normalizedTopic);
+						if (!content) continue;
+						return {
+							content: [{ type: "text" as const, text: `[${target.scope}] ${normalizedTopic}.md\n\n${content}` }],
 							details: undefined,
 						};
 					}
+
+					const normalizedNote = normalizedTopic !== topic.trim() ? ` (normalized: ${normalizedTopic})` : "";
+					const scopeNote = scope ? ` in ${scope} scope` : "";
 					return {
-						content: [{ type: "text" as const, text: content }],
+						content: [
+							{
+								type: "text" as const,
+								text:
+									`Topic not found${scopeNote}: ${topic}${normalizedNote}` +
+									"\nTip: pass topic as 'general' or 'general.md'.",
+							},
+						],
 						details: undefined,
 					};
 				}
 
-				// By query — search across all memories
+				// By query — search memories (optionally filtered by scope)
 				if (query) {
-					const results = await searchMemories(query, currentProjectId);
+					let results = await searchMemories(query, currentProjectId);
+					if (scope) {
+						results = results.filter((r) => r.scope === scope);
+					}
 					if (!results.length) {
 						return {
 							content: [{ type: "text" as const, text: "No matching memories found." }],
@@ -472,10 +526,21 @@ export default function memoryLayerExtension(pi: ExtensionAPI) {
 					};
 				}
 
-				// No params — return full index
-				const userIndex = (await readMemoryMd("user")).trim();
-				const projectIndex = currentProjectId ? (await readMemoryMd("project", currentProjectId)).trim() : "";
-				const combined = [userIndex, projectIndex].filter(Boolean).join("\n\n");
+				// No params — return index (optionally scope-filtered)
+				const parts: string[] = [];
+				if (!scope || scope === "user") {
+					const userIndex = (await readMemoryMd("user")).trim();
+					if (userIndex) {
+						parts.push(userIndex);
+					}
+				}
+				if ((!scope || scope === "project") && currentProjectId) {
+					const projectIndex = (await readMemoryMd("project", currentProjectId)).trim();
+					if (projectIndex) {
+						parts.push(projectIndex);
+					}
+				}
+				const combined = parts.filter(Boolean).join("\n\n");
 				return {
 					content: [{ type: "text" as const, text: combined || "No memories stored." }],
 					details: undefined,
@@ -499,49 +564,140 @@ export default function memoryLayerExtension(pi: ExtensionAPI) {
 		label: "Forget",
 		description:
 			"Archive a memory so it no longer appears in search results. " +
-			"Use when the user says '잊어줘', 'forget this', or a stored rule is no longer valid.",
+			"Use when the user says '잊어줘', 'forget this', or a stored rule is no longer valid. " +
+			"Provide title and optional topic/scope; if topic is omitted, the title must resolve uniquely.",
 		parameters: ForgetParams,
 		async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
 			try {
-				const { topic, title, scope } = params as { topic: string; title: string; scope?: MemoryScope };
+				const { topic, title, scope } = params as { topic?: string; title: string; scope?: MemoryScope };
 				currentProjectId = resolveCurrentProjectId(ctx.cwd);
 
-				// Explicit scope: delete directly from that scope
-				if (scope) {
-					const pid = scope === "project" ? currentProjectId : undefined;
-					const removed = await removeMemory(scope, pid, topic, title);
-					if (!removed) {
+				if (scope === "project" && !currentProjectId) {
+					return {
+						content: [
+							{ type: "text" as const, text: "project scope forget requires project context (projectId not resolved)" },
+						],
+						details: undefined,
+						isError: true,
+					};
+				}
+
+				const normalizedTitle = title?.trim();
+				if (!normalizedTitle) {
+					return {
+						content: [{ type: "text" as const, text: "forget requires non-empty title." }],
+						details: undefined,
+						isError: true,
+					};
+				}
+
+				if (topic) {
+					let normalizedTopic: string;
+					try {
+						normalizedTopic = normalizeTopicInput(topic);
+					} catch {
+						return {
+							content: [{ type: "text" as const, text: `Invalid topic: ${topic}` }],
+							details: undefined,
+							isError: true,
+						};
+					}
+
+					// Explicit scope: delete directly from that scope
+					if (scope) {
+						const pid = scope === "project" ? currentProjectId : undefined;
+						const removed = await removeMemory(scope, pid, normalizedTopic, normalizedTitle);
+						if (!removed) {
+							return {
+								content: [
+									{
+										type: "text" as const,
+										text: `Memory not found in ${scope} scope: ${normalizedTopic} / "${normalizedTitle}"`,
+									},
+								],
+								details: undefined,
+								isError: true,
+							};
+						}
+						return {
+							content: [{ type: "text" as const, text: `Deleted from ${scope}: ${normalizedTopic} / "${normalizedTitle}"` }],
+							details: undefined,
+						};
+					}
+
+					// No scope specified: check both for ambiguity
+					const existsInUser = await memoryExistsInScope("user", undefined, normalizedTopic, normalizedTitle);
+					const existsInProject = currentProjectId
+						? await memoryExistsInScope("project", currentProjectId, normalizedTopic, normalizedTitle)
+						: false;
+
+					if (existsInUser && existsInProject) {
 						return {
 							content: [
 								{
 									type: "text" as const,
-									text: `Memory not found in ${scope} scope: ${topic} / "${title}"`,
+									text:
+										`Ambiguous: "${normalizedTitle}" exists in both user and project scopes for topic "${normalizedTopic}". ` +
+										'Specify scope parameter: scope="user" or scope="project" to resolve.',
 								},
 							],
 							details: undefined,
 							isError: true,
 						};
 					}
+
+					if (!existsInUser && !existsInProject) {
+						return {
+							content: [{ type: "text" as const, text: `Memory not found: ${normalizedTopic} / "${normalizedTitle}"` }],
+							details: undefined,
+							isError: true,
+						};
+					}
+
+					// Exists in exactly one scope — safe to delete
+					const targetScope: MemoryScope = existsInUser ? "user" : "project";
+					const pid = targetScope === "project" ? currentProjectId : undefined;
+					const removed = await removeMemory(targetScope, pid, normalizedTopic, normalizedTitle);
+
+					if (!removed) {
+						return {
+							content: [{ type: "text" as const, text: `Memory not found: ${normalizedTopic} / "${normalizedTitle}"` }],
+							details: undefined,
+							isError: true,
+						};
+					}
+
 					return {
-						content: [{ type: "text" as const, text: `Deleted from ${scope}: ${topic} / "${title}"` }],
+						content: [
+							{
+								type: "text" as const,
+								text: `Deleted from ${targetScope}: ${normalizedTopic} / "${normalizedTitle}"`,
+							},
+						],
 						details: undefined,
 					};
 				}
 
-				// No scope specified: check both for ambiguity
-				const existsInUser = await memoryExistsInScope("user", undefined, topic, title);
-				const existsInProject = currentProjectId
-					? await memoryExistsInScope("project", currentProjectId, topic, title)
-					: false;
+				// Topic omitted: resolve by title across visible scopes
+				const entries = await collectDisplayEntries(currentProjectId);
+				const scopedEntries = scope ? entries.filter((entry) => entry.scope === scope) : entries;
 
-				if (existsInUser && existsInProject) {
+				let matches = scopedEntries.filter((entry) => entry.title === normalizedTitle);
+				let caseInsensitive = false;
+				if (!matches.length) {
+					const lower = normalizedTitle.toLowerCase();
+					matches = scopedEntries.filter((entry) => entry.title.toLowerCase() === lower);
+					caseInsensitive = matches.length > 0;
+				}
+
+				if (!matches.length) {
 					return {
 						content: [
 							{
 								type: "text" as const,
 								text:
-									`Ambiguous: "${title}" exists in both user and project scopes for topic "${topic}". ` +
-									'Specify scope parameter: scope="user" or scope="project" to resolve.',
+									`Memory not found by title: "${normalizedTitle}".` +
+									"\nTip: provide topic as well (e.g. topic: 'general' or 'general.md') for precise deletion.",
 							},
 						],
 						details: undefined,
@@ -549,32 +705,44 @@ export default function memoryLayerExtension(pi: ExtensionAPI) {
 					};
 				}
 
-				if (!existsInUser && !existsInProject) {
+				if (matches.length > 1) {
+					const preview = matches
+						.slice(0, 6)
+						.map((entry) => `- [${entry.scope}] ${entry.topic} / "${entry.title}"`)
+						.join("\n");
+					const more = matches.length > 6 ? `\n... and ${matches.length - 6} more` : "";
 					return {
-						content: [{ type: "text" as const, text: `Memory not found: ${topic} / "${title}"` }],
+						content: [
+							{
+								type: "text" as const,
+								text:
+									`Ambiguous title: "${normalizedTitle}" matches ${matches.length} memories.` +
+									"\nSpecify topic (and scope if needed) to delete safely.\n\n" +
+									preview +
+									more,
+							},
+						],
 						details: undefined,
 						isError: true,
 					};
 				}
 
-				// Exists in exactly one scope — safe to delete
-				const targetScope: MemoryScope = existsInUser ? "user" : "project";
-				const pid = targetScope === "project" ? currentProjectId : undefined;
-				const removed = await removeMemory(targetScope, pid, topic, title);
-
+				const target = matches[0];
+				const removed = await removeMemory(target.scope, target.projectId, target.topic, target.title);
 				if (!removed) {
 					return {
-						content: [{ type: "text" as const, text: `Memory not found: ${topic} / "${title}"` }],
+						content: [{ type: "text" as const, text: `Memory not found: ${target.topic} / "${target.title}"` }],
 						details: undefined,
 						isError: true,
 					};
 				}
 
+				const caseMatchNote = caseInsensitive ? ` (matched title: "${target.title}")` : "";
 				return {
 					content: [
 						{
 							type: "text" as const,
-							text: `Deleted from ${targetScope}: ${topic} / "${title}"`,
+							text: `Deleted from ${target.scope}: ${target.topic} / "${target.title}"${caseMatchNote}`,
 						},
 					],
 					details: undefined,
