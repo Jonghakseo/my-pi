@@ -4,9 +4,8 @@
 
 import type { AgentToolResult } from "@mariozechner/pi-agent-core";
 import type { Message } from "@mariozechner/pi-ai";
-import { StringEnum } from "@mariozechner/pi-ai";
 import { Type } from "@sinclair/typebox";
-import type { AgentConfig, AgentScope } from "./agents.js";
+import type { AgentConfig } from "./agents.js";
 
 // ─── Interfaces ──────────────────────────────────────────────────────────────
 
@@ -40,7 +39,6 @@ export interface SingleResult {
 
 export interface SubagentDetails {
 	mode: "single" | "chain";
-	agentScope: AgentScope;
 	inheritMainContext: boolean;
 	projectAgentsDir: string | null;
 	results: SingleResult[];
@@ -125,81 +123,19 @@ export interface GlobalRunEntry {
 export const ChainItem = Type.Object({
 	agent: Type.String({ description: "Name of the agent to invoke" }),
 	task: Type.String({ description: "Task with optional {previous} placeholder for prior output" }),
-	cwd: Type.Optional(Type.String({ description: "Working directory for the agent process" })),
 });
 
 /** TypeScript interface matching the ChainItem Typebox schema. */
 export interface ChainItemFields {
 	agent: string;
 	task: string;
-	cwd?: string;
 }
 
-export const AgentScopeSchema = StringEnum(["user", "project", "both"] as const, {
-	description:
-		'Which agent directories to use. Default: "user". Use "both" to include project-local agents (.pi/agents, .claude/agents).',
-	default: "user",
-});
-
-export const ContextModeSchema = StringEnum(["isolated", "main"] as const, {
-	description:
-		'Subagent context mode. "main" inherits current main session context, "isolated" starts a dedicated sub-session.',
-	default: "main",
-});
-
-export const AsyncActionSchema = StringEnum(["run", "list", "status", "detail", "abort", "remove"] as const, {
-	description:
-		'Async control action for tool-managed jobs. "run" starts a new job; others (list/status/detail/abort/remove) are for occasional manual inspection/control only. Do NOT call subagent repeatedly for polling — completion/failure/error updates are delivered automatically as follow-up messages.',
-	default: "run",
-});
-
-export const ListAgentsParams = Type.Object({
-	agentScope: Type.Optional(
-		StringEnum(["user", "project", "both"] as const, {
-			description:
-				'Which agent directories to list. Default: "both" (includes user + project-local agents when available).',
-			default: "both",
-		}),
-	),
-});
+export const ListAgentsParams = Type.Object({});
 
 export const SubagentParams = Type.Object({
-	agent: Type.Optional(Type.String({ description: "Name of the agent to invoke (for single mode)" })),
-	task: Type.Optional(Type.String({ description: "Task to delegate (for single mode)" })),
-	chain: Type.Optional(Type.Array(ChainItem, { description: "Array of {agent, task} for sequential execution" })),
-	agentScope: Type.Optional(AgentScopeSchema),
-	cwd: Type.Optional(Type.String({ description: "Working directory for the agent process (single mode)" })),
-	contextMode: Type.Optional(ContextModeSchema),
-	runAsync: Type.Optional(
-		Type.Boolean({
-			description:
-				"If true, start the subagent in background and return immediately. Do NOT keep calling subagent to poll status — completion/failure/error results are delivered automatically as follow-up messages. Use asyncAction only for occasional manual inspection or control (e.g. abort).",
-			default: true,
-		}),
-	),
-	asyncAction: Type.Optional(AsyncActionSchema),
-	runId: Type.Optional(
-		Type.Number({
-			description:
-				"Run ID for asyncAction=status|detail|abort|remove. For abort/remove, you can use runIds instead for bulk control. Use only for occasional manual checks/control; do not repeatedly poll, because completion/failure/error updates are delivered automatically.",
-		}),
-	),
-	runIds: Type.Optional(
-		Type.Array(
-			Type.Number({
-				description: "Run ID to control in bulk mode.",
-			}),
-			{
-				description:
-					"Run IDs for asyncAction=abort|remove bulk control. Use either runId (single) or runIds (multiple), not both.",
-				minItems: 1,
-			},
-		),
-	),
-	continueRunId: Type.Optional(
-		Type.Number({
-			description:
-				"Run ID of an existing completed/error run to continue. Reuses the run's session file for context continuity. The original run's agent is reused if 'agent' is not specified.",
-		}),
-	),
+	command: Type.String({
+		description:
+			"CLI-style subagent command. Always start with 'subagent help' to discover commands. Examples: 'subagent run planner --main --async -- <task>', 'subagent continue 22 -- <task>', 'subagent runs', 'subagent status 22', 'subagent abort 22', 'subagent remove all'.",
+	}),
 });

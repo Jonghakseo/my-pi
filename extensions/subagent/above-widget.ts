@@ -68,7 +68,8 @@ function readPurposeFromSessionFile(sessionFile?: string): string {
 }
 
 function getToolRuns(store: SubagentStore): CommandRunState[] {
-	const statusPriority = (status: "running" | "done" | "error") => (status === "running" ? 0 : status === "done" ? 1 : 2);
+	const statusPriority = (status: "running" | "done" | "error") =>
+		status === "running" ? 0 : status === "done" ? 1 : 2;
 	return Array.from(store.commandRuns.values())
 		.filter((r) => r.source === "tool" && !r.removed)
 		.sort((a, b) => {
@@ -146,11 +147,7 @@ export function updatePixelWidget(store: SubagentStore, ctx?: any): void {
 					const runPurpose = readPurposeFromSessionFile(run.sessionFile);
 					const purposeLabel = runPurpose ? theme.fg("dim", ` · ${runPurpose}`) : "";
 					const statusLeft =
-						`${icon} #${run.id}` +
-						modeLabel +
-						agentStr +
-						theme.fg("dim", `  (${elapsed})`) +
-						purposeLabel;
+						`${icon} #${run.id}` + modeLabel + agentStr + theme.fg("dim", `  (${elapsed})`) + purposeLabel;
 
 					if (contextShort) {
 						const contextWidth = visibleWidth(contextShort);

@@ -10,7 +10,7 @@ import * as path from "node:path";
 import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
 import { Container, Key, matchesKey, Spacer, Text, truncateToWidth } from "@mariozechner/pi-tui";
 import { parse as parseYaml } from "yaml";
-import type { AgentScope } from "./agents.js";
+import { updatePixelWidget } from "./above-widget.js";
 import { discoverAgents } from "./agents.js";
 import {
 	AGENT_SYMBOL_MAP,
@@ -29,7 +29,7 @@ import {
 	SUBVIEW_OVERLAY_WIDTH,
 } from "./constants.js";
 import { formatUsageStats, truncateLines } from "./format.js";
-import { updatePixelWidget } from "./above-widget.js";
+import { enqueueSubagentInvocation } from "./invocation-queue.js";
 import { readSessionReplayItems, SubagentSessionReplayOverlay } from "./replay.js";
 import { getLatestRun, removeRun, trimCommandRunHistory } from "./run-utils.js";
 import {
@@ -46,7 +46,6 @@ import { renderSubagentToolCall, renderSubagentToolResult } from "./tool-render.
 import type { CommandRunState, SingleResult, SubagentDetails } from "./types.js";
 import { ListAgentsParams, SubagentParams } from "./types.js";
 import { updateCommandRunsWidget } from "./widget.js";
-import { enqueueSubagentInvocation } from "./invocation-queue.js";
 
 /**
  * Capture switchSession from an ExtensionCommandContext into the shared store.
@@ -448,8 +447,7 @@ function restoreRunsFromSession(store: SubagentStore, ctx: any, pi?: ExtensionAP
 	// Snapshot previous session view before switching away so we can recover
 	// transient runs when JSONL persistence lags behind session switching.
 	if (store.currentSessionFile && store.currentSessionFile !== currentSessionFile) {
-		const snapshot = Array.from(store.commandRuns.values())
-			.map((run) => ({ ...run }));
+		const snapshot = Array.from(store.commandRuns.values()).map((run) => ({ ...run }));
 		if (snapshot.length > 0) {
 			store.sessionRunCache.set(store.currentSessionFile, snapshot);
 		}
@@ -670,8 +668,7 @@ function restoreRunsFromSession(store: SubagentStore, ctx: any, pi?: ExtensionAP
 
 	// Refresh per-session snapshot with the latest reconstructed view.
 	if (currentSessionFile) {
-		const latestSnapshot = Array.from(store.commandRuns.values())
-			.map((run) => ({ ...run }));
+		const latestSnapshot = Array.from(store.commandRuns.values()).map((run) => ({ ...run }));
 		if (latestSnapshot.length > 0) {
 			store.sessionRunCache.set(currentSessionFile, latestSnapshot);
 		} else {
@@ -689,16 +686,14 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 		description:
 			"List available subagent definitions (name, source, model, tools, description). Useful before planning delegation.",
 		parameters: ListAgentsParams,
-		execute: async (_toolCallId, params: Record<string, any>, _signal, _onUpdate, ctx) => {
-			const agentScope: AgentScope = params.agentScope ?? "both";
-			const discovery = discoverAgents(ctx.cwd, agentScope);
+		execute: async (_toolCallId, _params: Record<string, any>, _signal, _onUpdate, ctx) => {
+			const discovery = discoverAgents(ctx.cwd);
 			const agents = discovery.agents;
 
 			if (agents.length === 0) {
 				return {
-					content: [{ type: "text", text: `No subagents found (scope: ${agentScope}).` }],
+					content: [{ type: "text", text: "No subagents found." }],
 					details: {
-						agentScope,
 						projectAgentsDir: discovery.projectAgentsDir,
 						agents: [],
 					},
@@ -713,9 +708,8 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 			});
 
 			return {
-				content: [{ type: "text", text: `Available subagents (scope: ${agentScope})\n\n${lines.join("\n")}` }],
+				content: [{ type: "text", text: `Available subagents\n\n${lines.join("\n")}` }],
 				details: {
-					agentScope,
 					projectAgentsDir: discovery.projectAgentsDir,
 					agents: agents.map((agent) => ({
 						name: agent.name,
@@ -732,21 +726,8 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 	pi.registerTool({
 		name: "subagent",
 		label: "Subagent",
-		description: [
-			"Purpose-driven agent delegation. Choose the right agent for the task: " +
-				"finder (file/code search), searcher (web/codebase research), planner (structured planning), " +
-				"challenger (skeptical review of plans), decider (technical decisions), reviewer (code review), " +
-				"verifier (validation with evidence), deep-verify (high-risk validation), " +
-				"browser (UI automation), worker-fast (simple single-file changes), worker (complex multi-file implementation).",
-			"Delegate tasks to specialized subagents (default contextMode: isolated).",
-			"Modes: single (agent + task) and chain (sequential with {previous} placeholder).",
-			"Supports background async jobs via runAsync + asyncAction (list/status/detail/abort/remove). abort/remove accept runId (single) or runIds (bulk).",
-			'Use contextMode: "main" to inherit current main-session context, or "isolated" for dedicated sub-session (default).',
-			'Default agent scope is "user" (from ~/.pi/agent/agents).',
-			'To enable project-local agents in .pi/agents or .claude/agents, set agentScope: "both" (or "project").',
-			"Important: Do NOT keep calling subagent for polling. Async runs push completion/failure/error updates automatically as follow-up messages; status/detail/list is for occasional manual checks only.",
-			"Concurrent async subagent runs are capped at 10. If idle (done/error) non-removed runs pile up (8+), clean up with asyncAction: remove.",
-		].join(" "),
+		description:
+			'CLI-style subagent delegation interface. Always start with `subagent help` to learn available commands, then execute run/continue/runs/status/detail/abort/remove via `{ command: "subagent ..." }`.',
 		parameters: SubagentParams,
 
 		execute: createSubagentToolExecute(pi, store),
@@ -763,7 +744,7 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 			const trimmedStart = argumentPrefix.trimStart();
 			if (trimmedStart.includes(" ")) return null;
 
-			const discovery = discoverAgents(process.cwd(), "user");
+			const discovery = discoverAgents(process.cwd());
 			const agentItems = getSubCommandAgentCompletions(discovery.agents, argumentPrefix) ?? [];
 
 			const runItems = Array.from(store.commandRuns.values())
@@ -799,13 +780,12 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 				return;
 			}
 
-			const agentScope: AgentScope = "user";
-			const discovery = discoverAgents(ctx.cwd, agentScope);
+			const discovery = discoverAgents(ctx.cwd);
 			const agents = discovery.agents;
 
 			if (agents.length === 0) {
 				ctx.ui.notify(
-					"No agents found in ~/.pi/agent/agents (sub:isolate/sub:main uses user scope). Use /subagents both to inspect project agents.",
+					"No subagents found. Checked user (~/.pi/agent/agents) + project-local (.pi/agents, .claude/agents).",
 					"error",
 				);
 				return;
@@ -1032,7 +1012,6 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 
 			const makeDetails = (results: SingleResult[]): SubagentDetails => ({
 				mode: "single",
-				agentScope,
 				inheritMainContext: runState.contextMode === "main",
 				projectAgentsDir: discovery.projectAgentsDir,
 				results,
@@ -1089,7 +1068,6 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 							agents,
 							selectedAgent,
 							taskForAgent,
-							undefined,
 							undefined,
 							abortController.signal,
 							(partial) => {
@@ -1271,13 +1249,10 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 	});
 
 	pi.registerCommand("subagents", {
-		description: "List available subagents and their model/tool settings (default scope: both)",
-		handler: async (args, ctx) => {
+		description: "List available subagents and their model/tool settings",
+		handler: async (_args, ctx) => {
 			captureSwitchSession(store, ctx);
-			const scopeArg = (args ?? "").trim().toLowerCase();
-			const scope: AgentScope =
-				scopeArg === "user" || scopeArg === "project" || scopeArg === "both" ? (scopeArg as AgentScope) : "both";
-			const discovery = discoverAgents(ctx.cwd, scope);
+			const discovery = discoverAgents(ctx.cwd);
 			const agents = discovery.agents;
 			if (agents.length === 0) {
 				ctx.ui.notify("No subagents found.", "warning");
@@ -1291,7 +1266,7 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 				return truncateText(`${a.name} [${a.source}] · model: ${model} · tools: ${tools}${description}`, 220);
 			});
 
-			ctx.ui.notify(`Available subagents (scope: ${scope})\n${lines.map((line) => `• ${line}`).join("\n")}`, "info");
+			ctx.ui.notify(`Available subagents\n${lines.map((line) => `• ${line}`).join("\n")}`, "info");
 		},
 	});
 
@@ -1990,7 +1965,7 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 		if (!agentName) return;
 
 		// Discover agents and find exact match
-		const discovery = discoverAgents(ctx.cwd, "both");
+		const discovery = discoverAgents(ctx.cwd);
 		const agentConfig = discovery.agents.find((a) => a.name.toLowerCase() === agentName!.toLowerCase());
 		if (!agentConfig?.systemPrompt?.trim()) return;
 

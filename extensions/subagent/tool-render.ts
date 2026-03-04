@@ -6,7 +6,6 @@
 
 import { getMarkdownTheme } from "@mariozechner/pi-coding-agent";
 import { Container, Markdown, Spacer, Text } from "@mariozechner/pi-tui";
-import type { AgentScope } from "./agents.js";
 import { formatToolCall, formatUsageStats } from "./format.js";
 import { getDisplayItems, getFinalOutput } from "./runner.js";
 import { COLLAPSED_ITEM_COUNT } from "./store.js";
@@ -46,33 +45,16 @@ function aggregateUsage(results: SingleResult[]) {
 // ─── renderCall ──────────────────────────────────────────────────────────────
 
 export function renderSubagentToolCall(args: any, theme: any) {
-	const scope: AgentScope = args.agentScope ?? "user";
-	if (args.chain && args.chain.length > 0) {
-		let text =
-			theme.fg("toolTitle", theme.bold("subagent ")) +
-			theme.fg("accent", `chain (${args.chain.length} steps)`) +
-			theme.fg("muted", ` [${scope}]`);
-		for (let i = 0; i < Math.min(args.chain.length, 3); i++) {
-			const step = args.chain[i];
-			// Clean up {previous} placeholder for display
-			const cleanTask = step.task.replace(/\{previous\}/g, "").trim();
-			const preview = cleanTask.length > 40 ? `${cleanTask.slice(0, 40)}...` : cleanTask;
-			text +=
-				"\n  " + theme.fg("muted", `${i + 1}.`) + " " + theme.fg("accent", step.agent) + theme.fg("dim", ` ${preview}`);
-		}
-		if (args.chain.length > 3) text += `\n  ${theme.fg("muted", `... +${args.chain.length - 3} more`)}`;
-		return new Text(text, 0, 0);
-	}
-	const agentName = args.agent || "...";
-	const fullTask = args.task || "...";
+	const raw = typeof args.command === "string" ? args.command.trim() : "";
+	const command = raw || "subagent help";
 	const MAX_CALL_LINES = 5;
-	const taskLines = fullTask.split("\n");
-	const truncated = taskLines.length > MAX_CALL_LINES;
-	const preview = truncated ? taskLines.slice(0, MAX_CALL_LINES).join("\n") : fullTask;
-	let text =
-		theme.fg("toolTitle", theme.bold("subagent ")) + theme.fg("accent", agentName) + theme.fg("muted", ` [${scope}]`);
+	const commandLines = command.split("\n");
+	const truncated = commandLines.length > MAX_CALL_LINES;
+	const preview = truncated ? commandLines.slice(0, MAX_CALL_LINES).join("\n") : command;
+
+	let text = theme.fg("toolTitle", theme.bold("subagent ")) + theme.fg("accent", "cli");
 	text += `\n  ${theme.fg("dim", preview)}`;
-	if (truncated) text += `\n  ${theme.fg("muted", `... +${taskLines.length - MAX_CALL_LINES} more lines`)}`;
+	if (truncated) text += `\n  ${theme.fg("muted", `... +${commandLines.length - MAX_CALL_LINES} more lines`)}`;
 	return new Text(text, 0, 0);
 }
 

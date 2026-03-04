@@ -4,6 +4,7 @@
 
 import * as fs from "node:fs";
 import { Box, Text, truncateToWidth, visibleWidth } from "@mariozechner/pi-tui";
+import { updatePixelWidget } from "./above-widget.js";
 import { HANG_WARNING_IDLE_MS, PARENT_HINT } from "./constants.js";
 import {
 	AGENT_NAME_PALETTE,
@@ -14,7 +15,6 @@ import {
 	getUsedContextPercent,
 	resolveContextWindow,
 } from "./format.js";
-import { updatePixelWidget } from "./above-widget.js";
 
 const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"] as const;
 const SPINNER_INTERVAL_MS = 120;

@@ -7,14 +7,15 @@
 
 import * as fs from "node:fs";
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
-import type { AgentConfig, AgentScope } from "./agents.js";
 import { discoverAgents } from "./agents.js";
+import { parseSubagentToolCommand, SUBAGENT_CLI_HELP_TEXT } from "./cli.js";
 import {
 	DEFAULT_TURN_COUNT,
 	IDLE_RUN_WARNING_THRESHOLD,
 	MAX_CONCURRENT_ASYNC_SUBAGENT_RUNS,
 	STATUS_OUTPUT_PREVIEW_MAX_CHARS,
 } from "./constants.js";
+import { ESCALATION_EXIT_CODE, readAndConsumeEscalation } from "./escalation.js";
 import {
 	formatContextUsageBar,
 	formatUsageStats,
@@ -22,14 +23,13 @@ import {
 	resolveContextWindow,
 	truncateLines,
 } from "./format.js";
+import { enqueueSubagentInvocation } from "./invocation-queue.js";
 import { formatCommandRunSummary, removeRun, trimCommandRunHistory } from "./run-utils.js";
 import { getFinalOutput, getLastNonEmptyLine, runSingleAgent } from "./runner.js";
 import { buildMainContextText, makeSubagentSessionFile, wrapTaskWithMainContext } from "./session.js";
 import { type SubagentStore, updateRunFromResult } from "./store.js";
 import type { ChainItemFields, CommandRunState, OnUpdateCallback, SingleResult, SubagentDetails } from "./types.js";
-import { ESCALATION_EXIT_CODE, readAndConsumeEscalation } from "./escalation.js";
 import { updateCommandRunsWidget } from "./widget.js";
-import { enqueueSubagentInvocation } from "./invocation-queue.js";
 
 type SessionToolCall = {
 	name: string;
@@ -185,7 +185,7 @@ function formatIdleRunWarning(idleRunCount: number): string {
 	return (
 		`⚠️ Idle subagent runs: ${idleRunCount}. ` +
 		`removed되지 않은 완료/오류 run이 ${IDLE_RUN_WARNING_THRESHOLD}개 이상입니다. ` +
-		`필요 없는 run은 asyncAction:"remove"로 정리하세요.`
+		"필요 없는 run은 `subagent remove <runId|all>`로 정리하세요."
 	);
 }
 
@@ -204,11 +204,67 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 		onUpdate: OnUpdateCallback | undefined,
 		ctx: any,
 	): Promise<SubagentExecuteResult> => {
-		const agentScope: AgentScope = params.agentScope ?? "user";
+		const emptyDetails: SubagentDetails = {
+			mode: "single",
+			inheritMainContext: false,
+			projectAgentsDir: null,
+			results: [],
+		};
+
+		const knownRunIds = Array.from(store.commandRuns.values())
+			.filter((run) => !run.removed)
+			.map((run) => run.id);
+		const parsedCommand = parseSubagentToolCommand(params.command, { knownRunIds });
+
+		if (parsedCommand.type === "error") {
+			return {
+				content: [{ type: "text", text: `${parsedCommand.message}\n\n${SUBAGENT_CLI_HELP_TEXT}` }],
+				details: emptyDetails,
+				isError: true,
+			};
+		}
+
+		if (parsedCommand.type === "help") {
+			return {
+				content: [{ type: "text", text: SUBAGENT_CLI_HELP_TEXT }],
+				details: emptyDetails,
+			};
+		}
+
+		const discovery = discoverAgents(ctx.cwd);
+		const agents = discovery.agents;
+
+		if (parsedCommand.type === "agents") {
+			if (agents.length === 0) {
+				return {
+					content: [{ type: "text", text: "No subagents found." }],
+					details: {
+						...emptyDetails,
+						projectAgentsDir: discovery.projectAgentsDir,
+					},
+				};
+			}
+
+			const lines = agents.map((agent) => {
+				const model = agent.model ?? "(inherit current model)";
+				const tools = agent.tools && agent.tools.length > 0 ? agent.tools.join(",") : "default";
+				const description = agent.description ? ` · ${agent.description}` : "";
+				return `${agent.name} [${agent.source}] · model: ${model} · tools: ${tools}${description}`;
+			});
+
+			return {
+				content: [{ type: "text", text: `Available subagents\n\n${lines.join("\n")}` }],
+				details: {
+					...emptyDetails,
+					projectAgentsDir: discovery.projectAgentsDir,
+				},
+			};
+		}
+
+		params = parsedCommand.params;
+
 		const contextMode = params.contextMode ?? "isolated";
 		const inheritMainContext = contextMode === "main";
-		const discovery = discoverAgents(ctx.cwd, agentScope);
-		const agents = discovery.agents;
 		const asyncActionRequested = params.asyncAction ?? "run";
 		const rawMainSessionFile = inheritMainContext ? (ctx.sessionManager.getSessionFile() ?? undefined) : undefined;
 		const mainSessionFile =
@@ -226,7 +282,6 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 				],
 				details: {
 					mode: "single",
-					agentScope,
 					inheritMainContext,
 					projectAgentsDir: discovery.projectAgentsDir,
 					results: [],
@@ -242,15 +297,14 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 		const totalMessageCount = typeof mainContextResult === "string" ? 0 : mainContextResult.totalMessageCount;
 
 		const hasChain = (params.chain?.length ?? 0) > 0;
-		// hasSingle: true when (agent + task) OR (continueRunId + task — agent will be resolved from the prior run)
-		const hasSingle = Boolean((params.agent && params.task) || (params.continueRunId !== undefined && params.task));
+		// hasSingle: true when (agent + task) OR (runId + task — agent will be resolved from the prior run)
+		const hasSingle = Boolean((params.agent && params.task) || (params.runId !== undefined && params.task));
 		const modeCount = Number(hasChain) + Number(hasSingle);
 
 		const makeDetails =
 			(mode: "single" | "chain") =>
 			(results: SingleResult[]): SubagentDetails => ({
 				mode,
-				agentScope,
 				inheritMainContext,
 				projectAgentsDir: discovery.projectAgentsDir,
 				results,
@@ -519,7 +573,7 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 					content: [
 						{
 							type: "text",
-							text: withIdleRunWarning("runAsync requires single mode: provide agent + task, or continueRunId + task."),
+							text: withIdleRunWarning("runAsync requires single mode: provide agent + task, or runId + task."),
 						},
 					],
 					details: makeDetails("single")([]),
@@ -558,17 +612,26 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 			// inheritMainContext is intentionally kept so that contextMode
 			// metadata correctly reflects "main" when the caller requested it.
 
-			// --- continueRunId: resume an existing completed/error run ---
+			// --- runId continuation: resume an existing completed/error run ---
+			const continuationRunId = Number.isInteger(params.runId) ? (params.runId as number) : undefined;
+			if (params.runId !== undefined && continuationRunId === undefined) {
+				return {
+					content: [{ type: "text", text: withIdleRunWarning("runId must be an integer.") }],
+					details: makeDetails("single")([]),
+					isError: true,
+				};
+			}
+
 			let continueFromRun: CommandRunState | undefined;
-			if (params.continueRunId !== undefined) {
-				continueFromRun = store.commandRuns.get(params.continueRunId);
+			if (continuationRunId !== undefined) {
+				continueFromRun = store.commandRuns.get(continuationRunId);
 				if (!continueFromRun) {
 					return {
 						content: [
 							{
 								type: "text",
 								text: withIdleRunWarning(
-									`Unknown subagent run #${params.continueRunId}. Use asyncAction:"list" to see available runs.`,
+									`Unknown subagent run #${continuationRunId}. Use \`subagent runs\` to see available runs.`,
 								),
 							},
 						],
@@ -582,7 +645,7 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 							{
 								type: "text",
 								text: withIdleRunWarning(
-									`Subagent #${params.continueRunId} is still running. Wait for it to finish or abort it first.`,
+									`Subagent #${continuationRunId} is still running. Wait for it to finish or abort it first.`,
 								),
 							},
 						],
@@ -593,7 +656,6 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 			}
 
 			const resolvedAgent = params.agent ?? continueFromRun?.agent ?? "worker";
-			const resolvedAgentConfig = agents.find((a) => a.name === resolvedAgent);
 			let runId: number;
 			let runState: CommandRunState;
 			let taskForDisplay: string;
@@ -615,7 +677,7 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 				runState.toolCalls = 0;
 				runState.lastLine = "";
 				runState.lastOutput = "";
-				runState.continuedFromRunId = params.continueRunId;
+				runState.continuedFromRunId = continuationRunId;
 				runState.usage = undefined;
 				runState.model = undefined;
 				runState.removed = false;
@@ -684,7 +746,7 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 						runId,
 						agent: resolvedAgent,
 						task: taskForDisplay,
-						continuedFromRunId: params.continueRunId,
+						continuedFromRunId: continuationRunId,
 						turnCount: runState.turnCount,
 						contextMode: runState.contextMode,
 						sessionFile: runState.sessionFile,
@@ -708,22 +770,21 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 				try {
 					const result = await enqueueSubagentInvocation(() =>
 						runSingleAgent(
-						ctx.cwd,
-						agents,
-						resolvedAgent,
-						wrapTaskWithMainContext(params.task!, mainContextText, { mainSessionFile, totalMessageCount }),
-						params.cwd,
-						undefined,
-						abortController.signal,
-						(partial) => {
-							if (runState.removed) return;
-							const current = partial.details?.results?.[0];
-							if (!current) return;
-							updateRunFromResult(runState, current);
-							updateCommandRunsWidget(store);
-						},
-						makeDetails("single"),
-						runState.sessionFile,
+							ctx.cwd,
+							agents,
+							resolvedAgent,
+							wrapTaskWithMainContext(params.task!, mainContextText, { mainSessionFile, totalMessageCount }),
+							undefined,
+							abortController.signal,
+							(partial) => {
+								if (runState.removed) return;
+								const current = partial.details?.results?.[0];
+								if (!current) return;
+								updateRunFromResult(runState, current);
+								updateCommandRunsWidget(store);
+							},
+							makeDetails("single"),
+							runState.sessionFile,
 						),
 					);
 
@@ -790,7 +851,7 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 							runId,
 							agent: resolvedAgent,
 							task: taskForDisplay,
-							continuedFromRunId: params.continueRunId,
+							continuedFromRunId: continuationRunId,
 							turnCount: runState.turnCount,
 							contextMode: runState.contextMode,
 							sessionFile: runState.sessionFile,
@@ -858,7 +919,7 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 							runId,
 							agent: resolvedAgent,
 							task: taskForDisplay,
-							continuedFromRunId: params.continueRunId,
+							continuedFromRunId: continuationRunId,
 							turnCount: runState.turnCount,
 							contextMode: runState.contextMode,
 							sessionFile: runState.sessionFile,
@@ -955,7 +1016,6 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 						agents,
 						step.agent,
 						wrapTaskWithMainContext(taskWithContext, mainContextText, { mainSessionFile, totalMessageCount }),
-						step.cwd,
 						i + 1,
 						signal,
 						chainUpdate,
@@ -1001,7 +1061,6 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 					agents,
 					params.agent,
 					wrapTaskWithMainContext(params.task, mainContextText, { mainSessionFile, totalMessageCount }),
-					params.cwd,
 					undefined,
 					signal,
 					onUpdate,

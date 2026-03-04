@@ -23,9 +23,9 @@
  */
 
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
+import { cleanupPixelTimer } from "./above-widget.js";
 import { registerAll } from "./commands.js";
 import { HANG_CHECK_INTERVAL_MS, HANG_TIMEOUT_MS } from "./constants.js";
-import { cleanupPixelTimer } from "./above-widget.js";
 import { createStore, type SubagentStore } from "./store.js";
 import type { CommandRunState } from "./types.js";
 import { updateCommandRunsWidget } from "./widget.js";

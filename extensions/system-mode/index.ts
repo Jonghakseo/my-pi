@@ -9,6 +9,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { type ExtensionAPI, type ExtensionContext, isToolCallEventType } from "@mariozechner/pi-coding-agent";
+import { isSubagentAsyncLaunchCommand, parseSubagentCommandVerb } from "../subagent/cli.ts";
 import { STATUS_LOG_FOOTER, SUBAGENT_STARTED_STATUS_FOOTER } from "../subagent/constants.ts";
 import { SYSTEM_MODE_STATUS_KEY } from "../utils/status-keys.ts";
 import { setAgentsModeEnabled } from "./state.ts";
@@ -102,7 +103,6 @@ function getAllToolNames(pi: ExtensionAPI): string[] {
 /** Memory-layer tools allowed in master mode for cross-session knowledge management. */
 const MEMORY_TOOLS = ["remember", "recall", "forget", "memory_list"] as const;
 
-
 export default function (pi: ExtensionAPI) {
 	let mode: SystemMode = "default";
 	let activeToolsBeforeMaster: string[] | undefined;
@@ -141,22 +141,19 @@ export default function (pi: ExtensionAPI) {
 		if (ctx.hasUI && now - lastStatusPollNotifyAt >= STATUS_POLL_NOTIFY_COOLDOWN_MS) {
 			lastStatusPollNotifyAt = now;
 			ctx.ui.notify(
-				"Polling blocked: repeated subagent status/detail calls detected. Stop polling and end this turn; async completion/failure/cancellation updates will arrive automatically.",
+				"Polling blocked: repeated `subagent status/detail` calls detected. Stop polling and end this turn; async completion/failure/cancellation updates will arrive automatically.",
 				"warning",
 			);
 		}
 
 		return (
-			"Master mode polling guard: repeated subagent asyncAction=status/detail calls detected in a short window. " +
+			"Master mode polling guard: repeated `subagent status/detail` calls detected in a short window. " +
 			"Stop polling, wait for automatic async completion/failure/cancellation updates, and end this turn now."
 		);
 	};
 
 	const isAsyncSubagentRunLaunch = (input: Record<string, unknown> | undefined): boolean => {
-		const asyncAction = typeof input?.asyncAction === "string" ? input.asyncAction : "run";
-		if (asyncAction !== "run") return false;
-		const runAsync = input?.runAsync;
-		return runAsync === undefined || runAsync === true;
+		return isSubagentAsyncLaunchCommand(input?.command);
 	};
 
 	const applyToolPolicy = (previousMode: SystemMode, newMode: SystemMode, ctx?: ExtensionContext) => {
@@ -251,10 +248,7 @@ export default function (pi: ExtensionAPI) {
 			if (entry.type !== "custom") continue;
 			const ce = entry as any;
 			if (ce.customType === "system-mode-change" && ce.data?.mode) {
-				restoredMode =
-					ce.data.mode === "agents" || ce.data.mode === "master"
-						? ce.data.mode
-						: "default";
+				restoredMode = ce.data.mode === "agents" || ce.data.mode === "master" ? ce.data.mode : "default";
 			}
 			if (ce.customType === FIRST_ASYNC_ABORT_MARKER_ENTRY_TYPE) {
 				abortGuardTriggered = true;
@@ -283,8 +277,8 @@ export default function (pi: ExtensionAPI) {
 		// --- Master mode: subagent is the dispatch tool (with polling guard) ---
 		if (isToolCallEventType("subagent", event)) {
 			const input = event.input as Record<string, unknown> | undefined;
-			const asyncAction = typeof input?.asyncAction === "string" ? input.asyncAction : undefined;
-			if (asyncAction === "status" || asyncAction === "detail") {
+			const verb = parseSubagentCommandVerb(input?.command);
+			if (verb === "status" || verb === "detail") {
 				const pollBlockReason = trackStatusPolling(ctx);
 				if (pollBlockReason) {
 					return {
@@ -338,7 +332,7 @@ export default function (pi: ExtensionAPI) {
 		const modePrompt = loadPrompt(mode); // "agents" | "master"
 		if (!modePrompt) return;
 		return {
-			systemPrompt: modePrompt + "\n\n" + event.systemPrompt,
+			systemPrompt: `${modePrompt}\n\n${event.systemPrompt}`,
 		};
 	});
 }
