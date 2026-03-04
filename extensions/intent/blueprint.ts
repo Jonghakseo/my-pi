@@ -135,7 +135,9 @@ function recalculateBlueprintStatus(bp: Blueprint): void {
 		bp.status = "failed";
 	} else if (anyRunning || anyEscalated) {
 		// Escalated nodes keep the Blueprint in "running" state (not failed)
-		// so the master can retry them after providing judgment
+		// so the master can retry them after providing judgment.
+		// Note: mixed failed+escalated with no running nodes also stays "running" (via anyEscalated)
+		// — this is intentional: master must retry_node on escalated nodes before the BP can fail.
 		bp.status = "running";
 	}
 	// Otherwise keep current status (confirmed/running)
@@ -173,14 +175,14 @@ export function resetNodeStatus(blueprintId: string, nodeId: string): Blueprint 
 /**
  * Get all nodes that are ready to run:
  * - Status is "pending"
- * - All dependsOn nodes are "completed"
+ * - All dependsOn nodes are "completed" or "skipped"
  */
 export function getRunnableNodes(blueprint: Blueprint): BlueprintNode[] {
 	return blueprint.nodes.filter((node) => {
 		if (node.status !== "pending") return false;
 		return node.dependsOn.every((depId) => {
 			const dep = blueprint.nodes.find((n) => n.id === depId);
-			return dep?.status === "completed";
+			return dep?.status === "completed" || dep?.status === "skipped";
 		});
 	});
 }
@@ -384,7 +386,10 @@ export function injectChallengerGates(blueprint: Blueprint): void {
 					(n) =>
 						n.purpose === "challenge" &&
 						n.dependsOn.some((dep) => planNodeIds.has(dep)) &&
-						!getTransitiveAncestors(implNodesDependingOnPlan[0].id, blueprint.nodes).has(n.id),
+						// A sibling challenge must not be an ancestor of ANY impl node (not just [0])
+						implNodesDependingOnPlan.every(
+							(impl) => !getTransitiveAncestors(impl.id, blueprint.nodes).has(n.id),
+						),
 				);
 
 				if (siblingChallenge) {
@@ -459,7 +464,10 @@ export function injectChallengerGates(blueprint: Blueprint): void {
 					(n) =>
 						n.purpose === "challenge" &&
 						n.dependsOn.some((dep) => implNodeIds.has(dep)) &&
-						!getTransitiveAncestors(reviewNodesDependingOnImpl[0].id, blueprint.nodes).has(n.id),
+						// A sibling challenge must not be an ancestor of ANY review node (not just [0])
+						reviewNodesDependingOnImpl.every(
+							(review) => !getTransitiveAncestors(review.id, blueprint.nodes).has(n.id),
+						),
 				);
 
 				if (siblingChallenge2) {

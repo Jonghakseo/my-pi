@@ -23,13 +23,22 @@ export function getLastNonEmptyLine(text: string): string {
 }
 
 export function getFinalOutput(messages: Message[]): string {
+	// First pass: prefer text blocks
 	for (let i = messages.length - 1; i >= 0; i--) {
 		const msg = messages[i];
 		if (msg.role === "assistant") {
 			for (const part of msg.content) {
-				// Bug fix: skip empty text blocks (e.g. thinking-only responses)
-				// so we don't prematurely return "" and show "(no output)"
 				if (part.type === "text" && part.text) return part.text;
+			}
+		}
+	}
+	// Second pass: fall back to thinking blocks (extended thinking models may emit
+	// only a thinking block with no text block on the final turn)
+	for (let i = messages.length - 1; i >= 0; i--) {
+		const msg = messages[i];
+		if (msg.role === "assistant") {
+			for (const part of msg.content) {
+				if (part.type === "thinking" && part.thinking) return part.thinking;
 			}
 		}
 	}

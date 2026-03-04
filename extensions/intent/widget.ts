@@ -244,6 +244,9 @@ function renderNodeLine(node: BlueprintNode, theme: any): string {
 		case "failed":
 			icon = theme.fg("error", "✗");
 			break;
+		case "escalated":
+			icon = theme.fg("error", "🆘");
+			break;
 		case "skipped":
 			icon = theme.fg("muted", "-");
 			break;
