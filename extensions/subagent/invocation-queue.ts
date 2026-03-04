@@ -1,27 +1,29 @@
 import { SUBAGENT_QUEUE_INTERVAL_MS } from "./constants.js";
 
-let queueTail: Promise<void> = Promise.resolve();
+let startQueueTail: Promise<void> = Promise.resolve();
 
 function sleep(ms: number): Promise<void> {
 	return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 /**
- * Serialize subagent invocations through a single queue.
+ * Queue only subagent invocation starts through a single pacing queue.
  *
- * Every invocation waits in the queue and starts after a fixed delay,
- * ensuring calls are made sequentially at 500ms intervals.
+ * Each invocation waits for its start slot (fixed delay per slot), but once
+ * started the job runs independently so multiple subagents can execute in
+ * parallel.
  */
 export function enqueueSubagentInvocation<T>(job: () => Promise<T>): Promise<T> {
-	const queuedJob = async () => {
-		await sleep(SUBAGENT_QUEUE_INTERVAL_MS);
-		return await job();
-	};
+	const startGate = startQueueTail.then(
+		() => sleep(SUBAGENT_QUEUE_INTERVAL_MS),
+		() => sleep(SUBAGENT_QUEUE_INTERVAL_MS),
+	);
 
-	const result = queueTail.then(queuedJob, queuedJob);
-	queueTail = result.then(
+	// Important: only pace the next start slot. Do not wait for job completion.
+	startQueueTail = startGate.then(
 		() => undefined,
 		() => undefined,
 	);
-	return result;
+
+	return startGate.then(() => job());
 }
