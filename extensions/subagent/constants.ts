@@ -66,6 +66,8 @@ export const CONTINUATION_OUTPUT_CONTEXT_MAX_CHARS = 6_000;
 export const COMMAND_COMPLETION_LIMIT = 20;
 export const COMMAND_TASK_PREVIEW_CHARS = 50;
 export const RUN_TICK_INTERVAL_MS = 1_000;
+/** Queue delay (ms) before starting each subagent invocation. */
+export const SUBAGENT_QUEUE_INTERVAL_MS = 1_000;
 export const PLACEHOLDER_RUNNING_EXIT_CODE = -1;
 export const SUBVIEW_OVERLAY_WIDTH = "95%";
 export const SUBVIEW_OVERLAY_MAX_HEIGHT = "95%";

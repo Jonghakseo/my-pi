@@ -46,6 +46,7 @@ import { renderSubagentToolCall, renderSubagentToolResult } from "./tool-render.
 import type { CommandRunState, SingleResult, SubagentDetails } from "./types.js";
 import { ListAgentsParams, SubagentParams } from "./types.js";
 import { updateCommandRunsWidget } from "./widget.js";
+import { enqueueSubagentInvocation } from "./invocation-queue.js";
 
 /**
  * Capture switchSession from an ExtensionCommandContext into the shared store.
@@ -1082,23 +1083,25 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 
 			void (async () => {
 				try {
-					const result = await runSingleAgent(
-						ctx.cwd,
-						agents,
-						selectedAgent,
-						taskForAgent,
-						undefined,
-						undefined,
-						abortController.signal,
-						(partial) => {
-							if (runState.removed) return;
-							const current = partial.details?.results?.[0];
-							if (!current) return;
-							updateRunFromResult(runState, current);
-							updateCommandRunsWidget(store);
-						},
-						makeDetails,
-						runState.sessionFile,
+					const result = await enqueueSubagentInvocation(() =>
+						runSingleAgent(
+							ctx.cwd,
+							agents,
+							selectedAgent,
+							taskForAgent,
+							undefined,
+							undefined,
+							abortController.signal,
+							(partial) => {
+								if (runState.removed) return;
+								const current = partial.details?.results?.[0];
+								if (!current) return;
+								updateRunFromResult(runState, current);
+								updateCommandRunsWidget(store);
+							},
+							makeDetails,
+							runState.sessionFile,
+						),
 					);
 
 					if (runState.removed) return;
