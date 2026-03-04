@@ -1,19 +1,27 @@
 /**
- * Simple single-line-per-run above-editor widget for tool-invoked subagent runs.
+ * Above-editor widget for tool-invoked subagent runs.
  *
- * Each run is rendered as one line:
- *   {icon} #{id} {agent} ({elapsed}): {thought or activity}
+ * Each run is rendered in two lines (same style as below-editor widget):
+ *   1) status/meta line
+ *   2) thought/progress line
  */
 
 import { Box, Text, truncateToWidth, visibleWidth } from "@mariozechner/pi-tui";
-import { AGENT_NAME_PALETTE, agentBgIndex } from "./format.js";
+import {
+	AGENT_NAME_PALETTE,
+	agentBgIndex,
+	formatContextUsageBar,
+	getContextBarColorByRemaining,
+	getRemainingContextPercent,
+	getUsedContextPercent,
+	resolveContextWindow,
+} from "./format.js";
 import type { SubagentStore } from "./store.js";
 import type { CommandRunState } from "./types.js";
 
 const ANIM_REFRESH_MS = 150;
 const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"] as const;
 const SPINNER_INTERVAL_MS = 120;
-const MARQUEE_SPEED_MS = 400;
 
 let pixelAnimTimer: ReturnType<typeof setInterval> | undefined;
 
@@ -28,10 +36,32 @@ function managePixelTimer(store: SubagentStore): void {
 	}
 }
 
+function readPurposeFromSession(ctx: any): string {
+	try {
+		const entries = ctx?.sessionManager?.getEntries?.() ?? [];
+		for (let i = entries.length - 1; i >= 0; i--) {
+			const entry = entries[i] as any;
+			if (entry?.type !== "custom" || entry?.customType !== "purpose:set") continue;
+			return typeof entry?.data?.purpose === "string" ? entry.data.purpose.replace(/\s+/g, " ").trim() : "";
+		}
+	} catch {
+		// Ignore purpose parsing errors
+	}
+	return "";
+}
+
 function getToolRuns(store: SubagentStore): CommandRunState[] {
+	const statusPriority = (status: "running" | "done" | "error") => (status === "running" ? 0 : status === "done" ? 1 : 2);
 	return Array.from(store.commandRuns.values())
 		.filter((r) => r.source === "tool" && !r.removed)
-		.sort((a, b) => a.id - b.id);
+		.sort((a, b) => {
+			const priorityDiff = statusPriority(a.status) - statusPriority(b.status);
+			if (priorityDiff !== 0) return priorityDiff;
+			const startedDiff = (b.startedAt ?? 0) - (a.startedAt ?? 0);
+			if (startedDiff !== 0) return startedDiff;
+			return b.id - a.id;
+		})
+		.slice(0, 4);
 }
 
 /** Format elapsed milliseconds as a short English string: "5s", "1m 8s", "2h 5m". */
@@ -43,44 +73,6 @@ function formatElapsed(ms: number): string {
 	if (hours > 0) return `${hours}h ${minutes}m`;
 	if (minutes > 0) return `${minutes}m ${seconds}s`;
 	return `${seconds}s`;
-}
-
-/** Slice plain text to a visible-width window with seamless marquee wrapping. */
-function marqueeSlice(text: string, offset: number, maxWidth: number): string {
-	const segs: { ch: string; w: number }[] = [];
-	let totalW = 0;
-	for (const ch of text) {
-		const w = visibleWidth(ch);
-		segs.push({ ch, w });
-		totalW += w;
-	}
-	if (totalW <= maxWidth) return text;
-
-	const spacer = "   ";
-	const fullSegs = [...segs];
-	for (const ch of spacer) fullSegs.push({ ch, w: 1 });
-	for (const s of segs) fullSegs.push({ ch: s.ch, w: s.w });
-
-	const wrapOffset = offset % (totalW + spacer.length);
-	let skipped = 0;
-	let startIdx = 0;
-	for (let i = 0; i < fullSegs.length; i++) {
-		if (skipped >= wrapOffset) {
-			startIdx = i;
-			break;
-		}
-		skipped += fullSegs[i].w;
-		startIdx = i + 1;
-	}
-
-	let result = "";
-	let width = 0;
-	for (let i = startIdx; i < fullSegs.length && width < maxWidth; i++) {
-		if (width + fullSegs[i].w > maxWidth) break;
-		result += fullSegs[i].ch;
-		width += fullSegs[i].w;
-	}
-	return result;
 }
 
 export function updatePixelWidget(store: SubagentStore, ctx?: any): void {
@@ -106,44 +98,63 @@ export function updatePixelWidget(store: SubagentStore, ctx?: any): void {
 				const innerWidth = Math.max(1, width);
 				const now = Date.now();
 				const spinnerFrame = SPINNER_FRAMES[Math.floor(now / SPINNER_INTERVAL_MS) % SPINNER_FRAMES.length];
-
+				const currentPurpose = readPurposeFromSession(activeCtx);
+				const purposeSuffix = currentPurpose ? ` {${currentPurpose}}` : "";
 				const outputLines: string[] = [];
 
-				for (const run of toolRuns) {
-					const elapsed = run.status === "running" ? formatElapsed(now - run.startedAt) : formatElapsed(run.elapsedMs);
+				for (const [idx, run] of toolRuns.entries()) {
+					if (idx > 0) outputLines.push(theme.fg("muted", "─".repeat(innerWidth)));
 
-					// Status icon
+					const elapsed = run.status === "running" ? formatElapsed(now - run.startedAt) : formatElapsed(run.elapsedMs);
 					const icon =
 						run.status === "done"
 							? theme.fg("success", "✓")
 							: run.status === "error"
 								? theme.fg("error", "✗")
 								: theme.fg("warning", spinnerFrame);
-
-					// Agent name with color
 					const agentColor = AGENT_NAME_PALETTE[agentBgIndex(run.agent)];
-					const agentStr = `\x1b[38;5;${agentColor}m${run.agent}\x1b[39m`;
+					const agentStr = `\x1b[38;5;${agentColor}m ${run.agent}\x1b[39m`;
+					const modeLabel = run.contextMode === "main" ? theme.fg("warning", " · MainCtx") : "";
 
-					// Build prefix and measure its visible width
-					const prefix = `${icon} #${run.id} ${agentStr} (${elapsed}): `;
-					const prefixWidth = visibleWidth(prefix);
+					const contextWindow = resolveContextWindow(activeCtx, run.model);
+					const usedContextPercent = getUsedContextPercent(run.usage?.contextTokens, contextWindow);
+					const remainingContextPercent = getRemainingContextPercent(usedContextPercent);
+					const contextBar = usedContextPercent !== undefined ? formatContextUsageBar(usedContextPercent) : undefined;
+					const contextBarColor =
+						remainingContextPercent !== undefined ? getContextBarColorByRemaining(remainingContextPercent) : undefined;
+					const contextShort = contextBar
+						? contextBarColor
+							? theme.fg(contextBarColor, contextBar)
+							: theme.fg("dim", contextBar)
+						: "";
 
-					// Text source: thought > lastLine > task
-					const rawText = run.thoughtText || run.lastLine || run.task || "";
-					const maxTextWidth = Math.max(1, innerWidth - prefixWidth);
+					const statusLeft =
+						`${icon} #${run.id}` +
+						modeLabel +
+						agentStr +
+						theme.fg("dim", `  (${elapsed})`) +
+						theme.fg("dim", purposeSuffix);
 
-					let textPart: string;
-					if (run.status === "running" && rawText) {
-						const scrollOffset = Math.floor(now / MARQUEE_SPEED_MS);
-						textPart = theme.fg("muted", marqueeSlice(rawText, scrollOffset, maxTextWidth));
+					if (contextShort) {
+						const contextWidth = visibleWidth(contextShort);
+						if (contextWidth >= innerWidth) {
+							outputLines.push(truncateToWidth(contextShort, innerWidth));
+						} else {
+							const maxLeftWidth = Math.max(1, innerWidth - contextWidth - 1);
+							const fittedLeft = truncateToWidth(statusLeft, maxLeftWidth);
+							const gapWidth = Math.max(1, innerWidth - visibleWidth(fittedLeft) - contextWidth);
+							outputLines.push(`${fittedLeft}${" ".repeat(gapWidth)}${contextShort}`);
+						}
 					} else {
-						textPart = theme.fg("muted", truncateToWidth(rawText, maxTextWidth));
+						outputLines.push(truncateToWidth(statusLeft, innerWidth));
 					}
 
-					outputLines.push(truncateToWidth(`${prefix}${textPart}`, innerWidth));
+					const rawText = run.thoughtText || (run.status !== "done" ? run.lastLine : "") || "";
+					if (rawText) {
+						outputLines.push(theme.fg("accent", `  💭 ${truncateToWidth(rawText, Math.max(1, innerWidth - 4))}`));
+					}
 				}
 
-				// Bottom separator
 				const sepWidth = Math.min(innerWidth, 40);
 				outputLines.push(theme.fg("muted", "─".repeat(sepWidth)));
 
