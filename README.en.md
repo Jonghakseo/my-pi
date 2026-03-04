@@ -6,11 +6,11 @@
 
 **A personal AI operating system built on [pi](https://github.com/mariozechner/pi-coding-agent)**
 
-*9 specialized agents · 20+ extensions · one developer's opinionated setup*
+*11 specialized agents · 20+ extensions · one developer's opinionated setup*
 
 <br/>
 
-`🤖 9 Agents` &nbsp; `🧩 20+ Extensions` &nbsp; `🎨 5 Themes`
+`🤖 11 Agents` &nbsp; `🧩 20+ Extensions` &nbsp; `🎨 5 Themes`
 
 <br/>
 
@@ -34,7 +34,7 @@ The system is organized in **four layers**:
 |---|---|
 | **User / pi TUI** | Interactive terminal interface |
 | **Extensions** | 20+ TypeScript plugins — subagent management, voice I/O, MCP bridge, UI overlays, safety guards |
-| **Agent Orchestra** | 9 purpose-built agents with distinct models and roles |
+| **Agent Orchestra** | 11 purpose-built agents with distinct models and roles |
 | **Infrastructure** | MCP tool integrations via [claude-mcp-bridge](./extensions/claude-mcp-bridge/) — reuses your existing Claude Code MCP setup (Jira, Slack, Gmail, Calendar, GA4, Figma, DB, etc.) |
 
 ---
@@ -45,28 +45,30 @@ The system is organized in **four layers**:
   <img src="./tmp/agents.en.svg" alt="Agent Orchestra" width="800"/>
 </p>
 
-Nine agents, three models, one orchestrator. Each agent has a specific mandate, its own system prompt, and a model chosen for its strengths:
+Eleven agents, three models, one orchestrator. Each agent has a specific mandate, its own system prompt, and a model chosen for its strengths:
 
 | Agent | Model | Role | When to Use |
 |---|---|---|---|
 | 🔍 **finder** | `claude-sonnet-4-6` | Fast file & code locator | Quick lookups, grep-like tasks |
-| ⚡ **worker** | `claude-opus-4-6` | General-purpose executor | Implementation, writing, fixes |
+| ⚡ **worker** | `claude-sonnet-4-6` | General-purpose executor | Implementation, writing, fixes (complex multi-file) |
+| 🏃 **worker-fast** | `claude-haiku-4-5` | Lightweight simple executor | Single-file edits, quick changes |
 | 📐 **planner** | `gpt-5.3-codex` | Implementation architect | Breaking down complex tasks |
 | 🔎 **reviewer** | `gpt-5.3-codex` | Code review (P0–P3 severity) | PR reviews, quality checks |
-| 🥊 **challenger** | `claude-opus-4-6` | Pressure tester | Stress-test plans before execution |
-| ✅ **verifier** | `claude-opus-4-6` | 3-tier evidence validation | Verify claims, check correctness |
+| 🥊 **challenger** | `claude-sonnet-4-6` | Pressure tester | Stress-test plans before execution |
+| ✅ **verifier** | `claude-sonnet-4-6` | 3-tier evidence validation | Verify claims, check correctness |
+| 🔬 **deep-verify** | `gpt-5.3-codex` | High-risk deep validation | Risky operations (delete, deploy, migrate) |
 | ⚖️ **decider** | `gpt-5.3-codex` | Technical decision maker | Architecture choices, trade-offs |
-| 🌐 **searcher** | `claude-opus-4-6` | Research & web search | Documentation lookup, exploration |
-| 🖥️ **browser** | `claude-opus-4-6` | Browser automation & UI testing | E2E testing, visual verification |
+| 🌐 **searcher** | `claude-sonnet-4-6` | Research & web search | Documentation lookup, exploration |
+| 🖥️ **browser** | `claude-sonnet-4-6` | Browser automation & UI testing | E2E testing, visual verification |
 
 <details>
 <summary><strong>Model Selection Philosophy</strong></summary>
 
-- **claude-sonnet-4-6** — Speed-optimized tasks (file search, quick lookups)
-- **claude-opus-4-6** — Deep reasoning tasks (code execution, analysis, creative work)
-- **gpt-5.3-codex** — Structured reasoning tasks (planning, reviewing, decision-making)
+- **claude-haiku-4-5** — Ultra-fast lightweight tasks (simple single-file changes)
+- **claude-sonnet-4-6** — General-purpose tasks (file search, quick lookups, implementation, analysis, creative work)
+- **gpt-5.3-codex** — Structured reasoning tasks (planning, reviewing, decision-making, deep validation)
 
-The orchestrator (main agent) runs on `claude-opus-4-6` with `xhigh` thinking, ensuring maximum reasoning depth for delegation decisions.
+The orchestrator (main agent) runs on `claude-sonnet-4-6`, ensuring optimal reasoning depth for delegation decisions.
 
 </details>
 
@@ -157,9 +159,15 @@ retest    = browser("verify fixes with screenshots")
 final     = reviewer("review all changes")
 ```
 
-### `/set-purpose` — Auto Session Purpose
+### `/purpose` — Session Purpose
 
-Automatically sets the session purpose from the current context.
+Set or inspect the session purpose manually. It persists across compactions.
+
+```
+/purpose <session purpose text>   # set purpose
+/purpose                          # show current purpose
+/purpose clear                    # clear purpose
+```
 
 ---
 
@@ -260,7 +268,7 @@ This is not a demo project. It's a **living configuration** used daily for produ
 | Metric | Value |
 |---|---|
 | Active extensions | 20+ |
-| Agent definitions | 9 |
+| Agent definitions | 11 |
 | Themes | 5 |
 
 ---

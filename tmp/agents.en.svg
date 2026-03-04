@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 520" width="880" height="520">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 700" width="1200" height="700">
   <defs>
     <filter id="aglow">
       <feGaussianBlur stdDeviation="3" result="blur"/>
@@ -15,131 +15,162 @@
   </defs>
 
   <!-- Background -->
-  <rect width="880" height="520" fill="url(#abgGrad)" rx="12"/>
+  <rect width="1200" height="700" fill="url(#abgGrad)" rx="12"/>
 
   <!-- Subtle radial glow behind center -->
-  <circle cx="440" cy="260" r="200" fill="url(#centerGlow)"/>
+  <circle cx="600" cy="350" r="250" fill="url(#centerGlow)"/>
 
   <!-- Title -->
-  <text x="440" y="30" text-anchor="middle" fill="#e6edf3" font-family="monospace" font-size="16" font-weight="bold">🤖 Agent Orchestra</text>
+  <text x="600" y="35" text-anchor="middle" fill="#e6edf3" font-family="monospace" font-size="18" font-weight="bold">🤖 Agent Orchestra (11)</text>
 
   <!-- Connection lines (behind nodes) -->
-  <g stroke="#21262d" stroke-width="1.5" stroke-dasharray="4,4" opacity="0.7">
-    <!-- finder -->
-    <line x1="440" y1="260" x2="155" y2="105"/>
-    <!-- worker -->
-    <line x1="440" y1="260" x2="440" y2="100"/>
-    <!-- planner -->
-    <line x1="440" y1="260" x2="725" y2="105"/>
-    <!-- reviewer -->
-    <line x1="440" y1="260" x2="770" y2="260"/>
-    <!-- challenger -->
-    <line x1="440" y1="260" x2="725" y2="405"/>
-    <!-- verifier -->
-    <line x1="440" y1="260" x2="440" y2="425"/>
-    <!-- decider -->
-    <line x1="440" y1="260" x2="155" y2="405"/>
-    <!-- searcher -->
-    <line x1="440" y1="260" x2="110" y2="260"/>
-    <!-- browser -->
-    <line x1="440" y1="260" x2="260" y2="165"/>
+  <g stroke="#21262d" stroke-width="1.5" stroke-dasharray="4,4" opacity="0.5">
+    <!-- Top row -->
+    <line x1="600" y1="350" x2="150" y2="140"/>
+    <line x1="600" y1="350" x2="420" y2="140"/>
+    <line x1="600" y1="350" x2="600" y2="140"/>
+    <line x1="600" y1="350" x2="780" y2="140"/>
+    <line x1="600" y1="350" x2="1050" y2="140"/>
+    <!-- Middle row -->
+    <line x1="600" y1="350" x2="100" y2="350"/>
+    <line x1="600" y1="350" x2="1100" y2="350"/>
+    <!-- Bottom row -->
+    <line x1="600" y1="350" x2="200" y2="560"/>
+    <line x1="600" y1="350" x2="480" y2="560"/>
+    <line x1="600" y1="350" x2="720" y2="560"/>
+    <line x1="600" y1="350" x2="1000" y2="560"/>
   </g>
 
-  <!-- Center: Main Agent -->
-  <rect x="355" y="225" width="170" height="70" rx="12" fill="rgba(230,237,243,0.06)" stroke="#e6edf3" stroke-width="2" filter="url(#aglow)"/>
-  <text x="440" y="252" text-anchor="middle" fill="#e6edf3" font-family="monospace" font-size="13" font-weight="bold">Main Agent</text>
-  <text x="440" y="268" text-anchor="middle" fill="#8b949e" font-family="monospace" font-size="9">Orchestrator</text>
-  <text x="440" y="284" text-anchor="middle" fill="#484f58" font-family="monospace" font-size="8">claude-opus-4-6</text>
+  <!-- Center: Main Orchestrator -->
+  <rect x="495" y="310" width="210" height="80" rx="12" fill="rgba(230,237,243,0.08)" stroke="#e6edf3" stroke-width="2" filter="url(#aglow)"/>
+  <text x="600" y="340" text-anchor="middle" fill="#e6edf3" font-family="monospace" font-size="14" font-weight="bold">Main Orchestrator</text>
+  <text x="600" y="360" text-anchor="middle" fill="#8b949e" font-family="monospace" font-size="9">claude-sonnet-4-6</text>
 
-  <!-- Agent nodes -->
+  <!-- TOP ROW (5 agents) -->
+  
   <!-- finder: claude-sonnet-4-6, blue -->
-  <g transform="translate(65, 68)">
-    <rect width="170" height="70" rx="10" fill="rgba(88,166,255,0.08)" stroke="#58a6ff" stroke-width="1.5"/>
-    <text x="85" y="20" text-anchor="middle" fill="#58a6ff" font-family="monospace" font-size="13" font-weight="bold">🔍 finder</text>
-    <text x="85" y="37" text-anchor="middle" fill="#8b949e" font-family="monospace" font-size="8">claude-sonnet-4-6</text>
-    <text x="85" y="54" text-anchor="middle" fill="#e6edf3" font-family="monospace" font-size="9">Fast File Locator</text>
-    <circle cx="158" cy="12" r="5" fill="#58a6ff" opacity="0.6"/>
+  <g transform="translate(50, 80)">
+    <rect width="200" height="80" rx="10" fill="rgba(88,166,255,0.08)" stroke="#58a6ff" stroke-width="1.5"/>
+    <text x="100" y="22" text-anchor="middle" fill="#58a6ff" font-family="monospace" font-size="13" font-weight="bold">🔍 finder</text>
+    <text x="100" y="40" text-anchor="middle" fill="#8b949e" font-family="monospace" font-size="7">claude-sonnet-4-6</text>
+    <text x="100" y="56" text-anchor="middle" fill="#e6edf3" font-family="monospace" font-size="9">Fast File & Code</text>
+    <text x="100" y="70" text-anchor="middle" fill="#e6edf3" font-family="monospace" font-size="9">Search</text>
+    <circle cx="185" cy="14" r="5" fill="#58a6ff" opacity="0.6"/>
   </g>
 
-  <!-- worker: claude-opus-4-6, purple -->
-  <g transform="translate(355, 50)">
-    <rect width="170" height="70" rx="10" fill="rgba(188,140,255,0.08)" stroke="#bc8cff" stroke-width="1.5"/>
-    <text x="85" y="20" text-anchor="middle" fill="#bc8cff" font-family="monospace" font-size="13" font-weight="bold">⚡ worker</text>
-    <text x="85" y="37" text-anchor="middle" fill="#8b949e" font-family="monospace" font-size="8">claude-opus-4-6</text>
-    <text x="85" y="54" text-anchor="middle" fill="#e6edf3" font-family="monospace" font-size="9">Task Executor</text>
-    <circle cx="158" cy="12" r="5" fill="#bc8cff" opacity="0.6"/>
+  <!-- worker-fast: claude-haiku-4-5, cyan -->
+  <g transform="translate(320, 80)">
+    <rect width="200" height="80" rx="10" fill="rgba(79,180,165,0.08)" stroke="#4fb4a5" stroke-width="1.5"/>
+    <text x="100" y="22" text-anchor="middle" fill="#4fb4a5" font-family="monospace" font-size="13" font-weight="bold">🏃 worker-fast</text>
+    <text x="100" y="40" text-anchor="middle" fill="#8b949e" font-family="monospace" font-size="7">claude-haiku-4-5</text>
+    <text x="100" y="56" text-anchor="middle" fill="#e6edf3" font-family="monospace" font-size="9">Lightweight</text>
+    <text x="100" y="70" text-anchor="middle" fill="#e6edf3" font-family="monospace" font-size="9">Simple Tasks</text>
+    <circle cx="185" cy="14" r="5" fill="#4fb4a5" opacity="0.6"/>
+  </g>
+
+  <!-- worker: claude-sonnet-4-6, purple -->
+  <g transform="translate(500, 80)">
+    <rect width="200" height="80" rx="10" fill="rgba(188,140,255,0.08)" stroke="#bc8cff" stroke-width="1.5"/>
+    <text x="100" y="22" text-anchor="middle" fill="#bc8cff" font-family="monospace" font-size="13" font-weight="bold">⚡ worker</text>
+    <text x="100" y="40" text-anchor="middle" fill="#8b949e" font-family="monospace" font-size="7">claude-sonnet-4-6</text>
+    <text x="100" y="56" text-anchor="middle" fill="#e6edf3" font-family="monospace" font-size="9">General-Purpose</text>
+    <text x="100" y="70" text-anchor="middle" fill="#e6edf3" font-family="monospace" font-size="9">Task Executor</text>
+    <circle cx="185" cy="14" r="5" fill="#bc8cff" opacity="0.6"/>
   </g>
 
   <!-- planner: gpt-5.3-codex, orange -->
-  <g transform="translate(645, 68)">
-    <rect width="170" height="70" rx="10" fill="rgba(240,136,62,0.08)" stroke="#f0883e" stroke-width="1.5"/>
-    <text x="85" y="20" text-anchor="middle" fill="#f0883e" font-family="monospace" font-size="13" font-weight="bold">📐 planner</text>
-    <text x="85" y="37" text-anchor="middle" fill="#8b949e" font-family="monospace" font-size="8">gpt-5.3-codex</text>
-    <text x="85" y="54" text-anchor="middle" fill="#e6edf3" font-family="monospace" font-size="9">Architect</text>
-    <circle cx="158" cy="12" r="5" fill="#f0883e" opacity="0.6"/>
+  <g transform="translate(680, 80)">
+    <rect width="200" height="80" rx="10" fill="rgba(240,136,62,0.08)" stroke="#f0883e" stroke-width="1.5"/>
+    <text x="100" y="22" text-anchor="middle" fill="#f0883e" font-family="monospace" font-size="13" font-weight="bold">📐 planner</text>
+    <text x="100" y="40" text-anchor="middle" fill="#8b949e" font-family="monospace" font-size="7">gpt-5.3-codex</text>
+    <text x="100" y="56" text-anchor="middle" fill="#e6edf3" font-family="monospace" font-size="9">Implementation</text>
+    <text x="100" y="70" text-anchor="middle" fill="#e6edf3" font-family="monospace" font-size="9">Architect</text>
+    <circle cx="185" cy="14" r="5" fill="#f0883e" opacity="0.6"/>
   </g>
 
-  <!-- browser: claude-opus-4-6, purple — between finder and worker -->
-  <g transform="translate(175, 130)">
-    <rect width="170" height="70" rx="10" fill="rgba(188,140,255,0.08)" stroke="#bc8cff" stroke-width="1.5"/>
-    <text x="85" y="20" text-anchor="middle" fill="#bc8cff" font-family="monospace" font-size="13" font-weight="bold">🖥️ browser</text>
-    <text x="85" y="37" text-anchor="middle" fill="#8b949e" font-family="monospace" font-size="8">claude-opus-4-6</text>
-    <text x="85" y="54" text-anchor="middle" fill="#e6edf3" font-family="monospace" font-size="9">UI Testing</text>
-    <circle cx="158" cy="12" r="5" fill="#bc8cff" opacity="0.6"/>
+  <!-- browser: claude-sonnet-4-6, purple -->
+  <g transform="translate(950, 80)">
+    <rect width="200" height="80" rx="10" fill="rgba(188,140,255,0.08)" stroke="#bc8cff" stroke-width="1.5"/>
+    <text x="100" y="22" text-anchor="middle" fill="#bc8cff" font-family="monospace" font-size="13" font-weight="bold">🖥️ browser</text>
+    <text x="100" y="40" text-anchor="middle" fill="#8b949e" font-family="monospace" font-size="7">claude-sonnet-4-6</text>
+    <text x="100" y="56" text-anchor="middle" fill="#e6edf3" font-family="monospace" font-size="9">Browser</text>
+    <text x="100" y="70" text-anchor="middle" fill="#e6edf3" font-family="monospace" font-size="9">Automation</text>
+    <circle cx="185" cy="14" r="5" fill="#bc8cff" opacity="0.6"/>
   </g>
+
+  <!-- MIDDLE ROW (2 agents) -->
 
   <!-- searcher: claude-sonnet-4-6, blue — left -->
-  <g transform="translate(20, 228)">
-    <rect width="170" height="70" rx="10" fill="rgba(88,166,255,0.08)" stroke="#58a6ff" stroke-width="1.5"/>
-    <text x="85" y="20" text-anchor="middle" fill="#58a6ff" font-family="monospace" font-size="13" font-weight="bold">🌐 searcher</text>
-    <text x="85" y="37" text-anchor="middle" fill="#8b949e" font-family="monospace" font-size="8">claude-sonnet-4-6</text>
-    <text x="85" y="54" text-anchor="middle" fill="#e6edf3" font-family="monospace" font-size="9">Research</text>
-    <circle cx="158" cy="12" r="5" fill="#58a6ff" opacity="0.6"/>
+  <g transform="translate(0, 305)">
+    <rect width="200" height="80" rx="10" fill="rgba(88,166,255,0.08)" stroke="#58a6ff" stroke-width="1.5"/>
+    <text x="100" y="22" text-anchor="middle" fill="#58a6ff" font-family="monospace" font-size="13" font-weight="bold">🌐 searcher</text>
+    <text x="100" y="40" text-anchor="middle" fill="#8b949e" font-family="monospace" font-size="7">claude-sonnet-4-6</text>
+    <text x="100" y="56" text-anchor="middle" fill="#e6edf3" font-family="monospace" font-size="9">Web Research</text>
+    <text x="100" y="70" text-anchor="middle" fill="#e6edf3" font-family="monospace" font-size="9">& Investigation</text>
+    <circle cx="185" cy="14" r="5" fill="#58a6ff" opacity="0.6"/>
   </g>
 
   <!-- reviewer: gpt-5.3-codex, orange — right -->
-  <g transform="translate(690, 228)">
-    <rect width="170" height="70" rx="10" fill="rgba(240,136,62,0.08)" stroke="#f0883e" stroke-width="1.5"/>
-    <text x="85" y="20" text-anchor="middle" fill="#f0883e" font-family="monospace" font-size="13" font-weight="bold">🔎 reviewer</text>
-    <text x="85" y="37" text-anchor="middle" fill="#8b949e" font-family="monospace" font-size="8">gpt-5.3-codex</text>
-    <text x="85" y="54" text-anchor="middle" fill="#e6edf3" font-family="monospace" font-size="9">Code Review</text>
-    <circle cx="158" cy="12" r="5" fill="#f0883e" opacity="0.6"/>
+  <g transform="translate(1000, 305)">
+    <rect width="200" height="80" rx="10" fill="rgba(240,136,62,0.08)" stroke="#f0883e" stroke-width="1.5"/>
+    <text x="100" y="22" text-anchor="middle" fill="#f0883e" font-family="monospace" font-size="13" font-weight="bold">🔎 reviewer</text>
+    <text x="100" y="40" text-anchor="middle" fill="#8b949e" font-family="monospace" font-size="7">gpt-5.3-codex</text>
+    <text x="100" y="56" text-anchor="middle" fill="#e6edf3" font-family="monospace" font-size="9">Code</text>
+    <text x="100" y="70" text-anchor="middle" fill="#e6edf3" font-family="monospace" font-size="9">Review</text>
+    <circle cx="185" cy="14" r="5" fill="#f0883e" opacity="0.6"/>
   </g>
 
-  <!-- decider: gpt-5.3-codex, orange — bottom left -->
-  <g transform="translate(65, 372)">
-    <rect width="170" height="70" rx="10" fill="rgba(240,136,62,0.08)" stroke="#f0883e" stroke-width="1.5"/>
-    <text x="85" y="20" text-anchor="middle" fill="#f0883e" font-family="monospace" font-size="13" font-weight="bold">⚖️ decider</text>
-    <text x="85" y="37" text-anchor="middle" fill="#8b949e" font-family="monospace" font-size="8">gpt-5.3-codex</text>
-    <text x="85" y="54" text-anchor="middle" fill="#e6edf3" font-family="monospace" font-size="9">Decision Maker</text>
-    <circle cx="158" cy="12" r="5" fill="#f0883e" opacity="0.6"/>
+  <!-- BOTTOM ROW (4 agents) -->
+
+  <!-- challenger: claude-sonnet-4-6, purple -->
+  <g transform="translate(100, 505)">
+    <rect width="200" height="80" rx="10" fill="rgba(188,140,255,0.08)" stroke="#bc8cff" stroke-width="1.5"/>
+    <text x="100" y="22" text-anchor="middle" fill="#bc8cff" font-family="monospace" font-size="13" font-weight="bold">🥊 challenger</text>
+    <text x="100" y="40" text-anchor="middle" fill="#8b949e" font-family="monospace" font-size="7">claude-sonnet-4-6</text>
+    <text x="100" y="56" text-anchor="middle" fill="#e6edf3" font-family="monospace" font-size="9">Pressure</text>
+    <text x="100" y="70" text-anchor="middle" fill="#e6edf3" font-family="monospace" font-size="9">Testing</text>
+    <circle cx="185" cy="14" r="5" fill="#bc8cff" opacity="0.6"/>
   </g>
 
-  <!-- verifier: claude-opus-4-6, purple — bottom center -->
-  <g transform="translate(355, 390)">
-    <rect width="170" height="70" rx="10" fill="rgba(188,140,255,0.08)" stroke="#bc8cff" stroke-width="1.5"/>
-    <text x="85" y="20" text-anchor="middle" fill="#bc8cff" font-family="monospace" font-size="13" font-weight="bold">✅ verifier</text>
-    <text x="85" y="37" text-anchor="middle" fill="#8b949e" font-family="monospace" font-size="8">claude-opus-4-6</text>
-    <text x="85" y="54" text-anchor="middle" fill="#e6edf3" font-family="monospace" font-size="9">Validation</text>
-    <circle cx="158" cy="12" r="5" fill="#bc8cff" opacity="0.6"/>
+  <!-- verifier: claude-sonnet-4-6, purple -->
+  <g transform="translate(380, 505)">
+    <rect width="200" height="80" rx="10" fill="rgba(188,140,255,0.08)" stroke="#bc8cff" stroke-width="1.5"/>
+    <text x="100" y="22" text-anchor="middle" fill="#bc8cff" font-family="monospace" font-size="13" font-weight="bold">✅ verifier</text>
+    <text x="100" y="40" text-anchor="middle" fill="#8b949e" font-family="monospace" font-size="7">claude-sonnet-4-6</text>
+    <text x="100" y="56" text-anchor="middle" fill="#e6edf3" font-family="monospace" font-size="9">3-Stage</text>
+    <text x="100" y="70" text-anchor="middle" fill="#e6edf3" font-family="monospace" font-size="9">Validation</text>
+    <circle cx="185" cy="14" r="5" fill="#bc8cff" opacity="0.6"/>
   </g>
 
-  <!-- challenger: claude-opus-4-6, purple — bottom right -->
-  <g transform="translate(645, 372)">
-    <rect width="170" height="70" rx="10" fill="rgba(188,140,255,0.08)" stroke="#bc8cff" stroke-width="1.5"/>
-    <text x="85" y="20" text-anchor="middle" fill="#bc8cff" font-family="monospace" font-size="13" font-weight="bold">🥊 challenger</text>
-    <text x="85" y="37" text-anchor="middle" fill="#8b949e" font-family="monospace" font-size="8">claude-opus-4-6</text>
-    <text x="85" y="54" text-anchor="middle" fill="#e6edf3" font-family="monospace" font-size="9">Pressure Test</text>
-    <circle cx="158" cy="12" r="5" fill="#bc8cff" opacity="0.6"/>
+  <!-- deep-verify: gpt-5.3-codex, orange -->
+  <g transform="translate(620, 505)">
+    <rect width="200" height="80" rx="10" fill="rgba(240,136,62,0.08)" stroke="#f0883e" stroke-width="1.5"/>
+    <text x="100" y="22" text-anchor="middle" fill="#f0883e" font-family="monospace" font-size="13" font-weight="bold">🔬 deep-verify</text>
+    <text x="100" y="40" text-anchor="middle" fill="#8b949e" font-family="monospace" font-size="7">gpt-5.3-codex</text>
+    <text x="100" y="56" text-anchor="middle" fill="#e6edf3" font-family="monospace" font-size="9">High-Risk</text>
+    <text x="100" y="70" text-anchor="middle" fill="#e6edf3" font-family="monospace" font-size="9">Deep Verification</text>
+    <circle cx="185" cy="14" r="5" fill="#f0883e" opacity="0.6"/>
+  </g>
+
+  <!-- decider: gpt-5.3-codex, orange -->
+  <g transform="translate(900, 505)">
+    <rect width="200" height="80" rx="10" fill="rgba(240,136,62,0.08)" stroke="#f0883e" stroke-width="1.5"/>
+    <text x="100" y="22" text-anchor="middle" fill="#f0883e" font-family="monospace" font-size="13" font-weight="bold">⚖️ decider</text>
+    <text x="100" y="40" text-anchor="middle" fill="#8b949e" font-family="monospace" font-size="7">gpt-5.3-codex</text>
+    <text x="100" y="56" text-anchor="middle" fill="#e6edf3" font-family="monospace" font-size="9">Technical</text>
+    <text x="100" y="70" text-anchor="middle" fill="#e6edf3" font-family="monospace" font-size="9">Decision Maker</text>
+    <circle cx="185" cy="14" r="5" fill="#f0883e" opacity="0.6"/>
   </g>
 
   <!-- Legend -->
-  <g transform="translate(20, 488)" font-family="monospace" font-size="9">
+  <g transform="translate(30, 665)" font-family="monospace" font-size="10">
     <circle cx="8" cy="6" r="5" fill="#58a6ff" opacity="0.8"/>
-    <text x="20" y="10" fill="#8b949e">claude-sonnet-4-6 (fast)</text>
-    <circle cx="188" cy="6" r="5" fill="#bc8cff" opacity="0.8"/>
-    <text x="200" y="10" fill="#8b949e">claude-opus-4-6 (deep)</text>
-    <circle cx="378" cy="6" r="5" fill="#f0883e" opacity="0.8"/>
-    <text x="390" y="10" fill="#8b949e">gpt-5.3-codex (reasoning)</text>
+    <text x="20" y="10" fill="#8b949e">claude-sonnet-4-6</text>
+    <circle cx="220" cy="6" r="5" fill="#4fb4a5" opacity="0.8"/>
+    <text x="232" y="10" fill="#8b949e">claude-haiku-4-5</text>
+    <circle cx="400" cy="6" r="5" fill="#bc8cff" opacity="0.8"/>
+    <text x="412" y="10" fill="#8b949e">Purple = Versatile/Validation</text>
+    <circle cx="650" cy="6" r="5" fill="#f0883e" opacity="0.8"/>
+    <text x="662" y="10" fill="#8b949e">gpt-5.3-codex = Structured Reasoning</text>
   </g>
 </svg>

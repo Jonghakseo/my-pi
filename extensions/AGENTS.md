@@ -74,7 +74,12 @@ Custom extensions for the pi coding agent. All extensions are written in TypeScr
 
 ## Tooling Standards
 - **Package manager**: pnpm
-- **Quality checks**: `pnpm run typecheck` / `pnpm run lint` / `pnpm run format`
+- **Quality checks**:
+  - `pnpm run typecheck` — TypeScript 타입 검사 (오류만 출력, 파일 변경 없음)
+  - `pnpm run lint` — Biome lint + **자동 수정** (`biome check --write .`). 파일을 직접 고침.
+  - `pnpm run format` — Biome 포맷 검사만 (파일 변경 없음)
+  - `pnpm run format:write` — Biome 포맷 자동 적용 (파일 변경 있음)
+  > **주의:** `pnpm run lint`는 `--write` 옵션으로 실행되므로 파일이 즉시 수정된다. 검사만 원하면 `biome check .`를 직접 실행할 것.
 - **Formatter**: Biome 2.x
 
 ## Type Contract Guide
