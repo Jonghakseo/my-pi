@@ -29,6 +29,7 @@ import { type SubagentStore, updateRunFromResult } from "./store.js";
 import type { ChainItemFields, CommandRunState, OnUpdateCallback, SingleResult, SubagentDetails } from "./types.js";
 import { ESCALATION_EXIT_CODE, readAndConsumeEscalation } from "./escalation.js";
 import { updateCommandRunsWidget } from "./widget.js";
+import { enqueueSubagentInvocation } from "./invocation-queue.js";
 
 type SessionToolCall = {
 	name: string;
@@ -705,7 +706,8 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 
 			void (async () => {
 				try {
-					const result = await runSingleAgent(
+					const result = await enqueueSubagentInvocation(() =>
+						runSingleAgent(
 						ctx.cwd,
 						agents,
 						resolvedAgent,
@@ -722,6 +724,7 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 						},
 						makeDetails("single"),
 						runState.sessionFile,
+						),
 					);
 
 					if (runState.removed) return;
@@ -946,17 +949,19 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 						}
 					: undefined;
 
-				const result = await runSingleAgent(
-					ctx.cwd,
-					agents,
-					step.agent,
-					wrapTaskWithMainContext(taskWithContext, mainContextText, { mainSessionFile, totalMessageCount }),
-					step.cwd,
-					i + 1,
-					signal,
-					chainUpdate,
-					makeDetails("chain"),
-					undefined,
+				const result = await enqueueSubagentInvocation(() =>
+					runSingleAgent(
+						ctx.cwd,
+						agents,
+						step.agent,
+						wrapTaskWithMainContext(taskWithContext, mainContextText, { mainSessionFile, totalMessageCount }),
+						step.cwd,
+						i + 1,
+						signal,
+						chainUpdate,
+						makeDetails("chain"),
+						undefined,
+					),
 				);
 				results.push(result);
 
@@ -990,17 +995,19 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 		}
 
 		if (params.agent && params.task) {
-			const result = await runSingleAgent(
-				ctx.cwd,
-				agents,
-				params.agent,
-				wrapTaskWithMainContext(params.task, mainContextText, { mainSessionFile, totalMessageCount }),
-				params.cwd,
-				undefined,
-				signal,
-				onUpdate,
-				makeDetails("single"),
-				undefined,
+			const result = await enqueueSubagentInvocation(() =>
+				runSingleAgent(
+					ctx.cwd,
+					agents,
+					params.agent,
+					wrapTaskWithMainContext(params.task, mainContextText, { mainSessionFile, totalMessageCount }),
+					params.cwd,
+					undefined,
+					signal,
+					onUpdate,
+					makeDetails("single"),
+					undefined,
+				),
 			);
 
 			// Escalation detection in single run
