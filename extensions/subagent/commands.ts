@@ -448,7 +448,6 @@ function restoreRunsFromSession(store: SubagentStore, ctx: any, pi?: ExtensionAP
 	// transient runs when JSONL persistence lags behind session switching.
 	if (store.currentSessionFile && store.currentSessionFile !== currentSessionFile) {
 		const snapshot = Array.from(store.commandRuns.values())
-			.filter((run) => !run.removed)
 			.map((run) => ({ ...run }));
 		if (snapshot.length > 0) {
 			store.sessionRunCache.set(store.currentSessionFile, snapshot);
@@ -600,7 +599,10 @@ function restoreRunsFromSession(store: SubagentStore, ctx: any, pi?: ExtensionAP
 		}
 
 		for (const [id, run] of restoredRuns) {
-			if (removedRunIds.has(id)) continue;
+			if (removedRunIds.has(id)) {
+				store.commandRuns.set(id, { ...run, removed: true }); // removed run도 복원, 단 removed=true 유지
+				continue;
+			}
 			store.commandRuns.set(id, run);
 		}
 		if (maxRunId >= store.nextCommandRunId) {
@@ -663,7 +665,6 @@ function restoreRunsFromSession(store: SubagentStore, ctx: any, pi?: ExtensionAP
 	if (store.commandRuns.size === 0 && !sawSubagentMarkers && currentSessionFile) {
 		const cached = store.sessionRunCache.get(currentSessionFile) ?? [];
 		for (const run of cached) {
-			if (run.removed) continue;
 			store.commandRuns.set(run.id, { ...run });
 		}
 	}
@@ -671,7 +672,6 @@ function restoreRunsFromSession(store: SubagentStore, ctx: any, pi?: ExtensionAP
 	// Refresh per-session snapshot with the latest reconstructed view.
 	if (currentSessionFile) {
 		const latestSnapshot = Array.from(store.commandRuns.values())
-			.filter((run) => !run.removed)
 			.map((run) => ({ ...run }));
 		if (latestSnapshot.length > 0) {
 			store.sessionRunCache.set(currentSessionFile, latestSnapshot);
