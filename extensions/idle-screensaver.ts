@@ -139,35 +139,23 @@ function renderScreensaver(width: number, height: number, title: string, theme: 
 		return placeLine(" ".repeat(pad) + text);
 	};
 
-	// ── Title double-box ─────────────────────────────────────────
+	// ── Title separators (no box) ───────────────────────────────
 	const compact = title.trim();
 	const spread = compact.length <= 24 ? compact.split("").join(" ") : compact;
+	const titleText = spread || "Pi";
 
-	const doubleBoxW = Math.min(innerWidth - 4, Math.max(visibleWidth(spread) + 8, 40));
-	const dblLeft = Math.floor((innerWidth - doubleBoxW) / 2);
-	const leftPad = " ".repeat(dblLeft);
-
-	const titleInBox =
-		visibleWidth(spread) <= doubleBoxW - 4
-			? spread.padStart(Math.floor((doubleBoxW - 2 + spread.length) / 2)).padEnd(doubleBoxW - 2)
-			: spread.slice(0, doubleBoxW - 4);
-
-	const placeBoxLine = (chars: string): string => {
-		const vw = visibleWidth(leftPad + chars);
-		return L + leftPad + chars + " ".repeat(Math.max(0, innerWidth - vw)) + R;
-	};
-
-	const topDoubleBar = "╔" + "═".repeat(doubleBoxW - 2) + "╗";
-	const titleBar = "║" + " " + titleInBox + " " + "║";
-	const midDoubleBar = "║" + " ".repeat(doubleBoxW - 2) + "║";
-	const botDoubleBar = "╚" + "═".repeat(doubleBoxW - 2) + "╝";
+	const separatorWidth = Math.min(innerWidth - 4, Math.max(visibleWidth(titleText) + 8, 24));
+	const separator = bc("─".repeat(Math.max(1, separatorWidth)));
+	const topSeparatorLine = centerLine(separator);
+	const titleLine = centerLine(theme.fg("accent", titleText) as string);
+	const bottomSeparatorLine = centerLine(separator);
 
 	// ── Layout ───────────────────────────────────────────────────
-	const TITLE_BOX_H = 4;
+	const TITLE_BLOCK_H = 3;
 	const FOOTER_H = 1;
 	const innerHeight = height - 2;
 
-	const contentH = TITLE_BOX_H + FOOTER_H;
+	const contentH = TITLE_BLOCK_H + FOOTER_H;
 	const topPad = Math.max(0, Math.floor((innerHeight - contentH) / 2) - 1);
 
 	// ── Render ───────────────────────────────────────────────────
@@ -177,11 +165,10 @@ function renderScreensaver(width: number, height: number, title: string, theme: 
 	// 2. Top padding
 	for (let i = 0; i < topPad; i++) lines.push(emptyLine());
 
-	// 3. Title double-box (4 lines)
-	lines.push(placeBoxLine(topDoubleBar));
-	lines.push(placeBoxLine(titleBar));
-	lines.push(placeBoxLine(midDoubleBar));
-	lines.push(placeBoxLine(botDoubleBar));
+	// 3. Title with top/bottom separators (3 lines)
+	lines.push(topSeparatorLine);
+	lines.push(titleLine);
+	lines.push(bottomSeparatorLine);
 
 	// 4. Fill until footer
 	while (lines.length < height - 2) lines.push(emptyLine());
