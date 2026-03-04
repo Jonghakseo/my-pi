@@ -9,7 +9,7 @@ import { execSync } from "child_process";
  */
 
 const IDLE_MS = 5 * 60 * 1000; // 5 minutes
-const PURPOSE_ENTRY_TYPE = "purpose:set";
+const PURPOSE_ENTRY_TYPE = "purpose:set" as const;
 
 let idleTimer: ReturnType<typeof setTimeout> | null = null;
 let agentRunning = false;
@@ -17,14 +17,33 @@ let overlayActive = false;
 let askUserQuestionActive = false;
 let latestCtx: ExtensionContext | null = null;
 
-// Custom session entry shape written by purpose.ts
-interface PurposeSessionEntry {
-	type: string;
-	content?: unknown;
+// CustomEntry shape — matches the actual SDK structure used by purpose.ts
+type CustomEntry = {
+	type: "custom";
+	customType: string;
+	data: Record<string, unknown>;
+	[key: string]: unknown;
+};
+
+function isCustomEntry(entry: unknown): entry is CustomEntry {
+	if (typeof entry !== "object" || entry === null) return false;
+	const e = entry as Record<string, unknown>;
+	return e.type === "custom" && typeof e.customType === "string";
 }
 
-function isPurposeEntry(e: unknown): e is PurposeSessionEntry {
-	return typeof e === "object" && e !== null && (e as PurposeSessionEntry).type === PURPOSE_ENTRY_TYPE;
+/** Read the most-recently-set purpose from the session branch (mirrors purpose.ts logic). */
+function readPurposeFromSession(ctx: NonNullable<typeof latestCtx>): string {
+	const branch = ctx.sessionManager.getBranch();
+	for (let i = branch.length - 1; i >= 0; i--) {
+		const entry = branch[i];
+		if (!isCustomEntry(entry)) continue;
+		if (entry.customType !== PURPOSE_ENTRY_TYPE) continue;
+		const purpose = entry.data.purpose;
+		if (typeof purpose === "string") {
+			return purpose.trim(); // 빈값이어도 즉시 반환 — 최신 엔트리가 authoritative
+		}
+	}
+	return "";
 }
 
 // ── Timer helpers ─────────────────────────────────────────────────────────────
@@ -53,12 +72,11 @@ async function showScreensaver(): Promise<void> {
 	clearIdleTimer();
 
 	// Resolve title: prefer session purpose, fallback to folder/branch or session name
-	const entries = latestCtx.sessionManager.getEntries();
-	const purposeEntry = [...(entries as PurposeSessionEntry[])].reverse().find((e) => e.type === PURPOSE_ENTRY_TYPE);
+	const purposeText = readPurposeFromSession(latestCtx);
 
 	let title: string;
-	if (purposeEntry?.content && typeof purposeEntry.content === "string") {
-		title = purposeEntry.content;
+	if (purposeText) {
+		title = purposeText;
 	} else {
 		const folder = latestCtx.sessionManager.getCwd();
 		const sessionName = latestCtx.sessionManager.getSessionName() ?? "Pi";
