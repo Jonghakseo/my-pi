@@ -125,12 +125,14 @@ export interface GlobalRunEntry {
 export const ChainItem = Type.Object({
 	agent: Type.String({ description: "Name of the agent to invoke" }),
 	task: Type.String({ description: "Task with optional {previous} placeholder for prior output" }),
+	cwd: Type.Optional(Type.String({ description: "Working directory for the agent process" })),
 });
 
 /** TypeScript interface matching the ChainItem Typebox schema. */
 export interface ChainItemFields {
 	agent: string;
 	task: string;
+	cwd?: string;
 }
 
 export const AgentScopeSchema = StringEnum(["user", "project", "both"] as const, {
@@ -166,6 +168,7 @@ export const SubagentParams = Type.Object({
 	task: Type.Optional(Type.String({ description: "Task to delegate (for single mode)" })),
 	chain: Type.Optional(Type.Array(ChainItem, { description: "Array of {agent, task} for sequential execution" })),
 	agentScope: Type.Optional(AgentScopeSchema),
+	cwd: Type.Optional(Type.String({ description: "Working directory for the agent process (single mode)" })),
 	contextMode: Type.Optional(ContextModeSchema),
 	runAsync: Type.Optional(
 		Type.Boolean({
