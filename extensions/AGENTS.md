@@ -88,5 +88,28 @@ Custom extensions for the pi coding agent. All extensions are written in TypeScr
 - Keep `content.type` as the string literal `"text"` (no widened `string` type).
 - Prefer discriminated-union narrowing for `SessionEntry` / `AgentMessage` over forced type casts (`as`).
 
+## New Extension Code Quality Rules
+
+### Priority
+When adding new features or refactoring, use this priority order:
+
+- **Accuracy > Consistency > Visibility > Stability > Modifiability > Verifiability**
+
+### Practical checklist (verify each time)
+- [ ] **Requirement correctness:** confirm the implementation satisfies user intent and existing contracts first.
+- [ ] **Output contract parity:** verify user-facing text, order, format, sorting, and newlines are not unintentionally changed.
+- [ ] **Output/error/log policy:** follow existing message formatting rules; changes to user-facing contracts require prior agreement.
+- [ ] **Separate pure logic:** extract business rules into pure functions where possible; keep I/O (`fs`/`network`/`spawn`) in boundary layers.
+- [ ] **Module-scoped changes:** modify only one module (or a small unit) and avoid touching out-of-scope files.
+- [ ] **Respect single-writer boundaries:** in out-of-scope files/owned areas of other modules (for example, `subagent` core paths), allow only strictly minimal edits.
+- [ ] **Gate execution:** after changes run `test` → `typecheck` (and `coverage` when feasible) and then complete review before commit.
+- [ ] **Baseline control:** even if known baseline failures exist, do not introduce new failures. (fix only deltas)
+
+### Execution principles
+- Keep user-facing output contracts from breaking unless the change is explicitly intended.
+- Break risky work into small increments, and if any unexpected output change is found, immediately apply rollback criteria.
+- Fix regressions in the smallest verifiable unit and avoid bundling unrelated format and logic changes in the same patch.
+- Integrate and strengthen new rules only when they do not conflict with existing ones.
+
 ## Known Issues
 - **CJK width overflow in built-in footer**: Pi's built-in `FooterComponent` uses `pwd.length` instead of `visibleWidth()` to check terminal width, causing crashes when the session name contains CJK (Korean/Japanese/Chinese) characters. This surfaces during `/reload` when the custom footer is briefly removed. Workaround: avoid CJK characters in session names (`/name`). Root fix requires a pi core change.
