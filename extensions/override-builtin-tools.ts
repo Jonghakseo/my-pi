@@ -250,10 +250,14 @@ class SideBySideDiffView {
 
 		if (halfWidth < 20) {
 			for (const row of rowsToShow) {
-				if (row.left.type === "removed") lines.push(truncateToWidth(t.fg("toolDiffRemoved", `- ${row.left.content}`), width));
-				if (row.right.type === "added") lines.push(truncateToWidth(t.fg("toolDiffAdded", `+ ${row.right.content}`), width));
-				if (row.left.type === "context") lines.push(truncateToWidth(t.fg("toolDiffContext", `  ${row.left.content}`), width));
-				if (row.left.type === "ellipsis") lines.push(truncateToWidth(t.fg("toolDiffContext", `  ${row.left.content}`), width));
+				if (row.left.type === "removed")
+					lines.push(truncateToWidth(t.fg("toolDiffRemoved", `- ${row.left.content}`), width));
+				if (row.right.type === "added")
+					lines.push(truncateToWidth(t.fg("toolDiffAdded", `+ ${row.right.content}`), width));
+				if (row.left.type === "context")
+					lines.push(truncateToWidth(t.fg("toolDiffContext", `  ${row.left.content}`), width));
+				if (row.left.type === "ellipsis")
+					lines.push(truncateToWidth(t.fg("toolDiffContext", `  ${row.left.content}`), width));
 			}
 		} else {
 			for (const row of rowsToShow) {

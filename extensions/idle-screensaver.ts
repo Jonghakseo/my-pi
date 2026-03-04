@@ -2,6 +2,7 @@ import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-age
 import { DynamicBorder } from "@mariozechner/pi-coding-agent";
 import { visibleWidth } from "@mariozechner/pi-tui";
 import { execSync } from "child_process";
+
 /**
  * Idle screensaver extension
  * Shows a full-screen overlay after 5 min of inactivity.
@@ -94,8 +95,7 @@ async function showScreensaver(): Promise<void> {
 	await latestCtx.ui.custom(
 		// eslint-disable-next-line @typescript-eslint/no-explicit-any
 		(tui: any, theme: any, _kb: unknown, done: (v: undefined) => void) => ({
-			render: (w: number) =>
-				renderScreensaver(w, (tui.terminal?.rows as number | undefined) ?? 40, title, theme),
+			render: (w: number) => renderScreensaver(w, (tui.terminal?.rows as number | undefined) ?? 40, title, theme),
 			handleInput: (_data: string) => {
 				done(undefined);
 			},
