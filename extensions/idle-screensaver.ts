@@ -5,11 +5,11 @@ import { execSync } from "child_process";
 
 /**
  * Idle screensaver extension
- * Shows a full-screen overlay after 5 min of inactivity.
+ * Shows a full-screen overlay after 15 min of inactivity.
  * Dismissed by any keypress.
  */
 
-const IDLE_MS = 5 * 60 * 1000; // 5 minutes
+const IDLE_MS = 15 * 60 * 1000; // 15 minutes
 const PURPOSE_ENTRY_TYPE = "purpose:set" as const;
 
 let idleTimer: ReturnType<typeof setTimeout> | null = null;
