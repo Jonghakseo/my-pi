@@ -1094,6 +1094,8 @@ class GithubOverlayUI {
 	private itemLineByKey = new Map<string, number>();
 	private selectedIndex = 0;
 	private expandedKeys = new Set<string>();
+	private followSelection = true;
+	private lastVisibleHeight = 10;
 
 	constructor(
 		private state: OverlayState,
@@ -1111,6 +1113,10 @@ class GithubOverlayUI {
 			return;
 		}
 		this.selectedIndex = Math.max(0, Math.min(this.selectedIndex, this.commentKeys.length - 1));
+	}
+
+	private currentMaxScroll(): number {
+		return Math.max(0, this.totalLines.length - this.lastVisibleHeight);
 	}
 
 	private ensureSelectedVisible(visibleHeight: number): void {
@@ -1141,32 +1147,52 @@ class GithubOverlayUI {
 	}
 
 	handleInput(data: string, tui: OverlayTui): void {
-		const maxScroll = Math.max(0, this.totalLines.length - 5);
+		const maxScroll = this.currentMaxScroll();
 		const hasSelectableComments = this.commentKeys.length > 0;
 
 		if (matchesKey(data, Key.up) || data === "k") {
 			if (hasSelectableComments) {
-				this.selectedIndex = Math.max(0, this.selectedIndex - 1);
+				if (this.selectedIndex > 0) {
+					this.selectedIndex -= 1;
+					this.followSelection = true;
+				} else if (this.scrollOffset > 0) {
+					this.scrollOffset -= 1;
+					this.followSelection = false;
+				}
 			} else {
 				this.scrollOffset = Math.max(0, this.scrollOffset - 1);
+				this.followSelection = false;
 			}
 		} else if (matchesKey(data, Key.down) || data === "j") {
 			if (hasSelectableComments) {
-				this.selectedIndex = Math.min(this.commentKeys.length - 1, this.selectedIndex + 1);
+				if (this.selectedIndex < this.commentKeys.length - 1) {
+					this.selectedIndex += 1;
+					this.followSelection = true;
+				} else if (this.scrollOffset < maxScroll) {
+					this.scrollOffset += 1;
+					this.followSelection = false;
+				}
 			} else {
 				this.scrollOffset = Math.min(maxScroll, this.scrollOffset + 1);
+				this.followSelection = false;
 			}
 		} else if (matchesKey(data, Key.enter) || data === " ") {
 			if (hasSelectableComments) {
 				this.toggleSelectedItem();
+				this.followSelection = true;
 			}
 		} else if (matchesKey(data, Key.pageUp)) {
 			this.scrollOffset = Math.max(0, this.scrollOffset - 10);
+			this.followSelection = false;
 		} else if (matchesKey(data, Key.pageDown)) {
 			this.scrollOffset = Math.min(maxScroll, this.scrollOffset + 10);
+			this.followSelection = false;
 		} else if (data === "g") {
 			if (hasSelectableComments) {
 				this.selectedIndex = 0;
+				this.followSelection = true;
+			} else {
+				this.followSelection = false;
 			}
 			this.scrollOffset = 0;
 		} else if (data === "G") {
@@ -1174,6 +1200,7 @@ class GithubOverlayUI {
 				this.selectedIndex = this.commentKeys.length - 1;
 			}
 			this.scrollOffset = maxScroll;
+			this.followSelection = false;
 		} else if (data.toLowerCase() === "r") {
 			void this.onRefresh();
 		} else if (matchesKey(data, Key.escape) || data === "q") {
@@ -1199,6 +1226,7 @@ class GithubOverlayUI {
 			rendered = renderOverlayContent(theme, this.state, frameContentWidth, normalizedSelectedKey, this.expandedKeys);
 			this.commentKeys = rendered.itemKeys;
 			this.itemLineByKey = rendered.itemLineByKey;
+			this.followSelection = true;
 		}
 
 		this.totalLines = rendered.lines;
@@ -1207,10 +1235,13 @@ class GithubOverlayUI {
 		const footerHeight = 3;
 		const frameOverhead = 4;
 		const visibleHeight = Math.max(3, height - headerHeight - footerHeight - frameOverhead);
+		this.lastVisibleHeight = visibleHeight;
 
-		this.ensureSelectedVisible(visibleHeight);
+		if (this.followSelection) {
+			this.ensureSelectedVisible(visibleHeight);
+		}
 
-		const maxScroll = Math.max(0, this.totalLines.length - visibleHeight);
+		const maxScroll = this.currentMaxScroll();
 		if (this.scrollOffset > maxScroll) {
 			this.scrollOffset = maxScroll;
 		}
