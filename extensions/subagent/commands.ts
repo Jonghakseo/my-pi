@@ -758,7 +758,7 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 		name: "subagent",
 		label: "Subagent",
 		description:
-			'CLI-style subagent delegation interface. Always start with `subagent help` to learn available commands, then execute run/continue/runs/status/detail/abort/remove via `{ command: "subagent ..." }`.',
+			'CLI-style subagent delegation interface. Always start with `subagent help` to learn available commands, then execute run/continue/runs/status/detail/abort/remove via `{ command: "subagent ..." }`. For async launches, wait for automatic follow-up instead of polling status/detail in loops.',
 		parameters: SubagentParams,
 
 		execute: createSubagentToolExecute(pi, store),

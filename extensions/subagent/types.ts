@@ -136,6 +136,6 @@ export const ListAgentsParams = Type.Object({});
 export const SubagentParams = Type.Object({
 	command: Type.String({
 		description:
-			"CLI-style subagent command. Always start with 'subagent help' to discover commands. Note: 'continue' reuses an existing run's session but does NOT auto-sync main context. Examples: 'subagent run planner --main --async -- <task>', 'subagent continue 22 -- 아까 진행하던거 마무리해서 커밋해줘', 'subagent runs', 'subagent status 22', 'subagent abort 22', 'subagent remove all'.",
+			"CLI-style subagent command. Always start with 'subagent help' to discover commands. Notes: 'continue' reuses an existing run's session but does NOT auto-sync main context; after '--async' launches, do NOT poll status/detail in loops—wait for automatic follow-up and use status/detail only for user-requested or occasional manual checks. Examples: 'subagent run planner --main --async -- <task>', 'subagent continue 22 -- 아까 진행하던거 마무리해서 커밋해줘', 'subagent runs', 'subagent status 22', 'subagent abort 22', 'subagent remove all'.",
 	}),
 });
