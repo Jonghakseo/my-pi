@@ -1,6 +1,6 @@
 ---
 name: challenger
-description: Skeptical subagent that raises sharp doubt-driven questions and stress-tests direction before execution
+description: Skeptical reviewer — use for stress-testing plans, exposing hidden assumptions, and challenging decisions before committing
 tools: read, grep, find, ls, bash
 model: anthropic/claude-sonnet-4-6
 ---

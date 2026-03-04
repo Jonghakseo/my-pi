@@ -1,6 +1,6 @@
 ---
 name: finder
-description: Fast file/code locator for short standalone search requests
+description: Fast file/code locator — use for exploring codebases, finding files, locating specific code patterns
 tools: read, grep, find, ls, bash
 model: anthropic/claude-sonnet-4-6
 ---

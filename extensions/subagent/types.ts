@@ -35,6 +35,7 @@ export interface SingleResult {
 	liveText?: string;
 	liveToolCalls?: number;
 	thoughtText?: string;
+	sessionFile?: string;
 }
 
 export interface SubagentDetails {

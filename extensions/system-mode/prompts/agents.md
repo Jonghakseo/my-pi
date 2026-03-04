@@ -66,29 +66,11 @@ After any implementation:
 - Never start new tasks based only on status logs.
 - If intent is ambiguous, ask for a clear instruction first.
 
-### intent() Tool (Single-Step Dispatch)
+### 에이전트 선택 참고표
 
-For simple single-step work, use the `intent()` tool.
-The `intent()` tool automatically selects the best agent based on **purpose + difficulty** — you don't need to know agent names.
+작업 성격에 따라 적합한 에이전트를 선택하세요:
 
-**Single task dispatch:**
-```
-intent({ purpose: "explore", difficulty: "low", task: "Find all usages of AuthMiddleware" })
-intent({ purpose: "implement", difficulty: "high", task: "Refactor the payment module to use Stripe v3" })
-```
-
-### blueprint() Tool (Multi-Step Orchestration)
-
-For complex multi-step work with dependencies, use the `blueprint()` tool to design and execute DAGs of intent nodes.
-
-**Complex multi-step work (Blueprint):**
-1. Break the task into a DAG of intent nodes
-2. `blueprint({ mode: "create_blueprint", title: "...", nodes: [...] })` → show plan to user
-3. After user confirms: `blueprint({ mode: "run_next", blueprintId: "..." })` → execute nodes
-4. Nodes complete automatically and notify you via `[Intent Blueprint 완료]`. Do **NOT** call `run_next` again — the executor handles subsequent nodes automatically.
-
-**Purpose → Agent auto-mapping:**
-| Purpose | Agent | Notes |
+| 작업 목적 | 에이전트 | 비고 |
 |---------|-------|-------|
 | explore | finder | **internal** — 코드베이스/파일시스템 탐색 |
 | search | searcher | **external** — 웹/문서/외부 정보 검색 |
@@ -99,43 +81,6 @@ For complex multi-step work with dependencies, use the `blueprint()` tool to des
 | verify | verifier | 동작 검증 |
 | browse | browser | 브라우저 UI 테스트 |
 | implement | worker-fast (low/med) / worker (high) | 코드 구현, commit/PR/execute도 여기로 |
-
-**blueprint() DAG node example (YAML string format):**
-```yaml
-blueprint({
-  mode: "create_blueprint",
-  title: "로그인 버그 수정",
-  nodes: |
-    - id: plan-1
-      purpose: plan
-      difficulty: medium
-      task: 로그인 실패 원인 분석 계획
-      dependsOn: []
-    - id: challenge-1
-      purpose: challenge
-      difficulty: medium
-      task: 계획 검증
-      dependsOn: [plan-1]
-      chainFrom: plan-1
-    - id: impl-1
-      purpose: implement
-      difficulty: high
-      task: 버그 수정 구현
-      dependsOn: [challenge-1]
-      chainFrom: plan-1
-    - id: verify-1
-      purpose: verify
-      difficulty: medium
-      task: 수정 검증
-      dependsOn: [impl-1]
-      chainFrom: impl-1
-})
-```
-
-**When to use blueprint() vs intent() vs raw subagent:**
-- **blueprint()**: 3+ step work with dependencies (plan→implement→review→verify flow)
-- **intent()**: One-off task where you want auto agent selection
-- **Raw subagent**: When you need specific subagent features (continueRunId, session reuse, etc.)
 
 ### Response Pattern
 1. Acknowledge the user's request briefly

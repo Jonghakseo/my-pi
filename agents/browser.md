@@ -1,6 +1,6 @@
 ---
 name: browser
-description: Browser automation specialist using agent-browser CLI for UI flows and validation
+description: Browser automation specialist — use for UI testing, visual verification, and web interaction via agent-browser CLI
 tools: bash, read
 model: anthropic/claude-sonnet-4-6
 ---

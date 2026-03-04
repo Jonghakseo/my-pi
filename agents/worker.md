@@ -1,6 +1,6 @@
 ---
 name: worker
-description: General-purpose subagent with full capabilities, isolated context
+description: General-purpose implementation agent — use for complex multi-file changes, architectural refactoring, and heavy implementation tasks
 model: anthropic/claude-sonnet-4-6
 ---
 

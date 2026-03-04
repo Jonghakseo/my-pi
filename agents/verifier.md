@@ -1,6 +1,6 @@
 ---
 name: verifier
-description: Validation specialist that proves changes with concrete evidence
+description: Validation specialist — use for proving changes are correct with concrete evidence (tests, lint, typecheck)
 model: anthropic/claude-sonnet-4-6
 ---
 

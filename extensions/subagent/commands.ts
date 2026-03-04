@@ -734,6 +734,11 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 		name: "subagent",
 		label: "Subagent",
 		description: [
+			"Purpose-driven agent delegation. Choose the right agent for the task: " +
+				"finder (file/code search), searcher (web/codebase research), planner (structured planning), " +
+				"challenger (skeptical review of plans), decider (technical decisions), reviewer (code review), " +
+				"verifier (validation with evidence), deep-verify (high-risk validation), " +
+				"browser (UI automation), worker-fast (simple single-file changes), worker (complex multi-file implementation).",
 			"Delegate tasks to specialized subagents (default contextMode: isolated).",
 			"Modes: single (agent + task) and chain (sequential with {previous} placeholder).",
 			"Supports background async jobs via runAsync + asyncAction (list/status/detail/abort/remove). abort/remove accept runId (single) or runIds (bulk).",
@@ -1394,88 +1399,6 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 		handler: async (_args, ctx) => {
 			captureSwitchSession(store, ctx);
 
-			// Track synthetic IDs for cleanup after overlay closes
-			const syntheticIds: number[] = [];
-
-			// ── Merge intent-based runs (they bypass store.commandRuns) ──────────
-			// Intent runs are persisted to ~/.pi/blueprints/single-runs.yaml by
-			// executor.ts on each run start/end. Read directly from file to avoid
-			// ESM module cache isolation issues (dynamic import can return a different
-			// instance than the one the intent tool uses).
-			try {
-				const singleRunsFile = path.join(
-					process.env.HOME ?? process.env.USERPROFILE ?? "/tmp",
-					".pi",
-					"blueprints",
-					"single-runs.yaml",
-				);
-				let intentRuns: any[] = [];
-				if (fs.existsSync(singleRunsFile)) {
-					try {
-						intentRuns = parseYaml(fs.readFileSync(singleRunsFile, "utf-8")) ?? [];
-					} catch {
-						intentRuns = [];
-					}
-				}
-
-				// Find the minimum existing negative ID to avoid collisions
-				let nextNegId = -1;
-				for (const [id] of store.commandRuns) {
-					if (id < 0 && id <= nextNegId) nextNegId = id - 1;
-				}
-
-				// Index existing session files to avoid duplicates
-				const existingSessionFiles = new Set(
-					Array.from(store.commandRuns.values())
-						.filter((r) => r.sessionFile)
-						.map((r) => r.sessionFile!),
-				);
-
-				for (const ir of intentRuns) {
-					try {
-						// sessionFile may be absent for runs that haven't started writing yet;
-						// still show them but they won't be navigable via Enter.
-						if (ir.sessionFile && existingSessionFiles.has(ir.sessionFile)) continue;
-
-						const startedMs = new Date(ir.startedAt).getTime();
-						if (isNaN(startedMs)) {
-							console.warn(`[sub:history] Invalid startedAt date: ${ir.startedAt}`);
-							continue;
-						}
-
-						const doneMs = ir.completedAt ? new Date(ir.completedAt).getTime() : Date.now();
-						if (ir.completedAt && isNaN(doneMs)) {
-							console.warn(`[sub:history] Invalid completedAt date: ${ir.completedAt}`);
-							continue;
-						}
-
-						const synthetic: CommandRunState = {
-							id: nextNegId--,
-							agent: ir.agent ?? ir.purpose ?? "intent",
-							task: ir.task,
-							status: ir.status === "completed" ? "done" : "error",
-							startedAt: startedMs,
-							lastActivityAt: doneMs,
-							elapsedMs: doneMs - startedMs,
-							toolCalls: 0,
-							turnCount: 1,
-							lastLine: (ir.result?.split("\n").filter(Boolean).pop() ?? ir.error ?? "") || "(intent run)",
-							lastOutput: ir.result,
-							sessionFile: ir.sessionFile,
-							source: "tool" as const,
-						};
-						store.commandRuns.set(synthetic.id, synthetic);
-						syntheticIds.push(synthetic.id);
-						if (ir.sessionFile) existingSessionFiles.add(ir.sessionFile);
-					} catch (itemErr) {
-						console.warn(`[sub:history] Failed to process intent run:`, itemErr, ir);
-					}
-				}
-			} catch (err) {
-				// intent executor not available — show notification so it's diagnosable
-				ctx.ui.notify(`[sub:history] intent merge error: ${String(err)} (check console for details)`, "error");
-			}
-
 			const allRuns = Array.from(store.commandRuns.values()).sort((a, b) => b.startedAt - a.startedAt);
 
 			if (allRuns.length === 0) {
@@ -1528,11 +1451,6 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 					overlayOptions: { width: SUBVIEW_OVERLAY_WIDTH, maxHeight: SUBVIEW_OVERLAY_MAX_HEIGHT, anchor: "center" },
 				},
 			);
-
-			// Cleanup synthetic runs from hang detection
-			for (const id of syntheticIds) {
-				store.commandRuns.delete(id);
-			}
 
 			updatePixelWidget(store, ctx);
 		},

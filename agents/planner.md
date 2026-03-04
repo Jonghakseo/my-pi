@@ -1,6 +1,6 @@
 ---
 name: planner
-description: Implementation planner that produces structured plans, test scenarios, and design docs
+description: Implementation planner — use for breaking down complex tasks into structured plans, test scenarios, and design docs before coding
 tools: read, grep, find, ls, bash
 model: openai-codex/gpt-5.3-codex
 ---

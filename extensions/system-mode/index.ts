@@ -13,7 +13,7 @@ import { STATUS_LOG_FOOTER, SUBAGENT_STARTED_STATUS_FOOTER } from "../subagent/c
 import { SYSTEM_MODE_STATUS_KEY } from "../utils/status-keys.ts";
 import { setAgentsModeEnabled } from "./state.ts";
 
-type SystemMode = "default" | "agents" | "master" | "intent";
+type SystemMode = "default" | "agents" | "master";
 
 const STATUS_POLL_WINDOW_MS = 12_000;
 const STATUS_POLL_BLOCK_THRESHOLD = 3;
@@ -92,7 +92,6 @@ function loadPrompt(name: string): string {
 function modeEmoji(mode: SystemMode): string | undefined {
 	if (mode === "agents") return "🤖";
 	if (mode === "master") return "👑";
-	if (mode === "intent") return "🎯";
 	return undefined;
 }
 
@@ -103,8 +102,6 @@ function getAllToolNames(pi: ExtensionAPI): string[] {
 /** Memory-layer tools allowed in master mode for cross-session knowledge management. */
 const MEMORY_TOOLS = ["remember", "recall", "forget", "memory_list"] as const;
 
-/** Extra tools allowed in intent mode (intent itself is the base dispatch tool, not listed here). */
-const INTENT_MODE_EXTRA_TOOLS = ["AskUserQuestion", "todo"] as const;
 
 export default function (pi: ExtensionAPI) {
 	let mode: SystemMode = "default";
@@ -163,38 +160,24 @@ export default function (pi: ExtensionAPI) {
 	};
 
 	const applyToolPolicy = (previousMode: SystemMode, newMode: SystemMode, ctx?: ExtensionContext) => {
-		const isHardMode = newMode === "master" || newMode === "intent";
+		const isHardMode = newMode === "master";
 
 		if (isHardMode) {
-			if (previousMode !== "master" && previousMode !== "intent") {
+			if (previousMode !== "master") {
 				activeToolsBeforeMaster = pi.getActiveTools();
 			}
 
 			const tools = getAllToolNames(pi);
-			// Intent mode dispatches via "intent" tool; master mode via "subagent"
-			const baseTool = newMode === "intent" ? "intent" : "subagent";
+			const baseTool = "subagent";
 			if (tools.includes(baseTool)) {
 				const allowedTools = [baseTool];
-				// list-agents only in master mode; intent mode auto-selects agents
-				if (newMode !== "intent" && tools.includes("list-agents")) {
+				if (tools.includes("list-agents")) {
 					allowedTools.push("list-agents");
 				}
-				// blueprint is allowed in intent mode and master mode (for abort/status in master)
-				if ((newMode === "intent" || newMode === "master") && tools.includes("blueprint")) {
-					allowedTools.push("blueprint");
-				}
-				// Memory tools are allowed in hard modes for cross-session knowledge
+				// Memory tools are allowed in master mode for cross-session knowledge
 				for (const memTool of MEMORY_TOOLS) {
 					if (tools.includes(memTool)) {
 						allowedTools.push(memTool);
-					}
-				}
-				// Intent mode adds: AskUserQuestion, todo
-				if (newMode === "intent") {
-					for (const extraTool of INTENT_MODE_EXTRA_TOOLS) {
-						if (tools.includes(extraTool)) {
-							allowedTools.push(extraTool);
-						}
 					}
 				}
 				pi.setActiveTools(allowedTools);
@@ -210,7 +193,7 @@ export default function (pi: ExtensionAPI) {
 		}
 
 		masterHardLockEnabled = false;
-		if (previousMode === "master" || previousMode === "intent") {
+		if (previousMode === "master") {
 			const restoreTools =
 				activeToolsBeforeMaster && activeToolsBeforeMaster.length > 0 ? activeToolsBeforeMaster : getAllToolNames(pi);
 			pi.setActiveTools(restoreTools);
@@ -258,15 +241,6 @@ export default function (pi: ExtensionAPI) {
 		},
 	});
 
-	pi.registerCommand("system:intent", {
-		description: "Switch to intent master mode (Blueprint-driven orchestration via intent tool)",
-		handler: async (_args, ctx) => {
-			applyMode("intent", ctx);
-			pi.appendEntry("system-mode-change", { mode: "intent" });
-			ctx.ui.notify("System mode: intent 🎯 - Blueprint-driven orchestration (intent only, subagent blocked)", "info");
-		},
-	});
-
 	const restoreModeFromEntries = (ctx: Parameters<Parameters<typeof pi.on>[1]>[1]) => {
 		resetStatusPollTracker();
 		persistedFirstAbortSessionKeys = loadPersistedFirstAbortSessions();
@@ -278,7 +252,7 @@ export default function (pi: ExtensionAPI) {
 			const ce = entry as any;
 			if (ce.customType === "system-mode-change" && ce.data?.mode) {
 				restoredMode =
-					ce.data.mode === "agents" || ce.data.mode === "master" || ce.data.mode === "intent"
+					ce.data.mode === "agents" || ce.data.mode === "master"
 						? ce.data.mode
 						: "default";
 			}
@@ -304,23 +278,10 @@ export default function (pi: ExtensionAPI) {
 	});
 
 	pi.on("tool_call", async (event, ctx) => {
-		if ((mode !== "master" && mode !== "intent") || !masterHardLockEnabled) return;
-
-		// --- Intent mode: intent is the dispatch tool, subagent is blocked ---
-		if (mode === "intent") {
-			if (isToolCallEventType("intent", event)) {
-				return;
-			}
-			if (isToolCallEventType("subagent", event)) {
-				return {
-					block: true,
-					reason: "intent 모드에서는 subagent 대신 intent 도구를 사용하세요.",
-				};
-			}
-		}
+		if (mode !== "master" || !masterHardLockEnabled) return;
 
 		// --- Master mode: subagent is the dispatch tool (with polling guard) ---
-		if (mode === "master" && isToolCallEventType("subagent", event)) {
+		if (isToolCallEventType("subagent", event)) {
 			const input = event.input as Record<string, unknown> | undefined;
 			const asyncAction = typeof input?.asyncAction === "string" ? input.asyncAction : undefined;
 			if (asyncAction === "status" || asyncAction === "detail") {
@@ -335,47 +296,23 @@ export default function (pi: ExtensionAPI) {
 			return;
 		}
 
-		// --- list-agents: allowed in master mode only (intent mode auto-selects agents) ---
+		// --- list-agents: allowed in master mode ---
 		if (isToolCallEventType("list-agents", event)) {
-			if (mode === "intent") {
-				return {
-					block: true,
-					reason:
-						"Intent mode does not allow list-agents. Agent selection is automatic based on purpose/difficulty. Use the intent tool.",
-				};
-			}
 			return;
 		}
-		// blueprint is allowed in intent mode and master mode (abort/status/abort_run operations)
-		if (isToolCallEventType("blueprint", event) && (mode === "intent" || mode === "master")) {
-			return;
-		}
-		// Allow memory-layer tools in hard modes
+		// Allow memory-layer tools in master mode
 		for (const memTool of MEMORY_TOOLS) {
 			if (isToolCallEventType(memTool, event)) {
 				return;
 			}
 		}
-		// Intent mode allows extra tools (AskUserQuestion, todo)
-		if (mode === "intent") {
-			for (const extraTool of INTENT_MODE_EXTRA_TOOLS) {
-				if (isToolCallEventType(extraTool, event)) {
-					return;
-				}
-			}
-		}
 
 		// --- Block everything else ---
-		const modeLabel = mode === "intent" ? "Intent master" : "Master";
-		const allowedLabel =
-			mode === "intent"
-				? "intent, blueprint, AskUserQuestion, todo, and memory tools"
-				: "subagent, list-agents, blueprint, and memory tools (remember/recall/forget/memory_list)";
 		return {
 			block: true,
 			reason:
-				`${modeLabel} mode hard policy: only ${allowedLabel} can be called by the main agent. ` +
-				`Delegate execution through ${mode === "intent" ? "intent" : "subagent"}.`,
+				"Master mode hard policy: only subagent, list-agents, and memory tools (remember/recall/forget/memory_list) can be called by the main agent. " +
+				"Delegate execution through subagent.",
 		};
 	});
 
@@ -398,7 +335,7 @@ export default function (pi: ExtensionAPI) {
 
 	pi.on("before_agent_start", async (event, _ctx) => {
 		if (mode === "default") return;
-		const modePrompt = loadPrompt(mode); // "agents" | "master" | "intent"
+		const modePrompt = loadPrompt(mode); // "agents" | "master"
 		if (!modePrompt) return;
 		return {
 			systemPrompt: modePrompt + "\n\n" + event.systemPrompt,
