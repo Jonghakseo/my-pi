@@ -253,6 +253,18 @@ export default function (pi: ExtensionAPI) {
 		latestCtx = ctx;
 	});
 
+	// Filter out delayed-action log messages before LLM sees them.
+	// CustomMessageEntry (created by sendMessage) has role="custom" and participates
+	// in LLM context by default. We strip them here so they remain visible in the TUI
+	// (display:true is handled by the UI layer independently) but never reach the model.
+	pi.on("context", async (event, _ctx) => {
+		const filtered = event.messages.filter(
+			(m) => !(m.role === "custom" && (m as { customType?: string }).customType === CUSTOM_TYPE),
+		);
+		if (filtered.length === event.messages.length) return;
+		return { messages: filtered };
+	});
+
 	pi.on("session_start", async (_event, ctx) => {
 		agentRunning = false;
 		latestCtx = ctx;
