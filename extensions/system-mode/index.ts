@@ -172,6 +172,9 @@ export default function (pi: ExtensionAPI) {
 				if (tools.includes("list-agents")) {
 					allowedTools.push("list-agents");
 				}
+				if (tools.includes("read")) {
+					allowedTools.push("read");
+				}
 				// Memory tools are allowed in master mode for cross-session knowledge
 				for (const memTool of MEMORY_TOOLS) {
 					if (tools.includes(memTool)) {
@@ -231,11 +234,11 @@ export default function (pi: ExtensionAPI) {
 	});
 
 	pi.registerCommand("system:master", {
-		description: "Switch to hard master mode (subagent + list-agents tool execution)",
+		description: "Switch to hard master mode (subagent + list-agents + read tool execution)",
 		handler: async (_args, ctx) => {
 			applyMode("master", ctx);
 			pi.appendEntry("system-mode-change", { mode: "master" });
-			ctx.ui.notify("System mode: master 👑 - Hard delegation (subagent + list-agents)", "info");
+			ctx.ui.notify("System mode: master 👑 - Hard delegation (subagent + list-agents + read)", "info");
 		},
 	});
 
@@ -293,8 +296,8 @@ export default function (pi: ExtensionAPI) {
 			return;
 		}
 
-		// --- list-agents: allowed in master mode ---
-		if (isToolCallEventType("list-agents", event)) {
+		// --- list-agents/read: allowed in master mode ---
+		if (isToolCallEventType("list-agents", event) || isToolCallEventType("read", event)) {
 			return;
 		}
 		// Allow memory-layer tools in master mode
@@ -308,7 +311,7 @@ export default function (pi: ExtensionAPI) {
 		return {
 			block: true,
 			reason:
-				"Master mode hard policy: only subagent, list-agents, and memory tools (remember/recall/forget/memory_list) can be called by the main agent. " +
+				"Master mode hard policy: only subagent, list-agents, read, and memory tools (remember/recall/forget/memory_list) can be called by the main agent. " +
 				"Delegate execution through subagent.",
 		};
 	});

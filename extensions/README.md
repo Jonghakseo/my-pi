@@ -30,7 +30,6 @@
 | [`session-replay.ts`](./session-replay.ts) | 세션 리플레이 뷰어 |
 | [`status-overlay.ts`](./status-overlay.ts) | 스킬, 도구 & 확장 목록 오버레이 |
 | [`theme-cycler.ts`](./theme-cycler.ts) | `Ctrl+X`로 테마 순환 |
-| [`todos.ts`](./todos.ts) | 할 일 관리 UI & 도구 |
 | [`upload-image-url.ts`](./upload-image-url.ts) | 이미지 → GitHub 스토리지 업로드 |
 | [`voice-input.ts`](./voice-input.ts) | 음성 딕테이션 입력 & TTS 요약 |
 | [`working-text.ts`](./working-text.ts) | 스피너 작업 메시지 (재미 텍스트 + 경과 시간) |
