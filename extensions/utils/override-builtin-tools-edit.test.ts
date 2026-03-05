@@ -176,6 +176,72 @@ describe("executeStructuredEdit", () => {
 		expect(await readFile(abs, "utf8")).toBe("start\na\nb\nc\n");
 	});
 
+	it("supports insert op as append alias", async () => {
+		const cwd = await makeTempDir();
+		const path = "insert-alias.txt";
+		const abs = join(cwd, path);
+		await writeFile(abs, "a\nc\n", "utf8");
+
+		const result = await executeStructuredEdit(cwd, {
+			path,
+			edits: [{ op: "insert", pos: lineTag(1, "a"), lines: ["b"] }],
+		});
+
+		expect(result.isError).toBeFalsy();
+		expect(await readFile(abs, "utf8")).toBe("a\nb\nc\n");
+	});
+
+	it("supports delete op as range removal alias", async () => {
+		const cwd = await makeTempDir();
+		const path = "delete-alias.txt";
+		const abs = join(cwd, path);
+		await writeFile(abs, "a\nb\nc\nd\n", "utf8");
+
+		const result = await executeStructuredEdit(cwd, {
+			path,
+			edits: [{ op: "delete", pos: lineTag(2, "b"), end: lineTag(3, "c") }],
+		});
+
+		expect(result.isError).toBeFalsy();
+		expect(await readFile(abs, "utf8")).toBe("a\nd\n");
+	});
+
+	it("returns error when delete op is missing pos", async () => {
+		const cwd = await makeTempDir();
+		const path = "delete-missing-pos.txt";
+		const abs = join(cwd, path);
+		await writeFile(abs, "a\nb\n", "utf8");
+
+		const result = await executeStructuredEdit(cwd, {
+			path,
+			edits: [{ op: "delete" }],
+		});
+
+		expect(result.isError).toBe(true);
+		if (result.content[0]?.type === "text") {
+			expect(result.content[0].text).toContain("replace/delete operations require pos");
+		}
+		expect(await readFile(abs, "utf8")).toBe("a\nb\n");
+	});
+
+	it("returns error when delete op includes lines", async () => {
+		const cwd = await makeTempDir();
+		const path = "delete-lines-invalid.txt";
+		const abs = join(cwd, path);
+		await writeFile(abs, "a\nb\n", "utf8");
+
+		const result = await executeStructuredEdit(cwd, {
+			path,
+			edits: [{ op: "delete", pos: lineTag(2, "b"), lines: ["x"] }],
+		});
+
+		expect(result.isError).toBe(true);
+		if (result.content[0]?.type === "text") {
+			expect(result.content[0].text).toContain("delete operations cannot include lines");
+		}
+		expect(await readFile(abs, "utf8")).toBe("a\nb\n");
+	});
+
 	it("returns error when replace end is before pos", async () => {
 		const cwd = await makeTempDir();
 		const path = "invalid-range.txt";
