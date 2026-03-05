@@ -9,6 +9,7 @@
  * This implementation is a lightweight, pi-extension-friendly adaptation,
  * intentionally separated from /purpose.
  */
+import { spawn } from "node:child_process";
 import { copyToClipboard, type ExtensionAPI, type ExtensionContext } from "@mariozechner/pi-coding-agent";
 import {
 	buildHandoffPrompt,
@@ -61,6 +62,8 @@ type ScoredEntry = {
 	missingFields: string[];
 	notes: string[];
 	breakdown: DeepInterviewScoreResult["breakdown"];
+	scoreSource: AmbiguityScoreSource;
+	scoreError?: string;
 	timestamp: string;
 };
 
@@ -96,6 +99,43 @@ type ParsedArgs = {
 	goalArg: string;
 };
 
+type AmbiguityScoreSource = "llm" | "heuristic";
+
+type AmbiguityEvaluation = {
+	score: DeepInterviewScoreResult;
+	source: AmbiguityScoreSource;
+	error?: string;
+};
+
+type LlmAmbiguityPayload = {
+	goal_clarity: number;
+	constraints_clarity: number;
+	acceptance_criteria_clarity: number;
+	out_of_scope_clarity: number;
+	risks_clarity: number;
+	uncertainty_penalty: number;
+	missing_fields: string[];
+	notes: string[];
+};
+
+const LLM_SCORE_TIMEOUT_MS = 20_000;
+
+const LLM_SCORING_SYSTEM_PROMPT = [
+	"You are a strict requirements clarity evaluator.",
+	"Evaluate the provided draft spec and return ONLY valid JSON.",
+	"No markdown fences, no explanations, no extra text.",
+	"",
+	"Return format:",
+	'{"goal_clarity":0.0,"constraints_clarity":0.0,"acceptance_criteria_clarity":0.0,"out_of_scope_clarity":0.0,"risks_clarity":0.0,"uncertainty_penalty":0.0,"missing_fields":[],"notes":[]}',
+	"",
+	"Scoring rules:",
+	"- All clarity scores must be numbers in [0.0, 1.0] (higher = clearer).",
+	"- uncertainty_penalty must be in [0.0, 0.25] (higher = more ambiguous language).",
+	"- missing_fields can only contain: goal, constraints, acceptanceCriteria, outOfScope, risks.",
+	"- notes should be concise action-oriented recommendations.",
+	"- Be conservative: do not give high scores unless statements are specific and measurable.",
+].join("\n");
+
 function isCustomEntry(entry: unknown): entry is CustomEntry {
 	if (!entry || typeof entry !== "object") return false;
 	const obj = entry as Record<string, unknown>;
@@ -106,19 +146,281 @@ function cleanText(value: string): string {
 	return value.replace(/\s+/g, " ").trim();
 }
 
+function stripEnclosingQuotes(value: string): string {
+	if (!value) return value;
+	const first = value[0];
+	const last = value[value.length - 1];
+	if ((first === '"' && last === '"') || (first === "'" && last === "'")) {
+		return value.slice(1, -1).trim();
+	}
+	return value;
+}
+
 function parseArgs(rawArgs: string): ParsedArgs {
-	const normalized = cleanText(rawArgs);
+	const normalized = stripEnclosingQuotes(cleanText(rawArgs));
 	if (!normalized) return { mode: "interview", goalArg: "" };
 
-	const lower = normalized.toLowerCase();
-	if (lower === "help" || lower === "--help" || lower === "-h") {
+	const tokens = normalized.toLowerCase().split(/\s+/).filter(Boolean);
+	const head = tokens[0] ?? "";
+
+	if (["help", "--help", "-h", "usage", "?"].includes(head)) {
 		return { mode: "help", goalArg: "" };
 	}
-	if (lower === "latest" || lower === "last" || lower === "--latest") {
+	if (["latest", "last", "--latest"].includes(head)) {
 		return { mode: "latest", goalArg: "" };
 	}
 
 	return { mode: "interview", goalArg: normalized };
+}
+
+function clamp(value: number, min = 0, max = 1): number {
+	if (Number.isNaN(value)) return min;
+	if (value < min) return min;
+	if (value > max) return max;
+	return value;
+}
+
+function round(value: number, digits = 4): number {
+	const factor = 10 ** digits;
+	return Math.round(value * factor) / factor;
+}
+
+function normalizeStringArray(value: unknown): string[] {
+	if (!Array.isArray(value)) return [];
+	const seen = new Set<string>();
+	const result: string[] = [];
+	for (const item of value) {
+		if (typeof item !== "string") continue;
+		const normalized = cleanText(item);
+		if (!normalized) continue;
+		const key = normalized.toLowerCase();
+		if (seen.has(key)) continue;
+		seen.add(key);
+		result.push(normalized);
+	}
+	return result;
+}
+
+function extractJsonObject(raw: string): string | null {
+	const text = raw.trim();
+	if (!text) return null;
+
+	const codeBlockMatch = text.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+	if (codeBlockMatch?.[1]) {
+		const inside = codeBlockMatch[1].trim();
+		if (inside.startsWith("{") && inside.endsWith("}")) return inside;
+	}
+
+	const start = text.indexOf("{");
+	const end = text.lastIndexOf("}");
+	if (start >= 0 && end > start) {
+		return text.slice(start, end + 1);
+	}
+
+	return null;
+}
+
+function parseLlmAmbiguityPayload(raw: string): LlmAmbiguityPayload | null {
+	const jsonText = extractJsonObject(raw);
+	if (!jsonText) return null;
+
+	let data: Record<string, unknown>;
+	try {
+		const parsed = JSON.parse(jsonText) as unknown;
+		if (!parsed || typeof parsed !== "object") return null;
+		data = parsed as Record<string, unknown>;
+	} catch {
+		return null;
+	}
+
+	const goalClarity = clamp(Number(data.goal_clarity));
+	const constraintsClarity = clamp(Number(data.constraints_clarity));
+	const acceptanceCriteriaClarity = clamp(Number(data.acceptance_criteria_clarity));
+	const outOfScopeClarity = clamp(Number(data.out_of_scope_clarity));
+	const risksClarity = clamp(Number(data.risks_clarity));
+	const uncertaintyPenalty = clamp(Number(data.uncertainty_penalty), 0, 0.25);
+
+	if (
+		Number.isNaN(goalClarity) ||
+		Number.isNaN(constraintsClarity) ||
+		Number.isNaN(acceptanceCriteriaClarity) ||
+		Number.isNaN(outOfScopeClarity) ||
+		Number.isNaN(risksClarity) ||
+		Number.isNaN(uncertaintyPenalty)
+	) {
+		return null;
+	}
+
+	const allowedMissingField = new Set(["goal", "constraints", "acceptanceCriteria", "outOfScope", "risks"]);
+	const missingFields = normalizeStringArray(data.missing_fields).filter((field) => allowedMissingField.has(field));
+
+	return {
+		goal_clarity: goalClarity,
+		constraints_clarity: constraintsClarity,
+		acceptance_criteria_clarity: acceptanceCriteriaClarity,
+		out_of_scope_clarity: outOfScopeClarity,
+		risks_clarity: risksClarity,
+		uncertainty_penalty: uncertaintyPenalty,
+		missing_fields: missingFields,
+		notes: normalizeStringArray(data.notes),
+	};
+}
+
+function collectMissingFieldsFromDraft(draft: DeepInterviewDraft): string[] {
+	const missing: string[] = [];
+	if (!cleanText(draft.goal)) missing.push("goal");
+	if (draft.constraints.length === 0) missing.push("constraints");
+	if (draft.acceptanceCriteria.length === 0) missing.push("acceptanceCriteria");
+	if (draft.outOfScope.length === 0) missing.push("outOfScope");
+	if (draft.risks.length === 0) missing.push("risks");
+	return missing;
+}
+
+function buildLlmUserPrompt(draft: DeepInterviewDraft): string {
+	const payload = {
+		goal: draft.goal,
+		constraints: draft.constraints,
+		acceptanceCriteria: draft.acceptanceCriteria,
+		outOfScope: draft.outOfScope,
+		risks: draft.risks,
+	};
+
+	return [
+		"Evaluate this requirements draft:",
+		JSON.stringify(payload, null, 2),
+		"",
+		"Output strictly JSON using the required keys.",
+	].join("\n");
+}
+
+async function runPiLlmScoring(userPrompt: string): Promise<{ output: string; error?: string }> {
+	return new Promise((resolve) => {
+		const args = [
+			"--no-extensions",
+			"--no-skills",
+			"--no-prompt-templates",
+			"--no-session",
+			"--system-prompt",
+			LLM_SCORING_SYSTEM_PROMPT,
+			"-p",
+			userPrompt,
+		];
+
+		let output = "";
+		let stderrOutput = "";
+		let settled = false;
+
+		const proc = spawn("pi", args, {
+			env: process.env,
+			stdio: ["ignore", "pipe", "pipe"],
+		});
+
+		const finish = (result: { output: string; error?: string }) => {
+			if (settled) return;
+			settled = true;
+			resolve(result);
+		};
+
+		const timer = setTimeout(() => {
+			proc.kill();
+			finish({
+				output: output.trim(),
+				error: "LLM scoring timeout",
+			});
+		}, LLM_SCORE_TIMEOUT_MS);
+
+		proc.stdout.on("data", (chunk: Buffer) => {
+			output += chunk.toString();
+		});
+		proc.stderr.on("data", (chunk: Buffer) => {
+			stderrOutput += chunk.toString();
+		});
+
+		proc.on("close", (code) => {
+			clearTimeout(timer);
+			const trimmedOutput = output.trim();
+			if (code === 0 && trimmedOutput) {
+				finish({ output: trimmedOutput });
+				return;
+			}
+			finish({
+				output: trimmedOutput,
+				error: stderrOutput.trim() || `LLM scoring process exited with code ${code ?? "unknown"}`,
+			});
+		});
+
+		proc.on("error", (error) => {
+			clearTimeout(timer);
+			finish({ output: output.trim(), error: error.message });
+		});
+	});
+}
+
+function buildScoreFromLlmPayload(
+	payload: LlmAmbiguityPayload,
+	draft: DeepInterviewDraft,
+): DeepInterviewScoreResult {
+	const completeness =
+		payload.goal_clarity * 0.4 +
+		payload.constraints_clarity * 0.3 +
+		payload.acceptance_criteria_clarity * 0.3;
+
+	const structureCoverage = clamp((payload.out_of_scope_clarity + payload.risks_clarity) / 2);
+	const structureBonus = structureCoverage * 0.08;
+	const confidence = clamp(completeness + structureBonus - payload.uncertainty_penalty);
+	const ambiguityScore = clamp(1 - confidence);
+
+	const missingFields = normalizeStringArray([...payload.missing_fields, ...collectMissingFieldsFromDraft(draft)]);
+	const notes =
+		payload.notes.length > 0
+			? payload.notes
+			: ambiguityScore > DEEP_INTERVIEW_AMBIGUITY_THRESHOLD
+				? ["모호성 점수가 임계치를 초과했습니다. 추가 인터뷰를 권장합니다."]
+				: [];
+
+	return {
+		ambiguityScore: round(ambiguityScore),
+		readyForExecution: ambiguityScore <= DEEP_INTERVIEW_AMBIGUITY_THRESHOLD,
+		breakdown: {
+			goal: round(payload.goal_clarity),
+			constraints: round(payload.constraints_clarity),
+			acceptanceCriteria: round(payload.acceptance_criteria_clarity),
+			completeness: round(completeness),
+			structureCoverage: round(structureCoverage),
+			structureBonus: round(structureBonus),
+			uncertaintyPenalty: round(payload.uncertainty_penalty),
+			confidence: round(confidence),
+		},
+		missingFields,
+		notes,
+	};
+}
+
+async function evaluateAmbiguityScore(draft: DeepInterviewDraft): Promise<AmbiguityEvaluation> {
+	const userPrompt = buildLlmUserPrompt(draft);
+	const llmResult = await runPiLlmScoring(userPrompt);
+
+	if (llmResult.error) {
+		return {
+			score: computeAmbiguityScore(draft),
+			source: "heuristic",
+			error: llmResult.error,
+		};
+	}
+
+	const parsed = parseLlmAmbiguityPayload(llmResult.output);
+	if (!parsed) {
+		return {
+			score: computeAmbiguityScore(draft),
+			source: "heuristic",
+			error: "Failed to parse LLM scoring response",
+		};
+	}
+
+	return {
+		score: buildScoreFromLlmPayload(parsed, draft),
+		source: "llm",
+	};
 }
 
 function usageText(): string {
@@ -131,7 +433,7 @@ function usageText(): string {
 		"",
 		"Protocol:",
 		`1) 최소 ${DEEP_INTERVIEW_MIN_ROUNDS}라운드 인터뷰`,
-		`2) 모호성 점수 계산 (threshold <= ${DEEP_INTERVIEW_AMBIGUITY_THRESHOLD.toFixed(2)})`,
+		`2) LLM 기반 모호성 점수 계산 (threshold <= ${DEEP_INTERVIEW_AMBIGUITY_THRESHOLD.toFixed(2)})`,
 		"3) continue / freeze / force / cancel",
 		"4) frozen spec + [REQUEST — AUTHORITATIVE] handoff 생성",
 	].join("\n");
@@ -307,11 +609,17 @@ function buildDecisionOptions(score: DeepInterviewScoreResult): { options: strin
 	};
 }
 
-function buildProgressSummary(round: number, score: DeepInterviewScoreResult): string {
+function buildProgressSummary(
+	round: number,
+	score: DeepInterviewScoreResult,
+	source: AmbiguityScoreSource,
+): string {
 	const missing = score.missingFields.length > 0 ? score.missingFields.join(", ") : "none";
+	const sourceLabel = source === "llm" ? "LLM" : "heuristic-fallback";
 	return [
 		`Round ${round} 완료`,
 		`Ambiguity: ${score.ambiguityScore.toFixed(2)} (ready: ${score.readyForExecution ? "yes" : "no"})`,
+		`Score source: ${sourceLabel}`,
 		`Missing fields: ${missing}`,
 	].join("\n");
 }
@@ -357,11 +665,12 @@ async function promptRoundAction(
 	ctx: ExtensionContext,
 	round: number,
 	score: DeepInterviewScoreResult,
+	source: AmbiguityScoreSource,
 ): Promise<"continue" | "freeze" | "force" | "cancel"> {
 	if (!ctx.hasUI) return "cancel";
 
 	const decisionMeta = buildDecisionOptions(score);
-	const selected = await ctx.ui.select(buildProgressSummary(round, score), decisionMeta.options);
+	const selected = await ctx.ui.select(buildProgressSummary(round, score, source), decisionMeta.options);
 	if (!selected) return "cancel";
 	if (selected.includes("Cancel") || selected.includes("취소")) return "cancel";
 	if (selected.includes("Force")) return "force";
@@ -420,7 +729,11 @@ function emitFrozenMessage(pi: ExtensionAPI, spec: DeepInterviewSpecV1, handoffP
 	});
 }
 
-async function showLatestFrozenSpec(pi: ExtensionAPI, ctx: ExtensionContext): Promise<void> {
+async function showLatestFrozenSpec(
+	pi: ExtensionAPI,
+	ctx: ExtensionContext,
+	options?: { withPostActions?: boolean },
+): Promise<void> {
 	const latest = getLatestFrozenEntry(ctx);
 	if (!latest) {
 		if (ctx.hasUI) {
@@ -436,7 +749,9 @@ async function showLatestFrozenSpec(pi: ExtensionAPI, ctx: ExtensionContext): Pr
 	}
 
 	emitFrozenMessage(pi, latest.spec, latest.handoffPrompt, latest.recommendedNextStep);
-	await promptPostFreezeActions(pi, ctx, latest.handoffPrompt);
+	if (options?.withPostActions) {
+		await promptPostFreezeActions(pi, ctx, latest.handoffPrompt);
+	}
 }
 
 async function runDeepInterview(pi: ExtensionAPI, ctx: ExtensionContext, args: string): Promise<void> {
@@ -517,8 +832,16 @@ async function runDeepInterview(pi: ExtensionAPI, ctx: ExtensionContext, args: s
 			timestamp: new Date().toISOString(),
 		});
 
-		const score = computeAmbiguityScore(draft);
+		const evaluated = await evaluateAmbiguityScore(draft);
+		const score = evaluated.score;
 		finalScore = score;
+
+		if (evaluated.source === "heuristic") {
+			ctx.ui.notify(
+				`LLM 점수 평가 실패로 휴리스틱으로 대체했습니다: ${evaluated.error ?? "unknown error"}`,
+				"warning",
+			);
+		}
 
 		pi.appendEntry<ScoredEntry>(ENTRY_SCORED, {
 			round,
@@ -527,6 +850,8 @@ async function runDeepInterview(pi: ExtensionAPI, ctx: ExtensionContext, args: s
 			missingFields: score.missingFields,
 			notes: score.notes,
 			breakdown: score.breakdown,
+			scoreSource: evaluated.source,
+			scoreError: evaluated.error,
 			timestamp: new Date().toISOString(),
 		});
 
@@ -539,7 +864,7 @@ async function runDeepInterview(pi: ExtensionAPI, ctx: ExtensionContext, args: s
 			ctx.ui.notify(`라운드가 ${DEEP_INTERVIEW_SOFT_MAX_ROUNDS}를 넘었습니다. 요약 후 종료를 권장합니다.`, "warning");
 		}
 
-		const action = await promptRoundAction(ctx, round, score);
+		const action = await promptRoundAction(ctx, round, score, evaluated.source);
 		if (action === "continue") continue;
 		if (action === "cancel") {
 			finalAction = "cancel";
@@ -564,10 +889,21 @@ async function runDeepInterview(pi: ExtensionAPI, ctx: ExtensionContext, args: s
 		return;
 	}
 
-	const fallbackScore = computeAmbiguityScore(draft);
+	let scoreForFreeze = finalScore;
+	if (!scoreForFreeze) {
+		const evaluated = await evaluateAmbiguityScore(draft);
+		scoreForFreeze = evaluated.score;
+		if (evaluated.source === "heuristic") {
+			ctx.ui.notify(
+				`최종 점수 계산에서 LLM 평가를 사용하지 못했습니다: ${evaluated.error ?? "unknown error"}`,
+				"warning",
+			);
+		}
+	}
+
 	const frozenSpec = buildSpecSnapshot({
 		draft,
-		score: finalScore ?? fallbackScore,
+		score: scoreForFreeze,
 		specVersion,
 		forced: finalAction === "force",
 	});
@@ -598,6 +934,26 @@ export default function deepInterviewExtension(pi: ExtensionAPI) {
 	pi.registerCommand(COMMAND_NAME, {
 		description:
 			"Run a deep requirement interview protocol (goal/constraints/AC/out-of-scope/risks), with spec freeze and handoff",
+		getArgumentCompletions: (argumentPrefix: string) => {
+			const trimmedStart = argumentPrefix.trimStart();
+			if (trimmedStart.includes(" ")) return null;
+
+			const query = trimmedStart.toLowerCase();
+			const options = [
+				{ value: "help", description: "사용법 보기" },
+				{ value: "latest", description: "가장 최근 frozen spec 조회" },
+			];
+
+			const matches = options
+				.filter((option) => !query || option.value.startsWith(query))
+				.map((option) => ({
+					value: `${option.value} `,
+					label: option.value,
+					description: option.description,
+				}));
+
+			return matches.length > 0 ? matches : null;
+		},
 		handler: async (args, ctx) => {
 			const parsed = parseArgs(args);
 			if (parsed.mode === "help") {
