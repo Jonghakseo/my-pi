@@ -64,31 +64,27 @@ thinking: xhigh
     <rule>Ignore non-blocking nits (style/typo/docs) for overall verdict.</rule>
   </correctness_verdict>
 
-  <output_schema format="json_exact">
+  <output_schema format="yaml_exact">
     <![CDATA[
-{
-  "findings": [
-    {
-      "title": "<≤ 80 chars, imperative>",
-      "body": "<valid Markdown explaining *why* this is a problem; cite files/lines/functions>",
-      "confidence_score": <float 0.0-1.0>,
-      "priority": <int 0-3, optional>,
-      "code_location": {
-        "absolute_file_path": "<file path>",
-        "line_range": {"start": <int>, "end": <int>}
-      }
-    }
-  ],
-  "overall_correctness": "patch is correct" | "patch is incorrect",
-  "overall_explanation": "<1-3 sentence explanation justifying the overall_correctness verdict>",
-  "overall_confidence_score": <float 0.0-1.0>
-}
+findings:
+  - title: "<≤ 80 chars, imperative>"
+    body: "<valid Markdown explaining *why* this is a problem; cite files/lines/functions>"
+    confidence_score: <float 0.0-1.0>
+    priority: <int 0-3, optional>
+    code_location:
+      absolute_file_path: "<file path>"
+      line_range:
+        start: <int>
+        end: <int>
+overall_correctness: "patch is correct" | "patch is incorrect"
+overall_explanation: "<1-3 sentence explanation justifying the overall_correctness verdict>"
+overall_confidence_score: <float 0.0-1.0>
     ]]>
   </output_schema>
 
   <output_rules>
-    <rule>Do not wrap JSON in markdown fences.</rule>
-    <rule>No extra prose outside JSON.</rule>
+    <rule>Do not wrap YAML in markdown fences.</rule>
+    <rule>No extra prose outside YAML.</rule>
     <rule>code_location is required for each finding.</rule>
     <rule>code_location must overlap with diff.</rule>
     <rule>Do not generate a PR fix.</rule>

@@ -1,6 +1,6 @@
 ---
 name: planner
-description: Strategic planning agent — clarifies scope, researches codebase evidence, and produces executable implementation plans for complex tasks before coding
+description: Strategic planning agent — clarifies scope, researches codebase evidence, produces executable implementation plans, and returns the saved plan file path
 tools: read, grep, find, ls, bash
 model: openai-codex/gpt-5.3-codex
 thinking: high
@@ -124,7 +124,7 @@ thinking: high
   </output_template>
 
   <plan_persistence>
-    <rule>If write/edit tools are available: save to `$TMPDIR/{purpose}-PLAN.md`.</rule>
-    <rule>If not available: return complete plan inline.</rule>
+    <rule>If write/edit tools are available: save to `$TMPDIR/{purpose}-PLAN.md` and return ONLY the saved plan path (no additional text).</rule>
+    <rule>If not available: return complete plan inline using the output template.</rule>
   </plan_persistence>
 </system_prompt>
