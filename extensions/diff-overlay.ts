@@ -1,13 +1,11 @@
 /**
  * /diff — Git diff overlay
  *
- * Split-pane view: file list (left) + diff/commit viewer (right).
- * Two focus modes — arrow keys work naturally in whichever panel is active.
+ * Split-pane view with mode toggle:
+ * - Diff mode: left = changed files, right = aggregated file diff (current behavior)
+ * - Commit mode: left = commits, right = changed files per selected commit (fold/expand)
  *
- *   FILE LIST mode         │ ↑/↓ select file · Enter → open right pane · o open file · f reveal · S stash · q close
- *   DIFF VIEW mode         │ ↑/↓ scroll diff · PgUp/PgDn fast scroll · o open file · f reveal · Esc → files
- *   COMMIT HISTORY mode    │ ↑/↓ select commit · PgUp/PgDn fast scroll · Esc → files
- *   GLOBAL                 │ Tab / v toggle Diff ↔ Commit view
+ * Global: Tab / v toggles Diff ↔ Commit mode
  */
 
 import path from "node:path";
@@ -36,22 +34,41 @@ interface DiffFile {
 	commitState: CommitState;
 }
 
-type FocusPane = "files" | "diff";
+interface CommitFile {
+	path: string;
+	status: DiffFileStatus;
+	rawStatus: string;
+}
+
+type FocusPane = "left" | "right";
 
 interface DiffState {
+	// Diff mode
 	files: DiffFile[];
 	selectedIndex: number;
 	fileScrollOffset: number;
 	diffCache: Map<string, string>;
 	diffScrollOffset: number;
+
+	// Commit mode
 	commits: BranchCommitEntry[];
 	commitSelectedIndex: number;
 	commitScrollOffset: number;
+	commitFilesCache: Map<string, CommitFile[]>;
+	commitFilesLoading: Set<string>;
+	commitFileDiffCache: Map<string, string>;
+	commitFileDiffLoading: Set<string>;
+	commitExpandedByHash: Map<string, Set<string>>;
+	commitFileSelectedIndex: number;
+	commitFileScrollOffset: number; // line-based scroll in right commit pane
+	commitFileManualScroll: boolean;
+
 	viewMode: OverlayViewMode;
+	focus: FocusPane;
+
 	branch: string;
 	mergeBase: string | null;
 	baseBranch: string | null;
-	focus: FocusPane;
 	error: string | null;
 }
 
@@ -63,6 +80,60 @@ interface Theme {
 interface Tui {
 	requestRender: () => void;
 	height?: number;
+}
+
+// ─── Utils ─────────────────────────────────────────────────────────────────
+
+function clamp(n: number, min: number, max: number): number {
+	if (n < min) return min;
+	if (n > max) return max;
+	return n;
+}
+
+function commitDiffKey(commitHash: string, filePath: string): string {
+	return `${commitHash}\x00${filePath}`;
+}
+
+interface CommitRowsMeta {
+	totalRows: number;
+	fileStarts: number[];
+	fileEnds: number[];
+}
+
+function overlayContentHeight(totalHeight: number): number {
+	const bodyHeight = Math.max(3, totalHeight - 6); // header(3) + footer(3)
+	return Math.max(1, bodyHeight - 2); // title + separator
+}
+
+function buildCommitRowsMeta(
+	files: CommitFile[],
+	commitHash: string,
+	expanded: Set<string>,
+	diffCache: Map<string, string>,
+): CommitRowsMeta {
+	let row = 0;
+	const fileStarts: number[] = [];
+	const fileEnds: number[] = [];
+
+	for (let i = 0; i < files.length; i++) {
+		const file = files[i];
+		fileStarts[i] = row;
+		row += 1; // file header line
+
+		if (expanded.has(file.path)) {
+			const raw = diffCache.get(commitDiffKey(commitHash, file.path));
+			if (raw === undefined) {
+				row += 1; // loading / placeholder line
+			} else {
+				const diffLines = raw.split("\n");
+				row += Math.max(1, diffLines.length);
+			}
+		}
+
+		fileEnds[i] = row - 1;
+	}
+
+	return { totalRows: row, fileStarts, fileEnds };
 }
 
 // ─── Git helpers ───────────────────────────────────────────────────────────
@@ -86,7 +157,6 @@ async function findMergeBase(pi: ExtensionAPI, cwd: string, branch: string): Pro
 	const defaults = ["main", "master", "develop"];
 	if (defaults.includes(branch) || branch === "HEAD") return null;
 
-	// Try to detect default branch from remote
 	const symRef = await pi.exec("git", ["symbolic-ref", "refs/remotes/origin/HEAD", "--short"], { cwd });
 	if (symRef.code === 0 && symRef.stdout?.trim()) {
 		const defaultBranch = symRef.stdout.trim().replace(/^origin\//, "");
@@ -138,7 +208,6 @@ async function branchCommits(pi: ExtensionAPI, cwd: string, mergeBase: string | 
 	const commits = r.code === 0 && r.stdout ? parseGitLogOutput(r.stdout) : [];
 	if (commits.length > 0 || !mergeBase) return commits;
 
-	// Fallback: if branch has no commits since merge-base, still show recent branch history.
 	const fallback = await pi.exec(
 		"git",
 		[
@@ -154,6 +223,18 @@ async function branchCommits(pi: ExtensionAPI, cwd: string, mergeBase: string | 
 	return parseGitLogOutput(fallback.stdout);
 }
 
+async function commitFilesForHash(pi: ExtensionAPI, cwd: string, commitHash: string): Promise<CommitFile[]> {
+	const r = await pi.exec("git", ["show", "--name-status", "--format=", "-z", commitHash], { cwd });
+	if (r.code !== 0 || !r.stdout) return [];
+	return parseNameStatusZ(r.stdout);
+}
+
+async function commitFileDiff(pi: ExtensionAPI, cwd: string, commitHash: string, filePath: string): Promise<string> {
+	const r = await pi.exec("git", ["show", "--no-color", "--format=", commitHash, "--", filePath], { cwd });
+	if (r.code === 0 && (r.stdout ?? "").trim()) return (r.stdout ?? "").trim();
+	return "(no diff available)";
+}
+
 async function fileDiff(pi: ExtensionAPI, cwd: string, file: DiffFile, mergeBase: string | null): Promise<string> {
 	if (file.status === "untracked") {
 		const r = await pi.exec("cat", [file.path], { cwd });
@@ -164,7 +245,6 @@ async function fileDiff(pi: ExtensionAPI, cwd: string, file: DiffFile, mergeBase
 			.join("\n");
 	}
 
-	// When on a feature branch, diff from merge-base to working tree
 	if (mergeBase) {
 		const r = await pi.exec("git", ["diff", "--no-color", mergeBase, "--", file.path], { cwd });
 		if (r.code === 0 && (r.stdout ?? "").trim()) return (r.stdout ?? "").trim();
@@ -223,15 +303,12 @@ function colorDiffLine(t: Theme, line: string): string {
 	return line;
 }
 
-// ─── Panel renderers ──────────────────────────────────────────────────────
-
 function renderFiles(t: Theme, st: DiffState, w: number, h: number): string[] {
 	if (st.files.length === 0) return [t.fg("muted", " (no changes)")];
 
-	const active = st.focus === "files";
+	const active = st.focus === "left";
 	const max = Math.max(1, h);
 
-	// keep selected row visible
 	if (st.selectedIndex < st.fileScrollOffset) st.fileScrollOffset = st.selectedIndex;
 	if (st.selectedIndex >= st.fileScrollOffset + max) st.fileScrollOffset = st.selectedIndex - max + 1;
 
@@ -278,6 +355,41 @@ function renderFiles(t: Theme, st: DiffState, w: number, h: number): string[] {
 	return lines;
 }
 
+function renderCommits(t: Theme, st: DiffState, w: number, h: number): string[] {
+	if (st.commits.length === 0) return [t.fg("muted", " (no commits in branch scope)")];
+
+	const active = st.focus === "left";
+	const max = Math.max(1, h);
+	st.commitSelectedIndex = clamp(st.commitSelectedIndex, 0, Math.max(0, st.commits.length - 1));
+
+	if (st.commitSelectedIndex < st.commitScrollOffset) st.commitScrollOffset = st.commitSelectedIndex;
+	if (st.commitSelectedIndex >= st.commitScrollOffset + max) st.commitScrollOffset = st.commitSelectedIndex - max + 1;
+
+	const start = st.commitScrollOffset;
+	const end = Math.min(st.commits.length, start + max);
+	const lines: string[] = [];
+
+	for (let i = start; i < end; i++) {
+		const c = st.commits[i];
+		const sel = i === st.commitSelectedIndex;
+		const cursor = sel ? (active ? t.fg("accent", "▶") : t.fg("muted", "▸")) : " ";
+		const hash = t.fg(sel && active ? "accent" : "muted", c.shortHash);
+		const prefix = `${cursor} ${hash} `;
+		const subjectW = Math.max(4, w - visibleWidth(prefix));
+		const subject = sel && active ? t.fg("accent", truncateToWidth(c.subject, subjectW)) : t.fg("text", truncateToWidth(c.subject, subjectW));
+		lines.push(truncateToWidth(`${prefix}${subject}`, w));
+	}
+
+	if (st.commits.length > max) {
+		const info = t.fg("dim", ` ${start + 1}–${end}/${st.commits.length}`);
+		while (lines.length < max) lines.push("");
+		lines[max - 1] = info;
+	}
+
+	while (lines.length < max) lines.push("");
+	return lines;
+}
+
 function renderDiff(t: Theme, st: DiffState, w: number, h: number): string[] {
 	if (st.files.length === 0) return [t.fg("muted", "  No changes")];
 
@@ -291,7 +403,6 @@ function renderDiff(t: Theme, st: DiffState, w: number, h: number): string[] {
 	if (all.length === 0) return [t.fg("muted", "  (empty diff)")];
 
 	const max = Math.max(1, h);
-	// clamp scroll
 	const maxOffset = Math.max(0, all.length - max);
 	if (st.diffScrollOffset > maxOffset) st.diffScrollOffset = maxOffset;
 
@@ -305,7 +416,6 @@ function renderDiff(t: Theme, st: DiffState, w: number, h: number): string[] {
 
 	while (lines.length < max) lines.push("");
 
-	// scroll percentage in bottom-right corner
 	if (all.length > max) {
 		const pct = maxOffset > 0 ? Math.round((st.diffScrollOffset / maxOffset) * 100) : 0;
 		const indicator = t.fg("dim", `${pct}% (${start + 1}–${end}/${all.length})`);
@@ -315,38 +425,86 @@ function renderDiff(t: Theme, st: DiffState, w: number, h: number): string[] {
 	return lines;
 }
 
-function renderCommitHistory(t: Theme, st: DiffState, w: number, h: number): string[] {
-	if (st.commits.length === 0) return [t.fg("muted", "  (no commits in history)")];
+function renderCommitFiles(t: Theme, st: DiffState, w: number, h: number): string[] {
+	const selectedCommit = st.commits[st.commitSelectedIndex];
+	if (!selectedCommit) return [t.fg("muted", "  (no commit selected)")];
 
-	const active = st.focus === "diff";
+	const commitHash = selectedCommit.hash;
+	const files = st.commitFilesCache.get(commitHash);
+	if (!files) {
+		return [t.fg("muted", st.commitFilesLoading.has(commitHash) ? "  Loading changed files…" : "  (press Enter to load files)")];
+	}
+	if (files.length === 0) return [t.fg("muted", "  (no changed files)")];
+
+	st.commitFileSelectedIndex = clamp(st.commitFileSelectedIndex, 0, Math.max(0, files.length - 1));
+	const expanded = st.commitExpandedByHash.get(commitHash) ?? new Set<string>();
+	const active = st.focus === "right";
+
+	const rows: string[] = [];
+	const fileLineStart: number[] = [];
+
+	for (let i = 0; i < files.length; i++) {
+		const file = files[i];
+		const selected = i === st.commitFileSelectedIndex;
+		fileLineStart[i] = rows.length;
+
+		const cursor = selected ? (active ? t.fg("accent", "▶") : t.fg("muted", "▸")) : " ";
+		const fold = expanded.has(file.path) ? t.fg("accent", "▾") : t.fg("dim", "▸");
+		const ic = t.fg(statusColor(file.status), icon(file.status));
+		const prefix = `${cursor} ${fold} ${ic} `;
+		const nameW = Math.max(4, w - visibleWidth(prefix));
+
+		const fileName = truncateToWidth(file.path, nameW);
+		const label = selected
+			? active
+				? t.fg("accent", fileName)
+				: t.fg("muted", fileName)
+			: t.fg("text", fileName);
+		rows.push(truncateToWidth(`${prefix}${label}`, w));
+
+		if (!expanded.has(file.path)) continue;
+
+		const diffKey = commitDiffKey(commitHash, file.path);
+		const raw = st.commitFileDiffCache.get(diffKey);
+		if (raw === undefined) {
+			const loading = st.commitFileDiffLoading.has(diffKey) ? "    Loading diff…" : "    (no diff loaded)";
+			rows.push(t.fg("muted", truncateToWidth(loading, w)));
+			continue;
+		}
+
+		const diffLines = raw.split("\n");
+		if (diffLines.length === 0) {
+			rows.push(t.fg("muted", "    (empty diff)"));
+			continue;
+		}
+
+		for (const line of diffLines) {
+			rows.push(truncateToWidth(`    ${colorDiffLine(t, expandTabs(line))}`, w));
+		}
+	}
+
 	const max = Math.max(1, h);
-	st.commitSelectedIndex = Math.max(0, Math.min(st.commitSelectedIndex, st.commits.length - 1));
-
-	if (st.commitSelectedIndex < st.commitScrollOffset) st.commitScrollOffset = st.commitSelectedIndex;
-	if (st.commitSelectedIndex >= st.commitScrollOffset + max) st.commitScrollOffset = st.commitSelectedIndex - max + 1;
-
-	const start = st.commitScrollOffset;
-	const end = Math.min(st.commits.length, start + max);
-	const lines: string[] = [];
-
-	for (let i = start; i < end; i++) {
-		const c = st.commits[i];
-		const sel = i === st.commitSelectedIndex;
-		const cursor = sel ? (active ? t.fg("accent", "▶") : t.fg("muted", "▸")) : " ";
-		const hash = t.fg(sel ? "accent" : "muted", c.shortHash);
-		const subject = sel && active ? t.fg("accent", c.subject) : t.fg("text", c.subject);
-		const meta = t.fg("dim", ` · ${c.author} · ${c.relativeDate}`);
-		lines.push(truncateToWidth(` ${cursor} ${hash} ${subject}${meta}`, w));
+	const selectedLine = fileLineStart[st.commitFileSelectedIndex] ?? 0;
+	if (!st.commitFileManualScroll) {
+		if (selectedLine < st.commitFileScrollOffset) st.commitFileScrollOffset = selectedLine;
+		if (selectedLine >= st.commitFileScrollOffset + max) st.commitFileScrollOffset = selectedLine - max + 1;
 	}
 
-	if (st.commits.length > max) {
-		const info = t.fg("dim", ` ${start + 1}–${end}/${st.commits.length}`);
-		while (lines.length < max) lines.push("");
-		lines[max - 1] = info;
+	const maxOffset = Math.max(0, rows.length - max);
+	if (st.commitFileScrollOffset < 0) st.commitFileScrollOffset = 0;
+	if (st.commitFileScrollOffset > maxOffset) st.commitFileScrollOffset = maxOffset;
+
+	const start = st.commitFileScrollOffset;
+	const end = Math.min(rows.length, start + max);
+	const visible = rows.slice(start, end);
+
+	while (visible.length < max) visible.push("");
+	if (rows.length > max) {
+		const info = t.fg("dim", ` ${start + 1}–${end}/${rows.length}`);
+		visible[max - 1] = info;
 	}
 
-	while (lines.length < max) lines.push("");
-	return lines;
+	return visible;
 }
 
 // ─── Overlay controller ────────────────────────────────────────────────────
@@ -356,7 +514,7 @@ class DiffOverlay {
 	private pi: ExtensionAPI;
 	private cwd: string;
 	private done: () => void;
-	private loading = false;
+	private diffLoading = false;
 
 	constructor(pi: ExtensionAPI, cwd: string, st: DiffState, done: () => void) {
 		this.pi = pi;
@@ -365,31 +523,91 @@ class DiffOverlay {
 		this.done = done;
 	}
 
+	private selectedCommit(): BranchCommitEntry | null {
+		if (this.st.commits.length === 0) return null;
+		this.st.commitSelectedIndex = clamp(this.st.commitSelectedIndex, 0, this.st.commits.length - 1);
+		return this.st.commits[this.st.commitSelectedIndex] ?? null;
+	}
+
+	private selectedCommitFile(): CommitFile | null {
+		const commit = this.selectedCommit();
+		if (!commit) return null;
+		const files = this.st.commitFilesCache.get(commit.hash);
+		if (!files || files.length === 0) return null;
+		this.st.commitFileSelectedIndex = clamp(this.st.commitFileSelectedIndex, 0, files.length - 1);
+		return files[this.st.commitFileSelectedIndex] ?? null;
+	}
+
+	private expandedSet(commitHash: string): Set<string> {
+		let set = this.st.commitExpandedByHash.get(commitHash);
+		if (!set) {
+			set = new Set<string>();
+			this.st.commitExpandedByHash.set(commitHash, set);
+		}
+		return set;
+	}
+
+	private resetCommitFilesPanel(): void {
+		this.st.commitFileSelectedIndex = 0;
+		this.st.commitFileScrollOffset = 0;
+		this.st.commitFileManualScroll = false;
+	}
+
 	private async ensureDiff(tui: Tui): Promise<void> {
 		const f = this.st.files[this.st.selectedIndex];
-		if (!f || this.st.diffCache.has(f.path) || this.loading) return;
-		this.loading = true;
+		if (!f || this.st.diffCache.has(f.path) || this.diffLoading) return;
+		this.diffLoading = true;
 		try {
 			this.st.diffCache.set(f.path, await fileDiff(this.pi, this.cwd, f, this.st.mergeBase));
 		} finally {
-			this.loading = false;
+			this.diffLoading = false;
 		}
 		tui.requestRender();
 	}
 
-	private async openSelectedFile(file: DiffFile): Promise<void> {
-		const filePath = path.isAbsolute(file.path) ? file.path : path.resolve(this.cwd, file.path);
-		const command = process.platform === "darwin" ? "open" : "xdg-open";
-		const r = await this.pi.exec(command, [filePath], { cwd: this.cwd });
-		this.st.error = r.code === 0 ? null : r.stderr?.trim() || `Failed to open ${file.path}`;
+	private async ensureCommitFiles(tui: Tui): Promise<void> {
+		const commit = this.selectedCommit();
+		if (!commit) return;
+		if (this.st.commitFilesCache.has(commit.hash) || this.st.commitFilesLoading.has(commit.hash)) return;
+
+		this.st.commitFilesLoading.add(commit.hash);
+		tui.requestRender();
+		try {
+			const files = await commitFilesForHash(this.pi, this.cwd, commit.hash);
+			this.st.commitFilesCache.set(commit.hash, files);
+		} finally {
+			this.st.commitFilesLoading.delete(commit.hash);
+		}
+		tui.requestRender();
 	}
 
-	private async revealSelectedFile(file: DiffFile): Promise<void> {
-		const filePath = path.isAbsolute(file.path) ? file.path : path.resolve(this.cwd, file.path);
+	private async ensureCommitFileDiff(commitHash: string, filePath: string, tui: Tui): Promise<void> {
+		const key = commitDiffKey(commitHash, filePath);
+		if (this.st.commitFileDiffCache.has(key) || this.st.commitFileDiffLoading.has(key)) return;
+		this.st.commitFileDiffLoading.add(key);
+		tui.requestRender();
+		try {
+			const raw = await commitFileDiff(this.pi, this.cwd, commitHash, filePath);
+			this.st.commitFileDiffCache.set(key, raw);
+		} finally {
+			this.st.commitFileDiffLoading.delete(key);
+		}
+		tui.requestRender();
+	}
+
+	private async openPath(targetPath: string): Promise<void> {
+		const filePath = path.isAbsolute(targetPath) ? targetPath : path.resolve(this.cwd, targetPath);
+		const command = process.platform === "darwin" ? "open" : "xdg-open";
+		const r = await this.pi.exec(command, [filePath], { cwd: this.cwd });
+		this.st.error = r.code === 0 ? null : r.stderr?.trim() || `Failed to open ${targetPath}`;
+	}
+
+	private async revealPath(targetPath: string): Promise<void> {
+		const filePath = path.isAbsolute(targetPath) ? targetPath : path.resolve(this.cwd, targetPath);
 		const command = process.platform === "darwin" ? "open" : "xdg-open";
 		const args = process.platform === "darwin" ? ["-R", filePath] : [path.dirname(filePath)];
 		const r = await this.pi.exec(command, args, { cwd: this.cwd });
-		this.st.error = r.code === 0 ? null : r.stderr?.trim() || `Failed to reveal ${file.path}`;
+		this.st.error = r.code === 0 ? null : r.stderr?.trim() || `Failed to reveal ${targetPath}`;
 	}
 
 	private async refreshFiles(): Promise<void> {
@@ -399,7 +617,7 @@ class DiffOverlay {
 			this.st.selectedIndex = 0;
 			this.st.fileScrollOffset = 0;
 			this.st.diffScrollOffset = 0;
-			this.st.focus = "files";
+			this.st.focus = "left";
 			return;
 		}
 		this.st.selectedIndex = Math.min(this.st.selectedIndex, files.length - 1);
@@ -418,31 +636,21 @@ class DiffOverlay {
 		if (this.st.viewMode === "diff") void this.ensureDiff(tui);
 	}
 
-	handleInput(data: string, tui: Tui): void {
+	private selectCommit(nextIndex: number, tui: Tui): void {
+		if (this.st.commits.length === 0) return;
+		const clamped = clamp(nextIndex, 0, this.st.commits.length - 1);
+		if (clamped === this.st.commitSelectedIndex) return;
+		this.st.commitSelectedIndex = clamped;
+		this.resetCommitFilesPanel();
+		void this.ensureCommitFiles(tui);
+	}
+
+	private handleDiffModeInput(data: string, tui: Tui): void {
 		const st = this.st;
 		const n = st.files.length;
 		const f = st.files[st.selectedIndex];
 
-		// ── Global keys ──
-		if (data === "q") {
-			this.done();
-			return;
-		}
-		if (data === "S") {
-			void this.stashChanges(tui).then(() => tui.requestRender());
-			return;
-		}
-		if (matchesKey(data, Key.tab) || data === "v") {
-			st.viewMode = toggleOverlayViewMode(st.viewMode);
-			if (st.viewMode === "diff") {
-				void this.ensureDiff(tui);
-			}
-			tui.requestRender();
-			return;
-		}
-
-		// ── FILE LIST focus ──
-		if (st.focus === "files") {
+		if (st.focus === "left") {
 			if (matchesKey(data, Key.escape)) {
 				this.done();
 				return;
@@ -451,69 +659,40 @@ class DiffOverlay {
 				if (st.selectedIndex > 0) {
 					st.selectedIndex -= 1;
 					st.diffScrollOffset = 0;
-					if (st.viewMode === "diff") void this.ensureDiff(tui);
+					void this.ensureDiff(tui);
 				}
 			} else if (matchesKey(data, Key.down) || data === "j") {
 				if (st.selectedIndex < n - 1) {
 					st.selectedIndex += 1;
 					st.diffScrollOffset = 0;
-					if (st.viewMode === "diff") void this.ensureDiff(tui);
+					void this.ensureDiff(tui);
 				}
 			} else if (data === "g") {
 				st.selectedIndex = 0;
 				st.diffScrollOffset = 0;
-				if (st.viewMode === "diff") void this.ensureDiff(tui);
+				void this.ensureDiff(tui);
 			} else if (data === "G") {
 				st.selectedIndex = Math.max(0, n - 1);
 				st.diffScrollOffset = 0;
-				if (st.viewMode === "diff") void this.ensureDiff(tui);
+				void this.ensureDiff(tui);
 			} else if (matchesKey(data, Key.enter)) {
-				if (n > 0 || st.viewMode === "commit") {
-					st.focus = "diff";
-					if (st.viewMode === "diff") {
-						st.diffScrollOffset = 0;
-						void this.ensureDiff(tui);
-					}
+				if (n > 0) {
+					st.focus = "right";
+					st.diffScrollOffset = 0;
+					void this.ensureDiff(tui);
 				}
 			} else if (data === "o" && f) {
-				void this.openSelectedFile(f).then(() => tui.requestRender());
+				void this.openPath(f.path).then(() => tui.requestRender());
 			} else if (data === "f" && f) {
-				void this.revealSelectedFile(f).then(() => tui.requestRender());
+				void this.revealPath(f.path).then(() => tui.requestRender());
 			}
 
 			tui.requestRender();
 			return;
 		}
 
-		// ── RIGHT PANE focus ──
 		if (matchesKey(data, Key.escape)) {
-			st.focus = "files";
-			tui.requestRender();
-			return;
-		}
-
-		if (st.viewMode === "commit") {
-			const commitLen = st.commits.length;
-			if (matchesKey(data, Key.up) || data === "k") {
-				st.commitSelectedIndex = Math.max(0, st.commitSelectedIndex - 1);
-			} else if (matchesKey(data, Key.down) || data === "j") {
-				st.commitSelectedIndex = Math.min(Math.max(0, commitLen - 1), st.commitSelectedIndex + 1);
-			} else if (matchesKey(data, Key.pageUp) || matchesKey(data, Key.ctrl("u"))) {
-				st.commitSelectedIndex = Math.max(0, st.commitSelectedIndex - 10);
-			} else if (matchesKey(data, Key.pageDown) || matchesKey(data, Key.ctrl("d"))) {
-				st.commitSelectedIndex = Math.min(Math.max(0, commitLen - 1), st.commitSelectedIndex + 10);
-			} else if (data === "g") {
-				st.commitSelectedIndex = 0;
-			} else if (data === "G") {
-				st.commitSelectedIndex = Math.max(0, commitLen - 1);
-			} else if (matchesKey(data, Key.left)) {
-				st.focus = "files";
-			} else if (data === "o" && f) {
-				void this.openSelectedFile(f).then(() => tui.requestRender());
-			} else if (data === "f" && f) {
-				void this.revealSelectedFile(f).then(() => tui.requestRender());
-			}
-
+			st.focus = "left";
 			tui.requestRender();
 			return;
 		}
@@ -532,81 +711,249 @@ class DiffOverlay {
 		} else if (data === "G") {
 			st.diffScrollOffset = Math.max(0, diffLen - 3);
 		} else if (matchesKey(data, Key.left)) {
-			// quick back to file list
-			st.focus = "files";
+			st.focus = "left";
 		} else if (data === "o" && f) {
-			void this.openSelectedFile(f).then(() => tui.requestRender());
+			void this.openPath(f.path).then(() => tui.requestRender());
 		} else if (data === "f" && f) {
-			void this.revealSelectedFile(f).then(() => tui.requestRender());
+			void this.revealPath(f.path).then(() => tui.requestRender());
 		}
 
 		tui.requestRender();
 	}
 
+	private handleCommitModeInput(data: string, tui: Tui): void {
+		const st = this.st;
+
+		if (st.focus === "left") {
+			if (matchesKey(data, Key.escape)) {
+				this.done();
+				return;
+			}
+
+			if (matchesKey(data, Key.up) || data === "k") {
+				this.selectCommit(st.commitSelectedIndex - 1, tui);
+			} else if (matchesKey(data, Key.down) || data === "j") {
+				this.selectCommit(st.commitSelectedIndex + 1, tui);
+			} else if (matchesKey(data, Key.pageUp) || matchesKey(data, Key.ctrl("u"))) {
+				this.selectCommit(st.commitSelectedIndex - 10, tui);
+			} else if (matchesKey(data, Key.pageDown) || matchesKey(data, Key.ctrl("d"))) {
+				this.selectCommit(st.commitSelectedIndex + 10, tui);
+			} else if (data === "g") {
+				this.selectCommit(0, tui);
+			} else if (data === "G") {
+				this.selectCommit(Math.max(0, st.commits.length - 1), tui);
+			} else if (matchesKey(data, Key.enter)) {
+				st.focus = "right";
+				this.resetCommitFilesPanel();
+				void this.ensureCommitFiles(tui);
+			}
+
+			tui.requestRender();
+			return;
+		}
+
+		if (matchesKey(data, Key.escape) || matchesKey(data, Key.left)) {
+			st.focus = "left";
+			tui.requestRender();
+			return;
+		}
+
+		const commit = this.selectedCommit();
+		if (!commit) {
+			tui.requestRender();
+			return;
+		}
+
+		void this.ensureCommitFiles(tui);
+		const files = st.commitFilesCache.get(commit.hash);
+		if (!files || files.length === 0) {
+			tui.requestRender();
+			return;
+		}
+
+		const maxIndex = files.length - 1;
+		st.commitFileSelectedIndex = clamp(st.commitFileSelectedIndex, 0, maxIndex);
+		const selectedIndex = st.commitFileSelectedIndex;
+		const selectedFile = files[selectedIndex];
+		const expanded = this.expandedSet(commit.hash);
+		const selectedExpanded = Boolean(selectedFile && expanded.has(selectedFile.path));
+
+		const contentH = overlayContentHeight(tui.height ?? 40);
+		const rowsMeta = buildCommitRowsMeta(files, commit.hash, expanded, st.commitFileDiffCache);
+		const maxOffset = Math.max(0, rowsMeta.totalRows - contentH);
+		st.commitFileScrollOffset = clamp(st.commitFileScrollOffset, 0, maxOffset);
+		const viewportStart = st.commitFileScrollOffset;
+		const viewportEnd = viewportStart + contentH - 1;
+
+		const prevIndex = selectedIndex - 1;
+		const nextIndex = selectedIndex + 1;
+		const prevStart = prevIndex >= 0 ? (rowsMeta.fileStarts[prevIndex] ?? 0) : -1;
+		const nextStart = nextIndex <= maxIndex ? (rowsMeta.fileStarts[nextIndex] ?? rowsMeta.totalRows) : rowsMeta.totalRows;
+		const selectedStart = rowsMeta.fileStarts[selectedIndex] ?? 0;
+		const selectedEnd = rowsMeta.fileEnds[selectedIndex] ?? selectedStart;
+
+		const shouldArrowUpScroll =
+			selectedExpanded &&
+			st.commitFileScrollOffset > 0 &&
+			((prevIndex >= 0 && prevStart < viewportStart) || (prevIndex < 0 && selectedStart < viewportStart));
+		const shouldArrowDownScroll =
+			selectedExpanded &&
+			st.commitFileScrollOffset < maxOffset &&
+			((nextIndex <= maxIndex && nextStart > viewportEnd) || (nextIndex > maxIndex && selectedEnd > viewportEnd));
+
+		if (matchesKey(data, Key.up)) {
+			if (shouldArrowUpScroll) {
+				st.commitFileScrollOffset = Math.max(0, st.commitFileScrollOffset - 1);
+				st.commitFileManualScroll = true;
+			} else {
+				st.commitFileSelectedIndex = clamp(selectedIndex - 1, 0, maxIndex);
+				st.commitFileManualScroll = false;
+			}
+		} else if (matchesKey(data, Key.down)) {
+			if (shouldArrowDownScroll) {
+				st.commitFileScrollOffset = Math.min(maxOffset, st.commitFileScrollOffset + 1);
+				st.commitFileManualScroll = true;
+			} else {
+				st.commitFileSelectedIndex = clamp(selectedIndex + 1, 0, maxIndex);
+				st.commitFileManualScroll = false;
+			}
+		} else if (data === "k") {
+			st.commitFileSelectedIndex = clamp(selectedIndex - 1, 0, maxIndex);
+			st.commitFileManualScroll = false;
+		} else if (data === "j") {
+			st.commitFileSelectedIndex = clamp(selectedIndex + 1, 0, maxIndex);
+			st.commitFileManualScroll = false;
+		} else if (matchesKey(data, Key.pageUp) || matchesKey(data, Key.ctrl("u"))) {
+			st.commitFileScrollOffset = Math.max(0, st.commitFileScrollOffset - 20);
+			st.commitFileManualScroll = true;
+		} else if (matchesKey(data, Key.pageDown) || matchesKey(data, Key.ctrl("d"))) {
+			st.commitFileScrollOffset = Math.min(maxOffset, st.commitFileScrollOffset + 20);
+			st.commitFileManualScroll = true;
+		} else if (data === "g") {
+			st.commitFileSelectedIndex = 0;
+			st.commitFileManualScroll = false;
+		} else if (data === "G") {
+			st.commitFileSelectedIndex = maxIndex;
+			st.commitFileManualScroll = false;
+		} else if (matchesKey(data, Key.enter)) {
+			const file = files[st.commitFileSelectedIndex];
+			if (file) {
+				if (expanded.has(file.path)) {
+					expanded.delete(file.path);
+				} else {
+					expanded.add(file.path);
+					void this.ensureCommitFileDiff(commit.hash, file.path, tui);
+				}
+				st.commitFileManualScroll = false;
+			}
+		} else if (data === "o") {
+			const file = this.selectedCommitFile();
+			if (file) void this.openPath(file.path).then(() => tui.requestRender());
+		} else if (data === "f") {
+			const file = this.selectedCommitFile();
+			if (file) void this.revealPath(file.path).then(() => tui.requestRender());
+		}
+
+		tui.requestRender();
+	}
+
+	handleInput(data: string, tui: Tui): void {
+		if (data === "q") {
+			this.done();
+			return;
+		}
+
+		if (data === "S") {
+			void this.stashChanges(tui).then(() => tui.requestRender());
+			return;
+		}
+
+		if (matchesKey(data, Key.tab) || data === "v") {
+			this.st.viewMode = toggleOverlayViewMode(this.st.viewMode);
+			this.st.focus = "left";
+			if (this.st.viewMode === "diff") {
+				void this.ensureDiff(tui);
+			} else {
+				this.resetCommitFilesPanel();
+				void this.ensureCommitFiles(tui);
+			}
+			tui.requestRender();
+			return;
+		}
+
+		if (this.st.viewMode === "diff") this.handleDiffModeInput(data, tui);
+		else this.handleCommitModeInput(data, tui);
+	}
+
 	render(w: number, h: number, t: Theme): string[] {
 		const st = this.st;
 
-		// ── Header (3 lines) ──
 		const header: string[] = [];
 		header.push(...new DynamicBorder((s: string) => t.fg("accent", s)).render(w));
 
 		const branch = st.branch ? t.fg("muted", st.branch) : t.fg("dim", "(detached)");
 		const baseInfo = st.baseBranch ? ` ${t.fg("dim", "vs")} ${t.fg("muted", st.baseBranch)}` : "";
-		const cnt = t.fg("muted", `${st.files.length} file${st.files.length !== 1 ? "s" : ""}`);
+		const fileCnt = t.fg("muted", `${st.files.length} file${st.files.length !== 1 ? "s" : ""}`);
 		const commitCnt = t.fg("muted", `${st.commits.length} commit${st.commits.length !== 1 ? "s" : ""}`);
 		const mode = st.viewMode === "diff" ? t.fg("accent", "diff") : t.fg("accent", "commit");
 		header.push(
-			`  ${t.fg("accent", t.bold("DIFF"))} ${t.fg("dim", "|")} ${branch}${baseInfo} ${t.fg("dim", "·")} ${cnt} ${t.fg("dim", "·")} ${commitCnt} ${t.fg("dim", "·")} mode:${mode}`,
+			`  ${t.fg("accent", t.bold("DIFF"))} ${t.fg("dim", "|")} ${branch}${baseInfo} ${t.fg("dim", "·")} ${fileCnt} ${t.fg("dim", "·")} ${commitCnt} ${t.fg("dim", "·")} mode:${mode}`,
 		);
 		header.push("");
 
-		// ── Footer (3 lines) ──
 		const footer: string[] = [];
 		footer.push(st.error ? t.fg("error", `  ${st.error}`) : "");
+
 		const hint =
-			st.focus === "files"
-				? "  ↑/↓ Select  ·  Enter → Right Pane  ·  Tab/v Toggle Diff↔Commit  ·  o Open  ·  f Finder  ·  S Stash  ·  q/Esc Close"
-				: st.viewMode === "diff"
-					? "  ↑/↓ Scroll  ·  PgUp/PgDn Fast  ·  Tab/v Toggle Commit  ·  o Open  ·  f Finder  ·  S Stash  ·  ←/Esc → Files  ·  q Close"
-					: "  ↑/↓ Select Commit  ·  PgUp/PgDn Fast  ·  Tab/v Toggle Diff  ·  o Open  ·  f Finder  ·  S Stash  ·  ←/Esc → Files  ·  q Close";
+			st.viewMode === "diff"
+				? st.focus === "left"
+					? "  ↑/↓ Select File  ·  Enter → Diff  ·  Tab/v Toggle Commit  ·  o Open  ·  f Finder  ·  S Stash  ·  q/Esc Close"
+					: "  ↑/↓ Scroll  ·  PgUp/PgDn Fast  ·  Tab/v Toggle Commit  ·  o Open  ·  f Finder  ·  S Stash  ·  ←/Esc → Files  ·  q Close"
+				: st.focus === "left"
+					? "  ↑/↓ Select Commit  ·  Enter → Changed Files  ·  Tab/v Toggle Diff  ·  S Stash  ·  q/Esc Close"
+					: "  ↑/↓ Select (overflow 시 line scroll)  ·  j/k Select File  ·  Enter Fold/Unfold Diff  ·  PgUp/PgDn Scroll  ·  Tab/v Toggle Diff  ·  o Open  ·  f Finder  ·  ←/Esc → Commits  ·  q Close";
 		footer.push(t.fg("dim", hint));
 		footer.push(...new DynamicBorder((s: string) => t.fg("accent", s)).render(w));
 
-		// ── Body split ──
 		const bodyH = Math.max(3, h - header.length - footer.length);
 		const leftW = Math.max(14, Math.min(Math.floor(w * 0.28), 44));
-		const rightW = Math.max(10, w - leftW - 3); // 3 = " │ "
+		const rightW = Math.max(10, w - leftW - 3);
 
-		const leftTitle = st.focus === "files" ? t.fg("accent", t.bold(" FILES")) : t.fg("dim", " FILES");
-		const rightPanelName = st.viewMode === "diff" ? " DIFF" : " COMMITS";
-		const rightTitle = st.focus === "diff" ? t.fg("accent", t.bold(rightPanelName)) : t.fg("dim", rightPanelName);
+		const leftTitleLabel = st.viewMode === "diff" ? " FILES" : " COMMITS";
+		const rightTitleLabel = st.viewMode === "diff" ? " DIFF" : " CHANGED FILES";
+		const leftTitle = st.focus === "left" ? t.fg("accent", t.bold(leftTitleLabel)) : t.fg("dim", leftTitleLabel);
+		const rightTitle = st.focus === "right" ? t.fg("accent", t.bold(rightTitleLabel)) : t.fg("dim", rightTitleLabel);
 
-		const f = st.files[st.selectedIndex];
-		const fileLabel = f
-			? `${t.fg(statusColor(f.status), icon(f.status))} ${t.fg(commitStateColor(f.commitState), `[${commitStateBadge(f.commitState)}]`)} ${t.fg("muted", f.path)}`
-			: "";
+		const selectedFile = st.files[st.selectedIndex];
+		const fileLabel = selectedFile
+			? `${t.fg(statusColor(selectedFile.status), icon(selectedFile.status))} ${t.fg(commitStateColor(selectedFile.commitState), `[${commitStateBadge(selectedFile.commitState)}]`)} ${t.fg("muted", selectedFile.path)}`
+			: t.fg("muted", "(no file)");
+
 		const selectedCommit = st.commits[st.commitSelectedIndex];
-		const commitLabel = selectedCommit
-			? `${t.fg("muted", selectedCommit.shortHash)} ${t.fg("text", selectedCommit.subject)}`
-			: t.fg("muted", "(no commits)");
-		const rightHeader = st.viewMode === "diff" ? `${rightTitle} ${fileLabel}` : `${rightTitle} ${commitLabel}`;
+		let commitLabel = t.fg("muted", "(no commit)");
+		if (selectedCommit) {
+			const commitFiles = st.commitFilesCache.get(selectedCommit.hash);
+			const filesInfo = commitFiles
+				? `${commitFiles.length} file${commitFiles.length !== 1 ? "s" : ""}`
+				: st.commitFilesLoading.has(selectedCommit.hash)
+					? "loading files…"
+					: "files: -";
+			commitLabel = `${t.fg("muted", selectedCommit.shortHash)} ${t.fg("text", selectedCommit.subject)} ${t.fg("dim", `· ${filesInfo}`)}`;
+		}
 
+		const rightHeader = st.viewMode === "diff" ? `${rightTitle} ${fileLabel}` : `${rightTitle} ${commitLabel}`;
 		const titleLine = `${truncateToWidth(leftTitle, leftW)}${" ".repeat(Math.max(0, leftW - visibleWidth(leftTitle)))} ${t.fg("dim", "│")} ${truncateToWidth(rightHeader, rightW)}`;
 
-		const sepLeft = t.fg("dim", "─".repeat(leftW));
-		const sepRight = t.fg("dim", "─".repeat(rightW));
-		const separatorLine = `${sepLeft} ${t.fg("dim", "┼")} ${sepRight}`;
+		const separatorLine = `${t.fg("dim", "─".repeat(leftW))} ${t.fg("dim", "┼")} ${t.fg("dim", "─".repeat(rightW))}`;
+		const contentH = Math.max(1, bodyH - 2);
 
-		const contentH = Math.max(1, bodyH - 2); // minus title + separator
-		const left = renderFiles(t, st, leftW, contentH);
-		const right = st.viewMode === "diff" ? renderDiff(t, st, rightW, contentH) : renderCommitHistory(t, st, rightW, contentH);
+		const left = st.viewMode === "diff" ? renderFiles(t, st, leftW, contentH) : renderCommits(t, st, leftW, contentH);
+		const right = st.viewMode === "diff" ? renderDiff(t, st, rightW, contentH) : renderCommitFiles(t, st, rightW, contentH);
 
 		while (left.length < contentH) left.push("");
 		while (right.length < contentH) right.push("");
 
-		const body: string[] = [];
-		body.push(titleLine);
-		body.push(separatorLine);
+		const body: string[] = [titleLine, separatorLine];
 		for (let i = 0; i < contentH; i++) {
 			const l = truncateToWidth(left[i] ?? "", leftW);
 			const pad = Math.max(0, leftW - visibleWidth(l));
@@ -640,14 +987,24 @@ export default function diffOverlayExtension(pi: ExtensionAPI) {
 			fileScrollOffset: 0,
 			diffCache: new Map(),
 			diffScrollOffset: 0,
+
 			commits,
 			commitSelectedIndex: 0,
 			commitScrollOffset: 0,
+			commitFilesCache: new Map(),
+			commitFilesLoading: new Set(),
+			commitFileDiffCache: new Map(),
+			commitFileDiffLoading: new Set(),
+			commitExpandedByHash: new Map(),
+			commitFileSelectedIndex: 0,
+			commitFileScrollOffset: 0,
+			commitFileManualScroll: false,
+
 			viewMode: "diff",
+			focus: "left",
 			branch,
 			mergeBase,
 			baseBranch: mergeBaseInfo?.baseBranch ?? null,
-			focus: "files",
 			error: null,
 		};
 
@@ -660,18 +1017,17 @@ export default function diffOverlayExtension(pi: ExtensionAPI) {
 			return;
 		}
 
-		// Pre-load first diff
 		if (files.length > 0) {
 			st.diffCache.set(files[0].path, await fileDiff(pi, root, files[0], mergeBase));
 		}
 
 		await ctx.ui.custom<void>(
 			(tui, theme, _kb, done) => {
-				const o = new DiffOverlay(pi, root, st, () => done(undefined));
+				const overlay = new DiffOverlay(pi, root, st, () => done(undefined));
 				const tuiWithHeight = tui as Tui & { height?: number };
 				return {
-					render: (w) => o.render(w, tuiWithHeight.height ?? 40, theme as any),
-					handleInput: (data) => o.handleInput(data, tuiWithHeight),
+					render: (w) => overlay.render(w, tuiWithHeight.height ?? 40, theme as any),
+					handleInput: (data) => overlay.handleInput(data, tuiWithHeight),
 					invalidate: () => {},
 				};
 			},
@@ -680,7 +1036,7 @@ export default function diffOverlayExtension(pi: ExtensionAPI) {
 	};
 
 	pi.registerCommand("diff", {
-		description: "Git diff viewer — split-pane file list + diff, with commit-history toggle",
+		description: "Git diff viewer — diff mode + commit mode (per-commit foldable file diffs)",
 		handler,
 	});
 }
