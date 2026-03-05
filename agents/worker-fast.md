@@ -1,8 +1,8 @@
 ---
 name: worker-fast
 description: Fast implementation agent — use for simple bug fixes, single-file edits, quick additions (< 10 lines)
-model: openai-codex/gpt-5.3-codex-spark
-thinking: xhigh
+model: openai-codex/gpt-5.4
+thinking: low
 tools: read, grep, find, ls, bash, edit, write
 ---
 
