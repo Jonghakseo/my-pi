@@ -110,6 +110,7 @@ export default function (pi: ExtensionAPI) {
 	let recentStatusPollCalls: number[] = [];
 	let lastStatusPollNotifyAt = 0;
 	let firstAsyncLaunchAbortTriggeredInSession = false;
+	let suppressNextSystemAbortMessage = false;
 	let persistedFirstAbortSessionKeys = loadPersistedFirstAbortSessions();
 
 	const hasPersistedFirstAbortForSession = (ctx: ExtensionContext): boolean => {
@@ -240,6 +241,7 @@ export default function (pi: ExtensionAPI) {
 
 	const restoreModeFromEntries = (ctx: Parameters<Parameters<typeof pi.on>[1]>[1]) => {
 		resetStatusPollTracker();
+		suppressNextSystemAbortMessage = false;
 		persistedFirstAbortSessionKeys = loadPersistedFirstAbortSessions();
 		const entries = ctx.sessionManager.getEntries();
 		let restoredMode: SystemMode = "default";
@@ -267,6 +269,7 @@ export default function (pi: ExtensionAPI) {
 	});
 
 	pi.on("session_shutdown", async (_event, ctx) => {
+		suppressNextSystemAbortMessage = false;
 		if (!ctx.hasUI) return;
 		ctx.ui.setStatus(SYSTEM_MODE_STATUS_KEY, undefined);
 	});
@@ -319,12 +322,32 @@ export default function (pi: ExtensionAPI) {
 		if (firstAsyncLaunchAbortTriggeredInSession) return;
 
 		firstAsyncLaunchAbortTriggeredInSession = true;
+		suppressNextSystemAbortMessage = true;
 		persistFirstAbortForSession(ctx);
 		pi.appendEntry(FIRST_ASYNC_ABORT_MARKER_ENTRY_TYPE, { triggeredAt: Date.now(), mode });
 		if (ctx.hasUI) {
 			ctx.ui.notify("환각 방지: 첫 subagent 호출 이후 메인 응답을 강제 abort합니다.", "info");
 		}
 		ctx.abort();
+	});
+
+	pi.on("message_end", async (event, _ctx) => {
+		if (!suppressNextSystemAbortMessage) return;
+		if (event.message.role !== "assistant") return;
+		if (event.message.stopReason !== "aborted") return;
+
+		const hasSubagentToolCall = event.message.content.some(
+			(content) => content.type === "toolCall" && content.name === "subagent",
+		);
+		if (hasSubagentToolCall) {
+			event.message.stopReason = "toolUse";
+			event.message.errorMessage = undefined;
+		}
+		suppressNextSystemAbortMessage = false;
+	});
+
+	pi.on("agent_end", async () => {
+		suppressNextSystemAbortMessage = false;
 	});
 
 	pi.on("before_agent_start", async (event, _ctx) => {
