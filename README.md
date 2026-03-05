@@ -215,6 +215,16 @@ git clone https://github.com/Jonghakseo/my-pi.git ~/.pi/agent
 cd ~/.pi/agent/extensions && pnpm install
 ```
 
+### 웹 리서치 확장 (pi-web-access)
+
+이 셋업은 `web_search`, `fetch_content`, `get_search_content` 도구 사용을 위해 **pi-web-access**를 함께 설치해 사용한다.
+
+- 레포지토리: https://github.com/nicobailon/pi-web-access
+
+```bash
+pi install npm:pi-web-access
+```
+
 ### 설치 후
 
 ```bash
