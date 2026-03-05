@@ -26,6 +26,7 @@ import {
 	normalizeModelRef,
 	type TodoFrontMatterLike,
 	truncateLines,
+	truncateToWidthWithEllipsis,
 } from "./format-utils.js";
 
 // ─── formatUsd ───────────────────────────────────────────────────────────────
@@ -344,6 +345,24 @@ describe("truncateLines", () => {
 
 	it("handles empty string", () => {
 		expect(truncateLines("", 2)).toBe("");
+	});
+});
+
+describe("truncateToWidthWithEllipsis", () => {
+	it("returns input as-is when it fits", () => {
+		expect(truncateToWidthWithEllipsis("hello", 5)).toBe("hello");
+	});
+
+	it("appends ellipsis when truncated", () => {
+		expect(truncateToWidthWithEllipsis("hello world", 8)).toBe("hello...");
+	});
+
+	it("returns width-only truncation when maxWidth <= 3", () => {
+		expect(truncateToWidthWithEllipsis("abcdef", 3)).toBe("abc");
+	});
+
+	it("handles CJK width correctly", () => {
+		expect(truncateToWidthWithEllipsis("안녕하세요반갑습니다", 8)).toBe("안녕...");
 	});
 });
 

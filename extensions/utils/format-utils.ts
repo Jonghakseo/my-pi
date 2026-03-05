@@ -5,6 +5,7 @@
  * side effects and depend only on their arguments and Node built-ins.
  */
 
+import { visibleWidth } from "@mariozechner/pi-tui";
 import type { AgentConfigLike } from "./agent-utils.ts";
 import type { TodoPriority } from "./todo-utils.ts";
 
@@ -49,6 +50,7 @@ export interface TodoFrontMatterLike extends TodoMetadataLike {
 // ─── Constants ───────────────────────────────────────────────────────────────
 
 const TODO_ID_PREFIX = "TODO-";
+const graphemeSegmenter = new Intl.Segmenter(undefined, { granularity: "grapheme" });
 
 const TODO_PRIORITY_LABEL: Record<TodoPriority, string> = {
 	high: "상",
@@ -200,6 +202,37 @@ export function truncateLines(text: string, maxLines = 2): string {
 	const lines = text.split("\n");
 	if (lines.length <= maxLines) return text;
 	return lines.slice(0, maxLines).join("\n") + "\n...";
+}
+
+function sliceToDisplayWidth(value: string, maxWidth: number): string {
+	if (maxWidth <= 0 || value.length === 0) return "";
+
+	let result = "";
+	let width = 0;
+
+	for (const { segment } of graphemeSegmenter.segment(value)) {
+		const segmentWidth = visibleWidth(segment);
+		if (segmentWidth <= 0) {
+			result += segment;
+			continue;
+		}
+		if (width + segmentWidth > maxWidth) break;
+		result += segment;
+		width += segmentWidth;
+	}
+
+	return result;
+}
+
+/**
+ * Truncate a single line to display width and append "..." when truncation occurs.
+ * Uses terminal display width (CJK-aware) rather than string length.
+ */
+export function truncateToWidthWithEllipsis(value: string, maxWidth: number): string {
+	if (maxWidth <= 0) return "";
+	if (visibleWidth(value) <= maxWidth) return value;
+	if (maxWidth <= 3) return sliceToDisplayWidth(value, maxWidth);
+	return `${sliceToDisplayWidth(value, maxWidth - 3)}...`;
 }
 
 /**

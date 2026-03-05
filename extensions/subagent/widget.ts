@@ -13,6 +13,7 @@ import {
 	getRemainingContextPercent,
 	getUsedContextPercent,
 	resolveContextWindow,
+	truncateToWidthWithEllipsis,
 } from "./format.js";
 
 const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"] as const;
@@ -20,13 +21,6 @@ const SPINNER_INTERVAL_MS = 120;
 const SPINNER_REFRESH_MS = 150;
 
 import { type SubagentStore, truncateText } from "./store.js";
-
-function truncateToWidthWithEllipsis(value: string, maxWidth: number): string {
-	if (maxWidth <= 0) return "";
-	if (visibleWidth(value) <= maxWidth) return value;
-	if (maxWidth <= 3) return truncateToWidth(value, maxWidth);
-	return `${truncateToWidth(value, maxWidth - 3)}...`;
-}
 
 /** Fast timer that drives spinner animation while any run is active. */
 let spinnerTimer: ReturnType<typeof setInterval> | undefined;
