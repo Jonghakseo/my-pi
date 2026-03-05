@@ -23,11 +23,47 @@ describe("diagnoseResultFailure", () => {
 		expect(diagnosis.reason).toContain("no messages");
 	});
 
+	it("includes stderr diagnostics in no-message failure reason", () => {
+		const result = makeResult({
+			messages: [],
+			stderr: "[runner] no assistant/tool messages captured; settleReason=close; exitCode=0",
+		});
+		const diagnosis = diagnoseResultFailure(result);
+		expect(diagnosis.failed).toBe(true);
+		expect(diagnosis.reason).toContain("stderr:");
+		expect(diagnosis.reason).toContain("settleReason=close");
+	});
+
 	it("fails with explicit exit code reason", () => {
 		const result = makeResult({ exitCode: 2 });
 		const diagnosis = diagnoseResultFailure(result);
 		expect(diagnosis.failed).toBe(true);
 		expect(diagnosis.reason).toContain("code 2");
+	});
+
+	it("fails when stopReason is error", () => {
+		const result = makeResult({ stopReason: "error", errorMessage: "rate limited" });
+		const diagnosis = diagnoseResultFailure(result);
+		expect(diagnosis.failed).toBe(true);
+		expect(diagnosis.reason).toContain("rate limited");
+	});
+
+	it("fails when stopReason is aborted", () => {
+		const result = makeResult({ stopReason: "aborted" });
+		const diagnosis = diagnoseResultFailure(result);
+		expect(diagnosis.failed).toBe(true);
+		expect(diagnosis.reason).toContain("aborted");
+	});
+
+	it("fails when messages exist but assistant text is empty", () => {
+		const result = makeResult({
+			messages: [{ role: "assistant", content: [{ type: "toolCall", name: "read", arguments: {} }] } as any],
+			stderr: "diag",
+		});
+		const diagnosis = diagnoseResultFailure(result);
+		expect(diagnosis.failed).toBe(true);
+		expect(diagnosis.reason).toContain("without assistant text output");
+		expect(diagnosis.reason).toContain("diag");
 	});
 
 	it("passes when assistant text exists", () => {
