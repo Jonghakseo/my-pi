@@ -15,6 +15,7 @@ import {
 	getRemainingContextPercent,
 	getUsedContextPercent,
 	resolveContextWindow,
+	truncateToWidthWithEllipsis,
 } from "./format.js";
 import type { SubagentStore } from "./store.js";
 import type { CommandRunState } from "./types.js";
@@ -114,7 +115,7 @@ export function updatePixelWidget(store: SubagentStore, ctx?: any): void {
 						: "";
 
 					const taskSnippet = run.task
-						? theme.fg("dim", ` · ${run.task.replace(/\s+/g, " ").trim().slice(0, 60)}`)
+						? theme.fg("dim", ` · ${truncateToWidthWithEllipsis(run.task.replace(/\s+/g, " ").trim(), 60)}`)
 						: "";
 					const statusLeft =
 						`${icon} #${run.id}` + modeLabel + agentStr + theme.fg("dim", `  (${elapsed})`) + taskSnippet;
@@ -125,12 +126,12 @@ export function updatePixelWidget(store: SubagentStore, ctx?: any): void {
 							outputLines.push(truncateToWidth(contextShort, innerWidth));
 						} else {
 							const maxLeftWidth = Math.max(1, innerWidth - contextWidth - 1);
-							const fittedLeft = truncateToWidth(statusLeft, maxLeftWidth);
+							const fittedLeft = truncateToWidthWithEllipsis(statusLeft, maxLeftWidth);
 							const gapWidth = Math.max(1, innerWidth - visibleWidth(fittedLeft) - contextWidth);
 							outputLines.push(`${fittedLeft}${" ".repeat(gapWidth)}${contextShort}`);
 						}
 					} else {
-						outputLines.push(truncateToWidth(statusLeft, innerWidth));
+						outputLines.push(truncateToWidthWithEllipsis(statusLeft, innerWidth));
 					}
 
 					const rawText = run.thoughtText || (run.status !== "done" ? run.lastLine : "") || "";
