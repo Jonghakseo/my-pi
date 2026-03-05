@@ -100,7 +100,13 @@ const EditParams = Type.Object(
 		edits: Type.Array(
 			Type.Object(
 				{
-					op: Type.Union([Type.Literal("replace"), Type.Literal("append"), Type.Literal("prepend")]),
+					op: Type.Union([
+						Type.Literal("replace"),
+						Type.Literal("append"),
+						Type.Literal("prepend"),
+						Type.Literal("insert"),
+						Type.Literal("delete"),
+					]),
 					pos: Type.Optional(Type.Union([Type.String(), Type.Null()])),
 					end: Type.Optional(Type.Union([Type.String(), Type.Null()])),
 					lines: Type.Optional(Type.Union([Type.Array(Type.String()), Type.String(), Type.Null()])),
@@ -230,29 +236,37 @@ const ops: StructuredEditOp[] = [];
 for (const raw of rawOps) {
 if (!raw || typeof raw !== "object") return { ops: null, error: "Each edit must be an object." };
 const entry = raw as Record<string, unknown>;
-const op = entry.op;
-if (op !== "replace" && op !== "append" && op !== "prepend") {
-return { ops: null, error: "edit.op must be one of replace, append, prepend." };
-}
+		const rawOp = entry.op;
+		let op: StructuredEditOp["op"] | null = null;
+		if (rawOp === "replace" || rawOp === "append" || rawOp === "prepend") op = rawOp;
+		else if (rawOp === "insert") op = "append";
+		else if (rawOp === "delete") op = "replace";
+		if (!op) {
+			return { ops: null, error: "edit.op must be one of replace, append, prepend, insert, delete." };
+		}
 
-const posTag = parseLineTag(entry.pos);
-const endTag = parseLineTag(entry.end);
-const lines = normalizeEditLines(entry.lines);
-if (lines === undefined) return { ops: null, error: "edit.lines must be string[], string, or null." };
+		const posTag = parseLineTag(entry.pos);
+		const endTag = parseLineTag(entry.end);
+		const lines = normalizeEditLines(entry.lines);
+		if (lines === undefined) return { ops: null, error: "edit.lines must be string[], string, or null." };
 
-if (op === "replace" && posTag == null) {
-return { ops: null, error: "replace operations require pos (LINE#ID)." };
-}
+		if ((rawOp === "replace" || rawOp === "delete") && posTag == null) {
+			return { ops: null, error: "replace/delete operations require pos (LINE#ID)." };
+		}
 
-if (entry.end != null && endTag == null) {
-return { ops: null, error: "end must be a valid LINE#ID tag." };
-}
+		if (rawOp === "delete" && lines != null && lines.length > 0) {
+			return { ops: null, error: "delete operations cannot include lines." };
+		}
 
-if (entry.pos != null && posTag == null) {
-return { ops: null, error: "pos must be a valid LINE#ID tag." };
-}
+		if (entry.end != null && endTag == null) {
+			return { ops: null, error: "end must be a valid LINE#ID tag." };
+		}
 
-ops.push({ op, posTag, endTag, lines });
+		if (entry.pos != null && posTag == null) {
+			return { ops: null, error: "pos must be a valid LINE#ID tag." };
+		}
+
+		ops.push({ op, posTag, endTag, lines: rawOp === "delete" ? [] : lines });
 }
 
 return { ops };
