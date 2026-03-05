@@ -26,7 +26,12 @@ import {
 import { enqueueSubagentInvocation } from "./invocation-queue.js";
 import { formatCommandRunSummary, removeRun, trimCommandRunHistory } from "./run-utils.js";
 import { getFinalOutput, getLastNonEmptyLine, runSingleAgent } from "./runner.js";
-import { buildMainContextText, makeSubagentSessionFile, wrapTaskWithMainContext } from "./session.js";
+import {
+	buildMainContextText,
+	makeSubagentSessionFile,
+	stripTaskEchoFromMainContext,
+	wrapTaskWithMainContext,
+} from "./session.js";
 import { type SubagentStore, updateRunFromResult } from "./store.js";
 import type { ChainItemFields, CommandRunState, OnUpdateCallback, SingleResult, SubagentDetails } from "./types.js";
 import { updateCommandRunsWidget } from "./widget.js";
@@ -777,7 +782,11 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 							ctx.cwd,
 							agents,
 							resolvedAgent,
-							wrapTaskWithMainContext(params.task!, mainContextText, { mainSessionFile, totalMessageCount }),
+							wrapTaskWithMainContext(
+							params.task!,
+							stripTaskEchoFromMainContext(mainContextText, params.task!),
+							{ mainSessionFile, totalMessageCount },
+						),
 							undefined,
 							abortController.signal,
 							(partial) => {
@@ -1028,7 +1037,11 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 						ctx.cwd,
 						agents,
 						step.agent,
-						wrapTaskWithMainContext(taskWithContext, mainContextText, { mainSessionFile, totalMessageCount }),
+						wrapTaskWithMainContext(
+						taskWithContext,
+						stripTaskEchoFromMainContext(mainContextText, taskWithContext),
+						{ mainSessionFile, totalMessageCount },
+					),
 						i + 1,
 						signal,
 						chainUpdate,
@@ -1073,7 +1086,11 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 					ctx.cwd,
 					agents,
 					params.agent,
-					wrapTaskWithMainContext(params.task, mainContextText, { mainSessionFile, totalMessageCount }),
+					wrapTaskWithMainContext(
+						params.task,
+						stripTaskEchoFromMainContext(mainContextText, params.task),
+						{ mainSessionFile, totalMessageCount },
+					),
 					undefined,
 					signal,
 					onUpdate,

@@ -214,6 +214,50 @@ export function wrapTaskWithMainContext(
 	return sections.join("\n\n");
 }
 
+function normalizeForEchoMatch(text: string): string {
+	return text.replace(/[\r\n\t]+/g, " ").replace(/\s+/g, " ").trim();
+}
+
+function stripKnownPrefix(line: string): string {
+	const prefixes = ["User:", "Main agent:", "Main agent ToolCall"];
+	for (const prefix of prefixes) {
+		if (line.startsWith(prefix)) {
+			const idx = line.indexOf(":");
+			if (idx >= 0) return line.slice(idx + 1).trim();
+		}
+	}
+	return line.trim();
+}
+
+/**
+ * Remove immediate task echo from main-context history text.
+ *
+ * Rule-only v1:
+ * - Remove lines whose normalized body exactly equals the normalized task.
+ * - Remove subagent toolCall lines that include the exact task text.
+ */
+export function stripTaskEchoFromMainContext(contextText: string, task: string): string {
+	if (!contextText || !task) return contextText;
+
+	const normalizedTask = normalizeForEchoMatch(task);
+	if (!normalizedTask) return contextText;
+
+	const lines = contextText.split("\n");
+	const filtered = lines.filter((line) => {
+		const trimmed = line.trim();
+		if (!trimmed) return true;
+
+		const body = normalizeForEchoMatch(stripKnownPrefix(trimmed));
+		if (body === normalizedTask) return false;
+
+		if (trimmed.startsWith("Main agent ToolCall (subagent)") && trimmed.includes(task)) return false;
+
+		return true;
+	});
+
+	return filtered.join("\n");
+}
+
 export function writePromptToTempFile(agentName: string, prompt: string): { dir: string; filePath: string } {
 	const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "pi-subagent-"));
 	const safeName = agentName.replace(/[^\w.-]+/g, "_");
