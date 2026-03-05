@@ -4,6 +4,7 @@ const coverageCanaryInclude = [
 	// Utility modules with stable deterministic tests.
 	"agent-utils.ts",
 	"data-utils.ts",
+	"diff-overlay-utils.ts",
 	"format-utils.ts",
 	"git-utils.ts",
 	"memory-parse-utils.ts",

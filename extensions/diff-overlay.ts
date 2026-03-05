@@ -1,24 +1,39 @@
 /**
  * /diff — Git diff overlay
  *
- * Split-pane view: file list (left) + diff viewer (right).
+ * Split-pane view: file list (left) + diff/commit viewer (right).
  * Two focus modes — arrow keys work naturally in whichever panel is active.
  *
- *   FILE LIST mode  │  ↑/↓ select file · Enter → open diff · o open file · f reveal · S stash · q close
- *   DIFF VIEW mode  │  ↑/↓ scroll diff · PgUp/PgDn fast scroll · o open file · f reveal · S stash · Esc → files
+ *   FILE LIST mode         │ ↑/↓ select file · Enter → open right pane · o open file · f reveal · S stash · q close
+ *   DIFF VIEW mode         │ ↑/↓ scroll diff · PgUp/PgDn fast scroll · o open file · f reveal · Esc → files
+ *   COMMIT HISTORY mode    │ ↑/↓ select commit · PgUp/PgDn fast scroll · Esc → files
+ *   GLOBAL                 │ Tab / v toggle Diff ↔ Commit view
  */
 
 import path from "node:path";
 import type { ExtensionAPI, ExtensionCommandContext } from "@mariozechner/pi-coding-agent";
 import { DynamicBorder } from "@mariozechner/pi-coding-agent";
 import { Key, matchesKey, truncateToWidth, visibleWidth } from "@mariozechner/pi-tui";
+import {
+	commitStateBadge,
+	mergeDiffEntries,
+	parseGitLogOutput,
+	parseNameStatusZ,
+	parsePorcelainStatusZ,
+	toggleOverlayViewMode,
+	type BranchCommitEntry,
+	type CommitState,
+	type DiffFileStatus,
+	type OverlayViewMode,
+} from "./utils/diff-overlay-utils.ts";
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
 interface DiffFile {
 	path: string;
-	status: "added" | "deleted" | "modified" | "renamed" | "copied" | "untracked";
+	status: DiffFileStatus;
 	rawStatus: string;
+	commitState: CommitState;
 }
 
 type FocusPane = "files" | "diff";
@@ -29,6 +44,10 @@ interface DiffState {
 	fileScrollOffset: number;
 	diffCache: Map<string, string>;
 	diffScrollOffset: number;
+	commits: BranchCommitEntry[];
+	commitSelectedIndex: number;
+	commitScrollOffset: number;
+	viewMode: OverlayViewMode;
 	branch: string;
 	mergeBase: string | null;
 	baseBranch: string | null;
@@ -87,68 +106,52 @@ async function findMergeBase(pi: ExtensionAPI, cwd: string, branch: string): Pro
 	return null;
 }
 
-function mapDiffStatusCode(code: string): DiffFile["status"] {
-	const c = code.charAt(0);
-	if (c === "A") return "added";
-	if (c === "D") return "deleted";
-	if (c === "R") return "renamed";
-	if (c === "C") return "copied";
-	return "modified";
+async function committedFiles(pi: ExtensionAPI, cwd: string, mergeBase: string | null): Promise<DiffFile[]> {
+	if (!mergeBase) return [];
+	const diffR = await pi.exec("git", ["diff", "--name-status", "-z", `${mergeBase}..HEAD`], { cwd });
+	if (diffR.code !== 0 || !diffR.stdout) return [];
+	return parseNameStatusZ(diffR.stdout).map((entry) => ({ ...entry, commitState: "committed" }));
 }
 
-function parseStatus(code: string): DiffFile["status"] {
-	const second = code.charAt(1);
-	const effective = second !== " " && second !== "?" ? second : code.charAt(0);
-	if (code === "??") return "untracked";
-	if (effective === "A") return "added";
-	if (effective === "D") return "deleted";
-	if (effective === "R") return "renamed";
-	if (effective === "C") return "copied";
-	return "modified";
+async function workingTreeFiles(pi: ExtensionAPI, cwd: string): Promise<DiffFile[]> {
+	const r = await pi.exec("git", ["status", "--porcelain=1", "-uall", "-z"], { cwd });
+	if (r.code !== 0 || !r.stdout) return [];
+	return parsePorcelainStatusZ(r.stdout).map((entry) => ({ ...entry, commitState: "uncommitted" }));
 }
 
 async function changedFiles(pi: ExtensionAPI, cwd: string, mergeBase: string | null): Promise<DiffFile[]> {
-	const files: DiffFile[] = [];
-	const seen = new Set<string>();
+	const [committed, working] = await Promise.all([committedFiles(pi, cwd, mergeBase), workingTreeFiles(pi, cwd)]);
+	return mergeDiffEntries(committed, working);
+}
 
-	// When on a feature branch, include all changes since merge-base
-	if (mergeBase) {
-		const diffR = await pi.exec("git", ["diff", "--name-status", mergeBase], { cwd });
-		if (diffR.code === 0 && diffR.stdout) {
-			for (const line of diffR.stdout.trim().split("\n").filter(Boolean)) {
-				const parts = line.split("\t");
-				if (parts.length < 2) continue;
-				const code = parts[0];
-				const fp = parts[parts.length - 1]; // For renames, take new path
-				if (!fp || seen.has(fp)) continue;
-				seen.add(fp);
-				files.push({ path: fp, status: mapDiffStatusCode(code), rawStatus: code });
-			}
-		}
-	}
+const COMMIT_HISTORY_LIMIT = 200;
+const GIT_LOG_PRETTY = "%H%x1f%h%x1f%an%x1f%ar%x1f%s%x1e";
 
-	// Always include git status for uncommitted/untracked changes
-	const r = await pi.exec("git", ["status", "--porcelain=1", "-uall", "-z"], { cwd });
-	if (r.code === 0 && r.stdout) {
-		const statusParts = r.stdout.split("\0").filter(Boolean);
-		for (let i = 0; i < statusParts.length; i++) {
-			const entry = statusParts[i];
-			if (!entry || entry.length < 4) continue;
-			const raw = entry.slice(0, 2);
-			let fp = entry.slice(3);
-			if ((raw.startsWith("R") || raw.startsWith("C")) && statusParts[i + 1]) {
-				fp = statusParts[i + 1];
-				i += 1;
-			}
-			if (!fp || seen.has(fp)) continue;
-			seen.add(fp);
-			files.push({ path: fp, status: parseStatus(raw), rawStatus: raw.trim() || raw });
-		}
-	}
+async function branchCommits(pi: ExtensionAPI, cwd: string, mergeBase: string | null): Promise<BranchCommitEntry[]> {
+	const range = mergeBase ? `${mergeBase}..HEAD` : "HEAD";
+	const r = await pi.exec(
+		"git",
+		["log", "--no-color", `--max-count=${COMMIT_HISTORY_LIMIT}`, `--pretty=format:${GIT_LOG_PRETTY}`, range],
+		{ cwd },
+	);
 
-	const order: Record<string, number> = { modified: 0, added: 1, untracked: 2, renamed: 3, deleted: 4, copied: 5 };
-	files.sort((a, b) => (order[a.status] ?? 9) - (order[b.status] ?? 9) || a.path.localeCompare(b.path));
-	return files;
+	const commits = r.code === 0 && r.stdout ? parseGitLogOutput(r.stdout) : [];
+	if (commits.length > 0 || !mergeBase) return commits;
+
+	// Fallback: if branch has no commits since merge-base, still show recent branch history.
+	const fallback = await pi.exec(
+		"git",
+		[
+			"log",
+			"--no-color",
+			`--max-count=${Math.min(50, COMMIT_HISTORY_LIMIT)}`,
+			`--pretty=format:${GIT_LOG_PRETTY}`,
+			"HEAD",
+		],
+		{ cwd },
+	);
+	if (fallback.code !== 0 || !fallback.stdout) return [];
+	return parseGitLogOutput(fallback.stdout);
 }
 
 async function fileDiff(pi: ExtensionAPI, cwd: string, file: DiffFile, mergeBase: string | null): Promise<string> {
@@ -187,7 +190,7 @@ async function fileDiff(pi: ExtensionAPI, cwd: string, file: DiffFile, mergeBase
 
 // ─── Rendering helpers ─────────────────────────────────────────────────────
 
-function icon(s: DiffFile["status"]): string {
+function icon(s: DiffFileStatus): string {
 	if (s === "added" || s === "untracked") return "+";
 	if (s === "deleted") return "-";
 	if (s === "renamed") return "→";
@@ -195,9 +198,15 @@ function icon(s: DiffFile["status"]): string {
 	return "~";
 }
 
-function statusColor(s: DiffFile["status"]): string {
+function statusColor(s: DiffFileStatus): string {
 	if (s === "added" || s === "untracked") return "success";
 	if (s === "deleted") return "error";
+	return "warning";
+}
+
+function commitStateColor(state: CommitState): string {
+	if (state === "both") return "accent";
+	if (state === "committed") return "success";
 	return "warning";
 }
 
@@ -235,9 +244,9 @@ function renderFiles(t: Theme, st: DiffState, w: number, h: number): string[] {
 		const sel = i === st.selectedIndex;
 		const cursor = sel ? (active ? t.fg("accent", "▶") : t.fg("muted", "▸")) : " ";
 		const ic = t.fg(statusColor(f.status), icon(f.status));
-
-		const prefixCols = 5;
-		const nameW = Math.max(4, w - prefixCols);
+		const badge = t.fg(commitStateColor(f.commitState), `[${commitStateBadge(f.commitState)}]`);
+		const prefix = `${cursor} ${ic} ${badge} `;
+		const nameW = Math.max(4, w - visibleWidth(prefix));
 
 		let label: string;
 		if (sel && active) {
@@ -256,7 +265,7 @@ function renderFiles(t: Theme, st: DiffState, w: number, h: number): string[] {
 			}
 		}
 
-		lines.push(truncateToWidth(`${cursor} ${ic} ${label}`, w));
+		lines.push(truncateToWidth(`${prefix}${label}`, w));
 	}
 
 	if (st.files.length > max) {
@@ -303,6 +312,40 @@ function renderDiff(t: Theme, st: DiffState, w: number, h: number): string[] {
 		lines[max - 1] = truncateToWidth(` ${indicator}`, w);
 	}
 
+	return lines;
+}
+
+function renderCommitHistory(t: Theme, st: DiffState, w: number, h: number): string[] {
+	if (st.commits.length === 0) return [t.fg("muted", "  (no commits in history)")];
+
+	const active = st.focus === "diff";
+	const max = Math.max(1, h);
+	st.commitSelectedIndex = Math.max(0, Math.min(st.commitSelectedIndex, st.commits.length - 1));
+
+	if (st.commitSelectedIndex < st.commitScrollOffset) st.commitScrollOffset = st.commitSelectedIndex;
+	if (st.commitSelectedIndex >= st.commitScrollOffset + max) st.commitScrollOffset = st.commitSelectedIndex - max + 1;
+
+	const start = st.commitScrollOffset;
+	const end = Math.min(st.commits.length, start + max);
+	const lines: string[] = [];
+
+	for (let i = start; i < end; i++) {
+		const c = st.commits[i];
+		const sel = i === st.commitSelectedIndex;
+		const cursor = sel ? (active ? t.fg("accent", "▶") : t.fg("muted", "▸")) : " ";
+		const hash = t.fg(sel ? "accent" : "muted", c.shortHash);
+		const subject = sel && active ? t.fg("accent", c.subject) : t.fg("text", c.subject);
+		const meta = t.fg("dim", ` · ${c.author} · ${c.relativeDate}`);
+		lines.push(truncateToWidth(` ${cursor} ${hash} ${subject}${meta}`, w));
+	}
+
+	if (st.commits.length > max) {
+		const info = t.fg("dim", ` ${start + 1}–${end}/${st.commits.length}`);
+		while (lines.length < max) lines.push("");
+		lines[max - 1] = info;
+	}
+
+	while (lines.length < max) lines.push("");
 	return lines;
 }
 
@@ -372,14 +415,13 @@ class DiffOverlay {
 		this.st.error = null;
 		this.st.diffCache.clear();
 		await this.refreshFiles();
-		void this.ensureDiff(tui);
+		if (this.st.viewMode === "diff") void this.ensureDiff(tui);
 	}
 
 	handleInput(data: string, tui: Tui): void {
 		const st = this.st;
 		const n = st.files.length;
 		const f = st.files[st.selectedIndex];
-		const diffLen = f ? (st.diffCache.get(f.path) ?? "").split("\n").length : 0;
 
 		// ── Global keys ──
 		if (data === "q") {
@@ -388,6 +430,14 @@ class DiffOverlay {
 		}
 		if (data === "S") {
 			void this.stashChanges(tui).then(() => tui.requestRender());
+			return;
+		}
+		if (matchesKey(data, Key.tab) || data === "v") {
+			st.viewMode = toggleOverlayViewMode(st.viewMode);
+			if (st.viewMode === "diff") {
+				void this.ensureDiff(tui);
+			}
+			tui.requestRender();
 			return;
 		}
 
@@ -401,27 +451,29 @@ class DiffOverlay {
 				if (st.selectedIndex > 0) {
 					st.selectedIndex -= 1;
 					st.diffScrollOffset = 0;
-					void this.ensureDiff(tui);
+					if (st.viewMode === "diff") void this.ensureDiff(tui);
 				}
 			} else if (matchesKey(data, Key.down) || data === "j") {
 				if (st.selectedIndex < n - 1) {
 					st.selectedIndex += 1;
 					st.diffScrollOffset = 0;
-					void this.ensureDiff(tui);
+					if (st.viewMode === "diff") void this.ensureDiff(tui);
 				}
 			} else if (data === "g") {
 				st.selectedIndex = 0;
 				st.diffScrollOffset = 0;
-				void this.ensureDiff(tui);
+				if (st.viewMode === "diff") void this.ensureDiff(tui);
 			} else if (data === "G") {
 				st.selectedIndex = Math.max(0, n - 1);
 				st.diffScrollOffset = 0;
-				void this.ensureDiff(tui);
+				if (st.viewMode === "diff") void this.ensureDiff(tui);
 			} else if (matchesKey(data, Key.enter)) {
-				if (n > 0) {
+				if (n > 0 || st.viewMode === "commit") {
 					st.focus = "diff";
-					st.diffScrollOffset = 0;
-					void this.ensureDiff(tui);
+					if (st.viewMode === "diff") {
+						st.diffScrollOffset = 0;
+						void this.ensureDiff(tui);
+					}
 				}
 			} else if (data === "o" && f) {
 				void this.openSelectedFile(f).then(() => tui.requestRender());
@@ -433,13 +485,40 @@ class DiffOverlay {
 			return;
 		}
 
-		// ── DIFF VIEW focus ──
+		// ── RIGHT PANE focus ──
 		if (matchesKey(data, Key.escape)) {
 			st.focus = "files";
 			tui.requestRender();
 			return;
 		}
 
+		if (st.viewMode === "commit") {
+			const commitLen = st.commits.length;
+			if (matchesKey(data, Key.up) || data === "k") {
+				st.commitSelectedIndex = Math.max(0, st.commitSelectedIndex - 1);
+			} else if (matchesKey(data, Key.down) || data === "j") {
+				st.commitSelectedIndex = Math.min(Math.max(0, commitLen - 1), st.commitSelectedIndex + 1);
+			} else if (matchesKey(data, Key.pageUp) || matchesKey(data, Key.ctrl("u"))) {
+				st.commitSelectedIndex = Math.max(0, st.commitSelectedIndex - 10);
+			} else if (matchesKey(data, Key.pageDown) || matchesKey(data, Key.ctrl("d"))) {
+				st.commitSelectedIndex = Math.min(Math.max(0, commitLen - 1), st.commitSelectedIndex + 10);
+			} else if (data === "g") {
+				st.commitSelectedIndex = 0;
+			} else if (data === "G") {
+				st.commitSelectedIndex = Math.max(0, commitLen - 1);
+			} else if (matchesKey(data, Key.left)) {
+				st.focus = "files";
+			} else if (data === "o" && f) {
+				void this.openSelectedFile(f).then(() => tui.requestRender());
+			} else if (data === "f" && f) {
+				void this.revealSelectedFile(f).then(() => tui.requestRender());
+			}
+
+			tui.requestRender();
+			return;
+		}
+
+		const diffLen = f ? (st.diffCache.get(f.path) ?? "").split("\n").length : 0;
 		if (matchesKey(data, Key.up) || data === "k") {
 			st.diffScrollOffset = Math.max(0, st.diffScrollOffset - 1);
 		} else if (matchesKey(data, Key.down) || data === "j") {
@@ -474,8 +553,10 @@ class DiffOverlay {
 		const branch = st.branch ? t.fg("muted", st.branch) : t.fg("dim", "(detached)");
 		const baseInfo = st.baseBranch ? ` ${t.fg("dim", "vs")} ${t.fg("muted", st.baseBranch)}` : "";
 		const cnt = t.fg("muted", `${st.files.length} file${st.files.length !== 1 ? "s" : ""}`);
+		const commitCnt = t.fg("muted", `${st.commits.length} commit${st.commits.length !== 1 ? "s" : ""}`);
+		const mode = st.viewMode === "diff" ? t.fg("accent", "diff") : t.fg("accent", "commit");
 		header.push(
-			`  ${t.fg("accent", t.bold("DIFF"))} ${t.fg("dim", "|")} ${branch}${baseInfo} ${t.fg("dim", "·")} ${cnt}`,
+			`  ${t.fg("accent", t.bold("DIFF"))} ${t.fg("dim", "|")} ${branch}${baseInfo} ${t.fg("dim", "·")} ${cnt} ${t.fg("dim", "·")} ${commitCnt} ${t.fg("dim", "·")} mode:${mode}`,
 		);
 		header.push("");
 
@@ -484,8 +565,10 @@ class DiffOverlay {
 		footer.push(st.error ? t.fg("error", `  ${st.error}`) : "");
 		const hint =
 			st.focus === "files"
-				? "  ↑/↓ Select  ·  Enter → Diff  ·  o Open  ·  f Finder  ·  S Stash  ·  q/Esc Close"
-				: "  ↑/↓ Scroll  ·  PgUp/PgDn Fast  ·  o Open  ·  f Finder  ·  S Stash  ·  ←/Esc → Files  ·  q Close";
+				? "  ↑/↓ Select  ·  Enter → Right Pane  ·  Tab/v Toggle Diff↔Commit  ·  o Open  ·  f Finder  ·  S Stash  ·  q/Esc Close"
+				: st.viewMode === "diff"
+					? "  ↑/↓ Scroll  ·  PgUp/PgDn Fast  ·  Tab/v Toggle Commit  ·  o Open  ·  f Finder  ·  S Stash  ·  ←/Esc → Files  ·  q Close"
+					: "  ↑/↓ Select Commit  ·  PgUp/PgDn Fast  ·  Tab/v Toggle Diff  ·  o Open  ·  f Finder  ·  S Stash  ·  ←/Esc → Files  ·  q Close";
 		footer.push(t.fg("dim", hint));
 		footer.push(...new DynamicBorder((s: string) => t.fg("accent", s)).render(w));
 
@@ -495,12 +578,18 @@ class DiffOverlay {
 		const rightW = Math.max(10, w - leftW - 3); // 3 = " │ "
 
 		const leftTitle = st.focus === "files" ? t.fg("accent", t.bold(" FILES")) : t.fg("dim", " FILES");
-		const rightTitle = st.focus === "diff" ? t.fg("accent", t.bold(" DIFF")) : t.fg("dim", " DIFF");
+		const rightPanelName = st.viewMode === "diff" ? " DIFF" : " COMMITS";
+		const rightTitle = st.focus === "diff" ? t.fg("accent", t.bold(rightPanelName)) : t.fg("dim", rightPanelName);
 
-		// File header
 		const f = st.files[st.selectedIndex];
-		const fileLabel = f ? t.fg(statusColor(f.status), `${icon(f.status)} ${f.path}`) : "";
-		const rightHeader = `${rightTitle} ${fileLabel}`;
+		const fileLabel = f
+			? `${t.fg(statusColor(f.status), icon(f.status))} ${t.fg(commitStateColor(f.commitState), `[${commitStateBadge(f.commitState)}]`)} ${t.fg("muted", f.path)}`
+			: "";
+		const selectedCommit = st.commits[st.commitSelectedIndex];
+		const commitLabel = selectedCommit
+			? `${t.fg("muted", selectedCommit.shortHash)} ${t.fg("text", selectedCommit.subject)}`
+			: t.fg("muted", "(no commits)");
+		const rightHeader = st.viewMode === "diff" ? `${rightTitle} ${fileLabel}` : `${rightTitle} ${commitLabel}`;
 
 		const titleLine = `${truncateToWidth(leftTitle, leftW)}${" ".repeat(Math.max(0, leftW - visibleWidth(leftTitle)))} ${t.fg("dim", "│")} ${truncateToWidth(rightHeader, rightW)}`;
 
@@ -510,7 +599,7 @@ class DiffOverlay {
 
 		const contentH = Math.max(1, bodyH - 2); // minus title + separator
 		const left = renderFiles(t, st, leftW, contentH);
-		const right = renderDiff(t, st, rightW, contentH);
+		const right = st.viewMode === "diff" ? renderDiff(t, st, rightW, contentH) : renderCommitHistory(t, st, rightW, contentH);
 
 		while (left.length < contentH) left.push("");
 		while (right.length < contentH) right.push("");
@@ -543,7 +632,7 @@ export default function diffOverlayExtension(pi: ExtensionAPI) {
 		const branch = await currentBranch(pi, root);
 		const mergeBaseInfo = await findMergeBase(pi, root, branch);
 		const mergeBase = mergeBaseInfo?.commit ?? null;
-		const files = await changedFiles(pi, root, mergeBase);
+		const [files, commits] = await Promise.all([changedFiles(pi, root, mergeBase), branchCommits(pi, root, mergeBase)]);
 
 		const st: DiffState = {
 			files,
@@ -551,6 +640,10 @@ export default function diffOverlayExtension(pi: ExtensionAPI) {
 			fileScrollOffset: 0,
 			diffCache: new Map(),
 			diffScrollOffset: 0,
+			commits,
+			commitSelectedIndex: 0,
+			commitScrollOffset: 0,
+			viewMode: "diff",
 			branch,
 			mergeBase,
 			baseBranch: mergeBaseInfo?.baseBranch ?? null,
@@ -587,7 +680,7 @@ export default function diffOverlayExtension(pi: ExtensionAPI) {
 	};
 
 	pi.registerCommand("diff", {
-		description: "Git diff viewer — split-pane file list + diff with focus switching",
+		description: "Git diff viewer — split-pane file list + diff, with commit-history toggle",
 		handler,
 	});
 }
