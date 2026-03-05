@@ -2,8 +2,8 @@
 name: finder
 description: Fast file/code locator — use for exploring codebases, finding files, locating specific code patterns
 tools: read, grep, find, ls
-model: openai-codex/gpt-5.3-codex-spark
-thinking: xhigh
+model: openai-codex/gpt-5.3-codex
+thinking: high
 ---
 
 <system_prompt agent="finder">
