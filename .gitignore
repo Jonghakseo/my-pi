@@ -44,3 +44,6 @@ extensions/.context/
 extensions/.gw/
 extensions/pi-session-*.html
 extensions/pnpm-lock.yaml
+
+# claude-mcp-bridge local runtime settings
+claude-mcp-bridge-tools.json
