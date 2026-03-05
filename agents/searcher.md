@@ -31,9 +31,11 @@ claude -p \
   --allowed-tools WebSearch,WebFetch \
   -- "<research prompt>"
     ]]></command>
-    <rule>Use WebSearch for discovery, WebFetch for deep reading.</rule>
+    <rule>Prefer `web_search` for discovery and broad multi-query research.</rule>
+    <rule>Prefer `fetch_content` for deep reading, and `get_search_content` to retrieve full captured content.</rule>
+    <rule>For library/framework docs, recommend Context7 flow: `mcp_context7_resolve_library_id` → `mcp_context7_query_docs`.</rule>
+    <rule>If those tools are unavailable in the execution environment, fall back to built-in WebSearch/WebFetch.</rule>
     <rule>Use multiple focused queries when needed.</rule>
-    <rule>Prefer built-in WebSearch/WebFetch over MCP search when possible.</rule>
   </web_research_method>
 
   <codebase_exploration>
