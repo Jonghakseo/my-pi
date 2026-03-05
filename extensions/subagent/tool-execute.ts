@@ -52,6 +52,11 @@ type SessionDetailSummary = {
 	error?: string;
 };
 
+type ResultFailureDiagnosis = {
+	failed: boolean;
+	reason?: string;
+};
+
 function stringifyToolCallArguments(args: unknown): string {
 	if (args === undefined || args === null) return "";
 	if (typeof args === "string") return args;
@@ -79,7 +84,13 @@ function parseSessionDetailSummary(sessionFile?: string): SessionDetailSummary {
 		return { finalOutput: "", turns: [], error: "Session file is not available for this run." };
 	}
 	if (!fs.existsSync(sessionFile)) {
-		return { finalOutput: "", turns: [], error: `Session file not found: ${sessionFile}` };
+		return {
+			finalOutput: "",
+			turns: [],
+			error:
+				`Session file not found: ${sessionFile}. ` +
+				"The subagent likely exited before producing any persisted message (turn=0 / no output).",
+		};
 	}
 
 	let raw = "";
@@ -135,6 +146,33 @@ function parseSessionDetailSummary(sessionFile?: string): SessionDetailSummary {
 	}
 
 	return { finalOutput, turns };
+}
+
+export function diagnoseResultFailure(result: SingleResult): ResultFailureDiagnosis {
+	if (result.exitCode !== 0) return { failed: true, reason: `Subagent process exited with code ${result.exitCode}.` };
+	if (result.stopReason === "error") return { failed: true, reason: result.errorMessage || "Subagent reported stopReason=error." };
+	if (result.stopReason === "aborted") return { failed: true, reason: "Subagent execution was aborted." };
+
+	const finalOutput = getFinalOutput(result.messages).trim();
+	const hasAssistantText = finalOutput.length > 0;
+	if (hasAssistantText) return { failed: false };
+
+	const stderr = (result.stderr || "").trim();
+	if (result.messages.length === 0) {
+		return {
+			failed: true,
+			reason:
+				"Subagent returned no messages (turn=0). " +
+				(stderr ? `stderr: ${stderr}` : "No stderr captured. Child process may have exited before producing output."),
+		};
+	}
+
+	return {
+		failed: true,
+		reason:
+			"Subagent finished without assistant text output. " +
+			(stderr ? `stderr: ${stderr}` : "No stderr captured."),
+	};
 }
 
 function formatRunDetailOutput(run: CommandRunState): string {
@@ -841,13 +879,14 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 						return;
 					}
 
-					const isError = result.exitCode !== 0 || result.stopReason === "error" || result.stopReason === "aborted";
+					const failure = diagnoseResultFailure(result);
+					const isError = failure.failed;
 					runState.status = isError ? "error" : "done";
 					runState.elapsedMs = Date.now() - runState.startedAt;
 					updateCommandRunsWidget(store);
 
 					const rawOutput = isError
-						? result.errorMessage || result.stderr || getFinalOutput(result.messages) || "(no output)"
+						? failure.reason || result.errorMessage || result.stderr || getFinalOutput(result.messages) || "(no output)"
 						: getFinalOutput(result.messages) || "(no output)";
 					const usage = formatUsageStats(result.usage, result.model);
 
@@ -1063,9 +1102,9 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 					};
 				}
 
-				const isError = result.exitCode !== 0 || result.stopReason === "error" || result.stopReason === "aborted";
-				if (isError) {
-					const errorMsg = result.errorMessage || result.stderr || getFinalOutput(result.messages) || "(no output)";
+				const failure = diagnoseResultFailure(result);
+				if (failure.failed) {
+					const errorMsg = failure.reason || "Subagent failed.";
 					return {
 						content: [{ type: "text", text: `Chain stopped at step ${i + 1} (${step.agent}): ${errorMsg}` }],
 						details: makeDetails("chain")(results),
@@ -1111,11 +1150,11 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 				};
 			}
 
-			const isError = result.exitCode !== 0 || result.stopReason === "error" || result.stopReason === "aborted";
-			if (isError) {
-				const errorMsg = result.errorMessage || result.stderr || getFinalOutput(result.messages) || "(no output)";
+			const failure = diagnoseResultFailure(result);
+			if (failure.failed) {
+				const errorMsg = failure.reason || "Subagent failed.";
 				return {
-					content: [{ type: "text", text: `Agent ${result.stopReason || "failed"}: ${errorMsg}` }],
+					content: [{ type: "text", text: `Agent failed: ${errorMsg}` }],
 					details: makeDetails("single")([result]),
 					isError: true,
 				};
