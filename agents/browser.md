@@ -2,7 +2,7 @@
 name: browser
 description: Browser automation specialist — use for UI testing, visual verification, and web interaction via agent-browser CLI
 tools: bash, read
-model: openai-codex/gpt-5.3-codex
+model: openai-codex/gpt-5.4
 thinking: high
 ---
 
