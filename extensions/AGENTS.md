@@ -61,7 +61,6 @@ Custom extensions for the pi coding agent. All extensions are written in TypeScr
 ├── status-overlay.ts      # /status — skills, tools & extensions list overlay
 ├── theme-cycler.ts        # Ctrl+X to cycle through themes
 ├── themeMap.ts            # Default theme mapping per extension
-├── todos.ts               # Todo management UI & tool
 ├── upload-image-url.ts    # Upload images to GitHub storage and return URLs
 └── voice-input.ts         # Option+V voice dictation + response TTS summary
 ```
