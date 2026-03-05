@@ -8,8 +8,9 @@
  * Usage: auto-loaded from ~/.pi/agent/extensions/
  */
 
+import { readFile } from "node:fs/promises";
 import { homedir } from "node:os";
-import { isAbsolute, relative } from "node:path";
+import { isAbsolute, relative, resolve } from "node:path";
 import type { EditToolDetails, ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import {
 	createBashTool,
@@ -21,6 +22,7 @@ import {
 	createWriteTool,
 } from "@mariozechner/pi-coding-agent";
 import { Text, truncateToWidth, visibleWidth } from "@mariozechner/pi-tui";
+import { Type } from "@sinclair/typebox";
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -73,6 +75,61 @@ function getBuiltInTools(cwd: string) {
 	return tools;
 }
 
+const ReadParams = Type.Object(
+	{
+		path: Type.Union([Type.String(), Type.Array(Type.String(), { minItems: 1 })], {
+			description: "Path to read, or multiple paths to read in parallel",
+		}),
+		offset: Type.Optional(Type.Integer({ description: "Line number to start reading from (1-indexed)" })),
+		limit: Type.Optional(Type.Integer({ description: "Maximum number of lines to read" })),
+	},
+	{ additionalProperties: true },
+);
+
+function normalizeReadPaths(pathValue: unknown): string[] {
+	if (typeof pathValue === "string") {
+		const path = pathValue.trim();
+		return path ? [path] : [];
+	}
+
+	if (!Array.isArray(pathValue)) return [];
+
+	const paths: string[] = [];
+	for (const value of pathValue) {
+		if (typeof value !== "string") continue;
+		const path = value.trim();
+		if (path) paths.push(path);
+	}
+	return paths;
+}
+
+function formatReadRange(args: Record<string, unknown>, theme: any): string {
+	if (args.offset === undefined && args.limit === undefined) return "";
+	const start = typeof args.offset === "number" ? args.offset : 1;
+	const end = typeof args.limit === "number" ? start + args.limit - 1 : "";
+	return theme.fg("warning", `:${start}${end ? `-${end}` : ""}`);
+}
+
+const READ_SECTION_SEPARATOR = "=".repeat(72);
+
+function stripReadLinePrefix(line: string): string {
+	const match = line.match(/^\d+#[A-Z0-9]+:(.*)$/);
+	return match ? match[1] : line;
+}
+
+function numberReadLines(text: string, startLine: number): string {
+	const lines = text.split("\n");
+	const width = String(startLine + Math.max(0, lines.length - 1)).length;
+	return lines
+		.map((line, index) => `${String(startLine + index).padStart(width, " ")} | ${stripReadLinePrefix(line)}`)
+		.join("\n");
+}
+
+function formatMultiReadSection(path: string, index: number, total: number, body: string, startLine: number): string {
+	const header = [READ_SECTION_SEPARATOR, `[${index}/${total}] ${path}`, READ_SECTION_SEPARATOR].join("\n");
+	return `${header}\n${numberReadLines(body, startLine)}`;
+}
+
 function countLines(text: string): number {
 	return text.trim().split("\n").filter(Boolean).length;
 }
@@ -103,6 +160,132 @@ function renderPreviewLines(text: string, maxLines: number, theme: any): string 
 		output += "\n" + theme.fg("muted", `… +${remaining} lines`);
 	}
 	return output;
+}
+
+// ── Edit Fuzzy Fallback (Levenshtein=1, unique candidate) ─────────────────
+
+const FUZZY_EDIT_MIN_OLDTEXT_LEN = 5;
+const FUZZY_EDIT_MAX_FILE_CHARS = 400_000;
+
+interface EditLikeParams {
+	path?: unknown;
+	oldText?: unknown;
+	newText?: unknown;
+	[key: string]: unknown;
+}
+
+interface FuzzyCandidate {
+	text: string;
+	index: number;
+	distance: 1;
+}
+
+function getResultText(result: unknown): string {
+	if (!result || typeof result !== "object") return "";
+	const content = (result as { content?: unknown }).content;
+	if (!Array.isArray(content)) return "";
+	for (const part of content) {
+		if (part && typeof part === "object" && (part as { type?: unknown }).type === "text") {
+			const text = (part as { text?: unknown }).text;
+			if (typeof text === "string") return text;
+		}
+	}
+	return "";
+}
+
+function distanceAtMostOne(a: string, b: string): 0 | 1 | 2 {
+	const la = a.length;
+	const lb = b.length;
+	if (Math.abs(la - lb) > 1) return 2;
+
+	let i = 0;
+	let j = 0;
+	let edits = 0;
+
+	while (i < la && j < lb) {
+		if (a[i] === b[j]) {
+			i++;
+			j++;
+			continue;
+		}
+
+		edits++;
+		if (edits > 1) return 2;
+
+		if (la > lb) i++;
+		else if (lb > la) j++;
+		else {
+			i++;
+			j++;
+		}
+	}
+
+	if (i < la || j < lb) edits++;
+	if (edits > 1) return 2;
+	return edits === 0 ? 0 : 1;
+}
+
+function findUniqueFuzzyCandidate(fileText: string, oldText: string): FuzzyCandidate | undefined {
+	const targetLen = oldText.length;
+	const lengths = [targetLen - 1, targetLen, targetLen + 1].filter((len) => len > 0);
+	let found: FuzzyCandidate | undefined;
+
+	for (const windowLen of lengths) {
+		if (windowLen > fileText.length) continue;
+		for (let i = 0; i <= fileText.length - windowLen; i++) {
+			const candidate = fileText.slice(i, i + windowLen);
+			const distance = distanceAtMostOne(oldText, candidate);
+			if (distance !== 1) continue;
+
+			if (found) {
+				return undefined;
+			}
+			found = { text: candidate, index: i, distance };
+		}
+	}
+
+	return found;
+}
+
+async function resolveFuzzyCandidate(cwd: string, params: EditLikeParams): Promise<FuzzyCandidate | undefined> {
+	const path = typeof params.path === "string" ? params.path : "";
+	const oldText = typeof params.oldText === "string" ? params.oldText : "";
+	if (!path || !oldText) return undefined;
+	if (oldText.length < FUZZY_EDIT_MIN_OLDTEXT_LEN) return undefined;
+
+	const absolutePath = isAbsolute(path) ? path : resolve(cwd, path);
+	const fileText = await readFile(absolutePath, "utf8");
+	if (fileText.length > FUZZY_EDIT_MAX_FILE_CHARS) return undefined;
+
+	return findUniqueFuzzyCandidate(fileText, oldText);
+}
+
+function shouldTryFuzzyEdit(params: EditLikeParams, result: unknown): boolean {
+	if (typeof params.oldText !== "string" || params.oldText.length < FUZZY_EDIT_MIN_OLDTEXT_LEN) return false;
+	const text = getResultText(result);
+	return text.includes("Could not find the exact text") && text.includes("The old text must match exactly");
+}
+
+function withFuzzyNote<T>(result: T, note: string): T {
+	if (!result || typeof result !== "object") return result;
+	const out = { ...(result as Record<string, unknown>) };
+	const content = out.content;
+	if (!Array.isArray(content)) return result;
+
+	let replaced = false;
+	out.content = content.map((part) => {
+		if (replaced) return part;
+		if (part && typeof part === "object" && (part as { type?: unknown }).type === "text") {
+			const text = (part as { text?: unknown }).text;
+			if (typeof text === "string") {
+				replaced = true;
+				return { ...(part as Record<string, unknown>), text: `${note}\n${text}` };
+			}
+		}
+		return part;
+	});
+
+	return out as T;
 }
 
 // ── Side-by-Side Diff ──────────────────────────────────────────────────────
@@ -323,21 +506,62 @@ export default function (pi: ExtensionAPI) {
 		name: "read",
 		label: "read",
 		description:
-			"Read the contents of a file. Supports text files and images (jpg, png, gif, webp). Images are sent as attachments. For text files, output is truncated to 2000 lines or 50KB (whichever is hit first). Use offset/limit for large files. When you need the full file, continue with offset until complete.",
-		parameters: getBuiltInTools(process.cwd()).read.parameters,
+			"Read the contents of one or more files. Supports text files and images (jpg, png, gif, webp). For text files, output is truncated to 2000 lines or 50KB (whichever is hit first). Use offset/limit for large files. When path is an array, files are read in parallel and returned with per-file separators and line numbers.",
+		parameters: ReadParams,
 
 		async execute(toolCallId, params, signal, onUpdate, ctx) {
-			return getBuiltInTools(ctx.cwd).read.execute(toolCallId, params, signal, onUpdate);
+			const builtInRead = getBuiltInTools(ctx.cwd).read;
+			const readParams = params as Record<string, unknown>;
+			const paths = normalizeReadPaths(readParams.path);
+
+			if (paths.length === 0) {
+				return {
+					isError: true,
+					content: [{ type: "text" as const, text: "read requires a non-empty path (string or string[])." }],
+					details: { mode: "multi-read", paths: [] as string[] },
+				};
+			}
+
+			if (paths.length === 1) {
+				return builtInRead.execute(toolCallId, { ...readParams, path: paths[0] }, signal, onUpdate);
+			}
+
+			const sharedParams = { ...readParams };
+			delete sharedParams.path;
+
+			const results = await Promise.all(
+				paths.map((path) => builtInRead.execute(toolCallId, { ...sharedParams, path }, signal, onUpdate)),
+			);
+
+			const hasError = results.some((result) => Boolean((result as { isError?: boolean }).isError));
+			const startLine = typeof readParams.offset === "number" ? readParams.offset : 1;
+			const text = results
+				.map((result, index) => {
+					const body = getResultText(result) || "[No text output]";
+					return formatMultiReadSection(paths[index], index + 1, paths.length, body, startLine);
+				})
+				.join("\n\n");
+
+			return {
+				isError: hasError,
+				content: [{ type: "text" as const, text }],
+				details: { mode: "multi-read", paths, count: paths.length },
+			};
 		},
 
 		renderCall(args, theme) {
-			const path = shortenPath(args.path || "");
-			let display = path ? theme.fg("accent", path) : theme.fg("toolOutput", "...");
-			if (args.offset !== undefined || args.limit !== undefined) {
-				const start = args.offset ?? 1;
-				const end = args.limit !== undefined ? start + args.limit - 1 : "";
-				display += theme.fg("warning", `:${start}${end ? `-${end}` : ""}`);
+			const argObj = args as Record<string, unknown>;
+			const paths = normalizeReadPaths(argObj.path);
+			let display = theme.fg("toolOutput", "...");
+
+			if (paths.length === 1) {
+				display = theme.fg("accent", shortenPath(paths[0]));
+			} else if (paths.length > 1) {
+				const first = shortenPath(paths[0]);
+				display = theme.fg("accent", `${first} +${paths.length - 1} files`);
 			}
+
+			display += formatReadRange(argObj, theme);
 			return new Text(`${theme.fg("toolTitle", theme.bold("read"))} ${display}`, 0, 0);
 		},
 
@@ -413,7 +637,23 @@ export default function (pi: ExtensionAPI) {
 		parameters: getBuiltInTools(process.cwd()).edit.parameters,
 
 		async execute(toolCallId, params, signal, onUpdate, ctx) {
-			return getBuiltInTools(ctx.cwd).edit.execute(toolCallId, params, signal, onUpdate);
+			const builtInEdit = getBuiltInTools(ctx.cwd).edit;
+			const first = await builtInEdit.execute(toolCallId, params, signal, onUpdate);
+			if (!shouldTryFuzzyEdit(params as EditLikeParams, first)) return first;
+
+			try {
+				const candidate = await resolveFuzzyCandidate(ctx.cwd, params as EditLikeParams);
+				if (!candidate) return first;
+
+				const retryParams = { ...(params as Record<string, unknown>), oldText: candidate.text };
+				const retried = await builtInEdit.execute(toolCallId, retryParams as any, signal, onUpdate);
+				if ((retried as { isError?: boolean }).isError) return first;
+
+				const fuzzyNote = `[fuzzy-edit] exact-match failed; applied unique candidate (levenshtein=${candidate.distance}, index=${candidate.index}).`;
+				return withFuzzyNote(retried, fuzzyNote);
+			} catch {
+				return first;
+			}
 		},
 
 		renderCall(args, theme) {
