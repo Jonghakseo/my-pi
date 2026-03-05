@@ -21,10 +21,15 @@ Claude Code MCP 설정을 pi에서 재사용하는 전역 브릿지 확장입니
 - MCP tool을 pi tool로 등록
   - 이름 형식: `mcp_<server>_<tool>`
   - pi 런타임 시작/리로드 시점에 반영
+- MCP tool 활성/비활성 토글
+  - `/mcp-status` → 서버 선택 → `Tools`
+  - 기본값: 모든 도구 활성화
+  - 비활성 목록 저장: `~/.pi/agent/claude-mcp-bridge-tools.json` (전역)
+  - 비활성 도구는 등록 대상에서 제외되며, 새로 비활성화한 항목은 명령 종료 시 자동 `/reload`로 반영
 - 상태 표시
   - footer status: `MCP connected/total`
 - 명령어
-  - `/mcp-status`
+  - `/mcp-status` (서버 상태 + Tools 토글)
   - `/mcp-reload`
 
 ## Install (global)

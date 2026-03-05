@@ -357,6 +357,139 @@ type LoadedConfig = {
 	warnings: string[];
 };
 
+type ToolVisibilitySettingsFile = {
+	disabledTools?: Record<string, string[]> | string[];
+};
+
+type LoadedToolVisibilitySettings = {
+	disabledToolKeys: Set<string>;
+	warning?: string;
+};
+
+const TOOL_VISIBILITY_SETTINGS_PATH = path.join(os.homedir(), ".pi", "agent", "claude-mcp-bridge-tools.json");
+const TOOL_VISIBILITY_KEY_SEPARATOR = "\u001f";
+
+function buildToolVisibilityKey(serverName: string, toolName: string): string {
+	return `${serverName}${TOOL_VISIBILITY_KEY_SEPARATOR}${toolName}`;
+}
+
+function parseToolVisibilityKey(key: string): { serverName: string; toolName: string } | null {
+	const separatorIndex = key.indexOf(TOOL_VISIBILITY_KEY_SEPARATOR);
+	if (separatorIndex <= 0 || separatorIndex >= key.length - 1) return null;
+
+	const serverName = key.slice(0, separatorIndex).trim();
+	const toolName = key.slice(separatorIndex + TOOL_VISIBILITY_KEY_SEPARATOR.length).trim();
+	if (!serverName || !toolName) return null;
+
+	return { serverName, toolName };
+}
+
+function parseDisabledToolKeys(value: unknown): Set<string> {
+	const result = new Set<string>();
+	if (!value) return result;
+
+	if (Array.isArray(value)) {
+		for (const item of value) {
+			if (typeof item !== "string") continue;
+			const separatorIndex = item.indexOf("/");
+			if (separatorIndex <= 0 || separatorIndex >= item.length - 1) continue;
+			const serverName = item.slice(0, separatorIndex).trim();
+			const toolName = item.slice(separatorIndex + 1).trim();
+			if (!serverName || !toolName) continue;
+			result.add(buildToolVisibilityKey(serverName, toolName));
+		}
+		return result;
+	}
+
+	if (typeof value !== "object") return result;
+
+	for (const [serverNameRaw, tools] of Object.entries(value as Record<string, unknown>)) {
+		const serverName = serverNameRaw.trim();
+		if (!serverName || !Array.isArray(tools)) continue;
+		for (const toolNameRaw of tools) {
+			if (typeof toolNameRaw !== "string") continue;
+			const toolName = toolNameRaw.trim();
+			if (!toolName) continue;
+			result.add(buildToolVisibilityKey(serverName, toolName));
+		}
+	}
+
+	return result;
+}
+
+function loadToolVisibilitySettings(
+	settingsPath: string = TOOL_VISIBILITY_SETTINGS_PATH,
+): LoadedToolVisibilitySettings {
+	if (!fs.existsSync(settingsPath)) {
+		return { disabledToolKeys: new Set<string>() };
+	}
+
+	try {
+		const raw = fs.readFileSync(settingsPath, "utf-8");
+		const parsed = JSON.parse(raw) as ToolVisibilitySettingsFile;
+		if (!parsed || typeof parsed !== "object") {
+			return {
+				disabledToolKeys: new Set<string>(),
+				warning: `Invalid tool visibility settings format: ${settingsPath}`,
+			};
+		}
+		return { disabledToolKeys: parseDisabledToolKeys(parsed.disabledTools) };
+	} catch (error) {
+		const message = error instanceof Error ? error.message : String(error);
+		return {
+			disabledToolKeys: new Set<string>(),
+			warning: `Failed to load tool visibility settings (${settingsPath}): ${message}`,
+		};
+	}
+}
+
+function serializeToolVisibilitySettings(disabledToolKeys: Set<string>): ToolVisibilitySettingsFile {
+	const grouped = new Map<string, string[]>();
+
+	for (const key of disabledToolKeys) {
+		const parsed = parseToolVisibilityKey(key);
+		if (!parsed) continue;
+
+		const tools = grouped.get(parsed.serverName) ?? [];
+		tools.push(parsed.toolName);
+		grouped.set(parsed.serverName, tools);
+	}
+
+	const disabledTools: Record<string, string[]> = {};
+	const sortedServers = Array.from(grouped.keys()).sort((a, b) => a.localeCompare(b));
+	for (const serverName of sortedServers) {
+		const tools = grouped.get(serverName) ?? [];
+		const dedupedTools = Array.from(new Set(tools)).sort((a, b) => a.localeCompare(b));
+		if (dedupedTools.length > 0) {
+			disabledTools[serverName] = dedupedTools;
+		}
+	}
+
+	return { disabledTools };
+}
+
+function saveToolVisibilitySettings(
+	disabledToolKeys: Set<string>,
+	settingsPath: string = TOOL_VISIBILITY_SETTINGS_PATH,
+): { ok: true } | { ok: false; error: string } {
+	try {
+		fs.mkdirSync(path.dirname(settingsPath), { recursive: true });
+		const payload = serializeToolVisibilitySettings(disabledToolKeys);
+		fs.writeFileSync(settingsPath, `${JSON.stringify(payload, null, 2)}\n`, "utf-8");
+		return { ok: true };
+	} catch (error) {
+		const message = error instanceof Error ? error.message : String(error);
+		return { ok: false, error: message };
+	}
+}
+
+function hasNewlyDisabledTools(before: Set<string>, after: Set<string>): boolean {
+	for (const key of after) {
+		if (!before.has(key)) return true;
+	}
+	return false;
+}
+
 function expandEnvVars(value: string): string {
 	return value.replace(/\$\{([^}]+)\}/g, (_, key: string) => process.env[key] ?? "");
 }
@@ -710,7 +843,7 @@ type McpServerState = {
 	error?: string;
 };
 
-type ServerAction = "viewTools" | "reconnect";
+type ServerAction = "tools" | "reconnect";
 
 function sColor(status: ServerStatus): "success" | "error" | "warning" | "muted" {
 	switch (status) {
@@ -844,7 +977,7 @@ class McpActionOverlay {
 	private done: (value: ServerAction | null) => void;
 	private state: McpServerState;
 	private actions: Array<{ id: ServerAction; label: string; hint: string }> = [
-		{ id: "viewTools", label: "View Tools", hint: "List registered tools" },
+		{ id: "tools", label: "Tools", hint: "Enable/disable tools" },
 		{ id: "reconnect", label: "Reconnect", hint: "Disconnect & reconnect" },
 	];
 	private sel = 0;
@@ -913,25 +1046,66 @@ class McpToolListOverlay {
 	private onClose: () => void;
 	private serverName: string;
 	private tools: DiscoveredTool[];
+	private isToolDisabled: (toolName: string) => boolean;
+	private onToggleTool: (toolName: string) => void;
+	private sel = 0;
 	private scroll = 0;
 	private maxVisible = 15;
 
-	constructor(tui: TUI, theme: Theme, onClose: () => void, serverName: string, tools: DiscoveredTool[]) {
+	constructor(
+		tui: TUI,
+		theme: Theme,
+		onClose: () => void,
+		serverName: string,
+		tools: DiscoveredTool[],
+		isToolDisabled: (toolName: string) => boolean,
+		onToggleTool: (toolName: string) => void,
+	) {
 		this.tui = tui;
 		this.theme = theme;
 		this.onClose = onClose;
 		this.serverName = serverName;
 		this.tools = tools;
+		this.isToolDisabled = isToolDisabled;
+		this.onToggleTool = onToggleTool;
+	}
+
+	private ensureSelectionVisible(): void {
+		if (this.sel < this.scroll) {
+			this.scroll = this.sel;
+			return;
+		}
+		if (this.sel >= this.scroll + this.maxVisible) {
+			this.scroll = this.sel - this.maxVisible + 1;
+		}
 	}
 
 	handleInput(data: string): void {
 		if (matchesKey(data, "escape")) {
 			this.onClose();
-		} else if (matchesKey(data, "up") || data === "k") {
-			this.scroll = Math.max(0, this.scroll - 1);
+			return;
+		}
+
+		if (this.tools.length === 0) return;
+
+		if (matchesKey(data, "up") || data === "k") {
+			this.sel = Math.max(0, this.sel - 1);
+			this.ensureSelectionVisible();
 			this.tui.requestRender();
-		} else if (matchesKey(data, "down") || data === "j") {
-			this.scroll = Math.min(Math.max(0, this.tools.length - this.maxVisible), this.scroll + 1);
+			return;
+		}
+
+		if (matchesKey(data, "down") || data === "j") {
+			this.sel = Math.min(this.tools.length - 1, this.sel + 1);
+			this.ensureSelectionVisible();
+			this.tui.requestRender();
+			return;
+		}
+
+		if (matchesKey(data, "return") || data === " ") {
+			const tool = this.tools[this.sel];
+			if (!tool) return;
+			this.onToggleTool(tool.name);
 			this.tui.requestRender();
 		}
 	}
@@ -942,29 +1116,37 @@ class McpToolListOverlay {
 		const th = this.theme;
 		const iW = Math.max(1, width - 2);
 		const lines: string[] = [];
+		const enabledCount = this.tools.filter((tool) => !this.isToolDisabled(tool.name)).length;
 
 		lines.push(boxTop(th, `${this.serverName} · Tools`, iW));
+		lines.push(boxRow(th, th.fg("muted", `Enabled ${enabledCount}/${this.tools.length}`), iW));
+		lines.push(boxSep(th, iW));
 
 		if (this.tools.length === 0) {
 			lines.push(boxRow(th, th.fg("muted", "No tools available"), iW));
 		} else {
-			const slice = this.tools.slice(this.scroll, this.scroll + this.maxVisible);
-			for (const tool of slice) {
+			const from = this.scroll;
+			const to = Math.min(this.tools.length, this.scroll + this.maxVisible);
+			for (let i = from; i < to; i++) {
+				const tool = this.tools[i]!;
+				const selected = i === this.sel;
+				const cursor = selected ? th.fg("accent", "▸") : " ";
 				const piName = buildPiToolName(this.serverName, tool.name);
-				lines.push(boxRow(th, th.fg("accent", piName), iW));
-				if (tool.description) {
-					lines.push(boxRow(th, th.fg("muted", tool.description), iW));
-				}
+				const name = selected ? th.fg("accent", th.bold(piName)) : piName;
+				const enabled = !this.isToolDisabled(tool.name);
+				const state = enabled ? th.fg("success", "● on") : th.fg("muted", "○ off");
+				const desc = tool.description ? ` ${th.fg("muted", `— ${tool.description}`)}` : "";
+				lines.push(boxRow(th, `${cursor} ${state} ${name}${desc}`, iW));
 			}
 			if (this.tools.length > this.maxVisible) {
 				lines.push(boxSep(th, iW));
-				const info = `${this.scroll + 1}–${Math.min(this.scroll + this.maxVisible, this.tools.length)} of ${this.tools.length}`;
+				const info = `${from + 1}–${to} of ${this.tools.length}`;
 				lines.push(boxRow(th, th.fg("muted", info), iW));
 			}
 		}
 
 		lines.push(boxSep(th, iW));
-		lines.push(boxRow(th, th.fg("muted", "↑↓ scroll · ESC back"), iW));
+		lines.push(boxRow(th, th.fg("muted", "↑↓ navigate · Enter/Space toggle · ESC back"), iW));
 		lines.push(boxBot(th, iW));
 		return lines;
 	}
@@ -974,6 +1156,15 @@ export default async function claudeMcpBridge(pi: ExtensionAPI) {
 	const manager = new McpManager();
 	const registeredTools = new Set<string>();
 	let loadedAt: LoadedConfig = { sourcePath: null, servers: [], warnings: [] };
+	const loadedToolVisibility = loadToolVisibilitySettings();
+	const disabledToolKeys = loadedToolVisibility.disabledToolKeys;
+	let toolVisibilityWarning = loadedToolVisibility.warning;
+
+	function getOverlayWarnings(): string[] {
+		const warnings = [...loadedAt.warnings];
+		if (toolVisibilityWarning) warnings.push(toolVisibilityWarning);
+		return warnings;
+	}
 
 	function updateStatus(ctx: ExtensionContext): void {
 		if (!ctx.hasUI) return;
@@ -987,8 +1178,86 @@ export default async function claudeMcpBridge(pi: ExtensionAPI) {
 		ctx.ui.setStatus("mcp", `MCP ${connected}/${total}`);
 	}
 
+	function isToolDisabled(serverName: string, toolName: string): boolean {
+		return disabledToolKeys.has(buildToolVisibilityKey(serverName, toolName));
+	}
+
+	function removeDisabledToolsFromActiveSet(): void {
+		let activeTools: Set<string>;
+		try {
+			activeTools = new Set(pi.getActiveTools());
+		} catch {
+			return;
+		}
+
+		let changed = false;
+
+		for (const { serverName, tool } of manager.getAllTools()) {
+			if (!isToolDisabled(serverName, tool.name)) continue;
+			const piToolName = buildPiToolName(serverName, tool.name);
+			if (activeTools.delete(piToolName)) changed = true;
+		}
+
+		if (changed) {
+			pi.setActiveTools(Array.from(activeTools));
+		}
+	}
+
+	function setToolActive(piToolName: string, enabled: boolean): void {
+		let activeTools: Set<string>;
+		try {
+			activeTools = new Set(pi.getActiveTools());
+		} catch {
+			return;
+		}
+
+		let changed = false;
+		if (enabled) {
+			if (!activeTools.has(piToolName)) {
+				activeTools.add(piToolName);
+				changed = true;
+			}
+		} else if (activeTools.delete(piToolName)) {
+			changed = true;
+		}
+
+		if (changed) {
+			pi.setActiveTools(Array.from(activeTools));
+		}
+	}
+
+	function toggleToolDisabled(
+		serverName: string,
+		toolName: string,
+	): { ok: true; disabled: boolean } | { ok: false; error: string } {
+		const key = buildToolVisibilityKey(serverName, toolName);
+		const currentlyDisabled = disabledToolKeys.has(key);
+		const nextDisabled = !currentlyDisabled;
+
+		if (nextDisabled) {
+			disabledToolKeys.add(key);
+		} else {
+			disabledToolKeys.delete(key);
+		}
+
+		const saved = saveToolVisibilitySettings(disabledToolKeys);
+		if (!saved.ok) {
+			if (currentlyDisabled) {
+				disabledToolKeys.add(key);
+			} else {
+				disabledToolKeys.delete(key);
+			}
+			return { ok: false, error: saved.error };
+		}
+
+		toolVisibilityWarning = undefined;
+		return { ok: true, disabled: nextDisabled };
+	}
+
 	function registerDiscoveredTools(): void {
 		for (const { serverName, tool } of manager.getAllTools()) {
+			if (isToolDisabled(serverName, tool.name)) continue;
+
 			const piToolName = buildPiToolName(serverName, tool.name);
 			if (registeredTools.has(piToolName)) continue;
 
@@ -1039,6 +1308,15 @@ export default async function claudeMcpBridge(pi: ExtensionAPI) {
 						return {
 							content: [{ type: "text" as const, text: "Cancelled" }],
 							details: { server: serverName, tool: tool.name, cancelled: true },
+						};
+					}
+
+					if (isToolDisabled(serverName, tool.name)) {
+						return {
+							content: [
+								{ type: "text" as const, text: "This MCP tool is disabled. Open /mcp-status → Tools to enable it." },
+							],
+							details: { server: serverName, tool: tool.name, disabled: true, isError: true },
 						};
 					}
 
@@ -1101,6 +1379,10 @@ export default async function claudeMcpBridge(pi: ExtensionAPI) {
 
 	pi.on("session_start", async (_event, ctx) => {
 		updateStatus(ctx);
+		removeDisabledToolsFromActiveSet();
+		if (toolVisibilityWarning && ctx.hasUI) {
+			ctx.ui.notify(`[claude-mcp-bridge] ${toolVisibilityWarning}`, "warning");
+		}
 	});
 
 	pi.on("session_shutdown", async () => {
@@ -1115,13 +1397,20 @@ export default async function claudeMcpBridge(pi: ExtensionAPI) {
 				return;
 			}
 
+			const disabledAtCommandStart = new Set(disabledToolKeys);
+			let shouldReloadForVisibility = false;
+
 			if (!ctx.hasUI) {
 				const states = manager.getStates();
 				const summary = states
 					.map((s) => `${s.name}=${s.status}${s.toolCount > 0 ? `(${s.toolCount})` : ""}`)
 					.join(", ");
 				const sourceText = manager.sourcePath ? ` | source: ${manager.sourcePath}` : "";
-				ctx.ui.notify(`MCP: ${summary}${sourceText}`, "info");
+				const disabledCount = manager
+					.getAllTools()
+					.filter(({ serverName, tool }) => isToolDisabled(serverName, tool.name)).length;
+				const disabledText = disabledCount > 0 ? ` | disabled tools: ${disabledCount}` : "";
+				ctx.ui.notify(`MCP: ${summary}${sourceText}${disabledText}`, "info");
 				return;
 			}
 
@@ -1130,7 +1419,7 @@ export default async function claudeMcpBridge(pi: ExtensionAPI) {
 				const freshStates = manager.getStates();
 				const serverName = await ctx.ui.custom<string | null>(
 					(tui, theme, _kb, done) =>
-						new McpStatusOverlay(tui, theme, done, freshStates, manager.sourcePath, loadedAt.warnings),
+						new McpStatusOverlay(tui, theme, done, freshStates, manager.sourcePath, getOverlayWarnings()),
 					{ overlay: true, overlayOptions: { anchor: "center", width: "80%", minWidth: 50, maxHeight: "80%" } },
 				);
 				if (!serverName) break;
@@ -1145,10 +1434,45 @@ export default async function claudeMcpBridge(pi: ExtensionAPI) {
 						{ overlay: true, overlayOptions: { anchor: "center", width: "80%", minWidth: 50, maxHeight: "80%" } },
 					);
 
-					if (action === "viewTools") {
+					if (action === "tools") {
 						const tools = manager.getServerTools(serverName);
 						await ctx.ui.custom<null>(
-							(tui, theme, _kb, done) => new McpToolListOverlay(tui, theme, () => done(null), serverName, tools),
+							(tui, theme, _kb, done) =>
+								new McpToolListOverlay(
+									tui,
+									theme,
+									() => done(null),
+									serverName,
+									tools,
+									(toolName) => isToolDisabled(serverName, toolName),
+									(toolName) => {
+										const toggled = toggleToolDisabled(serverName, toolName);
+										if (!toggled.ok) {
+											ctx.ui.notify(`Failed to save MCP tool settings: ${toggled.error}`, "warning");
+											return;
+										}
+
+										registerDiscoveredTools();
+										removeDisabledToolsFromActiveSet();
+
+										const piToolName = buildPiToolName(serverName, toolName);
+										if (toggled.disabled) {
+											if (registeredTools.has(piToolName)) {
+												shouldReloadForVisibility = true;
+											}
+											setToolActive(piToolName, false);
+											ctx.ui.notify(`${piToolName}: disabled`, "info");
+											return;
+										}
+
+										if (registeredTools.has(piToolName)) {
+											setToolActive(piToolName, true);
+											ctx.ui.notify(`${piToolName}: enabled`, "info");
+										} else {
+											ctx.ui.notify(`${piToolName}: enabled (connect or reload to register)`, "warning");
+										}
+									},
+								),
 							{ overlay: true, overlayOptions: { anchor: "center", width: "80%", minWidth: 50, maxHeight: "80%" } },
 						);
 						continue;
@@ -1157,6 +1481,7 @@ export default async function claudeMcpBridge(pi: ExtensionAPI) {
 					if (action === "reconnect") {
 						await manager.reconnectServer(serverName);
 						registerDiscoveredTools();
+						removeDisabledToolsFromActiveSet();
 						updateStatus(ctx);
 						const updated = manager.getStates().find((s) => s.name === serverName);
 						if (updated?.status === "connected") {
@@ -1173,6 +1498,11 @@ export default async function claudeMcpBridge(pi: ExtensionAPI) {
 					// null (ESC) → back to server list
 					continue serverList;
 				}
+			}
+
+			if (shouldReloadForVisibility || hasNewlyDisabledTools(disabledAtCommandStart, disabledToolKeys)) {
+				ctx.ui.notify("Reloading runtime to hide disabled MCP tools...", "info");
+				await ctx.reload();
 			}
 		},
 	});
