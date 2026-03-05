@@ -215,6 +215,16 @@ git clone https://github.com/Jonghakseo/my-pi.git ~/.pi/agent
 cd ~/.pi/agent/extensions && pnpm install
 ```
 
+### Web research extension (pi-web-access)
+
+This setup uses **pi-web-access** for `web_search`, `fetch_content`, and `get_search_content` tools.
+
+- Repository: https://github.com/nicobailon/pi-web-access
+
+```bash
+pi install npm:pi-web-access
+```
+
 ### Post-install
 
 ```bash
