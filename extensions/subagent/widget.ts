@@ -21,6 +21,13 @@ const SPINNER_REFRESH_MS = 150;
 
 import { type SubagentStore, truncateText } from "./store.js";
 
+function truncateToWidthWithEllipsis(value: string, maxWidth: number): string {
+	if (maxWidth <= 0) return "";
+	if (visibleWidth(value) <= maxWidth) return value;
+	if (maxWidth <= 3) return truncateToWidth(value, maxWidth);
+	return `${truncateToWidth(value, maxWidth - 3)}...`;
+}
+
 /** Fast timer that drives spinner animation while any run is active. */
 let spinnerTimer: ReturnType<typeof setInterval> | undefined;
 
@@ -144,7 +151,10 @@ export function updateCommandRunsWidget(store: SubagentStore, ctx?: any): void {
 						}
 
 						const taskSnippet = run.task
-							? theme.fg("dim", ` · ${run.task.replace(/\s+/g, " ").trim().slice(0, 60)}`)
+							? theme.fg(
+								"dim",
+								` · ${truncateText(run.task.replace(/\s+/g, " ").trim(), 60)}`,
+							)
 							: "";
 						const statusLeft =
 							theme.fg(statusColor, `${statusIcon} #${run.id}`) +
@@ -160,12 +170,12 @@ export function updateCommandRunsWidget(store: SubagentStore, ctx?: any): void {
 								lines.push(truncateToWidth(contextShort, innerWidth));
 							} else {
 								const maxLeftWidth = Math.max(1, innerWidth - contextWidth - 1);
-								const fittedLeft = truncateToWidth(statusLeft, maxLeftWidth);
+								const fittedLeft = truncateToWidthWithEllipsis(statusLeft, maxLeftWidth);
 								const gapWidth = Math.max(1, innerWidth - visibleWidth(fittedLeft) - contextWidth);
 								lines.push(`${fittedLeft}${" ".repeat(gapWidth)}${contextShort}`);
 							}
 						} else {
-							lines.push(truncateToWidth(statusLeft, innerWidth));
+							lines.push(truncateToWidthWithEllipsis(statusLeft, innerWidth));
 						}
 
 						if (run.thoughtText) {
