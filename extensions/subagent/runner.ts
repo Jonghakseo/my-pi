@@ -20,6 +20,18 @@ function appendStderrDiagnostic(result: SingleResult, message: string): void {
 	result.stderr = result.stderr ? `${result.stderr.trimEnd()}\n${line}\n` : `${line}\n`;
 }
 
+/**
+ * Prevent tasks starting with `/` from being treated as slash commands
+ * inside the spawned pi process.
+ *
+ * We prepend one space (requested behavior) and escape the slash, so
+ * trim()-based slash command interceptors won't swallow the task.
+ */
+function normalizeTaskForSubagentPrompt(task: string): string {
+	if (task.startsWith("/")) return ` \\${task}`;
+	return task;
+}
+
 // ─── Result Helpers ──────────────────────────────────────────────────────────
 
 export function getLastNonEmptyLine(text: string): string {
@@ -171,7 +183,7 @@ export async function runSingleAgent(
 			args.push("--append-system-prompt", tmpPromptPath);
 		}
 
-		args.push(task);
+		args.push(normalizeTaskForSubagentPrompt(task));
 		let wasAborted = false;
 
 		const exitCode = await new Promise<number>((resolve) => {
