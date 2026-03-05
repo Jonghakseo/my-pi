@@ -15,6 +15,11 @@ import { formatToolCallPlain } from "./format.js";
 import { writePromptToTempFile } from "./session.js";
 import type { AgentAliasMatch, DisplayItem, OnUpdateCallback, SingleResult, SubagentDetails } from "./types.js";
 
+function appendStderrDiagnostic(result: SingleResult, message: string): void {
+	const line = `[runner] ${message}`;
+	result.stderr = result.stderr ? `${result.stderr.trimEnd()}\n${line}\n` : `${line}\n`;
+}
+
 // ─── Result Helpers ──────────────────────────────────────────────────────────
 
 export function getLastNonEmptyLine(text: string): string {
@@ -179,6 +184,9 @@ export async function runSingleAgent(
 			let lastExitCode = 0;
 			let lastEventAt = Date.now();
 			let sawAgentEnd = false;
+			let settleReason = "unknown";
+			let unparsedStdoutCount = 0;
+			const unparsedStdoutTail: string[] = [];
 
 			const processLine = (line: string) => {
 				if (!line.trim()) return;
@@ -186,6 +194,12 @@ export async function runSingleAgent(
 				try {
 					event = JSON.parse(line);
 				} catch {
+					unparsedStdoutCount++;
+					const snippet = line.trim().slice(0, 300);
+					if (snippet) {
+						unparsedStdoutTail.push(snippet);
+						if (unparsedStdoutTail.length > 3) unparsedStdoutTail.shift();
+					}
 					return;
 				}
 				lastEventAt = Date.now();
@@ -300,6 +314,19 @@ export async function runSingleAgent(
 					agentEndFallbackTimer = undefined;
 				}
 				if (buffer.trim()) processLine(buffer);
+
+				if (currentResult.messages.length === 0) {
+					appendStderrDiagnostic(
+						currentResult,
+						`no assistant/tool messages captured; settleReason=${settleReason}; exitCode=${code}; sawAgentEnd=${sawAgentEnd}`,
+					);
+					if (unparsedStdoutCount > 0) {
+						appendStderrDiagnostic(
+							currentResult,
+							`unparsed stdout lines=${unparsedStdoutCount}; tail=${unparsedStdoutTail.join(" | ") || "(empty)"}`,
+						);
+					}
+				}
 				resolve(code);
 			};
 
@@ -322,6 +349,7 @@ export async function runSingleAgent(
 						if (!procExited && proc.exitCode === null) proc.kill("SIGKILL");
 					}, 5000);
 
+					settleReason = "agent_end_fallback_timeout";
 					resolveOnce(forcedCode);
 				}, 1500);
 			}
@@ -342,22 +370,29 @@ export async function runSingleAgent(
 				lastExitCode = code ?? 0;
 				// In rare cases stdout/stderr pipes may stay open after process exit.
 				// Use a short fallback so runs cannot stay "running" forever.
-				exitFallbackTimer = setTimeout(() => resolveOnce(lastExitCode), 1500);
+				exitFallbackTimer = setTimeout(() => {
+					settleReason = "exit_fallback_timeout";
+					resolveOnce(lastExitCode);
+				}, 1500);
 			});
 
 			proc.on("close", (code) => {
 				procExited = true;
+				settleReason = "close";
 				resolveOnce(code ?? lastExitCode ?? 0);
 			});
 
-			proc.on("error", () => {
+			proc.on("error", (error) => {
 				procExited = true;
+				appendStderrDiagnostic(currentResult, `process error: ${error?.message || String(error)}`);
+				settleReason = "process_error";
 				resolveOnce(1);
 			});
 
 			if (signal) {
 				const killProc = () => {
 					wasAborted = true;
+					settleReason = "aborted_by_signal";
 					proc.kill("SIGTERM");
 					setTimeout(() => {
 						if (!procExited && proc.exitCode === null) proc.kill("SIGKILL");
