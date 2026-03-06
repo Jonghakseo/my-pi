@@ -12,6 +12,7 @@ import { parseSubagentToolCommand, SUBAGENT_CLI_HELP_TEXT } from "./cli.js";
 import {
 	DEFAULT_TURN_COUNT,
 	IDLE_RUN_WARNING_THRESHOLD,
+	MAX_LISTED_RUNS,
 	MAX_CONCURRENT_ASYNC_SUBAGENT_RUNS,
 	STATUS_OUTPUT_PREVIEW_MAX_CHARS,
 } from "./constants.js";
@@ -382,22 +383,27 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 
 		if (asyncAction !== "run") {
 			if (asyncAction === "list") {
-				const runs = Array.from(store.commandRuns.values()).sort((a, b) => b.id - a.id);
-				if (runs.length === 0) {
+				const allRuns = Array.from(store.commandRuns.values()).sort((a, b) => b.id - a.id);
+				if (allRuns.length === 0) {
 					return {
 						content: [{ type: "text", text: withIdleRunWarning("No subagent runs found.") }],
 						details: makeDetails([]),
 					};
 				}
-				const lines = runs.map((run) => {
+				const visibleRuns = allRuns.slice(0, MAX_LISTED_RUNS);
+				const hiddenCount = allRuns.length - visibleRuns.length;
+				const lines = visibleRuns.map((run) => {
 					const contextWindow = resolveContextWindow(ctx, run.model);
 					const usedPercent = getUsedContextPercent(run.usage?.contextTokens, contextWindow);
 					const usageSuffix = usedPercent === undefined ? "" : ` usage:${formatContextUsageBar(usedPercent)}`;
 					const taskPreview = truncateLines(run.task, 2).replace(/\n/g, "\n  ");
 					return `${formatCommandRunSummary(run)}${usageSuffix}\n  ${taskPreview}`;
 				});
+				const header = hiddenCount > 0
+					? `Subagent runs (showing ${visibleRuns.length} of ${allRuns.length}, oldest ${hiddenCount} hidden)`
+					: "Subagent runs";
 				return {
-					content: [{ type: "text", text: withIdleRunWarning(`Subagent runs\n\n${lines.join("\n\n")}`) }],
+					content: [{ type: "text", text: withIdleRunWarning(`${header}\n\n${lines.join("\n\n")}`) }],
 					details: makeDetails([]),
 				};
 			}
