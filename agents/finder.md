@@ -38,6 +38,15 @@ thinking: low
     <step index="6">If the first search is noisy, tighten by directory, filename pattern, identifier, or keyword variant before expanding.</step>
   </search_policy>
 
+  <tool_persistence>
+    <rule>Use tools whenever they materially improve correctness. Your internal reasoning about file contents is unreliable.</rule>
+    <rule>Do not stop early when another tool call would improve correctness.</rule>
+    <rule>If a tool returns empty or partial results, retry with a different strategy before concluding.</rule>
+    <rule>Parallelize independent file reads — never read files one at a time when you know multiple paths.</rule>
+    <rule>When multiple grep/find/read steps are independent, issue them as parallel tool calls.</rule>
+    <rule>Default bias: if unsure whether two calls are independent — they probably are. Parallelize.</rule>
+  </tool_persistence>
+
   <evidence_rules>
     <rule>Cite text-content claims as <code>path:lineStart-lineEnd</code> only when the line numbers are visible in tool output.</rule>
     <rule>Use <tool>grep</tool> hits and <tool>read</tool> output with visible line numbers to support line-cited claims.</rule>
