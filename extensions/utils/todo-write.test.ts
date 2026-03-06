@@ -21,10 +21,10 @@ describe("todo-write ops", () => {
 			],
 		);
 
-		expect(result.error).toBeUndefined();
-		expect(result.state?.phases[0]?.id).toBe("phase-1");
-		expect(result.state?.phases[0]?.tasks[0]?.id).toBe("task-1");
-		expect(result.state?.phases[0]?.tasks[1]?.id).toBe("task-2");
+		expect(result.errors).toEqual([]);
+		expect(result.state.phases[0]?.id).toBe("phase-1");
+		expect(result.state.phases[0]?.tasks[0]?.id).toBe("task-1");
+		expect(result.state.phases[0]?.tasks[1]?.id).toBe("task-2");
 	});
 
 	it("adds phase and task with incrementing ids", () => {
@@ -42,13 +42,13 @@ describe("todo-write ops", () => {
 			{ op: "add_task", phase: "phase-1", content: "C" },
 		]);
 
-		expect(result.error).toBeUndefined();
-		expect(result.state?.phases[1]?.id).toBe("phase-2");
-		expect(result.state?.phases[1]?.tasks[0]?.id).toBe("task-2");
-		expect(result.state?.phases[0]?.tasks[1]?.id).toBe("task-3");
+		expect(result.errors).toEqual([]);
+		expect(result.state.phases[1]?.id).toBe("phase-2");
+		expect(result.state.phases[1]?.tasks[0]?.id).toBe("task-2");
+		expect(result.state.phases[0]?.tasks[1]?.id).toBe("task-3");
 	});
 
-	it("returns error when multiple in_progress tasks exist", () => {
+	it("normalizes multiple in_progress tasks instead of erroring", () => {
 		const start = {
 			phases: [
 				{
@@ -63,8 +63,29 @@ describe("todo-write ops", () => {
 		};
 		const result = applyTodoWriteOps(start, [{ op: "update", id: "task-2", status: "in_progress" }]);
 
-		expect(result.state).toBeUndefined();
-		expect(result.error).toContain("in_progress");
+		expect(result.errors).toEqual([]);
+		expect(result.state.phases[0]?.tasks[0]?.status).toBe("in_progress");
+		expect(result.state.phases[0]?.tasks[1]?.status).toBe("pending");
+	});
+
+	it("promotes first pending task to in_progress when none exists", () => {
+		const start = {
+			phases: [
+				{
+					id: "phase-1",
+					name: "P1",
+					tasks: [
+						{ id: "task-1", content: "A", status: "pending" as const, notes: "" },
+						{ id: "task-2", content: "B", status: "pending" as const, notes: "" },
+					],
+				},
+			],
+		};
+		const result = applyTodoWriteOps(start, []);
+
+		expect(result.errors).toEqual([]);
+		expect(result.state.phases[0]?.tasks[0]?.status).toBe("in_progress");
+		expect(result.state.phases[0]?.tasks[1]?.status).toBe("pending");
 	});
 
 	it("removes task and renders summary", () => {
@@ -81,57 +102,45 @@ describe("todo-write ops", () => {
 			],
 		};
 		const result = applyTodoWriteOps(start, [{ op: "remove_task", id: "task-1" }]);
-		expect(result.error).toBeUndefined();
+		const summary = renderTodoWriteSummary(result.state, result.errors);
 
-		const summary = renderTodoWriteSummary(result.state!);
+		expect(result.errors).toEqual([]);
 		expect(summary).toContain("Remaining items (1):");
-		expect(summary).toContain("task-2 B [pending]");
+		expect(summary).toContain("task-2 B [in_progress]");
 	});
 
-	it("returns error when add_task phase is missing", () => {
+	it("accumulates add_task error when phase is missing", () => {
 		const start = {
 			phases: [{ id: "phase-1", name: "P1", tasks: [] }],
 		};
 		const result = applyTodoWriteOps(start, [{ op: "add_task", phase: "phase-999", content: "X" }]);
 
-		expect(result.state).toBeUndefined();
-		expect(result.error).toContain("Phase phase-999 not found");
+		expect(result.errors).toContain('Phase "phase-999" not found');
+		expect(result.state.phases).toHaveLength(1);
 	});
 
-	it("returns error when update target task does not exist", () => {
+	it("accumulates update error when task does not exist", () => {
 		const start = {
 			phases: [{ id: "phase-1", name: "P1", tasks: [] }],
 		};
 		const result = applyTodoWriteOps(start, [{ op: "update", id: "task-404", status: "completed" }]);
 
-		expect(result.state).toBeUndefined();
-		expect(result.error).toContain("Task task-404 not found");
+		expect(result.errors).toContain('Task "task-404" not found');
+		expect(result.state.phases).toHaveLength(1);
 	});
 
-	it("returns error when remove_task target does not exist", () => {
+	it("accumulates remove_task error when task does not exist", () => {
 		const start = {
 			phases: [{ id: "phase-1", name: "P1", tasks: [] }],
 		};
 		const result = applyTodoWriteOps(start, [{ op: "remove_task", id: "task-404" }]);
 
-		expect(result.state).toBeUndefined();
-		expect(result.error).toContain("Task task-404 not found");
+		expect(result.errors).toContain('Task "task-404" not found');
+		expect(result.state.phases).toHaveLength(1);
 	});
 
-	it("renders empty summary when no pending or in_progress tasks remain", () => {
-		const state = {
-			phases: [
-				{
-					id: "phase-1",
-					name: "P1",
-					tasks: [
-						{ id: "task-1", content: "A", status: "completed" as const, notes: "" },
-						{ id: "task-2", content: "B", status: "abandoned" as const, notes: "" },
-					],
-				},
-			],
-		};
-
-		expect(renderTodoWriteSummary(state)).toBe("Remaining items: none.");
+	it("renders empty summary when no tasks remain", () => {
+		const state = { phases: [] };
+		expect(renderTodoWriteSummary(state)).toBe("Todo list cleared.");
 	});
 });

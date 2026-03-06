@@ -1,7 +1,8 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
-import { Type } from "@sinclair/typebox";
+import { StringEnum } from "@mariozechner/pi-ai";
+import { Type, type Static } from "@sinclair/typebox";
 
 type TodoStatus = "pending" | "in_progress" | "completed" | "abandoned";
 
@@ -9,7 +10,7 @@ type TodoTask = {
 	id: string;
 	content: string;
 	status: TodoStatus;
-	notes: string;
+	notes?: string;
 };
 
 type TodoPhase = {
@@ -22,30 +23,60 @@ type TodoState = {
 	phases: TodoPhase[];
 };
 
-type ReplaceTaskInput = {
-	content: string;
-	status?: TodoStatus;
-	notes?: string;
-};
+const StatusEnum = StringEnum(["pending", "in_progress", "completed", "abandoned"] as const, {
+	description: "Task status",
+});
 
-type ReplacePhaseInput = {
-	name: string;
-	tasks: ReplaceTaskInput[];
-};
+const InputTask = Type.Object({
+	content: Type.String({ description: "Task description" }),
+	status: Type.Optional(StatusEnum),
+	notes: Type.Optional(Type.String({ description: "Additional context or notes" })),
+});
 
-type TodoWriteOp =
-	| { op: "replace"; phases: ReplacePhaseInput[] }
-	| { op: "add_phase"; name: string; tasks: ReplaceTaskInput[] }
-	| { op: "add_task"; phase: string; content: string; notes?: string }
-	| { op: "update"; id: string; status?: TodoStatus; content?: string; notes?: string }
-	| { op: "remove_task"; id: string };
+const InputPhase = Type.Object({
+	name: Type.String({ description: "Phase name" }),
+	tasks: Type.Optional(Type.Array(InputTask)),
+});
 
 const TodoWriteParams = Type.Object(
 	{
-		ops: Type.Array(Type.Any(), { description: "Todo write operations" }),
+		ops: Type.Array(
+			Type.Union([
+				Type.Object({
+					op: Type.Literal("replace"),
+					phases: Type.Array(InputPhase),
+				}),
+				Type.Object({
+					op: Type.Literal("add_phase"),
+					name: Type.String({ description: "Phase name" }),
+					tasks: Type.Optional(Type.Array(InputTask)),
+				}),
+				Type.Object({
+					op: Type.Literal("add_task"),
+					phase: Type.String({ description: "Phase ID, e.g. phase-1" }),
+					content: Type.String({ description: "Task description" }),
+					notes: Type.Optional(Type.String({ description: "Additional context or notes" })),
+				}),
+				Type.Object({
+					op: Type.Literal("update"),
+					id: Type.String({ description: "Task ID, e.g. task-3" }),
+					status: Type.Optional(StatusEnum),
+					content: Type.Optional(Type.String({ description: "Updated task description" })),
+					notes: Type.Optional(Type.String({ description: "Additional context or notes" })),
+				}),
+				Type.Object({
+					op: Type.Literal("remove_task"),
+					id: Type.String({ description: "Task ID, e.g. task-3" }),
+				}),
+			]),
+			{ description: "Todo write operations" },
+		),
 	},
 	{ additionalProperties: true },
 );
+
+type TodoWriteParamsType = Static<typeof TodoWriteParams>;
+type TodoWriteOp = TodoWriteParamsType["ops"][number];
 
 const TODO_WRITE_DIR = ".todos";
 const TODO_WRITE_FILE = "todo-write-state.json";
@@ -62,217 +93,215 @@ function isStatus(value: unknown): value is TodoStatus {
 	return value === "pending" || value === "in_progress" || value === "completed" || value === "abandoned";
 }
 
-function normalizeTaskInput(raw: unknown): ReplaceTaskInput | null {
-	if (!raw || typeof raw !== "object") return null;
-	const entry = raw as Record<string, unknown>;
-	if (typeof entry.content !== "string" || !entry.content.trim()) return null;
+function findTask(phases: TodoPhase[], id: string): TodoTask | undefined {
+	for (const phase of phases) {
+		const task = phase.tasks.find((entry) => entry.id === id);
+		if (task) return task;
+	}
+	return undefined;
+}
 
-	const status = entry.status;
-	if (status != null && !isStatus(status)) return null;
-
-	const notes = entry.notes;
-	if (notes != null && typeof notes !== "string") return null;
-
+function buildPhaseFromInput(
+	input: { name: string; tasks?: Array<{ content: string; status?: TodoStatus; notes?: string }> },
+	phaseId: string,
+	nextTaskId: number,
+): { phase: TodoPhase; nextTaskId: number } {
+	const tasks: TodoTask[] = [];
+	let taskId = nextTaskId;
+	for (const task of input.tasks ?? []) {
+		tasks.push({
+			id: `task-${taskId++}`,
+			content: task.content,
+			status: task.status ?? "pending",
+			notes: task.notes,
+		});
+	}
 	return {
-		content: entry.content,
-		status: status ?? "pending",
-		notes: typeof notes === "string" ? notes : "",
+		phase: {
+			id: phaseId,
+			name: input.name,
+			tasks,
+		},
+		nextTaskId: taskId,
 	};
 }
 
-function normalizeOps(rawOps: unknown): { ops?: TodoWriteOp[]; error?: string } {
-	if (!Array.isArray(rawOps) || rawOps.length === 0) {
-		return { error: "ops must be a non-empty array." };
+function getNextIds(phases: TodoPhase[]): { nextTaskId: number; nextPhaseId: number } {
+	let maxTaskId = 0;
+	let maxPhaseId = 0;
+
+	for (const phase of phases) {
+		const phaseMatch = /^phase-(\d+)$/.exec(phase.id);
+		if (phaseMatch) {
+			const value = Number.parseInt(phaseMatch[1], 10);
+			if (Number.isFinite(value) && value > maxPhaseId) maxPhaseId = value;
+		}
+
+		for (const task of phase.tasks) {
+			const taskMatch = /^task-(\d+)$/.exec(task.id);
+			if (!taskMatch) continue;
+			const value = Number.parseInt(taskMatch[1], 10);
+			if (Number.isFinite(value) && value > maxTaskId) maxTaskId = value;
+		}
 	}
 
-	const ops: TodoWriteOp[] = [];
-	for (const raw of rawOps) {
-		if (!raw || typeof raw !== "object") return { error: "Each op must be an object." };
-		const op = raw as Record<string, unknown>;
-		if (op.op === "replace") {
-			if (!Array.isArray(op.phases)) return { error: "replace requires phases array." };
-			const phases: ReplacePhaseInput[] = [];
-			for (const rawPhase of op.phases) {
-				if (!rawPhase || typeof rawPhase !== "object") return { error: "replace phases must be objects." };
-				const phaseObj = rawPhase as Record<string, unknown>;
-				if (typeof phaseObj.name !== "string" || !phaseObj.name.trim()) {
-					return { error: "phase name is required." };
-				}
-				if (!Array.isArray(phaseObj.tasks)) return { error: "phase tasks must be an array." };
-				const tasks: ReplaceTaskInput[] = [];
-				for (const rawTask of phaseObj.tasks) {
-					const task = normalizeTaskInput(rawTask);
-					if (!task) return { error: "invalid replace task entry." };
-					tasks.push(task);
-				}
-				phases.push({ name: phaseObj.name, tasks });
-			}
-			ops.push({ op: "replace", phases });
-			continue;
-		}
+	return { nextTaskId: maxTaskId + 1, nextPhaseId: maxPhaseId + 1 };
+}
 
-		if (op.op === "add_phase") {
-			if (typeof op.name !== "string" || !op.name.trim()) return { error: "add_phase requires name." };
-			if (!Array.isArray(op.tasks)) return { error: "add_phase requires tasks array." };
-			const tasks: ReplaceTaskInput[] = [];
-			for (const rawTask of op.tasks) {
-				const task = normalizeTaskInput(rawTask);
-				if (!task) return { error: "invalid add_phase task entry." };
-				tasks.push(task);
-			}
-			ops.push({ op: "add_phase", name: op.name, tasks });
-			continue;
-		}
+function clonePhases(phases: TodoPhase[]): TodoPhase[] {
+	return phases.map((phase) => ({
+		...phase,
+		tasks: phase.tasks.map((task) => ({ ...task })),
+	}));
+}
 
-		if (op.op === "add_task") {
-			if (typeof op.phase !== "string" || !op.phase.trim()) return { error: "add_task requires phase id." };
-			if (typeof op.content !== "string" || !op.content.trim()) return { error: "add_task requires content." };
-			if (op.notes != null && typeof op.notes !== "string") return { error: "add_task notes must be string." };
-			ops.push({
-				op: "add_task",
-				phase: op.phase,
-				content: op.content,
-				notes: typeof op.notes === "string" ? op.notes : "",
-			});
-			continue;
-		}
+function normalizeInProgressTask(phases: TodoPhase[]): void {
+	const orderedTasks = phases.flatMap((phase) => phase.tasks);
+	if (orderedTasks.length === 0) return;
 
-		if (op.op === "update") {
-			if (typeof op.id !== "string" || !op.id.trim()) return { error: "update requires id." };
-			if (op.status != null && !isStatus(op.status)) return { error: "update status is invalid." };
-			if (op.content != null && typeof op.content !== "string") return { error: "update content must be string." };
-			if (op.notes != null && typeof op.notes !== "string") return { error: "update notes must be string." };
-			ops.push({
-				op: "update",
-				id: op.id,
-				status: op.status as TodoStatus | undefined,
-				content: op.content as string | undefined,
-				notes: op.notes as string | undefined,
-			});
-			continue;
+	const inProgressTasks = orderedTasks.filter((task) => task.status === "in_progress");
+	if (inProgressTasks.length > 1) {
+		for (const task of inProgressTasks.slice(1)) {
+			task.status = "pending";
 		}
-
-		if (op.op === "remove_task") {
-			if (typeof op.id !== "string" || !op.id.trim()) return { error: "remove_task requires id." };
-			ops.push({ op: "remove_task", id: op.id });
-			continue;
-		}
-
-		return { error: `unsupported op: ${String(op.op)}` };
 	}
 
-	return { ops };
+	if (inProgressTasks.length > 0) return;
+
+	const firstPendingTask = orderedTasks.find((task) => task.status === "pending");
+	if (firstPendingTask) firstPendingTask.status = "in_progress";
 }
 
-function getMaxPhaseNumber(state: TodoState): number {
-	return state.phases
-		.map((phase) => Number(phase.id.replace("phase-", "")))
-		.filter((n) => Number.isInteger(n) && n > 0)
-		.reduce((acc, n) => Math.max(acc, n), 0);
-}
-
-function getMaxTaskNumber(state: TodoState): number {
-	return state.phases
-		.flatMap((phase) => phase.tasks)
-		.map((task) => Number(task.id.replace("task-", "")))
-		.filter((n) => Number.isInteger(n) && n > 0)
-		.reduce((acc, n) => Math.max(acc, n), 0);
-}
-
-function validateInProgressInvariant(state: TodoState): { error?: string } {
-	const inProgressCount = state.phases.flatMap((phase) => phase.tasks).filter((task) => task.status === "in_progress").length;
-	if (inProgressCount > 1) {
-		return { error: "Exactly one task may be in_progress at a time; found multiple in_progress tasks." };
-	}
-	return {};
-}
-
-export function applyTodoWriteOps(state: TodoState, ops: TodoWriteOp[]): { state?: TodoState; error?: string } {
-	let next: TodoState = {
-		phases: state.phases.map((phase) => ({ ...phase, tasks: phase.tasks.map((task) => ({ ...task })) })),
-	};
-	let phaseCounter = getMaxPhaseNumber(next);
-	let taskCounter = getMaxTaskNumber(next);
+export function applyTodoWriteOps(
+	state: TodoState,
+	ops: TodoWriteOp[],
+): {
+	state: TodoState;
+	errors: string[];
+} {
+	const errors: string[] = [];
+	let next: TodoState = { phases: clonePhases(state.phases) };
+	let { nextTaskId, nextPhaseId } = getNextIds(next.phases);
 
 	for (const op of ops) {
-		if (op.op === "replace") {
-			const phases: TodoPhase[] = [];
-			let phaseNum = 1;
-			let taskNum = 1;
-			for (const phase of op.phases) {
-				const tasks: TodoTask[] = phase.tasks.map((task) => ({
-					id: `task-${taskNum++}`,
-					content: task.content,
-					status: task.status ?? "pending",
-					notes: task.notes ?? "",
-				}));
-				phases.push({ id: `phase-${phaseNum++}`, name: phase.name, tasks });
+		switch (op.op) {
+			case "replace": {
+				const replaced: TodoState = { phases: [] };
+				let replaceTaskId = 1;
+				let replacePhaseId = 1;
+				for (const inputPhase of op.phases) {
+					const phaseId = `phase-${replacePhaseId++}`;
+					const { phase, nextTaskId: updatedTaskId } = buildPhaseFromInput(inputPhase, phaseId, replaceTaskId);
+					replaced.phases.push(phase);
+					replaceTaskId = updatedTaskId;
+				}
+				next = replaced;
+				({ nextTaskId, nextPhaseId } = getNextIds(next.phases));
+				break;
 			}
-			next = { phases };
-			phaseCounter = getMaxPhaseNumber(next);
-			taskCounter = getMaxTaskNumber(next);
-			continue;
-		}
 
-		if (op.op === "add_phase") {
-			const phaseId = `phase-${++phaseCounter}`;
-			const tasks: TodoTask[] = op.tasks.map((task) => ({
-				id: `task-${++taskCounter}`,
-				content: task.content,
-				status: task.status ?? "pending",
-				notes: task.notes ?? "",
-			}));
-			next.phases.push({ id: phaseId, name: op.name, tasks });
-			continue;
-		}
+			case "add_phase": {
+				const phaseId = `phase-${nextPhaseId++}`;
+				const { phase, nextTaskId: updatedTaskId } = buildPhaseFromInput(op, phaseId, nextTaskId);
+				next.phases.push(phase);
+				nextTaskId = updatedTaskId;
+				break;
+			}
 
-		if (op.op === "add_task") {
-			const phase = next.phases.find((entry) => entry.id === op.phase);
-			if (!phase) return { error: `Phase ${op.phase} not found.` };
-			phase.tasks.push({
-				id: `task-${++taskCounter}`,
-				content: op.content,
-				status: "pending",
-				notes: op.notes ?? "",
-			});
-			continue;
-		}
+			case "add_task": {
+				const phase = next.phases.find((entry) => entry.id === op.phase);
+				if (!phase) {
+					errors.push(`Phase "${op.phase}" not found`);
+					break;
+				}
+				phase.tasks.push({
+					id: `task-${nextTaskId++}`,
+					content: op.content,
+					status: "pending",
+					notes: op.notes,
+				});
+				break;
+			}
 
-		if (op.op === "update") {
-			const task = next.phases.flatMap((phase) => phase.tasks).find((entry) => entry.id === op.id);
-			if (!task) return { error: `Task ${op.id} not found.` };
-			if (op.status !== undefined) task.status = op.status;
-			if (op.content !== undefined) task.content = op.content;
-			if (op.notes !== undefined) task.notes = op.notes;
-			continue;
-		}
+			case "update": {
+				const task = findTask(next.phases, op.id);
+				if (!task) {
+					errors.push(`Task "${op.id}" not found`);
+					break;
+				}
+				if (op.status !== undefined) task.status = op.status;
+				if (op.content !== undefined) task.content = op.content;
+				if (op.notes !== undefined) task.notes = op.notes;
+				break;
+			}
 
-		const phase = next.phases.find((entry) => entry.tasks.some((task) => task.id === op.id));
-		if (!phase) return { error: `Task ${op.id} not found.` };
-		phase.tasks = phase.tasks.filter((task) => task.id !== op.id);
+			case "remove_task": {
+				let removed = false;
+				for (const phase of next.phases) {
+					const index = phase.tasks.findIndex((task) => task.id === op.id);
+					if (index === -1) continue;
+					phase.tasks.splice(index, 1);
+					removed = true;
+					break;
+				}
+				if (!removed) errors.push(`Task "${op.id}" not found`);
+				break;
+			}
+		}
 	}
 
-	const invariant = validateInProgressInvariant(next);
-	if (invariant.error) return { error: invariant.error };
-	return { state: next };
+	normalizeInProgressTask(next.phases);
+	return { state: next, errors };
 }
 
-export function renderTodoWriteSummary(state: TodoState): string {
-	const remaining = state.phases.flatMap((phase) => phase.tasks).filter((task) => task.status === "pending" || task.status === "in_progress");
-	if (remaining.length === 0) return "Remaining items: none.";
+export function renderTodoWriteSummary(state: TodoState, errors: string[] = []): string {
+	const tasks = state.phases.flatMap((phase) => phase.tasks);
+	if (tasks.length === 0) return errors.length > 0 ? `Errors: ${errors.join("; ")}` : "Todo list cleared.";
 
-	const lines: string[] = [`Remaining items (${remaining.length}):`];
-	for (const task of remaining) {
-		lines.push(`  - ${task.id} ${task.content} [${task.status}]`);
+	const remainingByPhase = state.phases
+		.map((phase) => ({
+			name: phase.name,
+			tasks: phase.tasks.filter((task) => task.status === "pending" || task.status === "in_progress"),
+		}))
+		.filter((phase) => phase.tasks.length > 0);
+	const remainingTasks = remainingByPhase.flatMap((phase) => phase.tasks.map((task) => ({ ...task, phase: phase.name })));
+
+	let currentIndex = state.phases.findIndex((phase) =>
+		phase.tasks.some((task) => task.status === "pending" || task.status === "in_progress"),
+	);
+	if (currentIndex === -1) currentIndex = state.phases.length - 1;
+	const currentPhase = state.phases[currentIndex];
+	const doneCount = currentPhase ? currentPhase.tasks.filter((task) => task.status === "completed" || task.status === "abandoned").length : 0;
+
+	const lines: string[] = [];
+	if (errors.length > 0) lines.push(`Errors: ${errors.join("; ")}`);
+	if (remainingTasks.length === 0) {
+		lines.push("Remaining items: none.");
+	} else {
+		lines.push(`Remaining items (${remainingTasks.length}):`);
+		for (const task of remainingTasks) {
+			lines.push(`  - ${task.id} ${task.content} [${task.status}] (${task.phase})`);
+		}
+	}
+
+	if (currentPhase) {
+		lines.push(
+			`Phase ${currentIndex + 1}/${state.phases.length} "${currentPhase.name}" — ${doneCount}/${currentPhase.tasks.length} tasks complete`,
+		);
 	}
 
 	for (const phase of state.phases) {
-		const total = phase.tasks.length;
-		const done = phase.tasks.filter((task) => task.status === "completed").length;
-		lines.push(`Phase ${phase.id} \"${phase.name}\" — ${done}/${total} tasks complete`);
+		lines.push(`  ${phase.name}:`);
 		for (const task of phase.tasks) {
-			const marker = task.status === "completed" ? "✓" : task.status === "in_progress" ? "→" : task.status === "abandoned" ? "✗" : "○";
-			lines.push(`  ${marker} ${task.id} ${task.content}`);
+			const marker =
+				task.status === "completed"
+					? "✓"
+					: task.status === "in_progress"
+						? "→"
+						: task.status === "abandoned"
+							? "✗"
+							: "○";
+			lines.push(`    ${marker} ${task.id} ${task.content}`);
 		}
 	}
 
@@ -285,32 +314,30 @@ async function readTodoWriteState(cwd: string): Promise<TodoState> {
 		const raw = await readFile(path, "utf8");
 		const parsed = JSON.parse(raw) as { phases?: unknown };
 		if (!parsed || !Array.isArray(parsed.phases)) return createEmptyState();
+
 		const phases: TodoPhase[] = [];
 		for (const rawPhase of parsed.phases) {
 			if (!rawPhase || typeof rawPhase !== "object") continue;
 			const phase = rawPhase as Record<string, unknown>;
 			if (typeof phase.id !== "string" || typeof phase.name !== "string" || !Array.isArray(phase.tasks)) continue;
+
 			const tasks: TodoTask[] = [];
 			for (const rawTask of phase.tasks) {
 				if (!rawTask || typeof rawTask !== "object") continue;
 				const task = rawTask as Record<string, unknown>;
-				if (
-					typeof task.id !== "string" ||
-					typeof task.content !== "string" ||
-					typeof task.notes !== "string" ||
-					!isStatus(task.status)
-				) {
-					continue;
-				}
+				if (typeof task.id !== "string" || typeof task.content !== "string" || !isStatus(task.status)) continue;
+				const notes = typeof task.notes === "string" ? task.notes : undefined;
 				tasks.push({
 					id: task.id,
 					content: task.content,
 					status: task.status,
-					notes: task.notes,
+					notes,
 				});
 			}
+
 			phases.push({ id: phase.id, name: phase.name, tasks });
 		}
+
 		return { phases };
 	} catch {
 		return createEmptyState();
@@ -328,31 +355,14 @@ export default function todoWriteExtension(pi: ExtensionAPI): void {
 		name: "todo_write",
 		label: "Todo Write",
 		description:
-			"Manage phased todos via ops. Supports replace/update/add_phase/add_task/remove_task with statuses pending/in_progress/completed/abandoned.",
+			"Manage phased todos via ops. Use replace/add_phase/add_task/update/remove_task. replace phases require { name, tasks? }; tasks require { content, status?, notes? }. Status values: pending, in_progress, completed, abandoned.",
 		parameters: TodoWriteParams,
 		async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
-			const parsed = normalizeOps((params as Record<string, unknown>).ops);
-			if (!parsed.ops) {
-				return {
-					isError: true,
-					content: [{ type: "text" as const, text: `Error: ${parsed.error ?? "invalid ops"}` }],
-					details: undefined,
-				};
-			}
-
 			const current = await readTodoWriteState(ctx.cwd);
-			const applied = applyTodoWriteOps(current, parsed.ops);
-			if (!applied.state) {
-				return {
-					isError: true,
-					content: [{ type: "text" as const, text: `Error: ${applied.error ?? "failed to apply ops"}` }],
-					details: undefined,
-				};
-			}
-
+			const applied = applyTodoWriteOps(current, params.ops);
 			await writeTodoWriteState(ctx.cwd, applied.state);
 			return {
-				content: [{ type: "text" as const, text: renderTodoWriteSummary(applied.state) }],
+				content: [{ type: "text" as const, text: renderTodoWriteSummary(applied.state, applied.errors) }],
 				details: { phases: applied.state.phases },
 			};
 		},
