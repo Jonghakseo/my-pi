@@ -2,7 +2,7 @@
 name: simplifier
 description: Code simplification specialist — refines recently modified code for clarity, consistency, and maintainability without changing behavior
 tools: read, grep, find, ls, bash, edit, write
-model: openai-codex/gpt-5.4
+model: anthropic/claude-sonnet-4-6
 thinking: medium
 ---
 
