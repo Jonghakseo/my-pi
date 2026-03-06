@@ -6,11 +6,11 @@
 
 **A personal AI operating system built on [pi](https://github.com/mariozechner/pi-coding-agent)**
 
-*10 specialized agents · 20+ extensions · one developer's opinionated setup*
+*11 specialized agents · 20+ extensions · one developer's opinionated setup*
 
 <br/>
 
-`🤖 10 Agents` &nbsp; `🧩 20+ Extensions` &nbsp; `🎨 5 Themes`
+`🤖 11 Agents` &nbsp; `🧩 20+ Extensions` &nbsp; `🎨 5 Themes`
 
 <br/>
 
@@ -34,7 +34,7 @@ The system is organized in **four layers**:
 |---|---|
 | **User / pi TUI** | Interactive terminal interface |
 | **Extensions** | 20+ TypeScript plugins — subagent management, voice I/O, MCP bridge, UI overlays, safety guards |
-| **Agent Orchestra** | 10 purpose-built agents with distinct models and roles |
+| **Agent Orchestra** | 11 purpose-built agents with distinct models and roles |
 | **Infrastructure** | MCP tool integrations via [claude-mcp-bridge](./extensions/claude-mcp-bridge/) — reuses your existing Claude Code MCP setup (Jira, Slack, Gmail, Calendar, GA4, Figma, DB, etc.) |
 
 ---
@@ -45,7 +45,7 @@ The system is organized in **four layers**:
   <img src="./tmp/agents.en.svg" alt="Agent Orchestra" width="800"/>
 </p>
 
-Ten agents, three models, one orchestrator. Each agent has a specific mandate, its own system prompt, and a model chosen for its strengths:
+Eleven agents, three models, one orchestrator. Each agent has a specific mandate, its own system prompt, and a model chosen for its strengths:
 
 | Agent | Model | Role | When to Use |
 |---|---|---|---|
@@ -53,6 +53,7 @@ Ten agents, three models, one orchestrator. Each agent has a specific mandate, i
 | ⚡ **worker** | `gpt-5.3-codex` | General-purpose executor | Implementation, writing, fixes (complex multi-file) |
 | 🏃 **worker-fast** | `gpt-5.3-codex-spark` | Lightweight simple executor | Single-file edits, quick changes |
 | 📐 **planner** | `gpt-5.3-codex` | Implementation architect | Breaking down complex tasks |
+| ✨ **simplifier** | `gpt-5.3-codex` | Code simplification specialist | Clean up recently modified code, improve readability, preserve behavior |
 | 🔎 **reviewer** | `gpt-5.3-codex` | Code review (P0–P3 severity) | PR reviews, quality checks |
 | 🥊 **challenger** | `gpt-5.3-codex` | Pressure tester | Stress-test plans before execution |
 | ✅ **verifier** | `gpt-5.3-codex` | 3-tier evidence validation | Verify claims, check correctness |
@@ -277,7 +278,7 @@ This is not a demo project. It's a **living configuration** used daily for produ
 | Metric | Value |
 |---|---|
 | Active extensions | 20+ |
-| Agent definitions | 10 |
+| Agent definitions | 11 |
 | Themes | 5 |
 
 ---
