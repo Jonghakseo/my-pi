@@ -33,7 +33,7 @@ import {
 	wrapTaskWithMainContext,
 } from "./session.js";
 import { type SubagentStore, updateRunFromResult } from "./store.js";
-import type { ChainItemFields, CommandRunState, OnUpdateCallback, SingleResult, SubagentDetails } from "./types.js";
+import type { CommandRunState, OnUpdateCallback, SingleResult, SubagentDetails } from "./types.js";
 import { updateCommandRunsWidget } from "./widget.js";
 
 type SessionToolCall = {
@@ -345,14 +345,12 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 		const hasSingle = Boolean((params.agent && params.task) || (params.runId !== undefined && params.task));
 		const modeCount = Number(hasChain) + Number(hasSingle);
 
-		const makeDetails =
-			(mode: "single" | "chain") =>
-			(results: SingleResult[]): SubagentDetails => ({
-				mode,
-				inheritMainContext,
-				projectAgentsDir: discovery.projectAgentsDir,
-				results,
-			});
+		const makeDetails = (results: SingleResult[]): SubagentDetails => ({
+			mode: "single",
+			inheritMainContext,
+			projectAgentsDir: discovery.projectAgentsDir,
+			results,
+		});
 
 		const runCounts = getRunCounts(store);
 		const idleRunWarning =
@@ -372,7 +370,7 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 				if (runs.length === 0) {
 					return {
 						content: [{ type: "text", text: withIdleRunWarning("No subagent runs found.") }],
-						details: makeDetails("single")([]),
+						details: makeDetails([]),
 					};
 				}
 				const lines = runs.map((run) => {
@@ -384,7 +382,7 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 				});
 				return {
 					content: [{ type: "text", text: withIdleRunWarning(`Subagent runs\n\n${lines.join("\n\n")}`) }],
-					details: makeDetails("single")([]),
+					details: makeDetails([]),
 				};
 			}
 
@@ -393,7 +391,7 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 			if (invalidRunIds.length > 0) {
 				return {
 					content: [{ type: "text", text: `runIds must be an array of integer run IDs.` }],
-					details: makeDetails("single")([]),
+					details: makeDetails([]),
 					isError: true,
 				};
 			}
@@ -406,7 +404,7 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 			if (!isBulkAction && rawRunIds !== undefined) {
 				return {
 					content: [{ type: "text", text: `asyncAction=${asyncAction} does not support runIds. Use runId.` }],
-					details: makeDetails("single")([]),
+					details: makeDetails([]),
 					isError: true,
 				};
 			}
@@ -414,7 +412,7 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 			if (hasRunId && hasRunIds) {
 				return {
 					content: [{ type: "text", text: `Use either runId or runIds, not both.` }],
-					details: makeDetails("single")([]),
+					details: makeDetails([]),
 					isError: true,
 				};
 			}
@@ -423,7 +421,7 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 				const required = isBulkAction ? "runId or runIds" : "runId";
 				return {
 					content: [{ type: "text", text: `asyncAction=${asyncAction} requires ${required}.` }],
-					details: makeDetails("single")([]),
+					details: makeDetails([]),
 					isError: true,
 				};
 			}
@@ -436,7 +434,7 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 				if (!run) {
 					return {
 						content: [{ type: "text", text: `Unknown subagent run #${firstRunId}.` }],
-						details: makeDetails("single")([]),
+						details: makeDetails([]),
 						isError: true,
 					};
 				}
@@ -454,7 +452,7 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 								text: `${formatCommandRunSummary(run)}\n${run.task}\n\n${preview}`,
 							},
 						],
-						details: makeDetails("single")([]),
+						details: makeDetails([]),
 					};
 				}
 
@@ -463,13 +461,13 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 						content: [
 							{ type: "text", text: `Subagent run #${run.id} is still running. detail is available after completion.` },
 						],
-						details: makeDetails("single")([]),
+						details: makeDetails([]),
 						isError: true,
 					};
 				}
 				return {
 					content: [{ type: "text", text: formatRunDetailOutput(run) }],
-					details: makeDetails("single")([]),
+					details: makeDetails([]),
 				};
 			}
 
@@ -504,7 +502,7 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 				if (targetRunIds.length === 1 && aborting.length === 1 && notRunning.length === 0 && unknown.length === 0) {
 					return {
 						content: [{ type: "text", text: `Aborting subagent run #${aborting[0]}...` }],
-						details: makeDetails("single")([]),
+						details: makeDetails([]),
 					};
 				}
 
@@ -516,7 +514,7 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 
 				return {
 					content: [{ type: "text", text: lines.join("\n") }],
-					details: makeDetails("single")([]),
+					details: makeDetails([]),
 				};
 			}
 
@@ -563,7 +561,7 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 										: `Removed subagent run #${removed[0]}.`,
 							},
 						],
-						details: makeDetails("single")([]),
+						details: makeDetails([]),
 					};
 				}
 
@@ -576,7 +574,7 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 
 				return {
 					content: [{ type: "text", text: lines.join("\n") }],
-					details: makeDetails("single")([]),
+					details: makeDetails([]),
 				};
 			}
 		}
@@ -590,202 +588,325 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 						text: `Invalid parameters. Provide exactly one mode.\nAvailable agents: ${available}`,
 					},
 				],
-				details: makeDetails("single")([]),
+				details: makeDetails([]),
 			};
 		}
 
-		const runAsync = params.runAsync ?? true;
+		if (hasChain) {
+			return {
+				content: [
+					{
+						type: "text",
+						text: withIdleRunWarning(
+							"Chain mode is no longer supported by the subagent CLI. Launch one run at a time and compose follow-up work through additional run/continue commands.",
+						),
+					},
+				],
+				details: makeDetails([]),
+				isError: true,
+			};
+		}
 
-		if (runAsync) {
-			if (hasChain) {
+		if (!hasSingle) {
+			return {
+				content: [
+					{
+						type: "text",
+						text: withIdleRunWarning("subagent run/continue requires single mode: provide agent + task, or runId + task."),
+					},
+				],
+				details: makeDetails([]),
+				isError: true,
+			};
+		}
+
+		if (hasSingle && !params.task) {
+			return {
+				content: [{ type: "text", text: withIdleRunWarning("single subagent run requires task.") }],
+				details: makeDetails([]),
+				isError: true,
+			};
+		}
+
+		if (runCounts.running >= MAX_CONCURRENT_ASYNC_SUBAGENT_RUNS) {
+			return {
+				content: [
+					{
+						type: "text",
+						text: withIdleRunWarning(
+							`Too many running subagent runs (${runCounts.running}). Max is ${MAX_CONCURRENT_ASYNC_SUBAGENT_RUNS}. ` +
+								`Wait for completion, abort unnecessary runs, or remove stale runs before starting a new one.`,
+						),
+					},
+				],
+				details: makeDetails([]),
+				isError: true,
+			};
+		}
+
+		// Async runs always use a dedicated session file (not a copy of
+		// the main session) to avoid contamination.  The "B" approach is
+		// used: mainContextText was already extracted above and will be
+		// injected into the task via wrapTaskWithMainContext.
+		// inheritMainContext is intentionally kept so that contextMode
+		// metadata correctly reflects "main" when the caller requested it.
+
+		// --- runId continuation: resume an existing completed/error run ---
+		const continuationRunId = Number.isInteger(params.runId) ? (params.runId as number) : undefined;
+		if (params.runId !== undefined && continuationRunId === undefined) {
+			return {
+				content: [{ type: "text", text: withIdleRunWarning("runId must be an integer.") }],
+				details: makeDetails([]),
+				isError: true,
+			};
+		}
+
+		let continueFromRun: CommandRunState | undefined;
+		if (continuationRunId !== undefined) {
+			continueFromRun = store.commandRuns.get(continuationRunId);
+			if (!continueFromRun) {
 				return {
 					content: [
 						{
 							type: "text",
 							text: withIdleRunWarning(
-								"runAsync supports single mode only. For dependent multi-step work, use chain with runAsync:false.",
+								`Unknown subagent run #${continuationRunId}. Use \`subagent runs\` to see available runs.`,
 							),
 						},
 					],
-					details: makeDetails("single")([]),
+					details: makeDetails([]),
 					isError: true,
 				};
 			}
-
-			if (!hasSingle) {
-				return {
-					content: [
-						{
-							type: "text",
-							text: withIdleRunWarning("runAsync requires single mode: provide agent + task, or runId + task."),
-						},
-					],
-					details: makeDetails("single")([]),
-					isError: true,
-				};
-			}
-
-			if (hasSingle && !params.task) {
-				return {
-					content: [{ type: "text", text: withIdleRunWarning("single async run requires task.") }],
-					details: makeDetails("single")([]),
-					isError: true,
-				};
-			}
-
-			if (runCounts.running >= MAX_CONCURRENT_ASYNC_SUBAGENT_RUNS) {
+			if (continueFromRun.status === "running") {
 				return {
 					content: [
 						{
 							type: "text",
 							text: withIdleRunWarning(
-								`Too many running subagent runs (${runCounts.running}). Max is ${MAX_CONCURRENT_ASYNC_SUBAGENT_RUNS}. ` +
-									`Wait for completion, abort unnecessary runs, or remove stale runs before starting a new one.`,
+								`Subagent #${continuationRunId} is still running. Wait for it to finish or abort it first.`,
 							),
 						},
 					],
-					details: makeDetails("single")([]),
+					details: makeDetails([]),
 					isError: true,
 				};
 			}
+		}
 
-			// Async runs always use a dedicated session file (not a copy of
-			// the main session) to avoid contamination.  The "B" approach is
-			// used: mainContextText was already extracted above and will be
-			// injected into the task via wrapTaskWithMainContext.
-			// inheritMainContext is intentionally kept so that contextMode
-			// metadata correctly reflects "main" when the caller requested it.
+		const resolvedAgent = params.agent ?? continueFromRun?.agent ?? "worker";
+		let runId: number;
+		let runState: CommandRunState;
+		let taskForDisplay: string;
+		let sessionFileForRun: string | undefined;
 
-			// --- runId continuation: resume an existing completed/error run ---
-			const continuationRunId = Number.isInteger(params.runId) ? (params.runId as number) : undefined;
-			if (params.runId !== undefined && continuationRunId === undefined) {
-				return {
-					content: [{ type: "text", text: withIdleRunWarning("runId must be an integer.") }],
-					details: makeDetails("single")([]),
-					isError: true,
-				};
-			}
+		if (continueFromRun) {
+			// Reuse existing run — same pattern as /sub:main command continuation
+			runId = continueFromRun.id;
+			taskForDisplay = `[continue #${runId}] ${params.task}`;
+			sessionFileForRun = continueFromRun.sessionFile;
 
-			let continueFromRun: CommandRunState | undefined;
-			if (continuationRunId !== undefined) {
-				continueFromRun = store.commandRuns.get(continuationRunId);
-				if (!continueFromRun) {
-					return {
-						content: [
-							{
-								type: "text",
-								text: withIdleRunWarning(
-									`Unknown subagent run #${continuationRunId}. Use \`subagent runs\` to see available runs.`,
-								),
-							},
-						],
-						details: makeDetails("single")([]),
-						isError: true,
-					};
-				}
-				if (continueFromRun.status === "running") {
-					return {
-						content: [
-							{
-								type: "text",
-								text: withIdleRunWarning(
-									`Subagent #${continuationRunId} is still running. Wait for it to finish or abort it first.`,
-								),
-							},
-						],
-						details: makeDetails("single")([]),
-						isError: true,
-					};
-				}
-			}
+			runState = continueFromRun;
+			runState.agent = resolvedAgent;
+			runState.task = taskForDisplay;
+			runState.status = "running";
+			runState.startedAt = Date.now();
+			runState.lastActivityAt = Date.now();
+			runState.elapsedMs = 0;
+			runState.toolCalls = 0;
+			runState.lastLine = "";
+			runState.lastOutput = "";
+			runState.continuedFromRunId = continuationRunId;
+			runState.usage = undefined;
+			runState.model = undefined;
+			runState.removed = false;
+			runState.turnCount = Math.max(DEFAULT_TURN_COUNT, runState.turnCount || DEFAULT_TURN_COUNT) + 1;
+			runState.contextMode = runState.contextMode ?? (inheritMainContext ? "main" : "sub");
+			runState.sessionFile = runState.sessionFile ?? makeSubagentSessionFile(runId);
+			runState.source = "tool";
+			sessionFileForRun = runState.sessionFile;
+		} else {
+			runId = store.nextCommandRunId++;
+			taskForDisplay = params.task!;
+			sessionFileForRun = makeSubagentSessionFile(runId);
 
-			const resolvedAgent = params.agent ?? continueFromRun?.agent ?? "worker";
-			let runId: number;
-			let runState: CommandRunState;
-			let taskForDisplay: string;
-			let sessionFileForRun: string | undefined;
+			runState = {
+				id: runId,
+				agent: resolvedAgent,
+				task: taskForDisplay,
+				status: "running",
+				startedAt: Date.now(),
+				lastActivityAt: Date.now(),
+				elapsedMs: 0,
+				toolCalls: 0,
+				lastLine: "",
+				lastOutput: "",
+				turnCount: DEFAULT_TURN_COUNT,
+				sessionFile: sessionFileForRun,
+				removed: false,
+				contextMode: inheritMainContext ? "main" : "sub",
+				source: "tool",
+			};
+			store.commandRuns.set(runId, runState);
+		}
 
-			if (continueFromRun) {
-				// Reuse existing run — same pattern as /sub:main command continuation
-				runId = continueFromRun.id;
-				taskForDisplay = `[continue #${runId}] ${params.task}`;
-				sessionFileForRun = continueFromRun.sessionFile;
+		const abortController = new AbortController();
+		runState.abortController = abortController;
 
-				runState = continueFromRun;
-				runState.agent = resolvedAgent;
-				runState.task = taskForDisplay;
-				runState.status = "running";
-				runState.startedAt = Date.now();
-				runState.lastActivityAt = Date.now();
-				runState.elapsedMs = 0;
-				runState.toolCalls = 0;
-				runState.lastLine = "";
-				runState.lastOutput = "";
-				runState.continuedFromRunId = continuationRunId;
-				runState.usage = undefined;
-				runState.model = undefined;
-				runState.removed = false;
-				runState.turnCount = Math.max(DEFAULT_TURN_COUNT, runState.turnCount || DEFAULT_TURN_COUNT) + 1;
-				runState.contextMode = runState.contextMode ?? (inheritMainContext ? "main" : "sub");
-				runState.sessionFile = runState.sessionFile ?? makeSubagentSessionFile(runId);
-				runState.source = "tool";
-				sessionFileForRun = runState.sessionFile;
-			} else {
-				runId = store.nextCommandRunId++;
-				taskForDisplay = params.task!;
-				sessionFileForRun = makeSubagentSessionFile(runId);
+		// Register in global live run registry (survives session switches).
+		let originSessionFile = "";
+		try {
+			const raw = ctx.sessionManager.getSessionFile() ?? "";
+			originSessionFile = raw.replace(/[\r\n\t]+/g, "").trim();
+		} catch {
+			/* ignore */
+		}
+		store.globalLiveRuns.set(runId, {
+			runState,
+			abortController,
+			originSessionFile,
+		});
 
-				runState = {
-					id: runId,
+		store.commandWidgetCtx = ctx;
+		updateCommandRunsWidget(store, ctx);
+
+		const startedState = continueFromRun ? "resumed" : "started";
+		const contextLabel = runState.contextMode === "main" ? "main context" : "dedicated sub-session";
+
+		pi.sendMessage(
+			{
+				customType: "subagent-tool",
+				content:
+					`[subagent:${resolvedAgent}#${runId}] ${startedState}` +
+					`
+Context: ${contextLabel} · turn ${runState.turnCount}` +
+					``,
+				display: false,
+				details: {
+					runId,
 					agent: resolvedAgent,
 					task: taskForDisplay,
-					status: "running",
-					startedAt: Date.now(),
-					lastActivityAt: Date.now(),
-					elapsedMs: 0,
-					toolCalls: 0,
-					lastLine: "",
-					lastOutput: "",
-					turnCount: DEFAULT_TURN_COUNT,
-					sessionFile: sessionFileForRun,
-					removed: false,
-					contextMode: inheritMainContext ? "main" : "sub",
-					source: "tool",
-				};
-				store.commandRuns.set(runId, runState);
-			}
+					continuedFromRunId: continuationRunId,
+					turnCount: runState.turnCount,
+					contextMode: runState.contextMode,
+					sessionFile: runState.sessionFile,
+					status: startedState,
+					startedAt: runState.startedAt,
+					elapsedMs: runState.elapsedMs,
+					lastActivityAt: runState.lastActivityAt,
+					thoughtText: runState.thoughtText,
+				},
+			},
+			{ deliverAs: "followUp", triggerTurn: false },
+		);
 
-			const abortController = new AbortController();
-			runState.abortController = abortController;
+		if (ctx.hasUI) {
+			ctx.ui.notify(
+				(continueFromRun
+					? `Resumed subagent #${runId}: ${resolvedAgent}`
+					: `Started subagent #${runId}: ${resolvedAgent}`) + ` (${contextLabel} · turn ${runState.turnCount})`,
+				"info",
+			);
+		}
 
-			// Register in global live run registry (survives session switches).
-			let originSessionFile = "";
+		void (async () => {
 			try {
-				const raw = ctx.sessionManager.getSessionFile() ?? "";
-				originSessionFile = raw.replace(/[\r\n\t]+/g, "").trim();
-			} catch {
-				/* ignore */
-			}
-			store.globalLiveRuns.set(runId, {
-				runState,
-				abortController,
-				originSessionFile,
-			});
+				const result = await enqueueSubagentInvocation(() =>
+					runSingleAgent(
+						ctx.cwd,
+						agents,
+						resolvedAgent,
+						wrapTaskWithMainContext(
+							params.task!,
+							stripTaskEchoFromMainContext(mainContextText, params.task!),
+							{ mainSessionFile, totalMessageCount },
+						),
+						undefined,
+						abortController.signal,
+						(partial) => {
+							if (runState.removed) return;
+							const current = partial.details?.results?.[0];
+							if (!current) return;
+							updateRunFromResult(runState, current);
+							updateCommandRunsWidget(store);
+						},
+						makeDetails,
+						runState.sessionFile,
+					),
+				);
 
-			store.commandWidgetCtx = ctx;
-			updateCommandRunsWidget(store, ctx);
+				if (runState.removed) return;
 
-			const startedState = continueFromRun ? "resumed" : "started";
-			const contextLabel = runState.contextMode === "main" ? "main context" : "dedicated sub-session";
+				updateRunFromResult(runState, result);
 
-			pi.sendMessage(
-				{
-					customType: "subagent-tool",
+				// Escalation detection: subagent used escalate tool (exit code 42)
+				if (result.exitCode === ESCALATION_EXIT_CODE && runState.sessionFile) {
+					const escalation = readAndConsumeEscalation(runState.sessionFile);
+					const escalationMsg = escalation?.message ?? "Subagent escalated without a message.";
+					runState.status = "error";
+					runState.elapsedMs = Date.now() - runState.startedAt;
+					runState.lastOutput = `[ESCALATION] ${escalationMsg}`;
+					runState.lastLine = `[ESCALATION] ${escalationMsg}`;
+					updateCommandRunsWidget(store);
+
+					const usage = formatUsageStats(result.usage, result.model);
+					const completionMessage = {
+						customType: "subagent-tool" as const,
+						content:
+							`[subagent:${resolvedAgent}#${runId}] escalated` +
+							`
+Prompt: ${truncateLines(taskForDisplay, 2)}` +
+							(usage ? `
+Usage: ${usage}` : "") +
+							`
+
+[ESCALATION] ${escalationMsg}`,
+						display: true,
+						details: {
+							runId,
+							agent: resolvedAgent,
+							task: taskForDisplay,
+							status: "error" as const,
+							startedAt: runState.startedAt,
+							elapsedMs: runState.elapsedMs,
+							lastActivityAt: runState.lastActivityAt,
+							exitCode: result.exitCode,
+							usage: result.usage,
+							model: result.model,
+						},
+					};
+					pi.sendMessage(completionMessage, { triggerTurn: true });
+					return;
+				}
+
+				const failure = diagnoseResultFailure(result);
+				const isError = failure.failed;
+				runState.status = isError ? "error" : "done";
+				runState.elapsedMs = Date.now() - runState.startedAt;
+				updateCommandRunsWidget(store);
+
+				const rawOutput = isError
+					? failure.reason || result.errorMessage || result.stderr || getFinalOutput(result.messages) || "(no output)"
+					: getFinalOutput(result.messages) || "(no output)";
+				const usage = formatUsageStats(result.usage, result.model);
+
+				runState.lastOutput = rawOutput;
+				if (rawOutput) runState.lastLine = getLastNonEmptyLine(rawOutput);
+
+				const completionMessage = {
+					customType: "subagent-tool" as const,
 					content:
-						`[subagent:${resolvedAgent}#${runId}] ${startedState}` +
-						`\nContext: ${contextLabel} · turn ${runState.turnCount}` +
-						``,
-					display: false,
+						`[subagent:${resolvedAgent}#${runId}] ${isError ? "failed" : "completed"}` +
+						`
+Prompt: ${truncateLines(taskForDisplay, 2)}` +
+						(usage ? `
+Usage: ${usage}` : "") +
+						(runState.thoughtText ? `
+Thought: ${runState.thoughtText}` : "") +
+						`
+
+${rawOutput}`,
+					display: true,
 					details: {
 						runId,
 						agent: resolvedAgent,
@@ -794,381 +915,144 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 						turnCount: runState.turnCount,
 						contextMode: runState.contextMode,
 						sessionFile: runState.sessionFile,
-						status: startedState,
 						startedAt: runState.startedAt,
 						elapsedMs: runState.elapsedMs,
 						lastActivityAt: runState.lastActivityAt,
+						exitCode: result.exitCode,
+						usage: result.usage,
+						model: result.model,
+						source: result.agentSource,
 						thoughtText: runState.thoughtText,
+						status: runState.status,
 					},
-				},
-				{ deliverAs: "followUp", triggerTurn: false },
-			);
+				};
+				const completionOptions = { deliverAs: "followUp" as const, triggerTurn: true };
 
-			if (ctx.hasUI) {
-				ctx.ui.notify(
-					(continueFromRun
-						? `Resumed subagent #${runId}: ${resolvedAgent}`
-						: `Started subagent #${runId}: ${resolvedAgent}`) + ` (${contextLabel} · turn ${runState.turnCount})`,
-					"info",
-				);
-			}
-
-			void (async () => {
+				// Check if the user is still in the origin session.
+				const toolGlobalEntry = store.globalLiveRuns.get(runId);
+				let toolCurrentSession: string | null = null;
 				try {
-					const result = await enqueueSubagentInvocation(() =>
-						runSingleAgent(
-							ctx.cwd,
-							agents,
-							resolvedAgent,
-							wrapTaskWithMainContext(
-							params.task!,
-							stripTaskEchoFromMainContext(mainContextText, params.task!),
-							{ mainSessionFile, totalMessageCount },
-						),
-							undefined,
-							abortController.signal,
-							(partial) => {
-								if (runState.removed) return;
-								const current = partial.details?.results?.[0];
-								if (!current) return;
-								updateRunFromResult(runState, current);
-								updateCommandRunsWidget(store);
-							},
-							makeDetails("single"),
-							runState.sessionFile,
-						),
+					const rawSession = ctx.sessionManager.getSessionFile() ?? null;
+					toolCurrentSession = rawSession ? rawSession.replace(/[\r\n\t]+/g, "").trim() : null;
+				} catch {
+					/* ignore */
+				}
+
+				const toolInOrigin =
+					!toolGlobalEntry ||
+					!toolCurrentSession ||
+					!toolGlobalEntry.originSessionFile ||
+					toolCurrentSession === toolGlobalEntry.originSessionFile;
+
+				if (toolInOrigin) {
+					pi.sendMessage(completionMessage, completionOptions);
+					store.globalLiveRuns.delete(runId);
+				} else {
+					// User is in a different session — queue for later delivery.
+					toolGlobalEntry.pendingCompletion = {
+						message: completionMessage,
+						options: completionOptions,
+					};
+					store.commandRuns.set(runId, runState);
+				}
+
+				if (ctx.hasUI) {
+					ctx.ui.notify(
+						isError
+							? `subagent tool run #${runId} (${resolvedAgent}) failed`
+							: `subagent tool run #${runId} (${resolvedAgent}) completed`,
+						isError ? "error" : "info",
 					);
-
-					if (runState.removed) return;
-
-					updateRunFromResult(runState, result);
-
-					// Escalation detection: subagent used escalate tool (exit code 42)
-					if (result.exitCode === ESCALATION_EXIT_CODE && runState.sessionFile) {
-						const escalation = readAndConsumeEscalation(runState.sessionFile);
-						const escalationMsg = escalation?.message ?? "Subagent escalated without a message.";
-						runState.status = "error";
-						runState.elapsedMs = Date.now() - runState.startedAt;
-						runState.lastOutput = `[ESCALATION] ${escalationMsg}`;
-						runState.lastLine = `[ESCALATION] ${escalationMsg}`;
-						updateCommandRunsWidget(store);
-
-						const usage = formatUsageStats(result.usage, result.model);
-						const completionMessage = {
-							customType: "subagent-tool" as const,
-							content:
-								`[subagent:${resolvedAgent}#${runId}] escalated` +
-								`\nPrompt: ${truncateLines(taskForDisplay, 2)}` +
-								(usage ? `\nUsage: ${usage}` : "") +
-								`\n\n[ESCALATION] ${escalationMsg}`,
-							display: true,
-							details: {
-								runId,
-								agent: resolvedAgent,
-								task: taskForDisplay,
-								status: "error" as const,
-								startedAt: runState.startedAt,
-								elapsedMs: runState.elapsedMs,
-								lastActivityAt: runState.lastActivityAt,
-								exitCode: result.exitCode,
-								usage: result.usage,
-								model: result.model,
-							},
-						};
-						pi.sendMessage(completionMessage, { triggerTurn: true });
-						return;
-					}
-
-					const failure = diagnoseResultFailure(result);
-					const isError = failure.failed;
-					runState.status = isError ? "error" : "done";
-					runState.elapsedMs = Date.now() - runState.startedAt;
-					updateCommandRunsWidget(store);
-
-					const rawOutput = isError
-						? failure.reason || result.errorMessage || result.stderr || getFinalOutput(result.messages) || "(no output)"
-						: getFinalOutput(result.messages) || "(no output)";
-					const usage = formatUsageStats(result.usage, result.model);
-
-					runState.lastOutput = rawOutput;
-					if (rawOutput) runState.lastLine = getLastNonEmptyLine(rawOutput);
-
-					const completionMessage = {
-						customType: "subagent-tool" as const,
-						content:
-							`[subagent:${resolvedAgent}#${runId}] ${isError ? "failed" : "completed"}` +
-							`\nPrompt: ${truncateLines(taskForDisplay, 2)}` +
-							(usage ? `\nUsage: ${usage}` : "") +
-							(runState.thoughtText ? `\nThought: ${runState.thoughtText}` : "") +
-							`\n\n${rawOutput}`,
-						display: true,
-						details: {
-							runId,
-							agent: resolvedAgent,
-							task: taskForDisplay,
-							continuedFromRunId: continuationRunId,
-							turnCount: runState.turnCount,
-							contextMode: runState.contextMode,
-							sessionFile: runState.sessionFile,
-							startedAt: runState.startedAt,
-							elapsedMs: runState.elapsedMs,
-							lastActivityAt: runState.lastActivityAt,
-							exitCode: result.exitCode,
-							usage: result.usage,
-							model: result.model,
-							source: result.agentSource,
-							thoughtText: runState.thoughtText,
-							status: runState.status,
-						},
-					};
-					const completionOptions = { deliverAs: "followUp" as const, triggerTurn: true };
-
-					// Check if the user is still in the origin session.
-					const toolGlobalEntry = store.globalLiveRuns.get(runId);
-					let toolCurrentSession: string | null = null;
-					try {
-						const rawSession = ctx.sessionManager.getSessionFile() ?? null;
-						toolCurrentSession = rawSession ? rawSession.replace(/[\r\n\t]+/g, "").trim() : null;
-					} catch {
-						/* ignore */
-					}
-
-					const toolInOrigin =
-						!toolGlobalEntry ||
-						!toolCurrentSession ||
-						!toolGlobalEntry.originSessionFile ||
-						toolCurrentSession === toolGlobalEntry.originSessionFile;
-
-					if (toolInOrigin) {
-						pi.sendMessage(completionMessage, completionOptions);
-						store.globalLiveRuns.delete(runId);
-					} else {
-						// User is in a different session — queue for later delivery.
-						toolGlobalEntry.pendingCompletion = {
-							message: completionMessage,
-							options: completionOptions,
-						};
-						store.commandRuns.set(runId, runState);
-					}
-
-					if (ctx.hasUI) {
-						ctx.ui.notify(
-							isError
-								? `subagent tool run #${runId} (${resolvedAgent}) failed`
-								: `subagent tool run #${runId} (${resolvedAgent}) completed`,
-							isError ? "error" : "info",
-						);
-					}
-				} catch (error: any) {
-					if (runState.removed) return;
-					runState.status = "error";
-					runState.elapsedMs = Date.now() - runState.startedAt;
-					runState.lastLine = error?.message ? String(error.message) : "Subagent execution failed";
-					runState.lastOutput = runState.lastLine;
-
-					const errorMessage = {
-						customType: "subagent-tool" as const,
-						content:
-							`[subagent:${resolvedAgent}#${runId}] failed` +
-							`\nPrompt: ${truncateLines(taskForDisplay, 2)}` +
-							`\n\n${runState.lastLine}`,
-						display: true,
-						details: {
-							runId,
-							agent: resolvedAgent,
-							task: taskForDisplay,
-							continuedFromRunId: continuationRunId,
-							turnCount: runState.turnCount,
-							contextMode: runState.contextMode,
-							sessionFile: runState.sessionFile,
-							startedAt: runState.startedAt,
-							elapsedMs: runState.elapsedMs,
-							lastActivityAt: runState.lastActivityAt,
-							error: runState.lastLine,
-							thoughtText: runState.thoughtText,
-							status: runState.status,
-						},
-					};
-
-					// Error path: also check origin session for deferred delivery.
-					const errGlobalEntry = store.globalLiveRuns.get(runId);
-					let errCurrentSession: string | null = null;
-					try {
-						const rawErrSession = ctx.sessionManager.getSessionFile() ?? null;
-						errCurrentSession = rawErrSession ? rawErrSession.replace(/[\r\n\t]+/g, "").trim() : null;
-					} catch {
-						/* ignore */
-					}
-
-					const errInOrigin =
-						!errGlobalEntry ||
-						!errCurrentSession ||
-						!errGlobalEntry.originSessionFile ||
-						errCurrentSession === errGlobalEntry.originSessionFile;
-
-					if (errInOrigin) {
-						pi.sendMessage(errorMessage, { deliverAs: "followUp", triggerTurn: true });
-						store.globalLiveRuns.delete(runId);
-					} else {
-						errGlobalEntry.pendingCompletion = {
-							message: errorMessage,
-							options: { deliverAs: "followUp", triggerTurn: true },
-						};
-						store.commandRuns.set(runId, runState);
-					}
-
-					if (ctx.hasUI) ctx.ui.notify(`subagent tool run #${runId} failed: ${runState.lastLine}`, "error");
-					updateCommandRunsWidget(store);
-				} finally {
-					runState.abortController = undefined;
-					trimCommandRunHistory(store, {
-						maxRuns: 10,
-						ctx,
-						pi,
-						updateWidget: false,
-						removalReason: "trim",
-					});
-					updateCommandRunsWidget(store);
 				}
-			})();
+			} catch (error: any) {
+				if (runState.removed) return;
+				runState.status = "error";
+				runState.elapsedMs = Date.now() - runState.startedAt;
+				runState.lastLine = error?.message ? String(error.message) : "Subagent execution failed";
+				runState.lastOutput = runState.lastLine;
 
-			return {
-				content: [
-					{
-						type: "text",
-						text: withIdleRunWarning(
-							continueFromRun
-								? `Resumed async subagent run #${runId} (${resolvedAgent}) turn ${runState.turnCount}.`
-								: `Started async subagent run #${runId} (${resolvedAgent}).`,
-						),
+				const errorMessage = {
+					customType: "subagent-tool" as const,
+					content:
+						`[subagent:${resolvedAgent}#${runId}] failed` +
+						`
+Prompt: ${truncateLines(taskForDisplay, 2)}` +
+						`
+
+${runState.lastLine}`,
+					display: true,
+					details: {
+						runId,
+						agent: resolvedAgent,
+						task: taskForDisplay,
+						continuedFromRunId: continuationRunId,
+						turnCount: runState.turnCount,
+						contextMode: runState.contextMode,
+						sessionFile: runState.sessionFile,
+						startedAt: runState.startedAt,
+						elapsedMs: runState.elapsedMs,
+						lastActivityAt: runState.lastActivityAt,
+						error: runState.lastLine,
+						thoughtText: runState.thoughtText,
+						status: runState.status,
 					},
-				],
-				details: makeDetails("single")([]),
-			};
-		}
+				};
 
-		if (params.chain && params.chain.length > 0) {
-			const chainSteps = params.chain as ChainItemFields[];
-			const results: SingleResult[] = [];
-			let previousOutput = "";
-
-			for (let i = 0; i < chainSteps.length; i++) {
-				const step = chainSteps[i];
-				const taskWithContext = step.task.replace(/\{previous\}/g, previousOutput);
-
-				// Create update callback that includes all previous results
-				const chainUpdate: OnUpdateCallback | undefined = onUpdate
-					? (partial) => {
-							// Combine completed results with current streaming result
-							const currentResult = partial.details?.results[0];
-							if (currentResult) {
-								const allResults = [...results, currentResult];
-								onUpdate({
-									content: partial.content,
-									details: makeDetails("chain")(allResults),
-								});
-							}
-						}
-					: undefined;
-
-				const result = await enqueueSubagentInvocation(() =>
-					runSingleAgent(
-						ctx.cwd,
-						agents,
-						step.agent,
-						wrapTaskWithMainContext(
-						taskWithContext,
-						stripTaskEchoFromMainContext(mainContextText, taskWithContext),
-						{ mainSessionFile, totalMessageCount },
-					),
-						i + 1,
-						signal,
-						chainUpdate,
-						makeDetails("chain"),
-						undefined,
-					),
-				);
-				results.push(result);
-
-				// Escalation detection in chain
-				if (result.exitCode === ESCALATION_EXIT_CODE) {
-					const sessionFile = result.sessionFile;
-					const escalation = sessionFile ? readAndConsumeEscalation(sessionFile) : null;
-					const escalationMsg = escalation?.message ?? "Subagent escalated without a message.";
-					return {
-						content: [{ type: "text", text: `[ESCALATION] Chain step ${i + 1} (${step.agent}): ${escalationMsg}` }],
-						details: makeDetails("chain")(results),
-						isError: true,
-					};
+				// Error path: also check origin session for deferred delivery.
+				const errGlobalEntry = store.globalLiveRuns.get(runId);
+				let errCurrentSession: string | null = null;
+				try {
+					const rawErrSession = ctx.sessionManager.getSessionFile() ?? null;
+					errCurrentSession = rawErrSession ? rawErrSession.replace(/[\r\n\t]+/g, "").trim() : null;
+				} catch {
+					/* ignore */
 				}
 
-				const failure = diagnoseResultFailure(result);
-				if (failure.failed) {
-					const errorMsg = failure.reason || "Subagent failed.";
-					return {
-						content: [{ type: "text", text: `Chain stopped at step ${i + 1} (${step.agent}): ${errorMsg}` }],
-						details: makeDetails("chain")(results),
-						isError: true,
+				const errInOrigin =
+					!errGlobalEntry ||
+					!errCurrentSession ||
+					!errGlobalEntry.originSessionFile ||
+					errCurrentSession === errGlobalEntry.originSessionFile;
+
+				if (errInOrigin) {
+					pi.sendMessage(errorMessage, { deliverAs: "followUp", triggerTurn: true });
+					store.globalLiveRuns.delete(runId);
+				} else {
+					errGlobalEntry.pendingCompletion = {
+						message: errorMessage,
+						options: { deliverAs: "followUp", triggerTurn: true },
 					};
+					store.commandRuns.set(runId, runState);
 				}
-				previousOutput = getFinalOutput(result.messages);
+
+				if (ctx.hasUI) ctx.ui.notify(`subagent tool run #${runId} failed: ${runState.lastLine}`, "error");
+				updateCommandRunsWidget(store);
+			} finally {
+				runState.abortController = undefined;
+				trimCommandRunHistory(store, {
+					maxRuns: 10,
+					ctx,
+					pi,
+					updateWidget: false,
+					removalReason: "trim",
+				});
+				updateCommandRunsWidget(store);
 			}
-			return {
-				content: [{ type: "text", text: getFinalOutput(results[results.length - 1].messages) || "(no output)" }],
-				details: makeDetails("chain")(results),
-			};
-		}
+		})();
 
-		if (params.agent && params.task) {
-			const result = await enqueueSubagentInvocation(() =>
-				runSingleAgent(
-					ctx.cwd,
-					agents,
-					params.agent,
-					wrapTaskWithMainContext(
-						params.task,
-						stripTaskEchoFromMainContext(mainContextText, params.task),
-						{ mainSessionFile, totalMessageCount },
-					),
-					undefined,
-					signal,
-					onUpdate,
-					makeDetails("single"),
-					undefined,
-				),
-			);
-
-			// Escalation detection in single run
-			if (result.exitCode === ESCALATION_EXIT_CODE) {
-				const sessionFile = result.sessionFile;
-				const escalation = sessionFile ? readAndConsumeEscalation(sessionFile) : null;
-				const escalationMsg = escalation?.message ?? "Subagent escalated without a message.";
-				return {
-					content: [{ type: "text", text: `[ESCALATION] ${escalationMsg}` }],
-					details: makeDetails("single")([result]),
-					isError: true,
-				};
-			}
-
-			const failure = diagnoseResultFailure(result);
-			if (failure.failed) {
-				const errorMsg = failure.reason || "Subagent failed.";
-				return {
-					content: [{ type: "text", text: `Agent failed: ${errorMsg}` }],
-					details: makeDetails("single")([result]),
-					isError: true,
-				};
-			}
-			return {
-				content: [{ type: "text", text: getFinalOutput(result.messages) || "(no output)" }],
-				details: makeDetails("single")([result]),
-			};
-		}
-
-		const available = agents.map((a) => `${a.name} (${a.source})`).join(", ") || "none";
 		return {
-			content: [{ type: "text", text: `Invalid parameters. Available agents: ${available}` }],
-			details: makeDetails("single")([]),
+			content: [
+				{
+					type: "text",
+					text: withIdleRunWarning(
+						continueFromRun
+							? `Resumed async subagent run #${runId} (${resolvedAgent}) turn ${runState.turnCount}.`
+							: `Started async subagent run #${runId} (${resolvedAgent}).`,
+					),
+				},
+			],
+			details: makeDetails([]),
 		};
+
 	};
 }

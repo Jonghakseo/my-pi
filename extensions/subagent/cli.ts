@@ -28,8 +28,8 @@ export const SUBAGENT_CLI_HELP_TEXT = [
 	"   • continue: Resume an EXISTING run's session by its runId; reuses conversation context",
 	"              but does NOT automatically sync the latest main context (provide it explicitly if needed)",
 	"",
-	"3. ASYNC follow-up policy:",
-	"   • After an `--async` launch, do NOT repeatedly call `subagent status/detail` to poll.",
+	"3. Follow-up policy:",
+	"   • After a launch, do NOT repeatedly call `subagent status/detail` to poll.",
 	"   • Wait for automatic completion/failure/cancellation follow-up messages.",
 	"   • Use `status/detail` only when the USER explicitly asks (or for one-off manual checks).",
 	"",
@@ -45,8 +45,8 @@ export const SUBAGENT_CLI_HELP_TEXT = [
 	"    subagent detail <runId>",
 	"",
 	"  Execution:",
-	"    subagent run <agent> [--main|--isolated] [--async|--sync] -- <task>",
-	"    subagent continue <runId> [--agent <agent>] [--main|--isolated] [--async|--sync] -- <task>",
+	"    subagent run <agent> [--main|--isolated] -- <task>",
+	"    subagent continue <runId> [--agent <agent>] [--main|--isolated] -- <task>",
 	"",
 	"  Cleanup:",
 	"    subagent abort <runId|runId,runId|all>",
@@ -56,14 +56,11 @@ export const SUBAGENT_CLI_HELP_TEXT = [
 	"EXAMPLES",
 	"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
 	"",
-	"  New run (async by default):",
-	"    subagent run planner --async -- 로그인 성능 개선 계획 수립",
+	"  New run:",
+	"    subagent run planner -- 로그인 성능 개선 계획 수립",
 	"",
 	"  Continue existing run (runId 22):",
 	"    subagent continue 22 -- 아까 진행하던거 마무리해서 커밋해줘",
-	"",
-	"  Sync execution (wait for result):",
-	"    subagent run worker-fast --sync -- 버그 수정",
 	"",
 	"  Manual status & cleanup (occasional checks):",
 	"    subagent runs",
@@ -75,9 +72,8 @@ export const SUBAGENT_CLI_HELP_TEXT = [
 	"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
 	"",
 	"💡 Tips:",
-	"  • Async runs (~--async~, default) notify you when done automatically.",
-	"  • After async launch, end the turn and wait for follow-up (no status/detail polling loops).",
-	"  • Sync runs (~--sync~) block and show real-time output.",
+	"  • Runs notify you when done automatically.",
+	"  • After launch, end the turn and wait for follow-up (no status/detail polling loops).",
 	"  • Use `--main` to share context with the main agent; `--isolated` for a fresh scope.",
 	"  • When using `continue`, the main context is NOT auto-synced. Include recent changes in the task text.",
 	"",
@@ -199,7 +195,6 @@ function parseRunLike(verb: "run" | "continue", args: string[]): { params: Recor
 	let runId: number | undefined;
 	let agent: string | undefined;
 	let contextMode: "main" | "isolated" | undefined;
-	let runAsync: boolean | undefined;
 
 	for (let i = 0; i < head.length; i++) {
 		const token = head[i];
@@ -212,13 +207,11 @@ function parseRunLike(verb: "run" | "continue", args: string[]): { params: Recor
 			contextMode = "isolated";
 			continue;
 		}
-		if (token === "--async") {
-			runAsync = true;
-			continue;
-		}
-		if (token === "--sync") {
-			runAsync = false;
-			continue;
+		if (token === "--async" || token === "--sync") {
+			return {
+				error:
+					`❌ ${token} is no longer supported\n\nSubagent run/continue commands are async-only, so you should omit execution-mode flags entirely. Wait for the automatic follow-up message after launch.\n\n✓ Correct: ${verb === "continue" ? "subagent continue 22 -- <task>" : "subagent run worker -- <task>"}`,
+			};
 		}
 		if (token === "--agent") {
 			const value = head[i + 1];
@@ -237,7 +230,7 @@ function parseRunLike(verb: "run" | "continue", args: string[]): { params: Recor
 
 		if (token.startsWith("--")) {
 			return {
-				error: `❌ Unknown option: ${token}\n\nValid options: --main, --isolated, --async, --sync${verb === "continue" ? ", --agent" : ""}\n\n✓ Example: subagent ${verb} ${token === "--main" ? "" : verb === "continue" ? "22 " : ""}${token} -- <task>`,
+				error: `❌ Unknown option: ${token}\n\nValid options: --main, --isolated${verb === "continue" ? ", --agent" : ""}\n\n✓ Example: subagent ${verb} ${token === "--main" ? "" : verb === "continue" ? "22 " : ""}${token} -- <task>`,
 			};
 		}
 
@@ -252,7 +245,7 @@ function parseRunLike(verb: "run" | "continue", args: string[]): { params: Recor
 				continue;
 			}
 			return {
-				error: `❌ Unexpected argument: ${token}\n\nAfter runId, only options (--main, --isolated, --async, --sync, --agent) or the separator \`--\` are allowed.\n\n✓ Correct: subagent continue ${runId} --main -- <task>`,
+				error: `❌ Unexpected argument: ${token}\n\nAfter runId, only options (--main, --isolated, --agent) or the separator \`--\` are allowed.\n\n✓ Correct: subagent continue ${runId} --main -- <task>`,
 			};
 		}
 
@@ -262,7 +255,7 @@ function parseRunLike(verb: "run" | "continue", args: string[]): { params: Recor
 			continue;
 		}
 		return {
-			error: `❌ Unexpected argument: ${token}\n\nAfter agent name, only options (--main, --isolated, --async, --sync) or the separator \`--\` are allowed.\n\n✓ Correct: subagent run ${agent} --main -- <task>`,
+			error: `❌ Unexpected argument: ${token}\n\nAfter agent name, only options (--main, --isolated) or the separator \`--\` are allowed.\n\n✓ Correct: subagent run ${agent} --main -- <task>`,
 		};
 	}
 
@@ -280,7 +273,6 @@ function parseRunLike(verb: "run" | "continue", args: string[]): { params: Recor
 		params.agent = agent ?? "worker";
 	}
 	if (contextMode) params.contextMode = contextMode;
-	if (runAsync !== undefined) params.runAsync = runAsync;
 
 	return { params };
 }
@@ -309,13 +301,9 @@ export function isSubagentAsyncLaunchCommand(command: unknown): boolean {
 	if (!trimmed) return false;
 	const tokenized = tokenizeCli(trimmed);
 	if ("error" in tokenized) return false;
-	const { verb, args } = extractVerb(tokenized.tokens);
+	const { verb } = extractVerb(tokenized.tokens);
 	if (verb !== "run" && verb !== "continue") return false;
 
-	const sepIndex = args.indexOf("--");
-	const head = sepIndex === -1 ? args : args.slice(0, sepIndex);
-	if (head.includes("--sync")) return false;
-	if (head.includes("--async")) return true;
 	return true;
 }
 
