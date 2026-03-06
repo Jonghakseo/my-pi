@@ -103,6 +103,17 @@ function getAllToolNames(pi: ExtensionAPI): string[] {
 /** Memory-layer tools allowed in master mode for cross-session knowledge management. */
 const MEMORY_TOOLS = ["remember", "recall", "forget", "memory_list"] as const;
 
+/** Lightweight orchestration tools allowed directly in master mode. */
+const MASTER_DIRECT_TOOLS = [
+	"list-agents",
+	"read",
+	"find",
+	"grep",
+	"ls",
+	"AskUserQuestion",
+	"todo_write",
+] as const;
+
 export default function (pi: ExtensionAPI) {
 	let mode: SystemMode = "default";
 	let activeToolsBeforeMaster: string[] | undefined;
@@ -169,13 +180,11 @@ export default function (pi: ExtensionAPI) {
 			const baseTool = "subagent";
 			if (tools.includes(baseTool)) {
 				const allowedTools = [baseTool];
-				if (tools.includes("list-agents")) {
-					allowedTools.push("list-agents");
+				for (const toolName of MASTER_DIRECT_TOOLS) {
+					if (tools.includes(toolName)) {
+						allowedTools.push(toolName);
+					}
 				}
-				if (tools.includes("read")) {
-					allowedTools.push("read");
-				}
-				// Memory tools are allowed in master mode for cross-session knowledge
 				for (const memTool of MEMORY_TOOLS) {
 					if (tools.includes(memTool)) {
 						allowedTools.push(memTool);
@@ -234,11 +243,14 @@ export default function (pi: ExtensionAPI) {
 	});
 
 	pi.registerCommand("system:master", {
-		description: "Switch to hard master mode (subagent + list-agents + read tool execution)",
+		description: "Switch to hard master mode (subagent + lightweight orchestration tools only)",
 		handler: async (_args, ctx) => {
 			applyMode("master", ctx);
 			pi.appendEntry("system-mode-change", { mode: "master" });
-			ctx.ui.notify("System mode: master 👑 - Hard delegation (subagent + list-agents + read)", "info");
+			ctx.ui.notify(
+				"System mode: master 👑 - Hard delegation (subagent + read/search/planning helpers)",
+				"info",
+			);
 		},
 	});
 
@@ -296,11 +308,13 @@ export default function (pi: ExtensionAPI) {
 			return;
 		}
 
-		// --- list-agents/read: allowed in master mode ---
-		if (isToolCallEventType("list-agents", event) || isToolCallEventType("read", event)) {
-			return;
+		// --- explicitly allowed direct tools in master mode ---
+		for (const toolName of MASTER_DIRECT_TOOLS) {
+			if (isToolCallEventType(toolName, event)) {
+				return;
+			}
 		}
-		// Allow memory-layer tools in master mode
+
 		for (const memTool of MEMORY_TOOLS) {
 			if (isToolCallEventType(memTool, event)) {
 				return;
@@ -311,7 +325,7 @@ export default function (pi: ExtensionAPI) {
 		return {
 			block: true,
 			reason:
-				"Master mode hard policy: only subagent, list-agents, read, and memory tools (remember/recall/forget/memory_list) can be called by the main agent. " +
+				"Master mode hard policy: only subagent, lightweight orchestration tools (list-agents/read/find/grep/ls/AskUserQuestion/todo_write), and memory tools (remember/recall/forget/memory_list) can be called by the main agent. " +
 				"Delegate execution through subagent.",
 		};
 	});
