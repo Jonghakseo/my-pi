@@ -22,6 +22,11 @@
 
 ---
 
+> [!WARNING]
+> 이 레포는 계속 바뀌는 개인 실사용 셋업이라 문서와 실제 상태가 언제든 어긋날 수 있다.
+> 일부 기능이나 설정은 특정 시점에 불안정하거나 깨져 있을 수 있다.
+
+
 ## 🏗️ 아키텍처
 
 <p align="center">
@@ -193,86 +198,16 @@ final     = reviewer("전체 변경사항 리뷰")
 | `Ctrl+X` | 테마 순환 |
 | `Option+V` | 음성 입력 (받아쓰기 + TTS) |
 
----
 
-## 📦 설치
+## 🌐 웹 리서치 확장
 
-> **사전 조건:** [pi coding agent](https://github.com/mariozechner/pi-coding-agent)가 글로벌 설치되어 있어야 한다.
-
-### 방법 A: pi 패키지 (권장)
-
-```bash
-# 글로벌 설치
-pi install git:https://github.com/Jonghakseo/my-pi.git
-
-# 프로젝트 로컬 설치
-pi install -l git:https://github.com/Jonghakseo/my-pi.git
-```
-
-### 방법 B: 수동 클론
-
-```bash
-git clone https://github.com/Jonghakseo/my-pi.git ~/.pi/agent
-cd ~/.pi/agent/extensions && pnpm install
-```
-
-### 웹 리서치 확장 (pi-web-access)
-
-이 셋업은 `web_search`, `fetch_content`, `get_search_content` 도구 사용을 위해 **pi-web-access**를 함께 설치해 사용한다.
+이 셋업은 `web_search`, `fetch_content`, `get_search_content` 도구 사용을 위해 **pi-web-access**를 함께 사용한다.
 
 - 레포지토리: https://github.com/nicobailon/pi-web-access
 
 ```bash
 pi install npm:pi-web-access
 ```
-
-### 설치 후
-
-```bash
-# API 키 설정 (택 1):
-pi /login                        # 인터랙티브 — CLI 프롬프트로 키 설정
-# 또는 환경 변수 설정:
-export ANTHROPIC_API_KEY=sk-...  # Claude 모델용
-export OPENAI_API_KEY=sk-...     # GPT 모델용
-
-pi                               # 실행 — 확장 기능 자동 로드
-```
-
-### browser 에이전트 사전 조건
-
-**browser** 에이전트는 `agent-browser` CLI가 별도로 설치되어 있어야 동작한다. 공식 설치 가이드:
-
-```bash
-npm install -g agent-browser
-agent-browser install  # Download Chromium
-```
-
-설치 후 로그인 정보 설정:
-
-```bash
-# browser 에이전트는 ~/.pi/agent/agents/.env.browser 파일을 읽어 자격 증명을 사용한다.
-# 예시:
-cat > ~/.pi/agent/agents/.env.browser << 'EOF'
-USERNAME=your-email@example.com
-PASSWORD=your-password
-EOF
-```
-
-> **참고:** `.env.browser` 파일은 민감 정보를 포함하므로 git에 커밋하지 않는다. 해당 파일은 `.gitignore`에 포함되어 있다.
-
-### 에이전트 정의
-
-> **참고:** `agents/` 디렉터리의 에이전트 `.md` 파일은 pi 표준 패키지 리소스가 **아니므로** `pi install`로 자동 등록되지 않는다.
-
-이 패키지는 `postinstall` 스크립트로 레포의 `agents/` 디렉터리에서 누락된 에이전트 정의를 `~/.pi/agent/agents/`에 복사한다. 기존 파일은 **절대 덮어쓰지 않으므로** 로컬 커스터마이징은 항상 안전하다.
-
-수동으로 에이전트를 동기화하려면:
-
-```bash
-pnpm run sync-agents          # 누락된 에이전트만 복사
-node scripts/sync-agents.mjs --force   # 전부 덮어쓰기 (주의해서 사용)
-```
-
 ---
 
 ## 💡 설계 철학

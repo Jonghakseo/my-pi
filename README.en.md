@@ -22,6 +22,11 @@
 
 ---
 
+> [!WARNING]
+> This repo is a fast-moving personal setup, so the documentation and actual behavior can drift at any time.
+> Some features or configurations may be temporarily unstable or broken.
+
+
 ## 🏗️ Architecture
 
 <p align="center">
@@ -193,30 +198,8 @@ Five hand-picked themes, hot-swappable with `Ctrl+X`:
 | `Ctrl+X` | Cycle themes |
 | `Option+V` | Voice input (dictation + TTS) |
 
----
 
-## 📦 Install as pi Package
-
-> **Prerequisite:** [pi coding agent](https://github.com/mariozechner/pi-coding-agent) installed globally.
-
-### Option A: pi package (recommended)
-
-```bash
-# Global install
-pi install git:https://github.com/Jonghakseo/my-pi.git
-
-# Project-local install
-pi install -l git:https://github.com/Jonghakseo/my-pi.git
-```
-
-### Option B: Clone manually
-
-```bash
-git clone https://github.com/Jonghakseo/my-pi.git ~/.pi/agent
-cd ~/.pi/agent/extensions && pnpm install
-```
-
-### Web research extension (pi-web-access)
+## 🌐 Web Research Extension
 
 This setup uses **pi-web-access** for `web_search`, `fetch_content`, and `get_search_content` tools.
 
@@ -225,32 +208,6 @@ This setup uses **pi-web-access** for `web_search`, `fetch_content`, and `get_se
 ```bash
 pi install npm:pi-web-access
 ```
-
-### Post-install
-
-```bash
-# Set up API keys (choose one):
-pi /login                        # Interactive — configure keys via CLI prompt
-# or set environment variables:
-export ANTHROPIC_API_KEY=sk-...  # for Claude models
-export OPENAI_API_KEY=sk-...     # for GPT models
-
-pi                               # Launch — extensions load automatically
-```
-
-### Agent Definitions
-
-> **Note:** Agent `.md` files in `agents/` are **not** a pi standard package resource — `pi install` does not auto-register them.
-
-This package includes a `postinstall` script that copies missing agent definitions from the repo's `agents/` directory into `~/.pi/agent/agents/`. It will **never overwrite** existing files, so your local customizations are always safe.
-
-To manually re-sync agents at any time:
-
-```bash
-npm run sync-agents           # copy only missing agents
-node scripts/sync-agents.mjs --force   # overwrite all (use with caution)
-```
-
 ---
 
 ## 💡 Philosophy
