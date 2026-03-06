@@ -150,7 +150,8 @@ function parseSessionDetailSummary(sessionFile?: string): SessionDetailSummary {
 
 export function diagnoseResultFailure(result: SingleResult): ResultFailureDiagnosis {
 	if (result.exitCode !== 0) return { failed: true, reason: `Subagent process exited with code ${result.exitCode}.` };
-	if (result.stopReason === "error") return { failed: true, reason: result.errorMessage || "Subagent reported stopReason=error." };
+	if (result.stopReason === "error")
+		return { failed: true, reason: result.errorMessage || "Subagent reported stopReason=error." };
 	if (result.stopReason === "aborted") return { failed: true, reason: "Subagent execution was aborted." };
 
 	const finalOutput = getFinalOutput(result.messages).trim();
@@ -170,8 +171,7 @@ export function diagnoseResultFailure(result: SingleResult): ResultFailureDiagno
 	return {
 		failed: true,
 		reason:
-			"Subagent finished without assistant text output. " +
-			(stderr ? `stderr: ${stderr}` : "No stderr captured."),
+			"Subagent finished without assistant text output. " + (stderr ? `stderr: ${stderr}` : "No stderr captured."),
 	};
 }
 
@@ -612,7 +612,9 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 				content: [
 					{
 						type: "text",
-						text: withIdleRunWarning("subagent run/continue requires single mode: provide agent + task, or runId + task."),
+						text: withIdleRunWarning(
+							"subagent run/continue requires single mode: provide agent + task, or runId + task.",
+						),
 					},
 				],
 				details: makeDetails([]),
@@ -816,11 +818,10 @@ Context: ${contextLabel} · turn ${runState.turnCount}` +
 						ctx.cwd,
 						agents,
 						resolvedAgent,
-						wrapTaskWithMainContext(
-							params.task!,
-							stripTaskEchoFromMainContext(mainContextText, params.task!),
-							{ mainSessionFile, totalMessageCount },
-						),
+						wrapTaskWithMainContext(params.task!, stripTaskEchoFromMainContext(mainContextText, params.task!), {
+							mainSessionFile,
+							totalMessageCount,
+						}),
 						undefined,
 						abortController.signal,
 						(partial) => {
@@ -856,8 +857,10 @@ Context: ${contextLabel} · turn ${runState.turnCount}` +
 							`[subagent:${resolvedAgent}#${runId}] escalated` +
 							`
 Prompt: ${truncateLines(taskForDisplay, 2)}` +
-							(usage ? `
-Usage: ${usage}` : "") +
+							(usage
+								? `
+Usage: ${usage}`
+								: "") +
 							`
 
 [ESCALATION] ${escalationMsg}`,
@@ -899,10 +902,14 @@ Usage: ${usage}` : "") +
 						`[subagent:${resolvedAgent}#${runId}] ${isError ? "failed" : "completed"}` +
 						`
 Prompt: ${truncateLines(taskForDisplay, 2)}` +
-						(usage ? `
-Usage: ${usage}` : "") +
-						(runState.thoughtText ? `
-Thought: ${runState.thoughtText}` : "") +
+						(usage
+							? `
+Usage: ${usage}`
+							: "") +
+						(runState.thoughtText
+							? `
+Thought: ${runState.thoughtText}`
+							: "") +
 						`
 
 ${rawOutput}`,
@@ -1053,6 +1060,5 @@ ${runState.lastLine}`,
 			],
 			details: makeDetails([]),
 		};
-
 	};
 }

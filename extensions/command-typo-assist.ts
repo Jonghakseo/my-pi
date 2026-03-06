@@ -14,8 +14,8 @@
  *   5. Returns { action: "handled" } so nothing is sent to the LLM
  */
 
-import type { ExtensionAPI, ExtensionContext, InputEvent, InputEventResult } from "@mariozechner/pi-coding-agent";
 import * as fs from "node:fs";
+import type { ExtensionAPI, ExtensionContext, InputEvent, InputEventResult } from "@mariozechner/pi-coding-agent";
 
 // ─── Builtin commands (hardcoded — not exposed via pi.getCommands()) ─────────
 const BUILTIN_COMMANDS = [

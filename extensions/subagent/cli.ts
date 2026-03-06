@@ -209,8 +209,7 @@ function parseRunLike(verb: "run" | "continue", args: string[]): { params: Recor
 		}
 		if (token === "--async" || token === "--sync") {
 			return {
-				error:
-					`❌ ${token} is no longer supported\n\nSubagent run/continue commands are async-only, so you should omit execution-mode flags entirely. Wait for the automatic follow-up message after launch.\n\n✓ Correct: ${verb === "continue" ? "subagent continue 22 -- <task>" : "subagent run worker -- <task>"}`,
+				error: `❌ ${token} is no longer supported\n\nSubagent run/continue commands are async-only, so you should omit execution-mode flags entirely. Wait for the automatic follow-up message after launch.\n\n✓ Correct: ${verb === "continue" ? "subagent continue 22 -- <task>" : "subagent run worker -- <task>"}`,
 			};
 		}
 		if (token === "--agent") {

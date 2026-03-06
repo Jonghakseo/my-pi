@@ -1,8 +1,8 @@
 /**
-	* Above-editor subagent widget is disabled.
-	*
-	* All subagent runs are rendered in the below-editor widget regardless of launch source.
-	*/
+ * Above-editor subagent widget is disabled.
+ *
+ * All subagent runs are rendered in the below-editor widget regardless of launch source.
+ */
 
 import type { SubagentStore } from "./store.js";
 

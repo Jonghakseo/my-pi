@@ -142,7 +142,6 @@ export async function invokeWithAutoRetry({
 				reason: retryDecision.reason || "Transient network/service failure detected.",
 			});
 			await waitWithAbort(delayMs, signal);
-			continue;
 		} catch (error) {
 			if (signal?.aborted) throw error;
 			const retryDecision = diagnoseRetryableError(error);

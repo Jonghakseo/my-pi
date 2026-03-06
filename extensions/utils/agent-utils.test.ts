@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
-	type AgentConfigLike,
 	AGENT_THINKING_LEVELS,
+	type AgentConfigLike,
 	CLAUDE_MODEL_ALIAS_MAP,
 	CLAUDE_TOOL_MAP,
 	computeAgentAliasHints,

@@ -215,7 +215,10 @@ export function wrapTaskWithMainContext(
 }
 
 function normalizeForEchoMatch(text: string): string {
-	return text.replace(/[\r\n\t]+/g, " ").replace(/\s+/g, " ").trim();
+	return text
+		.replace(/[\r\n\t]+/g, " ")
+		.replace(/\s+/g, " ")
+		.trim();
 }
 
 function stripKnownPrefix(line: string): string {

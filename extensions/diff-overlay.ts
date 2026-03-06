@@ -13,16 +13,16 @@ import type { ExtensionAPI, ExtensionCommandContext } from "@mariozechner/pi-cod
 import { DynamicBorder } from "@mariozechner/pi-coding-agent";
 import { Key, matchesKey, truncateToWidth, visibleWidth } from "@mariozechner/pi-tui";
 import {
+	type BranchCommitEntry,
+	type CommitState,
 	commitStateBadge,
+	type DiffFileStatus,
 	mergeDiffEntries,
+	type OverlayViewMode,
 	parseGitLogOutput,
 	parseNameStatusZ,
 	parsePorcelainStatusZ,
 	toggleOverlayViewMode,
-	type BranchCommitEntry,
-	type CommitState,
-	type DiffFileStatus,
-	type OverlayViewMode,
 } from "./utils/diff-overlay-utils.ts";
 
 // ─── Types ─────────────────────────────────────────────────────────────────
@@ -376,7 +376,10 @@ function renderCommits(t: Theme, st: DiffState, w: number, h: number): string[] 
 		const hash = t.fg(sel && active ? "accent" : "muted", c.shortHash);
 		const prefix = `${cursor} ${hash} `;
 		const subjectW = Math.max(4, w - visibleWidth(prefix));
-		const subject = sel && active ? t.fg("accent", truncateToWidth(c.subject, subjectW)) : t.fg("text", truncateToWidth(c.subject, subjectW));
+		const subject =
+			sel && active
+				? t.fg("accent", truncateToWidth(c.subject, subjectW))
+				: t.fg("text", truncateToWidth(c.subject, subjectW));
 		lines.push(truncateToWidth(`${prefix}${subject}`, w));
 	}
 
@@ -432,7 +435,12 @@ function renderCommitFiles(t: Theme, st: DiffState, w: number, h: number): strin
 	const commitHash = selectedCommit.hash;
 	const files = st.commitFilesCache.get(commitHash);
 	if (!files) {
-		return [t.fg("muted", st.commitFilesLoading.has(commitHash) ? "  Loading changed files…" : "  (press Enter to load files)")];
+		return [
+			t.fg(
+				"muted",
+				st.commitFilesLoading.has(commitHash) ? "  Loading changed files…" : "  (press Enter to load files)",
+			),
+		];
 	}
 	if (files.length === 0) return [t.fg("muted", "  (no changed files)")];
 
@@ -455,11 +463,7 @@ function renderCommitFiles(t: Theme, st: DiffState, w: number, h: number): strin
 		const nameW = Math.max(4, w - visibleWidth(prefix));
 
 		const fileName = truncateToWidth(file.path, nameW);
-		const label = selected
-			? active
-				? t.fg("accent", fileName)
-				: t.fg("muted", fileName)
-			: t.fg("text", fileName);
+		const label = selected ? (active ? t.fg("accent", fileName) : t.fg("muted", fileName)) : t.fg("text", fileName);
 		rows.push(truncateToWidth(`${prefix}${label}`, w));
 
 		if (!expanded.has(file.path)) continue;
@@ -788,7 +792,8 @@ class DiffOverlay {
 		const prevIndex = selectedIndex - 1;
 		const nextIndex = selectedIndex + 1;
 		const prevStart = prevIndex >= 0 ? (rowsMeta.fileStarts[prevIndex] ?? 0) : -1;
-		const nextStart = nextIndex <= maxIndex ? (rowsMeta.fileStarts[nextIndex] ?? rowsMeta.totalRows) : rowsMeta.totalRows;
+		const nextStart =
+			nextIndex <= maxIndex ? (rowsMeta.fileStarts[nextIndex] ?? rowsMeta.totalRows) : rowsMeta.totalRows;
 		const selectedStart = rowsMeta.fileStarts[selectedIndex] ?? 0;
 		const selectedEnd = rowsMeta.fileEnds[selectedIndex] ?? selectedStart;
 
@@ -948,7 +953,8 @@ class DiffOverlay {
 		const contentH = Math.max(1, bodyH - 2);
 
 		const left = st.viewMode === "diff" ? renderFiles(t, st, leftW, contentH) : renderCommits(t, st, leftW, contentH);
-		const right = st.viewMode === "diff" ? renderDiff(t, st, rightW, contentH) : renderCommitFiles(t, st, rightW, contentH);
+		const right =
+			st.viewMode === "diff" ? renderDiff(t, st, rightW, contentH) : renderCommitFiles(t, st, rightW, contentH);
 
 		while (left.length < contentH) left.push("");
 		while (right.length < contentH) right.push("");

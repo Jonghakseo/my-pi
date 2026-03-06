@@ -20,6 +20,7 @@ const SPINNER_INTERVAL_MS = 120;
 const SPINNER_REFRESH_MS = 150;
 
 const MAX_VISIBLE_RUNS = 3;
+
 import { type SubagentStore, truncateText } from "./store.js";
 
 /** Fast timer that drives spinner animation while any run is active. */
@@ -143,10 +144,7 @@ export function updateCommandRunsWidget(store: SubagentStore, ctx?: any): void {
 						}
 
 						const taskSnippet = run.task
-							? theme.fg(
-								"dim",
-								` · ${truncateText(run.task.replace(/\s+/g, " ").trim(), 60)}`,
-							)
+							? theme.fg("dim", ` · ${truncateText(run.task.replace(/\s+/g, " ").trim(), 60)}`)
 							: "";
 						const statusLeft =
 							theme.fg(statusColor, `${statusIcon} #${run.id}`) +
@@ -199,5 +197,4 @@ export function updateCommandRunsWidget(store: SubagentStore, ctx?: any): void {
 	}
 
 	manageSpinnerTimer(store);
-
 }

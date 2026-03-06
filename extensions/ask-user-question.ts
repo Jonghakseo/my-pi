@@ -335,7 +335,12 @@ export default function askUserQuestionExtension(pi: ExtensionAPI) {
 					answer: normalizedAnswer,
 					answers: [normalizedAnswer],
 					selectedOption,
-					selectedOptions: selectedOption && selectedOption !== "custom" ? [selectedOption] : normalizedAnswer ? [normalizedAnswer] : [],
+					selectedOptions:
+						selectedOption && selectedOption !== "custom"
+							? [selectedOption]
+							: normalizedAnswer
+								? [normalizedAnswer]
+								: [],
 					selectedIndex,
 					selectedIndices: selectedIndex ? [selectedIndex] : undefined,
 					customInput: selectedOption === "custom" ? normalizedAnswer : customInput,
@@ -393,7 +398,9 @@ export default function askUserQuestionExtension(pi: ExtensionAPI) {
 			if (details.selectedOption && details.selectedOption !== "custom") {
 				const indexPrefix = details.selectedIndex ? `${details.selectedIndex}. ` : "";
 				return new Text(
-					theme.fg("success", "✓ ") + theme.fg("muted", "selected ") + theme.fg("accent", `${indexPrefix}${answerText}`),
+					theme.fg("success", "✓ ") +
+						theme.fg("muted", "selected ") +
+						theme.fg("accent", `${indexPrefix}${answerText}`),
 					0,
 					0,
 				);

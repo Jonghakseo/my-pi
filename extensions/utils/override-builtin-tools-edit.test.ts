@@ -168,7 +168,7 @@ describe("executeStructuredEdit", () => {
 			path,
 			edits: [
 				{ op: "append", pos: lineTag(1, "a"), lines: ["b"] },
-				{ op: "prepend", pos: lineTag(1, "a"), lines: ["start"] }
+				{ op: "prepend", pos: lineTag(1, "a"), lines: ["start"] },
 			],
 		});
 

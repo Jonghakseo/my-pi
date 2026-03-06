@@ -3,8 +3,8 @@ import {
 	buildHandoffPrompt,
 	buildSpecSnapshot,
 	computeAmbiguityScore,
-	sanitizeListInput,
 	type DeepInterviewDraft,
+	sanitizeListInput,
 } from "./deep-interview-utils.ts";
 
 describe("sanitizeListInput", () => {

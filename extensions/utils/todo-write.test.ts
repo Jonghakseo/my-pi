@@ -1,25 +1,27 @@
 import { describe, expect, it } from "vitest";
-import { applyTodoWriteOps, getTodoWidgetVisibility, renderTodoWidgetLines, renderTodoWriteSummary } from "../todo-write.js";
+import {
+	applyTodoWriteOps,
+	getTodoWidgetVisibility,
+	renderTodoWidgetLines,
+	renderTodoWriteSummary,
+} from "../todo-write.js";
 
 describe("todo-write ops", () => {
 	it("replaces full state and assigns deterministic ids", () => {
-		const result = applyTodoWriteOps(
-			{ phases: [] },
-			[
-				{
-					op: "replace",
-					phases: [
-						{
-							name: "Planning",
-							tasks: [
-								{ content: "Read source", status: "completed" },
-								{ content: "Map callsites", status: "in_progress" },
-							],
-						},
-					],
-				},
-			],
-		);
+		const result = applyTodoWriteOps({ phases: [] }, [
+			{
+				op: "replace",
+				phases: [
+					{
+						name: "Planning",
+						tasks: [
+							{ content: "Read source", status: "completed" },
+							{ content: "Map callsites", status: "in_progress" },
+						],
+					},
+				],
+			},
+		]);
 
 		expect(result.errors).toEqual([]);
 		expect(result.state.phases[0]?.id).toBe("phase-1");
