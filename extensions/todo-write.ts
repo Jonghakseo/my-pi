@@ -1,6 +1,6 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
+import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
 import { StringEnum } from "@mariozechner/pi-ai";
 import { Type, type Static } from "@sinclair/typebox";
 
@@ -80,6 +80,7 @@ type TodoWriteOp = TodoWriteParamsType["ops"][number];
 
 const TODO_WRITE_DIR = ".todos";
 const TODO_WRITE_FILE = "todo-write-state.json";
+const TODO_WIDGET_KEY = "todo-write";
 
 function createEmptyState(): TodoState {
 	return { phases: [] };
@@ -254,6 +255,46 @@ export function applyTodoWriteOps(
 	return { state: next, errors };
 }
 
+export function renderTodoWidgetLines(state: TodoState): string[] {
+	const allTasks = state.phases.flatMap((phase) => phase.tasks.map((task) => ({ ...task, phase: phase.name })));
+	if (allTasks.length === 0) return [];
+
+	const remainingTasks = allTasks.filter((task) => task.status === "pending" || task.status === "in_progress");
+	const completedCount = allTasks.filter((task) => task.status === "completed" || task.status === "abandoned").length;
+	let currentPhaseIndex = state.phases.findIndex((phase) =>
+		phase.tasks.some((task) => task.status === "pending" || task.status === "in_progress"),
+	);
+	if (currentPhaseIndex === -1) currentPhaseIndex = state.phases.length - 1;
+	const currentPhase = state.phases[currentPhaseIndex];
+	const focusTask = remainingTasks.find((task) => task.status === "in_progress") ?? remainingTasks[0] ?? allTasks[allTasks.length - 1];
+	const phaseLabel = currentPhase ? ` · ${currentPhase.name} (${currentPhaseIndex + 1}/${state.phases.length})` : "";
+
+	const lines = [`📋 Todo ${completedCount}/${allTasks.length} done · ${remainingTasks.length} remaining${phaseLabel}`];
+	if (focusTask) {
+		const focusPrefix =
+			focusTask.status === "in_progress"
+				? "→"
+				: focusTask.status === "completed"
+					? "✓"
+					: focusTask.status === "abandoned"
+						? "✗"
+						: "○";
+		lines.push(`  ${focusPrefix} ${focusTask.id} ${focusTask.content} (${focusTask.phase})`);
+	}
+
+	for (const task of remainingTasks.slice(0, 3)) {
+		if (task.id === focusTask?.id) continue;
+		const marker = task.status === "in_progress" ? "→" : "○";
+		lines.push(`  ${marker} ${task.id} ${task.content} (${task.phase})`);
+	}
+
+	if (remainingTasks.length > 3) {
+		lines.push(`  … ${remainingTasks.length - 3} more`);
+	}
+
+	return lines;
+}
+
 export function renderTodoWriteSummary(state: TodoState, errors: string[] = []): string {
 	const tasks = state.phases.flatMap((phase) => phase.tasks);
 	if (tasks.length === 0) return errors.length > 0 ? `Errors: ${errors.join("; ")}` : "Todo list cleared.";
@@ -285,9 +326,7 @@ export function renderTodoWriteSummary(state: TodoState, errors: string[] = []):
 	}
 
 	if (currentPhase) {
-		lines.push(
-			`Phase ${currentIndex + 1}/${state.phases.length} "${currentPhase.name}" — ${doneCount}/${currentPhase.tasks.length} tasks complete`,
-		);
+		lines.push(`Phase ${currentIndex + 1}/${state.phases.length} "${currentPhase.name}" — ${doneCount}/${currentPhase.tasks.length} tasks complete`);
 	}
 
 	for (const phase of state.phases) {
@@ -350,6 +389,13 @@ async function writeTodoWriteState(cwd: string, state: TodoState): Promise<void>
 	await writeFile(getStatePath(cwd), `${JSON.stringify(state, null, 2)}\n`, "utf8");
 }
 
+async function syncTodoWidget(ctx: ExtensionContext): Promise<void> {
+	if (!ctx.hasUI) return;
+	const state = await readTodoWriteState(ctx.cwd);
+	const lines = renderTodoWidgetLines(state);
+	ctx.ui.setWidget(TODO_WIDGET_KEY, lines.length > 0 ? lines : undefined);
+}
+
 export default function todoWriteExtension(pi: ExtensionAPI): void {
 	pi.registerTool({
 		name: "todo_write",
@@ -361,10 +407,32 @@ export default function todoWriteExtension(pi: ExtensionAPI): void {
 			const current = await readTodoWriteState(ctx.cwd);
 			const applied = applyTodoWriteOps(current, params.ops);
 			await writeTodoWriteState(ctx.cwd, applied.state);
+			await syncTodoWidget(ctx);
 			return {
 				content: [{ type: "text" as const, text: renderTodoWriteSummary(applied.state, applied.errors) }],
 				details: { phases: applied.state.phases },
 			};
 		},
+	});
+
+	pi.on("session_start", async (_event, ctx) => {
+		await syncTodoWidget(ctx);
+	});
+
+	pi.on("session_switch", async (_event, ctx) => {
+		await syncTodoWidget(ctx);
+	});
+
+	pi.on("session_fork", async (_event, ctx) => {
+		await syncTodoWidget(ctx);
+	});
+
+	pi.on("session_tree", async (_event, ctx) => {
+		await syncTodoWidget(ctx);
+	});
+
+	pi.on("session_shutdown", async (_event, ctx) => {
+		if (!ctx.hasUI) return;
+		ctx.ui.setWidget(TODO_WIDGET_KEY, undefined);
 	});
 }
