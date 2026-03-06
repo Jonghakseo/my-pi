@@ -30,7 +30,7 @@ import {
 import { formatUsageStats, truncateLines } from "./format.js";
 import { enqueueSubagentInvocation } from "./invocation-queue.js";
 import { readSessionReplayItems, SubagentSessionReplayOverlay } from "./replay.js";
-import { MAX_SUBAGENT_AUTO_RETRIES, invokeWithAutoRetry } from "./retry.js";
+import { invokeWithAutoRetry, MAX_SUBAGENT_AUTO_RETRIES } from "./retry.js";
 import { getLatestRun, removeRun, trimCommandRunHistory } from "./run-utils.js";
 import {
 	getFinalOutput,
@@ -1182,7 +1182,7 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 							model: result.model,
 							source: result.agentSource,
 							thoughtText: runState.thoughtText,
-								retryCount: runState.retryCount,
+							retryCount: runState.retryCount,
 							status: runState.status,
 						},
 					};
@@ -1493,7 +1493,6 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 					overlayOptions: { width: SUBVIEW_OVERLAY_WIDTH, maxHeight: SUBVIEW_OVERLAY_MAX_HEIGHT, anchor: "center" },
 				},
 			);
-
 		},
 	});
 

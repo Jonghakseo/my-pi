@@ -142,7 +142,10 @@ const FILE_STATUS_ORDER: Record<DiffFileStatus, number> = {
 };
 
 /** Merge committed-file set + working-file set into final overlay file rows. */
-export function mergeDiffEntries(committedEntries: ParsedDiffEntry[], workingEntries: ParsedDiffEntry[]): MergedDiffEntry[] {
+export function mergeDiffEntries(
+	committedEntries: ParsedDiffEntry[],
+	workingEntries: ParsedDiffEntry[],
+): MergedDiffEntry[] {
 	const byPath = new Map<
 		string,
 		{
@@ -176,7 +179,9 @@ export function mergeDiffEntries(committedEntries: ParsedDiffEntry[], workingEnt
 		});
 	}
 
-	merged.sort((a, b) => (FILE_STATUS_ORDER[a.status] ?? 9) - (FILE_STATUS_ORDER[b.status] ?? 9) || a.path.localeCompare(b.path));
+	merged.sort(
+		(a, b) => (FILE_STATUS_ORDER[a.status] ?? 9) - (FILE_STATUS_ORDER[b.status] ?? 9) || a.path.localeCompare(b.path),
+	);
 	return merged;
 }
 

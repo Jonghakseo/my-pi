@@ -68,7 +68,10 @@ export default function memoryLayerExtension(pi: ExtensionAPI) {
 		return sanitizeTopic(withoutMd);
 	}
 
-	function scopeTargets(scope: MemoryScope | undefined, projectId: string | undefined): Array<{
+	function scopeTargets(
+		scope: MemoryScope | undefined,
+		projectId: string | undefined,
+	): Array<{
 		scope: MemoryScope;
 		projectId?: string;
 	}> {
@@ -625,7 +628,9 @@ export default function memoryLayerExtension(pi: ExtensionAPI) {
 							};
 						}
 						return {
-							content: [{ type: "text" as const, text: `Deleted from ${scope}: ${normalizedTopic} / "${normalizedTitle}"` }],
+							content: [
+								{ type: "text" as const, text: `Deleted from ${scope}: ${normalizedTopic} / "${normalizedTitle}"` },
+							],
 							details: undefined,
 						};
 					}

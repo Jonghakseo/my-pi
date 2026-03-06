@@ -1,17 +1,20 @@
 import { describe, expect, it } from "vitest";
-import { AGENT_SYMBOL_MAP as SUBAGENT_SYMBOL_MAP, formatSymbolHints as subagentFormatSymbolHints } from "../subagent/constants.js";
 import {
-	agentBgIndex as subagentAgentBgIndex,
+	AGENT_SYMBOL_MAP as SUBAGENT_SYMBOL_MAP,
+	formatSymbolHints as subagentFormatSymbolHints,
+} from "../subagent/constants.js";
+import {
+	formatToolCallPlain,
+	resolveContextWindow,
 	AGENT_NAME_PALETTE as SUBAGENT_NAME_PALETTE,
+	agentBgIndex as subagentAgentBgIndex,
 	formatContextUsageBar as subagentFormatContextUsageBar,
 	formatTokens as subagentFormatTokens,
-	formatToolCallPlain,
 	formatUsageStats as subagentFormatUsageStats,
 	getContextBarColorByRemaining as subagentGetContextBarColorByRemaining,
 	getRemainingContextPercent as subagentGetRemainingContextPercent,
 	getUsedContextPercent as subagentGetUsedContextPercent,
 	normalizeModelRef as subagentNormalizeModelRef,
-	resolveContextWindow,
 	truncateLines as subagentTruncateLines,
 } from "../subagent/format.js";
 import {
@@ -19,9 +22,9 @@ import {
 	AGENT_SYMBOL_MAP,
 	agentBgIndex,
 	formatContextUsageBar,
+	formatSymbolHints,
 	formatTokens,
 	formatUsageStats,
-	formatSymbolHints,
 	getContextBarColorByRemaining,
 	getRemainingContextPercent,
 	getUsedContextPercent,

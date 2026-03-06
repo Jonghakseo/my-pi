@@ -19,11 +19,11 @@ import {
 	DEEP_INTERVIEW_AMBIGUITY_THRESHOLD,
 	DEEP_INTERVIEW_MIN_ROUNDS,
 	DEEP_INTERVIEW_SOFT_MAX_ROUNDS,
-	mergeDraftList,
-	sanitizeListInput,
 	type DeepInterviewDraft,
 	type DeepInterviewScoreResult,
 	type DeepInterviewSpecV1,
+	mergeDraftList,
+	sanitizeListInput,
 } from "./utils/deep-interview-utils.ts";
 
 const COMMAND_NAME = "deep-interview";
@@ -356,14 +356,9 @@ async function runPiLlmScoring(userPrompt: string): Promise<{ output: string; er
 	});
 }
 
-function buildScoreFromLlmPayload(
-	payload: LlmAmbiguityPayload,
-	draft: DeepInterviewDraft,
-): DeepInterviewScoreResult {
+function buildScoreFromLlmPayload(payload: LlmAmbiguityPayload, draft: DeepInterviewDraft): DeepInterviewScoreResult {
 	const completeness =
-		payload.goal_clarity * 0.4 +
-		payload.constraints_clarity * 0.3 +
-		payload.acceptance_criteria_clarity * 0.3;
+		payload.goal_clarity * 0.4 + payload.constraints_clarity * 0.3 + payload.acceptance_criteria_clarity * 0.3;
 
 	const structureCoverage = clamp((payload.out_of_scope_clarity + payload.risks_clarity) / 2);
 	const structureBonus = structureCoverage * 0.08;
@@ -595,7 +590,10 @@ function applyRoundAnswer(draft: DeepInterviewDraft, slot: InterviewSlot, answer
 	return parsed;
 }
 
-function buildDecisionOptions(score: DeepInterviewScoreResult): { options: string[]; defaultAction: "continue" | "freeze" } {
+function buildDecisionOptions(score: DeepInterviewScoreResult): {
+	options: string[];
+	defaultAction: "continue" | "freeze";
+} {
 	if (score.readyForExecution) {
 		return {
 			options: ["✅ Freeze and finish", "🧠 Continue interview", "🛑 Cancel"],
@@ -609,11 +607,7 @@ function buildDecisionOptions(score: DeepInterviewScoreResult): { options: strin
 	};
 }
 
-function buildProgressSummary(
-	round: number,
-	score: DeepInterviewScoreResult,
-	source: AmbiguityScoreSource,
-): string {
+function buildProgressSummary(round: number, score: DeepInterviewScoreResult, source: AmbiguityScoreSource): string {
 	const missing = score.missingFields.length > 0 ? score.missingFields.join(", ") : "none";
 	const sourceLabel = source === "llm" ? "LLM" : "heuristic-fallback";
 	return [
@@ -653,10 +647,7 @@ async function promptForGoal(ctx: ExtensionContext, initialArgs: string): Promis
 async function promptDecisionAfterCancelInput(ctx: ExtensionContext): Promise<"continue" | "cancel"> {
 	if (!ctx.hasUI) return "cancel";
 
-	const selected = await ctx.ui.select("입력이 취소되었습니다. 인터뷰를 종료할까요?", [
-		"계속 진행",
-		"인터뷰 취소",
-	]);
+	const selected = await ctx.ui.select("입력이 취소되었습니다. 인터뷰를 종료할까요?", ["계속 진행", "인터뷰 취소"]);
 	if (!selected || selected === "인터뷰 취소") return "cancel";
 	return "continue";
 }
@@ -678,11 +669,7 @@ async function promptRoundAction(
 	return "continue";
 }
 
-async function promptPostFreezeActions(
-	pi: ExtensionAPI,
-	ctx: ExtensionContext,
-	handoffPrompt: string,
-): Promise<void> {
+async function promptPostFreezeActions(pi: ExtensionAPI, ctx: ExtensionContext, handoffPrompt: string): Promise<void> {
 	if (!ctx.hasUI) return;
 
 	while (true) {
@@ -794,7 +781,10 @@ async function runDeepInterview(pi: ExtensionAPI, ctx: ExtensionContext, args: s
 		minRounds: DEEP_INTERVIEW_MIN_ROUNDS,
 	});
 
-	ctx.ui.notify(`Deep interview 시작 (spec v${specVersion}) · 최소 ${DEEP_INTERVIEW_MIN_ROUNDS}라운드 후 종료 가능`, "info");
+	ctx.ui.notify(
+		`Deep interview 시작 (spec v${specVersion}) · 최소 ${DEEP_INTERVIEW_MIN_ROUNDS}라운드 후 종료 가능`,
+		"info",
+	);
 
 	let round = 0;
 	let finalScore: DeepInterviewScoreResult | null = null;
@@ -837,10 +827,7 @@ async function runDeepInterview(pi: ExtensionAPI, ctx: ExtensionContext, args: s
 		finalScore = score;
 
 		if (evaluated.source === "heuristic") {
-			ctx.ui.notify(
-				`LLM 점수 평가 실패로 휴리스틱으로 대체했습니다: ${evaluated.error ?? "unknown error"}`,
-				"warning",
-			);
+			ctx.ui.notify(`LLM 점수 평가 실패로 휴리스틱으로 대체했습니다: ${evaluated.error ?? "unknown error"}`, "warning");
 		}
 
 		pi.appendEntry<ScoredEntry>(ENTRY_SCORED, {

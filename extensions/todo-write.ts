@@ -1,7 +1,7 @@
-import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
 import { StringEnum } from "@mariozechner/pi-ai";
+import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
 import { Text, truncateToWidth } from "@mariozechner/pi-tui";
-import { Type, type Static } from "@sinclair/typebox";
+import { type Static, Type } from "@sinclair/typebox";
 
 type TodoStatus = "pending" | "in_progress" | "completed" | "abandoned";
 
@@ -87,7 +87,6 @@ const todoWidgetMetaStore = new Map<string, { completedAt?: number; completedTur
 const todoTurnStore = new Map<string, number>();
 const TODO_HIDE_COMPLETED_AFTER_MS = 90_000;
 const TODO_HIDE_COMPLETED_AFTER_TURNS = 2;
-
 
 function createEmptyState(): TodoState {
 	return { phases: [] };
@@ -186,7 +185,9 @@ function isPhaseCompleted(phase: TodoPhase): boolean {
 }
 
 function hasRemainingTasks(state: TodoState): boolean {
-	return state.phases.some((phase) => phase.tasks.some((task) => task.status === "pending" || task.status === "in_progress"));
+	return state.phases.some((phase) =>
+		phase.tasks.some((task) => task.status === "pending" || task.status === "in_progress"),
+	);
 }
 
 function getTodoTaskCount(state: TodoState): number {
@@ -348,14 +349,18 @@ export function renderTodoWriteSummary(state: TodoState, errors: string[] = []):
 			tasks: phase.tasks.filter((task) => task.status === "pending" || task.status === "in_progress"),
 		}))
 		.filter((phase) => phase.tasks.length > 0);
-	const remainingTasks = remainingByPhase.flatMap((phase) => phase.tasks.map((task) => ({ ...task, phase: phase.name })));
+	const remainingTasks = remainingByPhase.flatMap((phase) =>
+		phase.tasks.map((task) => ({ ...task, phase: phase.name })),
+	);
 
 	let currentIndex = state.phases.findIndex((phase) =>
 		phase.tasks.some((task) => task.status === "pending" || task.status === "in_progress"),
 	);
 	if (currentIndex === -1) currentIndex = state.phases.length - 1;
 	const currentPhase = state.phases[currentIndex];
-	const doneCount = currentPhase ? currentPhase.tasks.filter((task) => task.status === "completed" || task.status === "abandoned").length : 0;
+	const doneCount = currentPhase
+		? currentPhase.tasks.filter((task) => task.status === "completed" || task.status === "abandoned").length
+		: 0;
 
 	const lines: string[] = [];
 	if (errors.length > 0) lines.push(`Errors: ${errors.join("; ")}`);
@@ -369,7 +374,9 @@ export function renderTodoWriteSummary(state: TodoState, errors: string[] = []):
 	}
 
 	if (currentPhase) {
-		lines.push(`Phase ${currentIndex + 1}/${state.phases.length} "${currentPhase.name}" — ${doneCount}/${currentPhase.tasks.length} tasks complete`);
+		lines.push(
+			`Phase ${currentIndex + 1}/${state.phases.length} "${currentPhase.name}" — ${doneCount}/${currentPhase.tasks.length} tasks complete`,
+		);
 	}
 
 	for (const phase of state.phases) {
@@ -464,9 +471,12 @@ async function syncTodoWidget(ctx: ExtensionContext): Promise<void> {
 	if (visibility.completionGraceActive && visibility.remainingMs !== undefined) {
 		todoWidgetHideTimerByKey.set(
 			key,
-			setTimeout(() => {
-				void syncTodoWidget(ctx);
-			}, Math.max(0, visibility.remainingMs + 50)),
+			setTimeout(
+				() => {
+					void syncTodoWidget(ctx);
+				},
+				Math.max(0, visibility.remainingMs + 50),
+			),
 		);
 	}
 
@@ -484,11 +494,14 @@ async function syncTodoWidget(ctx: ExtensionContext): Promise<void> {
 		return {
 			render(width: number): string[] {
 				const lineWidth = Math.max(8, width);
-				const spinner = TODO_SPINNER_FRAMES[Math.floor(Date.now() / TODO_SPINNER_INTERVAL_MS) % TODO_SPINNER_FRAMES.length] ?? "•";
+				const spinner =
+					TODO_SPINNER_FRAMES[Math.floor(Date.now() / TODO_SPINNER_INTERVAL_MS) % TODO_SPINNER_FRAMES.length] ?? "•";
 				const styledLines = renderedLines.map((line) => {
 					if (!line.startsWith("  ")) {
 						const phaseLine = truncateToWidth(line, lineWidth);
-						return line === currentPhaseName ? theme.bold(theme.fg("accent", phaseLine)) : theme.fg("toolOutput", phaseLine);
+						return line === currentPhaseName
+							? theme.bold(theme.fg("accent", phaseLine))
+							: theme.fg("toolOutput", phaseLine);
 					}
 					if (line.startsWith("  → ")) {
 						const runningLine = `  ${spinner} ${line.slice(4)}`;

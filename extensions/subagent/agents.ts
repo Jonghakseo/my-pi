@@ -8,10 +8,10 @@ import * as path from "node:path";
 import { parseFrontmatter } from "@mariozechner/pi-coding-agent";
 import {
 	AGENT_THINKING_LEVELS,
+	type AgentThinkingLevel,
 	normalizeModel,
 	normalizeThinkingLevel,
 	normalizeTools,
-	type AgentThinkingLevel,
 } from "../utils/agent-utils.js";
 
 export const THINKING_LEVELS = AGENT_THINKING_LEVELS;

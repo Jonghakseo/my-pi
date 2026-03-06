@@ -456,7 +456,10 @@ export interface SearchResult {
 function tokenizeSearchQuery(query: string): string[] {
 	const normalized = query.toLowerCase().trim();
 	if (!normalized) return [];
-	const splitTokens = normalized.split(/\s+/).map((token) => token.trim()).filter(Boolean);
+	const splitTokens = normalized
+		.split(/\s+/)
+		.map((token) => token.trim())
+		.filter(Boolean);
 	const filtered = splitTokens.filter((token) => token.length >= 2);
 	const tokens = filtered.length > 0 ? filtered : splitTokens;
 	return [...new Set(tokens)];

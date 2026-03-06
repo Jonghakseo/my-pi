@@ -32,6 +32,14 @@ function getFolderName(cwd: string): string {
 	return parts.length > 0 ? parts[parts.length - 1] : cwd || "unknown";
 }
 
+async function getRepoName(pi: ExtensionAPI, cwd: string): Promise<string | null> {
+	const result = await pi.exec("git", ["remote", "get-url", "origin"], { cwd });
+	if (result.code !== 0 || !result.stdout?.trim()) return null;
+	const url = result.stdout.trim();
+	const match = url.match(/\/([^/]+?)(?:\.git)?$/);
+	return match?.[1] ?? null;
+}
+
 function sanitizeStatusText(text: string): string {
 	return text
 		.replace(/[\r\n\t]/g, " ")
@@ -61,6 +69,13 @@ function installFooter(pi: ExtensionAPI, ctx: ExtensionContext) {
 		let dirtyCheckRunning = false;
 		let disposed = false;
 		let dirtyTimer: ReturnType<typeof setInterval> | undefined;
+		let repoName: string | null = null;
+
+		const fetchRepoName = async () => {
+			if (disposed) return;
+			repoName = await getRepoName(pi, ctx.sessionManager.getCwd());
+			if (!disposed) tui.requestRender();
+		};
 
 		const refreshDirtyState = async () => {
 			if (disposed || dirtyCheckRunning) return;
@@ -91,6 +106,7 @@ function installFooter(pi: ExtensionAPI, ctx: ExtensionContext) {
 			}
 		};
 
+		void fetchRepoName();
 		void refreshDirtyState();
 		dirtyTimer = setInterval(() => {
 			void refreshDirtyState();
@@ -127,15 +143,17 @@ function installFooter(pi: ExtensionAPI, ctx: ExtensionContext) {
 				const done = statusTexts.filter((s) => /(^|\s)(done|✓)(\s|$)/i.test(s)).length;
 
 				const folder = getFolderName(ctx.sessionManager.getCwd());
+				const displayName = repoName || folder;
 				const branch = footerData.getGitBranch();
 				const branchText = branch ?? "no-branch";
-				const projectRef = `${folder} - ${branchText}`;
+				const dirtyMark = branch && hasDirtyChanges ? theme.fg("warning", "*") : "";
 
 				const left =
 					theme.fg("dim", ` ${model}`) +
 					theme.fg("muted", " · ") +
-					theme.fg("accent", projectRef) +
-					(branch && hasDirtyChanges ? theme.fg("warning", "*") : "");
+					theme.fg("accent", `${displayName} - `) +
+					dirtyMark +
+					theme.fg("accent", branchText);
 
 				const mid =
 					active > 0

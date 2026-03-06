@@ -33,7 +33,9 @@ async function makeDiffString(oldContent: string, newContent: string, contextLin
 	const output: string[] = [];
 	const maxLineNum = Math.max(oldContent.split("\n").length, newContent.split("\n").length);
 	const lnw = String(maxLineNum).length;
-	let oldLn = 1, newLn = 1, lastWasChange = false;
+	let oldLn = 1,
+		newLn = 1,
+		lastWasChange = false;
 	let firstChangedLine: number | undefined;
 	for (let i = 0; i < parts.length; i++) {
 		const part = parts[i];
@@ -42,20 +44,48 @@ async function makeDiffString(oldContent: string, newContent: string, contextLin
 		if (part.added || part.removed) {
 			if (firstChangedLine === undefined) firstChangedLine = newLn;
 			for (const line of raw) {
-				if (part.added) { output.push(`+${String(newLn).padStart(lnw)} ${line}`); newLn++; }
-				else { output.push(`-${String(oldLn).padStart(lnw)} ${line}`); oldLn++; }
+				if (part.added) {
+					output.push(`+${String(newLn).padStart(lnw)} ${line}`);
+					newLn++;
+				} else {
+					output.push(`-${String(oldLn).padStart(lnw)} ${line}`);
+					oldLn++;
+				}
 			}
 			lastWasChange = true;
 		} else {
 			const nextIsChange = i < parts.length - 1 && (parts[i + 1].added || parts[i + 1].removed);
 			if (lastWasChange || nextIsChange) {
-				let lines = raw, skipStart = 0, skipEnd = 0;
-				if (!lastWasChange) { skipStart = Math.max(0, raw.length - contextLines); lines = raw.slice(skipStart); }
-				if (!nextIsChange && lines.length > contextLines) { skipEnd = lines.length - contextLines; lines = lines.slice(0, contextLines); }
-				if (skipStart > 0) { output.push(` ${" ".repeat(lnw)} ...`); oldLn += skipStart; newLn += skipStart; }
-				for (const line of lines) { output.push(` ${String(oldLn).padStart(lnw)} ${line}`); oldLn++; newLn++; }
-				if (skipEnd > 0) { output.push(` ${" ".repeat(lnw)} ...`); oldLn += skipEnd; newLn += skipEnd; }
-			} else { oldLn += raw.length; newLn += raw.length; }
+				let lines = raw,
+					skipStart = 0,
+					skipEnd = 0;
+				if (!lastWasChange) {
+					skipStart = Math.max(0, raw.length - contextLines);
+					lines = raw.slice(skipStart);
+				}
+				if (!nextIsChange && lines.length > contextLines) {
+					skipEnd = lines.length - contextLines;
+					lines = lines.slice(0, contextLines);
+				}
+				if (skipStart > 0) {
+					output.push(` ${" ".repeat(lnw)} ...`);
+					oldLn += skipStart;
+					newLn += skipStart;
+				}
+				for (const line of lines) {
+					output.push(` ${String(oldLn).padStart(lnw)} ${line}`);
+					oldLn++;
+					newLn++;
+				}
+				if (skipEnd > 0) {
+					output.push(` ${" ".repeat(lnw)} ...`);
+					oldLn += skipEnd;
+					newLn += skipEnd;
+				}
+			} else {
+				oldLn += raw.length;
+				newLn += raw.length;
+			}
 			lastWasChange = false;
 		}
 	}
@@ -143,8 +173,16 @@ const EditParams = Type.Object(
 						Type.Literal("insert"),
 						Type.Literal("delete"),
 					]),
-					pos: Type.Optional(Type.Union([Type.String(), Type.Null()])),
-					end: Type.Optional(Type.Union([Type.String(), Type.Null()])),
+					pos: Type.Optional(
+						Type.Union([Type.String(), Type.Null()], {
+							description: "Anchor line tag in LINE#ID format, e.g. 33#BX. Use the exact tag shown by read output.",
+						}),
+					),
+					end: Type.Optional(
+						Type.Union([Type.String(), Type.Null()], {
+							description: "End line tag in LINE#ID format, e.g. 34#YS. Use the exact tag shown by read output.",
+						}),
+					),
 					lines: Type.Optional(Type.Union([Type.Array(Type.String()), Type.String(), Type.Null()])),
 				},
 				{ additionalProperties: false },
@@ -229,7 +267,9 @@ function computeLineHash(lineNumber: number, line: string): string {
 function formatHashTaggedLines(text: string, startLine: number): string {
 	const lines = text.split("\n");
 	if (lines.every((line) => HASH_LINE_PATTERN.test(line))) return text;
-	return lines.map((line, index) => `${startLine + index}#${computeLineHash(startLine + index, line)}:${line}`).join("\n");
+	return lines
+		.map((line, index) => `${startLine + index}#${computeLineHash(startLine + index, line)}:${line}`)
+		.join("\n");
 }
 
 function formatMultiReadSection(path: string, index: number, total: number, body: string, startLine: number): string {
@@ -255,45 +295,45 @@ function withHashTaggedReadResult<T>(result: T, startLine: number): T {
 }
 
 type LineTag = {
-line: number;
-hash: string;
+	line: number;
+	hash: string;
 };
 
 type StructuredEditOp = {
-op: "replace" | "append" | "prepend";
-posTag: LineTag | null;
-endTag: LineTag | null;
-lines: string[] | null;
+	op: "replace" | "append" | "prepend";
+	posTag: LineTag | null;
+	endTag: LineTag | null;
+	lines: string[] | null;
 };
 
 function parseLineTag(tag: unknown): LineTag | null {
-if (tag == null) return null;
-if (typeof tag !== "string") return null;
-const match = tag.trim().match(/^(\d+)#([A-Z]{2})$/);
-if (!match) return null;
-const line = Number(match[1]);
-if (!Number.isInteger(line) || line < 1) return null;
-return { line, hash: match[2] };
+	if (tag == null) return null;
+	if (typeof tag !== "string") return null;
+	const match = tag.trim().match(/^(\d+)#([A-Z]{2})$/);
+	if (!match) return null;
+	const line = Number(match[1]);
+	if (!Number.isInteger(line) || line < 1) return null;
+	return { line, hash: match[2] };
 }
 
 function normalizeEditLines(value: unknown): string[] | null | undefined {
-if (value == null) return null;
-if (typeof value === "string") return value.split("\n");
-if (Array.isArray(value)) {
-if (!value.every((entry) => typeof entry === "string")) return undefined;
-return value as string[];
-}
-return undefined;
+	if (value == null) return null;
+	if (typeof value === "string") return value.split("\n");
+	if (Array.isArray(value)) {
+		if (!value.every((entry) => typeof entry === "string")) return undefined;
+		return value as string[];
+	}
+	return undefined;
 }
 
 function parseStructuredEditOps(rawOps: unknown): { ops: StructuredEditOp[] | null; error?: string } {
-if (rawOps == null) return { ops: null };
-if (!Array.isArray(rawOps)) return { ops: null, error: "edits must be an array." };
+	if (rawOps == null) return { ops: null };
+	if (!Array.isArray(rawOps)) return { ops: null, error: "edits must be an array." };
 
-const ops: StructuredEditOp[] = [];
-for (const raw of rawOps) {
-if (!raw || typeof raw !== "object") return { ops: null, error: "Each edit must be an object." };
-const entry = raw as Record<string, unknown>;
+	const ops: StructuredEditOp[] = [];
+	for (const raw of rawOps) {
+		if (!raw || typeof raw !== "object") return { ops: null, error: "Each edit must be an object." };
+		const entry = raw as Record<string, unknown>;
 		const rawOp = entry.op;
 		let op: StructuredEditOp["op"] | null = null;
 		if (rawOp === "replace" || rawOp === "append" || rawOp === "prepend") op = rawOp;
@@ -309,7 +349,11 @@ const entry = raw as Record<string, unknown>;
 		if (lines === undefined) return { ops: null, error: "edit.lines must be string[], string, or null." };
 
 		if ((rawOp === "replace" || rawOp === "delete") && posTag == null) {
-			return { ops: null, error: "replace/delete operations require pos (LINE#ID)." };
+			return {
+				ops: null,
+				error:
+					'replace/delete operations require pos in LINE#ID format (for example: "33#BX"). Use the exact tag shown by read output.',
+			};
 		}
 
 		if (rawOp === "delete" && lines != null && lines.length > 0) {
@@ -317,190 +361,201 @@ const entry = raw as Record<string, unknown>;
 		}
 
 		if (entry.end != null && endTag == null) {
-			return { ops: null, error: "end must be a valid LINE#ID tag." };
+			return {
+				ops: null,
+				error: 'end must be a valid LINE#ID tag (for example: "34#YS"). Use the exact tag shown by read output.',
+			};
 		}
 
 		if (entry.pos != null && posTag == null) {
-			return { ops: null, error: "pos must be a valid LINE#ID tag." };
+			return {
+				ops: null,
+				error: 'pos must be a valid LINE#ID tag (for example: "33#BX"). Use the exact tag shown by read output.',
+			};
 		}
 
 		ops.push({ op, posTag, endTag, lines: rawOp === "delete" ? [] : lines });
-}
+	}
 
-return { ops };
+	return { ops };
 }
 
 function validateTagAgainstLine(tag: LineTag, lines: string[]): string | undefined {
-if (tag.line < 1 || tag.line > lines.length) return `line ${tag.line} does not exist`;
-const lineText = lines[tag.line - 1] ?? "";
-const actualHash = computeLineHash(tag.line, lineText);
-if (actualHash !== tag.hash) {
-return `line ${tag.line} has changed since last read (${tag.hash} != ${actualHash})`;
-}
-return undefined;
+	if (tag.line < 1 || tag.line > lines.length) return `line ${tag.line} does not exist`;
+	const lineText = lines[tag.line - 1] ?? "";
+	const actualHash = computeLineHash(tag.line, lineText);
+	if (actualHash !== tag.hash) {
+		return `line ${tag.line} has changed since last read (${tag.hash} != ${actualHash})`;
+	}
+	return undefined;
 }
 
 function applyStructuredEdits(fileText: string, ops: StructuredEditOp[]): { text?: string; error?: string } {
-const hasTrailingNewline = fileText.endsWith("\n");
-const lines = fileText.length === 0 ? [] : fileText.split("\n");
-if (hasTrailingNewline && lines[lines.length - 1] === "") lines.pop();
+	const hasTrailingNewline = fileText.endsWith("\n");
+	const lines = fileText.length === 0 ? [] : fileText.split("\n");
+	if (hasTrailingNewline && lines[lines.length - 1] === "") lines.pop();
 
-const withAnchor = ops.map((op, index) => {
-const anchor = op.posTag?.line ?? (op.op === "append" ? Number.MAX_SAFE_INTEGER - index : op.op === "prepend" ? 0 : -1);
-return { ...op, index, anchor };
-});
-withAnchor.sort((a, b) => (b.anchor !== a.anchor ? b.anchor - a.anchor : a.index - b.index));
+	const withAnchor = ops.map((op, index) => {
+		const anchor =
+			op.posTag?.line ?? (op.op === "append" ? Number.MAX_SAFE_INTEGER - index : op.op === "prepend" ? 0 : -1);
+		return { ...op, index, anchor };
+	});
+	withAnchor.sort((a, b) => (b.anchor !== a.anchor ? b.anchor - a.anchor : a.index - b.index));
 
-for (const op of withAnchor) {
-if (op.op === "replace") {
-const startTag = op.posTag as LineTag;
-const endTag = op.endTag ?? startTag;
-const startError = validateTagAgainstLine(startTag, lines);
-if (startError) return { error: startError };
-const endError = validateTagAgainstLine(endTag, lines);
-if (endError) return { error: endError };
-const start = startTag.line;
-const end = endTag.line;
-if (end < start) return { error: "replace end must be >= pos." };
-const replacement = op.lines ?? [];
-lines.splice(start - 1, end - start + 1, ...replacement);
-continue;
-}
+	for (const op of withAnchor) {
+		if (op.op === "replace") {
+			const startTag = op.posTag as LineTag;
+			const endTag = op.endTag ?? startTag;
+			const startError = validateTagAgainstLine(startTag, lines);
+			if (startError) return { error: startError };
+			const endError = validateTagAgainstLine(endTag, lines);
+			if (endError) return { error: endError };
+			const start = startTag.line;
+			const end = endTag.line;
+			if (end < start) return { error: "replace end must be >= pos." };
+			const replacement = op.lines ?? [];
+			lines.splice(start - 1, end - start + 1, ...replacement);
+			continue;
+		}
 
-if (op.op === "prepend") {
-const insert = op.lines ?? [];
-if (insert.length === 0) continue;
-if (op.posTag) {
-const tagError = validateTagAgainstLine(op.posTag, lines);
-if (tagError) return { error: tagError };
-}
-const at = op.posTag == null ? 0 : op.posTag.line - 1;
-if (at < 0 || at > lines.length) return { error: `prepend pos out of range: ${op.posTag?.line ?? 0}` };
-lines.splice(at, 0, ...insert);
-continue;
-}
+		if (op.op === "prepend") {
+			const insert = op.lines ?? [];
+			if (insert.length === 0) continue;
+			if (op.posTag) {
+				const tagError = validateTagAgainstLine(op.posTag, lines);
+				if (tagError) return { error: tagError };
+			}
+			const at = op.posTag == null ? 0 : op.posTag.line - 1;
+			if (at < 0 || at > lines.length) return { error: `prepend pos out of range: ${op.posTag?.line ?? 0}` };
+			lines.splice(at, 0, ...insert);
+			continue;
+		}
 
-const insert = op.lines ?? [];
-if (insert.length === 0) continue;
-if (op.posTag) {
-const tagError = validateTagAgainstLine(op.posTag, lines);
-if (tagError) return { error: tagError };
-}
-const at = op.posTag == null ? lines.length : op.posTag.line;
-if (at < 0 || at > lines.length) return { error: `append pos out of range: ${op.posTag?.line ?? 0}` };
-lines.splice(at, 0, ...insert);
-}
+		const insert = op.lines ?? [];
+		if (insert.length === 0) continue;
+		if (op.posTag) {
+			const tagError = validateTagAgainstLine(op.posTag, lines);
+			if (tagError) return { error: tagError };
+		}
+		const at = op.posTag == null ? lines.length : op.posTag.line;
+		if (at < 0 || at > lines.length) return { error: `append pos out of range: ${op.posTag?.line ?? 0}` };
+		lines.splice(at, 0, ...insert);
+	}
 
-const out = lines.join("\n");
-return { text: hasTrailingNewline ? `${out}\n` : out };
+	const out = lines.join("\n");
+	return { text: hasTrailingNewline ? `${out}\n` : out };
 }
 
 export async function executeStructuredEdit(cwd: string, params: Record<string, unknown>) {
-const relPath = typeof params.path === "string" ? params.path.trim() : "";
-if (!relPath) {
-return {
-isError: true,
-content: [{ type: "text" as const, text: "Error: path is required." }],
-details: undefined,
-};
-}
+	const relPath = typeof params.path === "string" ? params.path.trim() : "";
+	if (!relPath) {
+		return {
+			isError: true,
+			content: [{ type: "text" as const, text: "Error: path is required." }],
+			details: undefined,
+		};
+	}
 
-const sourcePath = isAbsolute(relPath) ? relPath : resolve(cwd, relPath);
-const shouldDelete = params.delete === true;
-const moveTarget = typeof params.move === "string" ? params.move.trim() : "";
-const parsed = parseStructuredEditOps(params.edits);
-if (parsed.error) {
-return {
-isError: true,
-content: [{ type: "text" as const, text: `Error: ${parsed.error}` }],
-details: undefined,
-};
-}
+	const sourcePath = isAbsolute(relPath) ? relPath : resolve(cwd, relPath);
+	const shouldDelete = params.delete === true;
+	const moveTarget = typeof params.move === "string" ? params.move.trim() : "";
+	const parsed = parseStructuredEditOps(params.edits);
+	if (parsed.error) {
+		return {
+			isError: true,
+			content: [{ type: "text" as const, text: `Error: ${parsed.error}` }],
+			details: undefined,
+		};
+	}
 
-if (shouldDelete) {
-if (parsed.ops && parsed.ops.length > 0) {
-return {
-isError: true,
-content: [{ type: "text" as const, text: "Error: delete cannot be combined with edits." }],
-details: undefined,
-};
-}
-if (moveTarget) {
-return {
-isError: true,
-content: [{ type: "text" as const, text: "Error: delete cannot be combined with move." }],
-details: undefined,
-};
-}
-try {
-await unlink(sourcePath);
-return {
-content: [{ type: "text" as const, text: `Deleted ${relPath}` }],
-details: undefined,
-};
-} catch (error) {
-return {
-isError: true,
-content: [{ type: "text" as const, text: `Error: ${(error as Error).message}` }],
-details: undefined,
-};
-}
-}
+	if (shouldDelete) {
+		if (parsed.ops && parsed.ops.length > 0) {
+			return {
+				isError: true,
+				content: [{ type: "text" as const, text: "Error: delete cannot be combined with edits." }],
+				details: undefined,
+			};
+		}
+		if (moveTarget) {
+			return {
+				isError: true,
+				content: [{ type: "text" as const, text: "Error: delete cannot be combined with move." }],
+				details: undefined,
+			};
+		}
+		try {
+			await unlink(sourcePath);
+			return {
+				content: [{ type: "text" as const, text: `Deleted ${relPath}` }],
+				details: undefined,
+			};
+		} catch (error) {
+			return {
+				isError: true,
+				content: [{ type: "text" as const, text: `Error: ${(error as Error).message}` }],
+				details: undefined,
+			};
+		}
+	}
 
-let original = "";
-try {
-original = await readFile(sourcePath, "utf8");
-} catch (error) {
-return {
-isError: true,
-content: [{ type: "text" as const, text: `Error: ${(error as Error).message}` }],
-details: undefined,
-};
-}
+	let original = "";
+	try {
+		original = await readFile(sourcePath, "utf8");
+	} catch (error) {
+		return {
+			isError: true,
+			content: [{ type: "text" as const, text: `Error: ${(error as Error).message}` }],
+			details: undefined,
+		};
+	}
 
-let next = original;
-if (parsed.ops && parsed.ops.length > 0) {
-const applied = applyStructuredEdits(original, parsed.ops);
-if (applied.error || applied.text == null) {
-return {
-isError: true,
-content: [{ type: "text" as const, text: `Error: ${applied.error ?? "failed to apply edits"}` }],
-details: undefined,
-};
-}
-next = applied.text;
-}
+	let next = original;
+	if (parsed.ops && parsed.ops.length > 0) {
+		const applied = applyStructuredEdits(original, parsed.ops);
+		if (applied.error || applied.text == null) {
+			return {
+				isError: true,
+				content: [{ type: "text" as const, text: `Error: ${applied.error ?? "failed to apply edits"}` }],
+				details: undefined,
+			};
+		}
+		next = applied.text;
+	}
 
-try {
-if (next !== original) {
-await writeFile(sourcePath, next, "utf8");
-}
+	try {
+		if (next !== original) {
+			await writeFile(sourcePath, next, "utf8");
+		}
 
-let finalPath = sourcePath;
-if (moveTarget) {
-const resolvedMove = isAbsolute(moveTarget) ? moveTarget : resolve(cwd, moveTarget);
-await mkdir(dirname(resolvedMove), { recursive: true });
-await rename(sourcePath, resolvedMove);
-finalPath = resolvedMove;
-}
+		let finalPath = sourcePath;
+		if (moveTarget) {
+			const resolvedMove = isAbsolute(moveTarget) ? moveTarget : resolve(cwd, moveTarget);
+			await mkdir(dirname(resolvedMove), { recursive: true });
+			await rename(sourcePath, resolvedMove);
+			finalPath = resolvedMove;
+		}
 
-const changed = next !== original;
-const diffResult = changed ? await makeDiffString(original, next) : undefined;
-const message = [
-changed ? `Applied ${parsed.ops?.length ?? 0} edit operation(s)` : "No content changes",
-moveTarget ? `Moved to ${finalPath}` : "",
-].filter(Boolean).join(". ");
-return {
-content: [{ type: "text" as const, text: message }],
-details: diffResult ? { diff: diffResult.diff, firstChangedLine: diffResult.firstChangedLine } as EditToolDetails : undefined,
-};
-} catch (error) {
-return {
-isError: true,
-content: [{ type: "text" as const, text: `Error: ${(error as Error).message}` }],
-details: undefined,
-};
-}
+		const changed = next !== original;
+		const diffResult = changed ? await makeDiffString(original, next) : undefined;
+		const message = [
+			changed ? `Applied ${parsed.ops?.length ?? 0} edit operation(s)` : "No content changes",
+			moveTarget ? `Moved to ${finalPath}` : "",
+		]
+			.filter(Boolean)
+			.join(". ");
+		return {
+			content: [{ type: "text" as const, text: message }],
+			details: diffResult
+				? ({ diff: diffResult.diff, firstChangedLine: diffResult.firstChangedLine } as EditToolDetails)
+				: undefined,
+		};
+	} catch (error) {
+		return {
+			isError: true,
+			content: [{ type: "text" as const, text: `Error: ${(error as Error).message}` }],
+			details: undefined,
+		};
+	}
 }
 
 function countLines(text: string): number {
@@ -965,7 +1020,9 @@ export default function (pi: ExtensionAPI) {
 				const lines = [theme.fg("toolTitle", theme.bold("Read"))];
 				for (const [index, path] of paths.entries()) {
 					const suffix = rangePlain ? `:${rangePlain}` : "";
-					lines.push(`└ ${theme.fg("muted", `파일 ${index + 1}: `)}${theme.fg("accent", shortenPath(path))}${theme.fg("warning", suffix)}`);
+					lines.push(
+						`└ ${theme.fg("muted", `파일 ${index + 1}: `)}${theme.fg("accent", shortenPath(path))}${theme.fg("warning", suffix)}`,
+					);
 				}
 				return new Text(lines.join("\n"), 0, 0);
 			}
@@ -1081,8 +1138,9 @@ export default function (pi: ExtensionAPI) {
 			const details = getObjectDetails(result.details) as WriteRenderDetails & Record<string, unknown>;
 			const path = typeof details.path === "string" ? details.path : "";
 			const preview = typeof details.preview === "string" ? details.preview : "";
-			const lineCount = typeof details.lineCount === "number" ? details.lineCount : (preview ? countLines(preview) : 0);
-			const byteCount = typeof details.byteCount === "number" ? details.byteCount : (preview ? Buffer.byteLength(preview, "utf8") : 0);
+			const lineCount = typeof details.lineCount === "number" ? details.lineCount : preview ? countLines(preview) : 0;
+			const byteCount =
+				typeof details.byteCount === "number" ? details.byteCount : preview ? Buffer.byteLength(preview, "utf8") : 0;
 			const header = `${theme.fg("toolTitle", theme.bold("Write"))} ${theme.fg("accent", shortenPath(path || "..."))}`;
 			const meta = theme.fg("muted", `${lineCount} lines • ${byteCount} bytes`);
 			const tc = result.content.find((c) => c.type === "text");
@@ -1095,7 +1153,11 @@ export default function (pi: ExtensionAPI) {
 
 			const fullPreview = preview ? renderFullOutput(preview, theme) : new Text("", 0, 0);
 			const fullPreviewText = (fullPreview as unknown as { text?: string }).text ?? "";
-			return new Text([header, meta, fullPreviewText ? fullPreviewText.trimStart() : "", summary].filter(Boolean).join("\n"), 0, 0);
+			return new Text(
+				[header, meta, fullPreviewText ? fullPreviewText.trimStart() : "", summary].filter(Boolean).join("\n"),
+				0,
+				0,
+			);
 		},
 	});
 
@@ -1104,7 +1166,7 @@ export default function (pi: ExtensionAPI) {
 		name: "edit",
 		label: "edit",
 		description:
-			"Edit files via line-tag operations: path + edits[{ op, pos, end, lines }], with optional delete/move.",
+			"Edit files via line-tag operations: path + edits[{ op, pos, end, lines }], with optional delete/move. pos/end must use the exact LINE#ID tag from read output (for example: 33#BX).",
 		parameters: EditParams,
 
 		async execute(_toolCallId, params, _signal, _onUpdate, ctx) {

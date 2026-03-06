@@ -641,7 +641,12 @@ describe("filterTodos", () => {
 	it("returns matching todos ranked by score and status grouping", () => {
 		const todos = [
 			mkTodo({ id: "11111111", title: "alpha", created_at: "2026-01-01T00:00:00Z" }),
-			mkTodo({ id: "22222222", title: "alpha assigned", assigned_to_session: "s1", created_at: "2026-01-02T00:00:00Z" }),
+			mkTodo({
+				id: "22222222",
+				title: "alpha assigned",
+				assigned_to_session: "s1",
+				created_at: "2026-01-02T00:00:00Z",
+			}),
 			mkTodo({ id: "33333333", title: "alpha closed", status: "closed", created_at: "2026-01-03T00:00:00Z" }),
 		];
 		const result = filterTodos(todos, "alpha", exactMatcher);

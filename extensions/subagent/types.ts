@@ -122,7 +122,6 @@ export interface GlobalRunEntry {
 	pendingCompletion?: PendingCompletion;
 }
 
-
 export const ListAgentsParams = Type.Object({});
 
 export const SubagentParams = Type.Object({

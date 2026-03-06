@@ -104,15 +104,7 @@ function getAllToolNames(pi: ExtensionAPI): string[] {
 const MEMORY_TOOLS = ["remember", "recall", "forget", "memory_list"] as const;
 
 /** Lightweight orchestration tools allowed directly in master mode. */
-const MASTER_DIRECT_TOOLS = [
-	"list-agents",
-	"read",
-	"find",
-	"grep",
-	"ls",
-	"AskUserQuestion",
-	"todo_write",
-] as const;
+const MASTER_DIRECT_TOOLS = ["list-agents", "read", "find", "grep", "ls", "AskUserQuestion", "todo_write"] as const;
 
 export default function (pi: ExtensionAPI) {
 	let mode: SystemMode = "default";
@@ -247,10 +239,7 @@ export default function (pi: ExtensionAPI) {
 		handler: async (_args, ctx) => {
 			applyMode("master", ctx);
 			pi.appendEntry("system-mode-change", { mode: "master" });
-			ctx.ui.notify(
-				"System mode: master 👑 - Hard delegation (subagent + read/search/planning helpers)",
-				"info",
-			);
+			ctx.ui.notify("System mode: master 👑 - Hard delegation (subagent + read/search/planning helpers)", "info");
 		},
 	});
 
