@@ -77,6 +77,13 @@ function savePersistedFirstAbortSessions(sessionKeys: Set<string>): void {
 }
 
 const PROMPTS_DIR = path.join(import.meta.dirname, "prompts");
+const TODO_COMPLETION_POLICY = [
+	"### Todo Completion Guard",
+	"- Before giving any completion-style response, check whether `todo_write` still has remaining items.",
+	"- If remaining items exist, do not imply that the overall task is finished.",
+	"- When progress changes materially, update `todo_write` before reporting status or completion.",
+].join("\n");
+
 
 function loadPrompt(name: string): string {
 	const filePath = path.join(PROMPTS_DIR, `${name}.md`);
@@ -357,11 +364,13 @@ export default function (pi: ExtensionAPI) {
 	});
 
 	pi.on("before_agent_start", async (event, _ctx) => {
-		if (mode === "default") return;
-		const modePrompt = loadPrompt(mode); // "agents" | "master"
-		if (!modePrompt) return;
+		const promptBlocks = [TODO_COMPLETION_POLICY];
+		if (mode !== "default") {
+			const modePrompt = loadPrompt(mode); // "agents" | "master"
+			if (modePrompt) promptBlocks.push(modePrompt);
+		}
 		return {
-			systemPrompt: `${modePrompt}\n\n${event.systemPrompt}`,
+			systemPrompt: `${promptBlocks.join("\n\n")}\n\n${event.systemPrompt}`,	
 		};
 	});
 }
