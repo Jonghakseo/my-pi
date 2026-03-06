@@ -31,6 +31,7 @@ import {
 import { formatUsageStats, truncateLines } from "./format.js";
 import { enqueueSubagentInvocation } from "./invocation-queue.js";
 import { readSessionReplayItems, SubagentSessionReplayOverlay } from "./replay.js";
+import { MAX_SUBAGENT_AUTO_RETRIES, invokeWithAutoRetry } from "./retry.js";
 import { getLatestRun, removeRun, trimCommandRunHistory } from "./run-utils.js";
 import {
 	getFinalOutput,
@@ -967,6 +968,8 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 				runState.continuedFromRunId = continuedFromRunId;
 				runState.usage = undefined;
 				runState.model = undefined;
+				runState.retryCount = 0;
+				runState.lastRetryReason = undefined;
 				runState.removed = false;
 				runState.turnCount = Math.max(DEFAULT_TURN_COUNT, runState.turnCount || DEFAULT_TURN_COUNT) + 1;
 				// NOTE(user-approved): continuation 시 기존 context/session을 유지한다.
@@ -1020,6 +1023,7 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 					sessionFile: sessionFileForRun,
 					removed: false,
 					contextMode: forceMainContext ? "main" : "sub",
+					retryCount: 0,
 				};
 				store.commandRuns.set(runId, runState);
 			}
@@ -1098,25 +1102,40 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 
 			void (async () => {
 				try {
-					const result = await enqueueSubagentInvocation(() =>
-						runSingleAgent(
-							ctx.cwd,
-							agents,
-							selectedAgent,
-							taskForAgent,
-							undefined,
-							abortController.signal,
-							(partial) => {
-								if (runState.removed) return;
-								const current = partial.details?.results?.[0];
-								if (!current) return;
-								updateRunFromResult(runState, current);
-								updateCommandRunsWidget(store);
-							},
-							makeDetails,
-							runState.sessionFile,
-						),
-					);
+					const { result, retryCount } = await invokeWithAutoRetry({
+						maxRetries: MAX_SUBAGENT_AUTO_RETRIES,
+						signal: abortController.signal,
+						onRetryScheduled: ({ retryIndex, maxRetries, delayMs, reason }) => {
+							runState.retryCount = retryIndex;
+							runState.lastRetryReason = reason;
+							runState.lastActivityAt = Date.now();
+							runState.lastLine = `Auto-retrying ${retryIndex}/${maxRetries} in ${Math.ceil(delayMs / 1000)}s: ${reason}`;
+							runState.lastOutput = runState.lastLine;
+							updateCommandRunsWidget(store);
+							ctx.ui.notify(`subagent #${runId} retry ${retryIndex}/${maxRetries}: ${reason}`, "warning");
+						},
+						invoke: () =>
+							enqueueSubagentInvocation(() =>
+								runSingleAgent(
+									ctx.cwd,
+									agents,
+									selectedAgent,
+									taskForAgent,
+									undefined,
+									abortController.signal,
+									(partial) => {
+										if (runState.removed) return;
+										const current = partial.details?.results?.[0];
+										if (!current) return;
+										updateRunFromResult(runState, current);
+										updateCommandRunsWidget(store);
+									},
+									makeDetails,
+									runState.sessionFile,
+								),
+							),
+					});
+					runState.retryCount = retryCount;
 
 					if (runState.removed) return;
 
@@ -1144,6 +1163,7 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 							`[subagent:${selectedAgent}#${runId}] ${isError ? "failed" : "completed"}` +
 							`\nPrompt: ${truncateLines(taskForDisplay, 2)}` +
 							(usage ? `\nUsage: ${usage}` : "") +
+							(runState.retryCount ? `\nRetries: ${runState.retryCount}/${MAX_SUBAGENT_AUTO_RETRIES}` : "") +
 							(runState.thoughtText ? `\nThought: ${runState.thoughtText}` : "") +
 							`\n\n${output}`,
 						display: true,
@@ -1163,6 +1183,7 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 							model: result.model,
 							source: result.agentSource,
 							thoughtText: runState.thoughtText,
+								retryCount: runState.retryCount,
 							status: runState.status,
 						},
 					};

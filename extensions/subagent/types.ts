@@ -65,6 +65,10 @@ export interface CommandRunState {
 	thoughtText?: string;
 	/** Timestamp of last detected activity (tool call / turn / liveText change). Used for hang detection. */
 	lastActivityAt: number;
+	/** Number of auto-retries already attempted for this run. */
+	retryCount?: number;
+	/** Last transient failure reason that triggered an auto-retry. */
+	lastRetryReason?: string;
 	/** Origin of this run: "tool" = LLM called subagent tool, "command" = user slash-command / >> shorthand. */
 	source?: "tool" | "command";
 }
