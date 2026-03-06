@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 450" width="800" height="450">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 500" width="800" height="500">
   <defs>
     <filter id="glow">
       <feGaussianBlur stdDeviation="2" result="blur"/>
@@ -10,157 +10,121 @@
     </linearGradient>
   </defs>
 
-  <!-- Background -->
-  <rect width="800" height="450" fill="url(#bgGrad)" rx="12"/>
+  <rect width="800" height="500" fill="url(#bgGrad)" rx="12"/>
 
-  <!-- Title -->
   <text x="400" y="32" text-anchor="middle" fill="#e6edf3" font-family="monospace" font-size="16" font-weight="bold" filter="url(#glow)">⚙ System Architecture</text>
 
-  <!-- Layer 1: User / pi TUI -->
   <rect x="280" y="46" width="240" height="36" rx="8" fill="none" stroke="#8b949e" stroke-width="1.5" stroke-dasharray="4,3"/>
   <text x="400" y="69" text-anchor="middle" fill="#e6edf3" font-family="monospace" font-size="13" font-weight="bold">👤 User  ─  pi TUI</text>
 
-  <!-- Arrow down -->
   <line x1="400" y1="82" x2="400" y2="96" stroke="#484f58" stroke-width="1.5"/>
   <polygon points="394,93 400,100 406,93" fill="#484f58"/>
 
-  <!-- Layer 2: Extensions -->
-  <rect x="40" y="100" width="720" height="56" rx="10" fill="rgba(88,166,255,0.06)" stroke="#58a6ff" stroke-width="1.5"/>
+  <rect x="40" y="100" width="720" height="60" rx="10" fill="rgba(88,166,255,0.06)" stroke="#58a6ff" stroke-width="1.5"/>
   <text x="60" y="120" fill="#58a6ff" font-family="monospace" font-size="11" font-weight="bold">EXTENSIONS LAYER</text>
-
   <g font-family="monospace" font-size="10" fill="#e6edf3">
     <rect x="60" y="128" width="110" height="22" rx="5" fill="rgba(88,166,255,0.12)" stroke="#58a6ff" stroke-width="0.8"/>
-    <text x="115" y="143" text-anchor="middle">Subagent System</text>
-
+    <text x="115" y="143" text-anchor="middle">Subagent</text>
     <rect x="185" y="128" width="100" height="22" rx="5" fill="rgba(88,166,255,0.12)" stroke="#58a6ff" stroke-width="0.8"/>
     <text x="235" y="143" text-anchor="middle">Voice Input</text>
-
     <rect x="300" y="128" width="100" height="22" rx="5" fill="rgba(88,166,255,0.12)" stroke="#58a6ff" stroke-width="0.8"/>
     <text x="350" y="143" text-anchor="middle">MCP Bridge</text>
-
     <rect x="415" y="128" width="100" height="22" rx="5" fill="rgba(88,166,255,0.12)" stroke="#58a6ff" stroke-width="0.8"/>
     <text x="465" y="143" text-anchor="middle">UI Overlays</text>
-
     <rect x="530" y="128" width="110" height="22" rx="5" fill="rgba(88,166,255,0.12)" stroke="#58a6ff" stroke-width="0.8"/>
     <text x="585" y="143" text-anchor="middle">Safety Guards</text>
-
-    <rect x="655" y="128" width="90" height="22" rx="5" fill="rgba(88,166,255,0.12)" stroke="#58a6ff" stroke-width="0.8"/>
-    <text x="700" y="143" text-anchor="middle">Screensaver</text>
+    <rect x="655" y="128" width="95" height="22" rx="5" fill="rgba(88,166,255,0.12)" stroke="#58a6ff" stroke-width="0.8"/>
+    <text x="703" y="143" text-anchor="middle">Memory/Tools</text>
   </g>
 
-  <!-- Arrow down -->
-  <line x1="400" y1="156" x2="400" y2="170" stroke="#484f58" stroke-width="1.5"/>
-  <polygon points="394,167 400,174 406,167" fill="#484f58"/>
+  <line x1="400" y1="160" x2="400" y2="174" stroke="#484f58" stroke-width="1.5"/>
+  <polygon points="394,171 400,178 406,171" fill="#484f58"/>
 
-  <!-- Layer 3: Agent Orchestra -->
-  <rect x="40" y="176" width="720" height="180" rx="10" fill="rgba(188,140,255,0.05)" stroke="#bc8cff" stroke-width="1.5"/>
-  <text x="60" y="196" fill="#bc8cff" font-family="monospace" font-size="11" font-weight="bold">AGENT ORCHESTRA</text>
+  <rect x="40" y="180" width="720" height="216" rx="10" fill="rgba(188,140,255,0.05)" stroke="#bc8cff" stroke-width="1.5"/>
+  <text x="60" y="200" fill="#bc8cff" font-family="monospace" font-size="11" font-weight="bold">AGENT ORCHESTRA · 11 agents / 3 models</text>
 
-  <!-- Agent grid: 5 top row, 4 bottom row -->
-  <g font-family="monospace" font-size="9">
-    <!-- Row 1 -->
-    <rect x="60" y="206" width="126" height="60" rx="6" fill="rgba(88,166,255,0.1)" stroke="#58a6ff" stroke-width="1"/>
-    <text x="123" y="222" text-anchor="middle" fill="#58a6ff" font-size="12" font-weight="bold">finder</text>
-    <text x="123" y="236" text-anchor="middle" fill="#8b949e" font-size="8">sonnet</text>
-    <text x="123" y="250" text-anchor="middle" fill="#e6edf3" font-size="8">Fast File Locator</text>
-    <text x="123" y="261" text-anchor="middle" fill="#484f58" font-size="8">🔍</text>
+  <g font-family="monospace" font-size="8">
+    <!-- row 1 -->
+    <rect x="52" y="214" width="108" height="56" rx="6" fill="rgba(240,136,62,0.10)" stroke="#f0883e" stroke-width="1"/>
+    <text x="106" y="230" text-anchor="middle" fill="#f0883e" font-size="12" font-weight="bold">finder</text>
+    <text x="106" y="244" text-anchor="middle" fill="#8b949e">codex</text>
+    <text x="106" y="257" text-anchor="middle" fill="#e6edf3">lookup</text>
 
-    <rect x="198" y="206" width="126" height="60" rx="6" fill="rgba(88,166,255,0.1)" stroke="#58a6ff" stroke-width="1"/>
-    <text x="261" y="222" text-anchor="middle" fill="#58a6ff" font-size="12" font-weight="bold">worker</text>
-    <text x="261" y="236" text-anchor="middle" fill="#8b949e" font-size="8">sonnet</text>
-    <text x="261" y="250" text-anchor="middle" fill="#e6edf3" font-size="8">Task Executor</text>
-    <text x="261" y="261" text-anchor="middle" fill="#484f58" font-size="8">⚡</text>
+    <rect x="168" y="214" width="108" height="56" rx="6" fill="rgba(240,136,62,0.10)" stroke="#f0883e" stroke-width="1"/>
+    <text x="222" y="230" text-anchor="middle" fill="#f0883e" font-size="12" font-weight="bold">worker-fast</text>
+    <text x="222" y="244" text-anchor="middle" fill="#8b949e">codex</text>
+    <text x="222" y="257" text-anchor="middle" fill="#e6edf3">quick edits</text>
 
-    <rect x="336" y="206" width="126" height="60" rx="6" fill="rgba(240,136,62,0.1)" stroke="#f0883e" stroke-width="1"/>
-    <text x="399" y="222" text-anchor="middle" fill="#f0883e" font-size="12" font-weight="bold">planner</text>
-    <text x="399" y="236" text-anchor="middle" fill="#8b949e" font-size="8">codex</text>
-    <text x="399" y="250" text-anchor="middle" fill="#e6edf3" font-size="8">Architect</text>
-    <text x="399" y="261" text-anchor="middle" fill="#484f58" font-size="8">📐</text>
+    <rect x="284" y="214" width="108" height="56" rx="6" fill="rgba(210,168,255,0.12)" stroke="#d2a8ff" stroke-width="1"/>
+    <text x="338" y="230" text-anchor="middle" fill="#d2a8ff" font-size="12" font-weight="bold">worker</text>
+    <text x="338" y="244" text-anchor="middle" fill="#8b949e">opus</text>
+    <text x="338" y="257" text-anchor="middle" fill="#e6edf3">implementation</text>
 
-    <rect x="474" y="206" width="126" height="60" rx="6" fill="rgba(240,136,62,0.1)" stroke="#f0883e" stroke-width="1"/>
-    <text x="537" y="222" text-anchor="middle" fill="#f0883e" font-size="12" font-weight="bold">reviewer</text>
-    <text x="537" y="236" text-anchor="middle" fill="#8b949e" font-size="8">codex</text>
-    <text x="537" y="250" text-anchor="middle" fill="#e6edf3" font-size="8">Code Review</text>
-    <text x="537" y="261" text-anchor="middle" fill="#484f58" font-size="8">🔎</text>
+    <rect x="400" y="214" width="108" height="56" rx="6" fill="rgba(210,168,255,0.12)" stroke="#d2a8ff" stroke-width="1"/>
+    <text x="454" y="230" text-anchor="middle" fill="#d2a8ff" font-size="12" font-weight="bold">planner</text>
+    <text x="454" y="244" text-anchor="middle" fill="#8b949e">opus</text>
+    <text x="454" y="257" text-anchor="middle" fill="#e6edf3">planning</text>
 
-    <rect x="612" y="206" width="126" height="60" rx="6" fill="rgba(88,166,255,0.1)" stroke="#58a6ff" stroke-width="1"/>
-    <text x="675" y="222" text-anchor="middle" fill="#58a6ff" font-size="12" font-weight="bold">challenger</text>
-    <text x="675" y="236" text-anchor="middle" fill="#8b949e" font-size="8">sonnet</text>
-    <text x="675" y="250" text-anchor="middle" fill="#e6edf3" font-size="8">Pressure Test</text>
-    <text x="675" y="261" text-anchor="middle" fill="#484f58" font-size="8">🥊</text>
+    <rect x="516" y="214" width="108" height="56" rx="6" fill="rgba(240,136,62,0.10)" stroke="#f0883e" stroke-width="1"/>
+    <text x="570" y="230" text-anchor="middle" fill="#f0883e" font-size="12" font-weight="bold">reviewer</text>
+    <text x="570" y="244" text-anchor="middle" fill="#8b949e">codex</text>
+    <text x="570" y="257" text-anchor="middle" fill="#e6edf3">review</text>
 
-    <!-- Row 2 -->
-    <rect x="130" y="278" width="126" height="60" rx="6" fill="rgba(88,166,255,0.1)" stroke="#58a6ff" stroke-width="1"/>
-    <text x="193" y="294" text-anchor="middle" fill="#58a6ff" font-size="12" font-weight="bold">verifier</text>
-    <text x="193" y="308" text-anchor="middle" fill="#8b949e" font-size="8">sonnet</text>
-    <text x="193" y="322" text-anchor="middle" fill="#e6edf3" font-size="8">Validation</text>
-    <text x="193" y="333" text-anchor="middle" fill="#484f58" font-size="8">✅</text>
+    <rect x="632" y="214" width="108" height="56" rx="6" fill="rgba(240,136,62,0.10)" stroke="#f0883e" stroke-width="1"/>
+    <text x="686" y="230" text-anchor="middle" fill="#f0883e" font-size="12" font-weight="bold">challenger</text>
+    <text x="686" y="244" text-anchor="middle" fill="#8b949e">codex</text>
+    <text x="686" y="257" text-anchor="middle" fill="#e6edf3">pressure test</text>
 
-    <rect x="268" y="278" width="126" height="60" rx="6" fill="rgba(240,136,62,0.1)" stroke="#f0883e" stroke-width="1"/>
-    <text x="331" y="294" text-anchor="middle" fill="#f0883e" font-size="12" font-weight="bold">decider</text>
-    <text x="331" y="308" text-anchor="middle" fill="#8b949e" font-size="8">codex</text>
-    <text x="331" y="322" text-anchor="middle" fill="#e6edf3" font-size="8">Decision Maker</text>
-    <text x="331" y="333" text-anchor="middle" fill="#484f58" font-size="8">⚖️</text>
+    <!-- row 2 -->
+    <rect x="110" y="286" width="108" height="56" rx="6" fill="rgba(210,168,255,0.12)" stroke="#d2a8ff" stroke-width="1"/>
+    <text x="164" y="302" text-anchor="middle" fill="#d2a8ff" font-size="12" font-weight="bold">verifier</text>
+    <text x="164" y="316" text-anchor="middle" fill="#8b949e">opus</text>
+    <text x="164" y="329" text-anchor="middle" fill="#e6edf3">validation</text>
 
-    <rect x="406" y="278" width="126" height="60" rx="6" fill="rgba(88,166,255,0.1)" stroke="#58a6ff" stroke-width="1"/>
-    <text x="469" y="294" text-anchor="middle" fill="#58a6ff" font-size="12" font-weight="bold">searcher</text>
-    <text x="469" y="308" text-anchor="middle" fill="#8b949e" font-size="8">sonnet</text>
-    <text x="469" y="322" text-anchor="middle" fill="#e6edf3" font-size="8">Research</text>
-    <text x="469" y="333" text-anchor="middle" fill="#484f58" font-size="8">🌐</text>
+    <rect x="226" y="286" width="108" height="56" rx="6" fill="rgba(240,136,62,0.10)" stroke="#f0883e" stroke-width="1"/>
+    <text x="280" y="302" text-anchor="middle" fill="#f0883e" font-size="12" font-weight="bold">decider</text>
+    <text x="280" y="316" text-anchor="middle" fill="#8b949e">codex</text>
+    <text x="280" y="329" text-anchor="middle" fill="#e6edf3">trade-offs</text>
 
-    <rect x="544" y="278" width="126" height="60" rx="6" fill="rgba(88,166,255,0.1)" stroke="#58a6ff" stroke-width="1"/>
-    <text x="607" y="294" text-anchor="middle" fill="#58a6ff" font-size="12" font-weight="bold">browser</text>
-    <text x="607" y="308" text-anchor="middle" fill="#8b949e" font-size="8">sonnet</text>
-    <text x="607" y="322" text-anchor="middle" fill="#e6edf3" font-size="8">UI Testing</text>
-    <text x="607" y="333" text-anchor="middle" fill="#484f58" font-size="8">🖥️</text>
+    <rect x="342" y="286" width="108" height="56" rx="6" fill="rgba(88,166,255,0.10)" stroke="#58a6ff" stroke-width="1"/>
+    <text x="396" y="302" text-anchor="middle" fill="#58a6ff" font-size="12" font-weight="bold">searcher</text>
+    <text x="396" y="316" text-anchor="middle" fill="#8b949e">sonnet</text>
+    <text x="396" y="329" text-anchor="middle" fill="#e6edf3">research</text>
+
+    <rect x="458" y="286" width="108" height="56" rx="6" fill="rgba(240,136,62,0.10)" stroke="#f0883e" stroke-width="1"/>
+    <text x="512" y="302" text-anchor="middle" fill="#f0883e" font-size="12" font-weight="bold">browser</text>
+    <text x="512" y="316" text-anchor="middle" fill="#8b949e">codex</text>
+    <text x="512" y="329" text-anchor="middle" fill="#e6edf3">UI testing</text>
+
+    <rect x="574" y="286" width="108" height="56" rx="6" fill="rgba(88,166,255,0.10)" stroke="#58a6ff" stroke-width="1"/>
+    <text x="628" y="302" text-anchor="middle" fill="#58a6ff" font-size="12" font-weight="bold">simplifier</text>
+    <text x="628" y="316" text-anchor="middle" fill="#8b949e">sonnet</text>
+    <text x="628" y="329" text-anchor="middle" fill="#e6edf3">polishing</text>
   </g>
 
-  <!-- Additional agents note -->
-  <text x="400" y="349" text-anchor="middle" fill="#8b949e" font-family="monospace" font-size="8">+ worker-fast (haiku), deep-verify (codex)</text>
+  <text x="400" y="368" text-anchor="middle" fill="#8b949e" font-family="monospace" font-size="8">codex = openai-codex/gpt-5.4 · sonnet = anthropic/claude-sonnet-4-6 · opus = anthropic/claude-opus-4-6</text>
 
-  <!-- Arrow down -->
-  <line x1="400" y1="356" x2="400" y2="370" stroke="#484f58" stroke-width="1.5"/>
-  <polygon points="394,367 400,374 406,367" fill="#484f58"/>
+  <line x1="400" y1="396" x2="400" y2="410" stroke="#484f58" stroke-width="1.5"/>
+  <polygon points="394,407 400,414 406,407" fill="#484f58"/>
 
-  <!-- Layer 4: Infrastructure -->
-  <rect x="40" y="376" width="720" height="56" rx="10" fill="rgba(63,185,80,0.05)" stroke="#3fb950" stroke-width="1.5"/>
-  <text x="60" y="396" fill="#3fb950" font-family="monospace" font-size="11" font-weight="bold">INFRASTRUCTURE ─ MCP Tools</text>
-
+  <rect x="40" y="416" width="720" height="56" rx="10" fill="rgba(63,185,80,0.05)" stroke="#3fb950" stroke-width="1.5"/>
+  <text x="60" y="436" fill="#3fb950" font-family="monospace" font-size="11" font-weight="bold">INFRASTRUCTURE ─ MCP Tools</text>
   <g font-family="monospace" font-size="10" fill="#e6edf3">
-    <rect x="60" y="404" width="70" height="20" rx="4" fill="rgba(63,185,80,0.12)" stroke="#3fb950" stroke-width="0.8"/>
-    <text x="95" y="418" text-anchor="middle">Jira</text>
-
-    <rect x="142" y="404" width="70" height="20" rx="4" fill="rgba(63,185,80,0.12)" stroke="#3fb950" stroke-width="0.8"/>
-    <text x="177" y="418" text-anchor="middle">Slack</text>
-
-    <rect x="224" y="404" width="70" height="20" rx="4" fill="rgba(63,185,80,0.12)" stroke="#3fb950" stroke-width="0.8"/>
-    <text x="259" y="418" text-anchor="middle">Gmail</text>
-
-    <rect x="306" y="404" width="70" height="20" rx="4" fill="rgba(63,185,80,0.12)" stroke="#3fb950" stroke-width="0.8"/>
-    <text x="341" y="418" text-anchor="middle">Calendar</text>
-
-    <rect x="388" y="404" width="70" height="20" rx="4" fill="rgba(63,185,80,0.12)" stroke="#3fb950" stroke-width="0.8"/>
-    <text x="423" y="418" text-anchor="middle">GA4</text>
-
-    <rect x="470" y="404" width="70" height="20" rx="4" fill="rgba(63,185,80,0.12)" stroke="#3fb950" stroke-width="0.8"/>
-    <text x="505" y="418" text-anchor="middle">Figma</text>
-
-    <rect x="552" y="404" width="70" height="20" rx="4" fill="rgba(63,185,80,0.12)" stroke="#3fb950" stroke-width="0.8"/>
-    <text x="587" y="418" text-anchor="middle">Database</text>
-
-    <rect x="634" y="404" width="70" height="20" rx="4" fill="rgba(63,185,80,0.12)" stroke="#3fb950" stroke-width="0.8"/>
-    <text x="669" y="418" text-anchor="middle">GitHub</text>
-  </g>
-
-  <!-- Model legend -->
-  <g font-family="monospace" font-size="8" transform="translate(580, 46)">
-    <rect x="0" y="0" width="170" height="36" rx="5" fill="rgba(255,255,255,0.03)" stroke="#30363d" stroke-width="0.5"/>
-    <circle cx="14" cy="11" r="4" fill="#58a6ff"/>
-    <text x="24" y="14" fill="#8b949e">sonnet</text>
-    <circle cx="80" cy="11" r="4" fill="#79c0ff"/>
-    <text x="90" y="14" fill="#8b949e">haiku</text>
-    <circle cx="140" cy="11" r="4" fill="#f0883e"/>
-    <text x="150" y="14" fill="#8b949e">codex</text>
-    <text x="85" y="30" text-anchor="middle" fill="#484f58" font-size="7">model color key</text>
+    <rect x="60" y="444" width="70" height="20" rx="4" fill="rgba(63,185,80,0.12)" stroke="#3fb950" stroke-width="0.8"/>
+    <text x="95" y="458" text-anchor="middle">Jira</text>
+    <rect x="142" y="444" width="70" height="20" rx="4" fill="rgba(63,185,80,0.12)" stroke="#3fb950" stroke-width="0.8"/>
+    <text x="177" y="458" text-anchor="middle">Slack</text>
+    <rect x="224" y="444" width="70" height="20" rx="4" fill="rgba(63,185,80,0.12)" stroke="#3fb950" stroke-width="0.8"/>
+    <text x="259" y="458" text-anchor="middle">Gmail</text>
+    <rect x="306" y="444" width="70" height="20" rx="4" fill="rgba(63,185,80,0.12)" stroke="#3fb950" stroke-width="0.8"/>
+    <text x="341" y="458" text-anchor="middle">Calendar</text>
+    <rect x="388" y="444" width="70" height="20" rx="4" fill="rgba(63,185,80,0.12)" stroke="#3fb950" stroke-width="0.8"/>
+    <text x="423" y="458" text-anchor="middle">GA4</text>
+    <rect x="470" y="444" width="70" height="20" rx="4" fill="rgba(63,185,80,0.12)" stroke="#3fb950" stroke-width="0.8"/>
+    <text x="505" y="458" text-anchor="middle">Figma</text>
+    <rect x="552" y="444" width="70" height="20" rx="4" fill="rgba(63,185,80,0.12)" stroke="#3fb950" stroke-width="0.8"/>
+    <text x="587" y="458" text-anchor="middle">Database</text>
+    <rect x="634" y="444" width="70" height="20" rx="4" fill="rgba(63,185,80,0.12)" stroke="#3fb950" stroke-width="0.8"/>
+    <text x="669" y="458" text-anchor="middle">GitHub</text>
   </g>
 </svg>
