@@ -15,6 +15,7 @@
  */
 
 import type { ExtensionAPI, ExtensionContext, InputEvent, InputEventResult } from "@mariozechner/pi-coding-agent";
+import * as fs from "node:fs";
 
 // ─── Builtin commands (hardcoded — not exposed via pi.getCommands()) ─────────
 const BUILTIN_COMMANDS = [
@@ -74,19 +75,38 @@ function maxDistance(len: number): number {
 }
 
 // ─── Extension entry point ───────────────────────────────────────────────────
+function shouldInterceptSlashCommand(text: string): boolean {
+	if (!text.startsWith("/")) return false;
+	const spaceIdx = text.indexOf(" ");
+	const cmdName = spaceIdx === -1 ? text.slice(1) : text.slice(1, spaceIdx);
+	if (!cmdName) return false;
+
+	// Absolute filesystem paths like /var/folders/... are user input, not slash commands.
+	if (cmdName.includes("/")) return false;
+	if (spaceIdx === -1) {
+		try {
+			if (fs.existsSync(text)) return false;
+		} catch {
+			// Ignore filesystem probe errors and fall through to command handling.
+		}
+	}
+
+	return true;
+}
+
+export { shouldInterceptSlashCommand };
+
 export default function commandTypoAssist(pi: ExtensionAPI) {
 	pi.on("input", (event: InputEvent, ctx: ExtensionContext): InputEventResult | undefined => {
 		const text = event.text.trim();
 
-		// Only intercept slash commands
-		if (!text.startsWith("/")) return;
+		// Only intercept actual slash commands, not pasted absolute paths.
+		if (!shouldInterceptSlashCommand(text)) return;
 
 		// Parse command token + trailing args
 		const spaceIdx = text.indexOf(" ");
 		const cmdName = spaceIdx === -1 ? text.slice(1) : text.slice(1, spaceIdx);
 		const cmdArgs = spaceIdx === -1 ? "" : text.slice(spaceIdx);
-
-		if (!cmdName) return;
 
 		// ── Build full known-command set ──────────────────────────────────
 		// pi.getCommands() returns extension commands, prompt templates, and skills
