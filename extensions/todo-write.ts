@@ -439,7 +439,7 @@ export default function todoWriteExtension(pi: ExtensionAPI): void {
 		name: "todo_write",
 		label: "Todo Write",
 		description:
-			"Manage todos via ops. Use replace/add_task/update/remove_task. replace requires { tasks }; tasks require { content, status?, notes? }. Status values: pending, in_progress, completed, abandoned.",
+			"Manage todos via ops. Use replace/add_task/update/remove_task. replace requires { tasks }; tasks require { content, status?, notes? }. Status values: pending, in_progress, completed, abandoned. If requirements change mid-task, revise the todo list with todo_write to reflect the new plan before continuing.",
 		parameters: TodoWriteParams,
 		async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
 			const current = readTodoWriteState(ctx);
