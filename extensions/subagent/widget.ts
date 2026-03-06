@@ -3,7 +3,6 @@
  */
 
 import { Box, Text, truncateToWidth, visibleWidth } from "@mariozechner/pi-tui";
-import { updatePixelWidget } from "./above-widget.js";
 import { HANG_WARNING_IDLE_MS, PARENT_HINT } from "./constants.js";
 import {
 	AGENT_NAME_PALETTE,
@@ -20,6 +19,7 @@ const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", 
 const SPINNER_INTERVAL_MS = 120;
 const SPINNER_REFRESH_MS = 150;
 
+const MAX_VISIBLE_RUNS = 3;
 import { type SubagentStore, truncateText } from "./store.js";
 
 /** Fast timer that drives spinner animation while any run is active. */
@@ -67,17 +67,17 @@ export function updateCommandRunsWidget(store: SubagentStore, ctx?: any): void {
 
 	const statusPriority = (status: "running" | "done" | "error") =>
 		status === "running" ? 0 : status === "done" ? 1 : 2;
-	// Only show command-invoked runs in the belowEditor widget.
-	// Tool-invoked runs (source === "tool") are shown in the pixel widget above the editor.
+	// Show all subagent runs in the belowEditor widget, regardless of how they were launched.
 	const runs = Array.from(store.commandRuns.values())
-		.filter((r) => r.source !== "tool" && !r.removed)
+		.filter((r) => !r.removed)
 		.sort((a, b) => {
 			const priorityDiff = statusPriority(a.status) - statusPriority(b.status);
 			if (priorityDiff !== 0) return priorityDiff;
 			const startedDiff = (b.startedAt ?? 0) - (a.startedAt ?? 0);
 			if (startedDiff !== 0) return startedDiff;
 			return b.id - a.id;
-		});
+		})
+		.slice(0, MAX_VISIBLE_RUNS);
 	const visibleRunIds = new Set<number>(runs.map((run) => run.id));
 
 	for (const id of Array.from(store.renderedRunWidgetIds)) {
@@ -90,8 +90,6 @@ export function updateCommandRunsWidget(store: SubagentStore, ctx?: any): void {
 	if (runs.length === 0) {
 		activeCtx.ui.setWidget("subagent-runs", undefined);
 		manageSpinnerTimer(store);
-		// Still need to refresh the pixel widget for tool-invoked runs.
-		updatePixelWidget(store, ctx);
 		return;
 	}
 
@@ -202,6 +200,4 @@ export function updateCommandRunsWidget(store: SubagentStore, ctx?: any): void {
 
 	manageSpinnerTimer(store);
 
-	// Also refresh the pixel widget (above-editor) for tool-invoked runs.
-	updatePixelWidget(store, ctx);
 }
