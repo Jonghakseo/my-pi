@@ -2,7 +2,7 @@
 name: worker
 description: General-purpose implementation agent — use for complex multi-file changes, architectural refactoring, and heavy implementation tasks
 tools: read, grep, find, ls, bash, edit, write
-model: gpt-5.4
+model: openai-codex/gpt-5.4
 thinking: medium
 ---
 
