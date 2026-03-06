@@ -272,6 +272,8 @@ function computeLineHash(lineNumber: number, line: string): string {
 function formatHashTaggedLines(text: string, startLine: number): string {
 	const lines = text.split("\n");
 	if (lines.every((line) => HASH_LINE_PATTERN.test(line))) return text;
+	// Strip trailing phantom line from files ending with \n (matches applyStructuredEdits behavior)
+	if (text.endsWith("\n") && lines.length > 0 && lines[lines.length - 1] === "") lines.pop();
 	return lines
 		.map((line, index) => `${startLine + index}#${computeLineHash(startLine + index, line)}:${line}`)
 		.join("\n");
