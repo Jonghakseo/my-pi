@@ -82,6 +82,11 @@ const TODO_WIDGET_KEY = "todo-write";
 const TODO_SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"] as const;
 const TODO_SPINNER_INTERVAL_MS = 120;
 let todoWidgetTimer: ReturnType<typeof setInterval> | undefined;
+const todoWidgetHideTimerByKey = new Map<string, ReturnType<typeof setTimeout>>();
+const todoWidgetMetaStore = new Map<string, { completedAt?: number; completedTurn?: number }>();
+const todoTurnStore = new Map<string, number>();
+const TODO_HIDE_COMPLETED_AFTER_MS = 90_000;
+const TODO_HIDE_COMPLETED_AFTER_TURNS = 2;
 
 
 function createEmptyState(): TodoState {
@@ -180,6 +185,44 @@ function isPhaseCompleted(phase: TodoPhase): boolean {
 	return phase.tasks.length > 0 && phase.tasks.every((task) => task.status === "completed");
 }
 
+function hasRemainingTasks(state: TodoState): boolean {
+	return state.phases.some((phase) => phase.tasks.some((task) => task.status === "pending" || task.status === "in_progress"));
+}
+
+function getTodoTaskCount(state: TodoState): number {
+	return state.phases.reduce((count, phase) => count + phase.tasks.length, 0);
+}
+
+type TodoWidgetVisibility = {
+	hidden: boolean;
+	completionGraceActive: boolean;
+	meta?: { completedAt: number; completedTurn: number };
+	remainingMs?: number;
+};
+
+export function getTodoWidgetVisibility(
+	state: TodoState,
+	meta: { completedAt?: number; completedTurn?: number } | undefined,
+	currentTurn: number,
+	now: number,
+): TodoWidgetVisibility {
+	if (getTodoTaskCount(state) === 0) return { hidden: true, completionGraceActive: false };
+	if (hasRemainingTasks(state)) return { hidden: false, completionGraceActive: false };
+
+	const completedAt = meta?.completedAt ?? now;
+	const completedTurn = meta?.completedTurn ?? currentTurn;
+	const elapsedMs = Math.max(0, now - completedAt);
+	const elapsedTurns = Math.max(0, currentTurn - completedTurn);
+	const hidden = elapsedMs >= TODO_HIDE_COMPLETED_AFTER_MS || elapsedTurns >= TODO_HIDE_COMPLETED_AFTER_TURNS;
+
+	return {
+		hidden,
+		completionGraceActive: !hidden,
+		meta: { completedAt, completedTurn },
+		remainingMs: hidden ? 0 : Math.max(0, TODO_HIDE_COMPLETED_AFTER_MS - elapsedMs),
+	};
+}
+
 export function applyTodoWriteOps(
 	state: TodoState,
 	ops: TodoWriteOp[],
@@ -263,17 +306,16 @@ export function applyTodoWriteOps(
 }
 
 export function renderTodoWidgetLines(state: TodoState): string[] {
-	const allTasks = state.phases.flatMap((phase) => phase.tasks.map((task) => ({ ...task, phase: phase.name })));
-	if (allTasks.length === 0) return [];
+	if (getTodoTaskCount(state) === 0) return [];
 
 	const lines: string[] = [];
 	const remainingByPhase = state.phases.map((phase) => ({
 		name: phase.name,
 		tasks: phase.tasks.filter((task) => task.status === "pending" || task.status === "in_progress"),
 	}));
-	const hasRemainingTasks = remainingByPhase.some((phase) => phase.tasks.length > 0);
+	const hasRemaining = remainingByPhase.some((phase) => phase.tasks.length > 0);
 
-	if (hasRemainingTasks) {
+	if (hasRemaining) {
 		for (const [index, phase] of state.phases.entries()) {
 			const remainingPhase = remainingByPhase[index];
 			lines.push(isPhaseCompleted(phase) ? `${phase.name} ✓` : phase.name);
@@ -381,14 +423,51 @@ function clearTodoWidgetTimer(): void {
 	todoWidgetTimer = undefined;
 }
 
+function clearTodoWidgetHideTimer(key: string): void {
+	const timer = todoWidgetHideTimerByKey.get(key);
+	if (!timer) return;
+	clearTimeout(timer);
+	todoWidgetHideTimerByKey.delete(key);
+}
+
+function getTodoTurn(key: string): number {
+	return todoTurnStore.get(key) ?? 0;
+}
+
+function incrementTodoTurn(ctx: Pick<ExtensionContext, "cwd" | "sessionManager">): void {
+	const key = getTodoStateKey(ctx);
+	todoTurnStore.set(key, getTodoTurn(key) + 1);
+}
+
 async function syncTodoWidget(ctx: ExtensionContext): Promise<void> {
 	if (!ctx.hasUI) return;
+
+	const key = getTodoStateKey(ctx);
 	const state = readTodoWriteState(ctx);
-	const lines = renderTodoWidgetLines(state);
+	const visibility = getTodoWidgetVisibility(state, todoWidgetMetaStore.get(key), getTodoTurn(key), Date.now());
+
+	if (visibility.meta) {
+		todoWidgetMetaStore.set(key, visibility.meta);
+	} else {
+		todoWidgetMetaStore.delete(key);
+	}
+
+	const lines = visibility.hidden ? [] : renderTodoWidgetLines(state);
 	if (lines.length === 0) {
 		clearTodoWidgetTimer();
+		clearTodoWidgetHideTimer(key);
 		ctx.ui.setWidget(TODO_WIDGET_KEY, undefined);
 		return;
+	}
+
+	clearTodoWidgetHideTimer(key);
+	if (visibility.completionGraceActive && visibility.remainingMs !== undefined) {
+		todoWidgetHideTimerByKey.set(
+			key,
+			setTimeout(() => {
+				void syncTodoWidget(ctx);
+			}, Math.max(0, visibility.remainingMs + 50)),
+		);
 	}
 
 	ctx.ui.setWidget(TODO_WIDGET_KEY, (tui, theme) => {
@@ -469,8 +548,17 @@ export default function todoWriteExtension(pi: ExtensionAPI): void {
 		await syncTodoWidget(ctx);
 	});
 
+	pi.on("message_end", async (_event, ctx) => {
+		incrementTodoTurn(ctx);
+		await syncTodoWidget(ctx);
+	});
+
 	pi.on("session_shutdown", async (_event, ctx) => {
+		const key = getTodoStateKey(ctx);
 		clearTodoWidgetTimer();
+		clearTodoWidgetHideTimer(key);
+		todoWidgetMetaStore.delete(key);
+		todoTurnStore.delete(key);
 		if (!ctx.hasUI) return;
 		ctx.ui.setWidget(TODO_WIDGET_KEY, undefined);
 	});

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { applyTodoWriteOps, renderTodoWidgetLines, renderTodoWriteSummary } from "../todo-write.js";
+import { applyTodoWriteOps, getTodoWidgetVisibility, renderTodoWidgetLines, renderTodoWriteSummary } from "../todo-write.js";
 
 describe("todo-write ops", () => {
 	it("replaces full state and assigns deterministic ids", () => {
@@ -161,6 +161,53 @@ describe("todo-write ops", () => {
 
 		const lines = renderTodoWidgetLines(state);
 		expect(lines).toEqual(["Planning", "  → Map callsites", "  ○ Write patch"]);
+	});
+
+	it("keeps completed widget visible during grace period", () => {
+		const state = {
+			phases: [
+				{
+					id: "phase-1",
+					name: "Planning",
+					tasks: [{ id: "task-1", content: "Done", status: "completed" as const }],
+				},
+			],
+		};
+
+		const visibility = getTodoWidgetVisibility(state, undefined, 3, 1_000);
+		expect(visibility.hidden).toBe(false);
+		expect(visibility.completionGraceActive).toBe(true);
+		expect(visibility.meta).toEqual({ completedAt: 1_000, completedTurn: 3 });
+	});
+
+	it("hides completed widget after grace period by time", () => {
+		const state = {
+			phases: [
+				{
+					id: "phase-1",
+					name: "Planning",
+					tasks: [{ id: "task-1", content: "Done", status: "completed" as const }],
+				},
+			],
+		};
+
+		const visibility = getTodoWidgetVisibility(state, { completedAt: 1_000, completedTurn: 3 }, 3, 91_500);
+		expect(visibility.hidden).toBe(true);
+	});
+
+	it("hides completed widget after grace period by turns", () => {
+		const state = {
+			phases: [
+				{
+					id: "phase-1",
+					name: "Planning",
+					tasks: [{ id: "task-1", content: "Done", status: "completed" as const }],
+				},
+			],
+		};
+
+		const visibility = getTodoWidgetVisibility(state, { completedAt: 1_000, completedTurn: 3 }, 5, 5_000);
+		expect(visibility.hidden).toBe(true);
 	});
 
 	it("hides widget when todo state is empty", () => {
