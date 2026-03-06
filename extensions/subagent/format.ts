@@ -41,15 +41,32 @@ export function resolveContextWindow(ctx: any, modelRef?: string): number | unde
 
 // ─── Tool Call Formatting ────────────────────────────────────────────────────
 
+function stringifyPreviewValue(value: unknown): string {
+	if (value === undefined || value === null) return "...";
+	if (typeof value === "string") return value;
+	if (Array.isArray(value)) {
+		const parts = value.map((item) => stringifyPreviewValue(item));
+		return parts.length > 3 ? `${parts.slice(0, 3).join(", ")}, ...` : parts.join(", ");
+	}
+	try {
+		return JSON.stringify(value);
+	} catch {
+		return String(value);
+	}
+}
+
+function formatPathValueForPreview(value: unknown): string {
+	const text = stringifyPreviewValue(value);
+	const home = os.homedir();
+	return text.startsWith(home) ? `~${text.slice(home.length)}` : text;
+}
+
 export function formatToolCall(
 	toolName: string,
 	args: Record<string, unknown>,
 	themeFg: (color: any, text: string) => string,
 ): string {
-	const shortenPath = (p: string) => {
-		const home = os.homedir();
-		return p.startsWith(home) ? `~${p.slice(home.length)}` : p;
-	};
+	const shortenPath = (value: unknown) => formatPathValueForPreview(value);
 
 	switch (toolName) {
 		case "bash": {
@@ -58,7 +75,7 @@ export function formatToolCall(
 			return themeFg("muted", "$ ") + themeFg("toolOutput", preview);
 		}
 		case "read": {
-			const rawPath = (args.file_path || args.path || "...") as string;
+			const rawPath = args.file_path || args.path || "...";
 			const filePath = shortenPath(rawPath);
 			const offset = args.offset as number | undefined;
 			const limit = args.limit as number | undefined;
@@ -71,7 +88,7 @@ export function formatToolCall(
 			return themeFg("muted", "read ") + text;
 		}
 		case "write": {
-			const rawPath = (args.file_path || args.path || "...") as string;
+			const rawPath = args.file_path || args.path || "...";
 			const filePath = shortenPath(rawPath);
 			const content = (args.content || "") as string;
 			const lines = content.split("\n").length;
@@ -80,21 +97,21 @@ export function formatToolCall(
 			return text;
 		}
 		case "edit": {
-			const rawPath = (args.file_path || args.path || "...") as string;
+			const rawPath = args.file_path || args.path || "...";
 			return themeFg("muted", "edit ") + themeFg("accent", shortenPath(rawPath));
 		}
 		case "ls": {
-			const rawPath = (args.path || ".") as string;
+			const rawPath = args.path || ".";
 			return themeFg("muted", "ls ") + themeFg("accent", shortenPath(rawPath));
 		}
 		case "find": {
 			const pattern = (args.pattern || "*") as string;
-			const rawPath = (args.path || ".") as string;
+			const rawPath = args.path || ".";
 			return themeFg("muted", "find ") + themeFg("accent", pattern) + themeFg("dim", ` in ${shortenPath(rawPath)}`);
 		}
 		case "grep": {
 			const pattern = (args.pattern || "") as string;
-			const rawPath = (args.path || ".") as string;
+			const rawPath = args.path || ".";
 			return (
 				themeFg("muted", "grep ") + themeFg("accent", `/${pattern}/`) + themeFg("dim", ` in ${shortenPath(rawPath)}`)
 			);
@@ -107,9 +124,8 @@ export function formatToolCall(
 	}
 }
 
-export function shortenPathForPreview(p: string): string {
-	const home = os.homedir();
-	return p.startsWith(home) ? `~${p.slice(home.length)}` : p;
+export function shortenPathForPreview(p: unknown): string {
+	return formatPathValueForPreview(p);
 }
 
 export function formatToolCallPlain(toolName: string, args: Record<string, unknown>): string {
@@ -120,7 +136,7 @@ export function formatToolCallPlain(toolName: string, args: Record<string, unkno
 			return `$ ${preview}`;
 		}
 		case "read": {
-			const rawPath = (args.file_path || args.path || "...") as string;
+			const rawPath = args.file_path || args.path || "...";
 			const filePath = shortenPathForPreview(rawPath);
 			const offset = args.offset as number | undefined;
 			const limit = args.limit as number | undefined;
@@ -132,28 +148,28 @@ export function formatToolCallPlain(toolName: string, args: Record<string, unkno
 			return `read ${filePath}`;
 		}
 		case "write": {
-			const rawPath = (args.file_path || args.path || "...") as string;
+			const rawPath = args.file_path || args.path || "...";
 			const filePath = shortenPathForPreview(rawPath);
 			const content = (args.content || "") as string;
 			const lines = content.split("\n").length;
 			return lines > 1 ? `write ${filePath} (${lines} lines)` : `write ${filePath}`;
 		}
 		case "edit": {
-			const rawPath = (args.file_path || args.path || "...") as string;
+			const rawPath = args.file_path || args.path || "...";
 			return `edit ${shortenPathForPreview(rawPath)}`;
 		}
 		case "ls": {
-			const rawPath = (args.path || ".") as string;
+			const rawPath = args.path || ".";
 			return `ls ${shortenPathForPreview(rawPath)}`;
 		}
 		case "find": {
 			const pattern = (args.pattern || "*") as string;
-			const rawPath = (args.path || ".") as string;
+			const rawPath = args.path || ".";
 			return `find ${pattern} in ${shortenPathForPreview(rawPath)}`;
 		}
 		case "grep": {
 			const pattern = (args.pattern || "") as string;
-			const rawPath = (args.path || ".") as string;
+			const rawPath = args.path || ".";
 			return `grep /${pattern}/ in ${shortenPathForPreview(rawPath)}`;
 		}
 		default: {
