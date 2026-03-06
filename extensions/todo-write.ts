@@ -1,7 +1,6 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { join } from "node:path";
 import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
 import { StringEnum } from "@mariozechner/pi-ai";
+import { Text, truncateToWidth } from "@mariozechner/pi-tui";
 import { Type, type Static } from "@sinclair/typebox";
 
 type TodoStatus = "pending" | "in_progress" | "completed" | "abandoned";
@@ -78,16 +77,20 @@ const TodoWriteParams = Type.Object(
 type TodoWriteParamsType = Static<typeof TodoWriteParams>;
 type TodoWriteOp = TodoWriteParamsType["ops"][number];
 
-const TODO_WRITE_DIR = ".todos";
-const TODO_WRITE_FILE = "todo-write-state.json";
+const todoStateStore = new Map<string, TodoState>();
 const TODO_WIDGET_KEY = "todo-write";
+const TODO_SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"] as const;
+const TODO_SPINNER_INTERVAL_MS = 120;
+let todoWidgetTimer: ReturnType<typeof setInterval> | undefined;
+
 
 function createEmptyState(): TodoState {
 	return { phases: [] };
 }
 
-function getStatePath(cwd: string): string {
-	return join(cwd, TODO_WRITE_DIR, TODO_WRITE_FILE);
+function getTodoStateKey(ctx: Pick<ExtensionContext, "cwd" | "sessionManager">): string {
+	const sessionFile = ctx.sessionManager.getSessionFile?.();
+	return sessionFile ? `session:${sessionFile}` : `cwd:${ctx.cwd}`;
 }
 
 function isStatus(value: unknown): value is TodoStatus {
@@ -171,6 +174,10 @@ function normalizeInProgressTask(phases: TodoPhase[]): void {
 
 	const firstPendingTask = orderedTasks.find((task) => task.status === "pending");
 	if (firstPendingTask) firstPendingTask.status = "in_progress";
+}
+
+function isPhaseCompleted(phase: TodoPhase): boolean {
+	return phase.tasks.length > 0 && phase.tasks.every((task) => task.status === "completed");
 }
 
 export function applyTodoWriteOps(
@@ -259,37 +266,31 @@ export function renderTodoWidgetLines(state: TodoState): string[] {
 	const allTasks = state.phases.flatMap((phase) => phase.tasks.map((task) => ({ ...task, phase: phase.name })));
 	if (allTasks.length === 0) return [];
 
-	const remainingTasks = allTasks.filter((task) => task.status === "pending" || task.status === "in_progress");
-	const completedCount = allTasks.filter((task) => task.status === "completed" || task.status === "abandoned").length;
-	let currentPhaseIndex = state.phases.findIndex((phase) =>
-		phase.tasks.some((task) => task.status === "pending" || task.status === "in_progress"),
-	);
-	if (currentPhaseIndex === -1) currentPhaseIndex = state.phases.length - 1;
-	const currentPhase = state.phases[currentPhaseIndex];
-	const focusTask = remainingTasks.find((task) => task.status === "in_progress") ?? remainingTasks[0] ?? allTasks[allTasks.length - 1];
-	const phaseLabel = currentPhase ? ` · ${currentPhase.name} (${currentPhaseIndex + 1}/${state.phases.length})` : "";
+	const lines: string[] = [];
+	const remainingByPhase = state.phases.map((phase) => ({
+		name: phase.name,
+		tasks: phase.tasks.filter((task) => task.status === "pending" || task.status === "in_progress"),
+	}));
+	const hasRemainingTasks = remainingByPhase.some((phase) => phase.tasks.length > 0);
 
-	const lines = [`📋 Todo ${completedCount}/${allTasks.length} done · ${remainingTasks.length} remaining${phaseLabel}`];
-	if (focusTask) {
-		const focusPrefix =
-			focusTask.status === "in_progress"
-				? "→"
-				: focusTask.status === "completed"
-					? "✓"
-					: focusTask.status === "abandoned"
-						? "✗"
-						: "○";
-		lines.push(`  ${focusPrefix} ${focusTask.id} ${focusTask.content} (${focusTask.phase})`);
+	if (hasRemainingTasks) {
+		for (const [index, phase] of state.phases.entries()) {
+			const remainingPhase = remainingByPhase[index];
+			lines.push(isPhaseCompleted(phase) ? `${phase.name} ✓` : phase.name);
+			for (const task of remainingPhase.tasks) {
+				const marker = task.status === "in_progress" ? "→" : "○";
+				lines.push(`  ${marker} ${task.content}`);
+			}
+		}
+		return lines;
 	}
 
-	for (const task of remainingTasks.slice(0, 3)) {
-		if (task.id === focusTask?.id) continue;
-		const marker = task.status === "in_progress" ? "→" : "○";
-		lines.push(`  ${marker} ${task.id} ${task.content} (${task.phase})`);
-	}
-
-	if (remainingTasks.length > 3) {
-		lines.push(`  … ${remainingTasks.length - 3} more`);
+	for (const phase of state.phases) {
+		lines.push(isPhaseCompleted(phase) ? `${phase.name} ✓` : phase.name);
+		for (const task of phase.tasks) {
+			const marker = task.status === "completed" ? "●" : task.status === "abandoned" ? "✗" : "○";
+			lines.push(`  ${marker} ${task.content}`);
+		}
 	}
 
 	return lines;
@@ -347,53 +348,83 @@ export function renderTodoWriteSummary(state: TodoState, errors: string[] = []):
 	return lines.join("\n");
 }
 
-async function readTodoWriteState(cwd: string): Promise<TodoState> {
-	const path = getStatePath(cwd);
-	try {
-		const raw = await readFile(path, "utf8");
-		const parsed = JSON.parse(raw) as { phases?: unknown };
-		if (!parsed || !Array.isArray(parsed.phases)) return createEmptyState();
-
-		const phases: TodoPhase[] = [];
-		for (const rawPhase of parsed.phases) {
-			if (!rawPhase || typeof rawPhase !== "object") continue;
-			const phase = rawPhase as Record<string, unknown>;
-			if (typeof phase.id !== "string" || typeof phase.name !== "string" || !Array.isArray(phase.tasks)) continue;
-
-			const tasks: TodoTask[] = [];
-			for (const rawTask of phase.tasks) {
-				if (!rawTask || typeof rawTask !== "object") continue;
-				const task = rawTask as Record<string, unknown>;
-				if (typeof task.id !== "string" || typeof task.content !== "string" || !isStatus(task.status)) continue;
-				const notes = typeof task.notes === "string" ? task.notes : undefined;
-				tasks.push({
-					id: task.id,
-					content: task.content,
-					status: task.status,
-					notes,
-				});
-			}
-
-			phases.push({ id: phase.id, name: phase.name, tasks });
-		}
-
-		return { phases };
-	} catch {
-		return createEmptyState();
-	}
+function readTodoWriteState(ctx: Pick<ExtensionContext, "cwd" | "sessionManager">): TodoState {
+	const key = getTodoStateKey(ctx);
+	const state = todoStateStore.get(key);
+	return state ? { phases: clonePhases(state.phases) } : createEmptyState();
 }
 
-async function writeTodoWriteState(cwd: string, state: TodoState): Promise<void> {
-	const dir = join(cwd, TODO_WRITE_DIR);
-	await mkdir(dir, { recursive: true });
-	await writeFile(getStatePath(cwd), `${JSON.stringify(state, null, 2)}\n`, "utf8");
+function writeTodoWriteState(ctx: Pick<ExtensionContext, "cwd" | "sessionManager">, state: TodoState): void {
+	const key = getTodoStateKey(ctx);
+	if (state.phases.length === 0) {
+		todoStateStore.delete(key);
+		return;
+	}
+	todoStateStore.set(key, { phases: clonePhases(state.phases) });
+}
+
+function hasInProgressTask(state: TodoState): boolean {
+	return state.phases.some((phase) => phase.tasks.some((task) => task.status === "in_progress"));
+}
+
+function getCurrentPhaseName(state: TodoState): string | undefined {
+	const currentPhase = state.phases.find((phase) => phase.tasks.some((task) => task.status === "in_progress"));
+	if (currentPhase) return currentPhase.name;
+	const nextPhase = state.phases.find((phase) => phase.tasks.some((task) => task.status === "pending"));
+	if (nextPhase) return nextPhase.name;
+	return state.phases.at(-1)?.name;
+}
+
+function clearTodoWidgetTimer(): void {
+	if (!todoWidgetTimer) return;
+	clearInterval(todoWidgetTimer);
+	todoWidgetTimer = undefined;
 }
 
 async function syncTodoWidget(ctx: ExtensionContext): Promise<void> {
 	if (!ctx.hasUI) return;
-	const state = await readTodoWriteState(ctx.cwd);
+	const state = readTodoWriteState(ctx);
 	const lines = renderTodoWidgetLines(state);
-	ctx.ui.setWidget(TODO_WIDGET_KEY, lines.length > 0 ? lines : undefined);
+	if (lines.length === 0) {
+		clearTodoWidgetTimer();
+		ctx.ui.setWidget(TODO_WIDGET_KEY, undefined);
+		return;
+	}
+
+	ctx.ui.setWidget(TODO_WIDGET_KEY, (tui, theme) => {
+		const renderedLines = [...lines];
+		const hasRunning = hasInProgressTask(state);
+		const currentPhaseName = getCurrentPhaseName(state);
+		const content = new Text("", 0, 0);
+
+		clearTodoWidgetTimer();
+		if (hasRunning) {
+			todoWidgetTimer = setInterval(() => tui.requestRender(), TODO_SPINNER_INTERVAL_MS);
+		}
+
+		return {
+			render(width: number): string[] {
+				const lineWidth = Math.max(8, width);
+				const spinner = TODO_SPINNER_FRAMES[Math.floor(Date.now() / TODO_SPINNER_INTERVAL_MS) % TODO_SPINNER_FRAMES.length] ?? "•";
+				const styledLines = renderedLines.map((line) => {
+					if (!line.startsWith("  ")) {
+						const phaseLine = truncateToWidth(line, lineWidth);
+						return line === currentPhaseName ? theme.bold(theme.fg("accent", phaseLine)) : theme.fg("toolOutput", phaseLine);
+					}
+					if (line.startsWith("  → ")) {
+						const runningLine = `  ${spinner} ${line.slice(4)}`;
+						return theme.bold(theme.fg("accent", truncateToWidth(runningLine, lineWidth)));
+					}
+					return theme.fg("toolOutput", truncateToWidth(line, lineWidth));
+				});
+				content.setText(styledLines.join("\n"));
+				return content.render(width);
+			},
+			invalidate() {
+				content.invalidate();
+			},
+		};
+	});
 }
 
 export default function todoWriteExtension(pi: ExtensionAPI): void {
@@ -404,14 +435,21 @@ export default function todoWriteExtension(pi: ExtensionAPI): void {
 			"Manage phased todos via ops. Use replace/add_phase/add_task/update/remove_task. replace phases require { name, tasks? }; tasks require { content, status?, notes? }. Status values: pending, in_progress, completed, abandoned.",
 		parameters: TodoWriteParams,
 		async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
-			const current = await readTodoWriteState(ctx.cwd);
+			const current = readTodoWriteState(ctx);
 			const applied = applyTodoWriteOps(current, params.ops);
-			await writeTodoWriteState(ctx.cwd, applied.state);
+			const summary = renderTodoWriteSummary(applied.state, applied.errors);
+			writeTodoWriteState(ctx, applied.state);
 			await syncTodoWidget(ctx);
 			return {
-				content: [{ type: "text" as const, text: renderTodoWriteSummary(applied.state, applied.errors) }],
-				details: { phases: applied.state.phases },
+				content: [{ type: "text" as const, text: summary }],
+				details: { phases: applied.state.phases, summary },
 			};
+		},
+		renderResult(result, { expanded }, theme) {
+			if (!expanded) return new Text("", 0, 0);
+			const details = result.details as { summary?: unknown } | undefined;
+			const summary = typeof details?.summary === "string" ? details.summary : "";
+			return new Text(summary ? theme.fg("toolOutput", summary) : "", 0, 0);
 		},
 	});
 
@@ -432,6 +470,7 @@ export default function todoWriteExtension(pi: ExtensionAPI): void {
 	});
 
 	pi.on("session_shutdown", async (_event, ctx) => {
+		clearTodoWidgetTimer();
 		if (!ctx.hasUI) return;
 		ctx.ui.setWidget(TODO_WIDGET_KEY, undefined);
 	});
