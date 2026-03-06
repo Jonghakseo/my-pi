@@ -453,9 +453,43 @@ export interface SearchResult {
 	content: string;
 }
 
+function tokenizeSearchQuery(query: string): string[] {
+	const normalized = query.toLowerCase().trim();
+	if (!normalized) return [];
+	const splitTokens = normalized.split(/\s+/).map((token) => token.trim()).filter(Boolean);
+	const filtered = splitTokens.filter((token) => token.length >= 2);
+	const tokens = filtered.length > 0 ? filtered : splitTokens;
+	return [...new Set(tokens)];
+}
+
+export function scoreMemorySearchMatch(
+	query: string,
+	target: { topic: string; title: string; content: string },
+): number {
+	const normalizedQuery = query.toLowerCase().trim();
+	if (!normalizedQuery) return 0;
+
+	const topic = target.topic.toLowerCase();
+	const title = target.title.toLowerCase();
+	const content = target.content.toLowerCase();
+	const tokens = tokenizeSearchQuery(normalizedQuery);
+	let score = 0;
+
+	if (title.includes(normalizedQuery)) score += 10;
+	if (topic.includes(normalizedQuery)) score += 8;
+	if (content.includes(normalizedQuery)) score += 6;
+
+	for (const token of tokens) {
+		if (title.includes(token)) score += 3;
+		if (topic.includes(token)) score += 2;
+		if (content.includes(token)) score += 1;
+	}
+
+	return score;
+}
+
 export async function searchMemories(query: string, projectId?: string): Promise<SearchResult[]> {
-	const q = query.toLowerCase();
-	const results: SearchResult[] = [];
+	const results: Array<SearchResult & { score: number }> = [];
 
 	const scopes: Array<{ scope: MemoryScope; pid?: string }> = [
 		{ scope: "user" },
@@ -467,18 +501,16 @@ export async function searchMemories(query: string, projectId?: string): Promise
 		for (const topic of topics) {
 			const entries = await loadTopicEntries(scope, pid, topic);
 			for (const entry of entries) {
-				if (
-					entry.title.toLowerCase().includes(q) ||
-					entry.content.toLowerCase().includes(q) ||
-					topic.toLowerCase().includes(q)
-				) {
-					results.push({ scope, projectId: pid, topic, title: entry.title, content: entry.content });
+				const score = scoreMemorySearchMatch(query, { topic, title: entry.title, content: entry.content });
+				if (score > 0) {
+					results.push({ scope, projectId: pid, topic, title: entry.title, content: entry.content, score });
 				}
 			}
 		}
 	}
 
-	return results;
+	results.sort((a, b) => b.score - a.score || a.topic.localeCompare(b.topic) || a.title.localeCompare(b.title));
+	return results.map(({ score: _score, ...result }) => result);
 }
 
 // ── Count Helper for Migration Dedup ─────────────────────────────────────────
