@@ -159,6 +159,13 @@ function formatReadRange(args: Record<string, unknown>, theme: any): string {
 	return theme.fg("warning", `:${start}${end ? `-${end}` : ""}`);
 }
 
+function formatReadRangePlain(args: Record<string, unknown>): string {
+	if (args.offset === undefined && args.limit === undefined) return "";
+	const start = typeof args.offset === "number" ? args.offset : 1;
+	const end = typeof args.limit === "number" ? start + args.limit - 1 : undefined;
+	return end ? `${start}~${end}` : `${start}~`;
+}
+
 const READ_SECTION_SEPARATOR = "=".repeat(72);
 const HASH_ALPHABET = "ZPMQVRWSNKTXJBYH";
 const HASH_LINE_PATTERN = /^\d+#[A-Z]{2}:/;
@@ -914,16 +921,24 @@ export default function (pi: ExtensionAPI) {
 		renderCall(args, theme) {
 			const argObj = args as Record<string, unknown>;
 			const paths = normalizeReadPaths(argObj.path);
-			let display = theme.fg("toolOutput", "...");
+			const rangePlain = formatReadRangePlain(argObj);
+			const rangeStyled = formatReadRange(argObj, theme);
 
-			if (paths.length === 1) {
-				display = theme.fg("accent", shortenPath(paths[0]));
-			} else if (paths.length > 1) {
-				const first = shortenPath(paths[0]);
-				display = theme.fg("accent", `${first} +${paths.length - 1} files`);
+			if (paths.length > 1) {
+				const lines = [theme.fg("toolTitle", theme.bold("Read"))];
+				for (const [index, path] of paths.entries()) {
+					const suffix = rangePlain ? `:${rangePlain}` : "";
+					lines.push(`ㄴ ${theme.fg("muted", `파일 ${index + 1}: `)}${theme.fg("accent", shortenPath(path))}${theme.fg("warning", suffix)}`);
+				}
+				return new Text(lines.join("\n"), 0, 0);
 			}
 
-			display += formatReadRange(argObj, theme);
+			let display = theme.fg("toolOutput", "...");
+			if (paths.length === 1) {
+				display = theme.fg("accent", shortenPath(paths[0]));
+			}
+
+			display += rangeStyled;
 			return new Text(`${theme.fg("toolTitle", theme.bold("Read"))} ${display}`, 0, 0);
 		},
 
