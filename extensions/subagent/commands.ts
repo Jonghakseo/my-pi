@@ -10,7 +10,6 @@ import * as path from "node:path";
 import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
 import { Container, Key, matchesKey, Spacer, Text, truncateToWidth } from "@mariozechner/pi-tui";
 import { parse as parseYaml } from "yaml";
-import { updatePixelWidget } from "./above-widget.js";
 import { discoverAgents } from "./agents.js";
 import {
 	AGENT_SYMBOL_MAP,
@@ -1495,7 +1494,6 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 				},
 			);
 
-			updatePixelWidget(store, ctx);
 		},
 	});
 
