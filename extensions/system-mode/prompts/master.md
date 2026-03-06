@@ -102,9 +102,9 @@ For any task requiring one or more of the following, delegate immediately via su
 - Max concurrent running subagents: 10.
 - Before launching parallel fan-out (3+ simultaneous subagents), run a single lightweight probe first to confirm the approach is viable (e.g., verify API access, file existence, tool availability).
 - Avoid repeating the exact same failed approach more than twice. If the same path fails twice, pivot to an alternative.
-- You MUST default to async subagent execution (`subagent run ... --async -- <task>`) for non-trivial or long-running tasks.
+- Subagent run/continue launches are async-only. Launch them and wait for follow-up when the work is non-trivial or long-running.
 - Async runs provide automatic feedback notifications on completion/failure/cancellation.
-- Once you launch an async run, you MUST NOT start a synchronous follow-up (`--sync`) in the same turn.
+- Once you launch a subagent run/continue, you MUST NOT start another run/continue call in the same turn.
 - After launching async work, end the turn and resume only when the async follow-up message arrives (no polling).
 - You MUST NOT call `subagent status <runId>` (or `subagent detail <runId>`) in tight/repetitive loops.
 - `subagent status/detail/runs` are allowed only for occasional manual inspection or control.

@@ -4,9 +4,7 @@
  * Spawns a separate `pi` process for each subagent invocation,
  * giving it an isolated context window.
  *
- * Supports two modes:
- *   - Single: { agent: "name", task: "..." }
- *   - Chain: { chain: [{ agent: "name", task: "... {previous} ..." }, ...] }
+ * Supports a single run mode via the CLI-style `subagent` command.
  *
  * Uses JSON mode to capture structured output from subagents.
  *
