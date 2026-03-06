@@ -10,7 +10,7 @@ export default function (pi: ExtensionAPI) {
 	pi.on("tool_result", async (event, ctx) => {
 		if (event.toolName !== "write" || event.isError) return;
 
-		const filePath: string | undefined = (event as any).input?.path;
+		const filePath = typeof event.input?.path === "string" ? event.input.path : undefined;
 		if (!filePath) return;
 
 		// /tmp or /private/tmp (macOS symlink)

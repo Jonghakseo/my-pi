@@ -13,7 +13,13 @@ import { ELAPSED_STATUS_KEY, PURPOSE_STATUS_KEY } from "./utils/status-keys.ts";
 const BAR_WIDTH = 10;
 const DIRTY_CHECK_INTERVAL_MS = 3000;
 
-type StatusStyler = (theme: any, text: string) => string;
+type FooterTheme = {
+	fg: (color: string, text: string) => string;
+	bg: (color: string, text: string) => string;
+	bold: (text: string) => string;
+};
+
+type StatusStyler = (theme: FooterTheme, text: string) => string;
 
 const STATUS_STYLE_MAP: Record<string, StatusStyler> = {
 	[PURPOSE_STATUS_KEY]: (theme, text) => {
@@ -47,7 +53,7 @@ function sanitizeStatusText(text: string): string {
 		.trim();
 }
 
-function styleStatus(theme: any, key: string, text: string): string {
+function styleStatus(theme: FooterTheme, key: string, text: string): string {
 	const style = STATUS_STYLE_MAP[key];
 	return style ? style(theme, text) : text;
 }

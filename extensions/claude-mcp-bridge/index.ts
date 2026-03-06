@@ -876,15 +876,15 @@ function boxTop(th: Theme, title: string, innerW: number): string {
 	const tW = visibleWidth(t);
 	const p1 = Math.floor((innerW - tW) / 2);
 	const p2 = Math.max(0, innerW - tW - p1);
-	return th.fg("border", "╭" + "─".repeat(p1)) + th.fg("accent", th.bold(t)) + th.fg("border", "─".repeat(p2) + "╮");
+	return th.fg("border", `╭${"─".repeat(p1)}`) + th.fg("accent", th.bold(t)) + th.fg("border", `${"─".repeat(p2)}╮`);
 }
 
 function boxSep(th: Theme, innerW: number): string {
-	return th.fg("border", "├" + "─".repeat(innerW) + "┤");
+	return th.fg("border", `├${"─".repeat(innerW)}┤`);
 }
 
 function boxBot(th: Theme, innerW: number): string {
-	return th.fg("border", "╰" + "─".repeat(innerW) + "╯");
+	return th.fg("border", `╰${"─".repeat(innerW)}╯`);
 }
 
 function boxRow(th: Theme, content: string, innerW: number): string {
@@ -928,7 +928,7 @@ class McpStatusOverlay {
 			this.sel = Math.min(this.states.length - 1, this.sel + 1);
 			this.tui.requestRender();
 		} else if (matchesKey(data, "return")) {
-			if (this.states.length > 0) this.done(this.states[this.sel]!.name);
+			if (this.states.length > 0) this.done(this.states[this.sel]?.name);
 		}
 	}
 
@@ -946,7 +946,8 @@ class McpStatusOverlay {
 		lines.push(boxSep(th, iW));
 
 		for (let i = 0; i < this.states.length; i++) {
-			const st = this.states[i]!;
+			const st = this.states[i];
+			if (!st) continue;
 			const c = sColor(st.status);
 			const ico = sIcon(st.status);
 			const sel = i === this.sel;
@@ -975,7 +976,6 @@ class McpActionOverlay {
 	private tui: TUI;
 	private theme: Theme;
 	private done: (value: ServerAction | null) => void;
-	private state: McpServerState;
 	private actions: Array<{ id: ServerAction; label: string; hint: string }> = [
 		{ id: "tools", label: "Tools", hint: "Enable/disable tools" },
 		{ id: "reconnect", label: "Reconnect", hint: "Disconnect & reconnect" },
@@ -999,7 +999,7 @@ class McpActionOverlay {
 			this.sel = Math.min(this.actions.length - 1, this.sel + 1);
 			this.tui.requestRender();
 		} else if (matchesKey(data, "return")) {
-			this.done(this.actions[this.sel]!.id);
+			this.done(this.actions[this.sel]?.id);
 		}
 	}
 
@@ -1024,7 +1024,8 @@ class McpActionOverlay {
 		lines.push(boxSep(th, iW));
 
 		for (let i = 0; i < this.actions.length; i++) {
-			const a = this.actions[i]!;
+			const a = this.actions[i];
+			if (!a) continue;
 			const sel = i === this.sel;
 			const cursor = sel ? th.fg("accent", "▸") : " ";
 			const label = sel ? th.fg("accent", th.bold(a.label)) : a.label;
@@ -1128,7 +1129,8 @@ class McpToolListOverlay {
 			const from = this.scroll;
 			const to = Math.min(this.tools.length, this.scroll + this.maxVisible);
 			for (let i = from; i < to; i++) {
-				const tool = this.tools[i]!;
+				const tool = this.tools[i];
+				if (!tool) continue;
 				const selected = i === this.sel;
 				const cursor = selected ? th.fg("accent", "▸") : " ";
 				const piName = buildPiToolName(this.serverName, tool.name);
@@ -1274,10 +1276,13 @@ export default async function claudeMcpBridge(pi: ExtensionAPI) {
 
 					let argText = "";
 					if (entries.length > 0) {
-						const [, firstVal] = entries[0]!;
-						const str = typeof firstVal === "string" ? firstVal : JSON.stringify(firstVal);
-						const display = str.length > 80 ? `${str.slice(0, 77)}…` : str;
-						argText = ` ${theme.fg("accent", display)}`;
+						const firstEntry = entries[0];
+						if (firstEntry) {
+							const [, firstVal] = firstEntry;
+							const str = typeof firstVal === "string" ? firstVal : JSON.stringify(firstVal);
+							const display = str.length > 80 ? `${str.slice(0, 77)}…` : str;
+							argText = ` ${theme.fg("accent", display)}`;
+						}
 						if (entries.length > 1) {
 							argText += theme.fg("muted", ` +${entries.length - 1}`);
 						}

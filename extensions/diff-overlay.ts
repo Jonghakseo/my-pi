@@ -1032,7 +1032,7 @@ export default function diffOverlayExtension(pi: ExtensionAPI) {
 				const overlay = new DiffOverlay(pi, root, st, () => done(undefined));
 				const tuiWithHeight = tui as Tui & { height?: number };
 				return {
-					render: (w) => overlay.render(w, tuiWithHeight.height ?? 40, theme as any),
+					render: (w) => overlay.render(w, tuiWithHeight.height ?? 40, theme),
 					handleInput: (data) => overlay.handleInput(data, tuiWithHeight),
 					invalidate: () => {},
 				};

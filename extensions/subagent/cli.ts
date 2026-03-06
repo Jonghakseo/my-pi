@@ -7,7 +7,7 @@
 export type SubagentCliParseResult =
 	| { type: "help" }
 	| { type: "agents" }
-	| { type: "params"; params: Record<string, any> }
+	| { type: "params"; params: Record<string, unknown> }
 	| { type: "error"; message: string };
 
 export const SUBAGENT_CLI_HELP_TEXT = [
@@ -173,7 +173,10 @@ function parseRunTarget(
 	return { runId };
 }
 
-function parseRunLike(verb: "run" | "continue", args: string[]): { params: Record<string, any> } | { error: string } {
+function parseRunLike(
+	verb: "run" | "continue",
+	args: string[],
+): { params: Record<string, unknown> } | { error: string } {
 	const sepIndex = args.indexOf("--");
 	if (sepIndex === -1) {
 		const example = verb === "run" ? "subagent run planner -- 계획 수립" : "subagent continue 22 -- 다음 단계를 진행";
@@ -264,7 +267,7 @@ function parseRunLike(verb: "run" | "continue", args: string[]): { params: Recor
 		};
 	}
 
-	const params: Record<string, any> = { task };
+	const params: Record<string, unknown> = { task };
 	if (verb === "continue") {
 		params.runId = runId;
 		if (agent) params.agent = agent;

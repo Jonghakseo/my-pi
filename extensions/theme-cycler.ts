@@ -21,7 +21,7 @@ import { truncateToWidth } from "@mariozechner/pi-tui";
 import { applyExtensionDefaults } from "./themeMap.ts";
 
 export default function (pi: ExtensionAPI) {
-	let currentCtx: ExtensionContext | undefined;
+	let _currentCtx: ExtensionContext | undefined;
 	let swatchTimer: ReturnType<typeof setTimeout> | null = null;
 
 	function showSwatch(ctx: ExtensionContext) {
@@ -48,9 +48,9 @@ export default function (pi: ExtensionAPI) {
 						theme.fg("dim", block) +
 						" " +
 						theme.fg("muted", block);
-					const label = theme.fg("accent", " 🎨 ") + theme.fg("muted", ctx.ui.theme.name ?? "") + "  " + swatch;
+					const label = `${theme.fg("accent", " 🎨 ") + theme.fg("muted", ctx.ui.theme.name ?? "")}  ${swatch}`;
 					const border = theme.fg("borderMuted", "─".repeat(Math.max(0, width)));
-					return [border, truncateToWidth("  " + label, width), border];
+					return [border, truncateToWidth(`  ${label}`, width), border];
 				},
 			}),
 			{ placement: "belowEditor" },
@@ -101,7 +101,7 @@ export default function (pi: ExtensionAPI) {
 	pi.registerShortcut("ctrl+x", {
 		description: "Cycle theme forward",
 		handler: async (ctx) => {
-			currentCtx = ctx;
+			_currentCtx = ctx;
 			cycleTheme(ctx, 1);
 		},
 	});
@@ -109,7 +109,7 @@ export default function (pi: ExtensionAPI) {
 	pi.registerShortcut("ctrl+q", {
 		description: "Cycle theme backward",
 		handler: async (ctx) => {
-			currentCtx = ctx;
+			_currentCtx = ctx;
 			cycleTheme(ctx, -1);
 		},
 	});
@@ -119,7 +119,7 @@ export default function (pi: ExtensionAPI) {
 	pi.registerCommand("theme", {
 		description: "Select a theme: /theme or /theme <name>",
 		handler: async (args, ctx) => {
-			currentCtx = ctx;
+			_currentCtx = ctx;
 			if (!ctx.hasUI) return;
 
 			const themes = getThemeList(ctx);
@@ -157,7 +157,7 @@ export default function (pi: ExtensionAPI) {
 	// --- Session init ---
 
 	pi.on("session_start", async (_event, ctx) => {
-		currentCtx = ctx;
+		_currentCtx = ctx;
 		applyExtensionDefaults(import.meta.url, ctx);
 	});
 

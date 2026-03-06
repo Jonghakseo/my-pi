@@ -1,5 +1,5 @@
 import { DynamicBorder, type ExtensionAPI, getMarkdownTheme as getPiMdTheme } from "@mariozechner/pi-coding-agent";
-import { Box, Container, Key, Markdown, matchesKey, Spacer, Text, truncateToWidth } from "@mariozechner/pi-tui";
+import { Box, Container, Key, Markdown, matchesKey, Spacer, Text } from "@mariozechner/pi-tui";
 import { applyExtensionDefaults } from "./themeMap.ts";
 import { formatDurationBetween } from "./utils/time-utils.ts";
 
@@ -7,6 +7,9 @@ import { formatDurationBetween } from "./utils/time-utils.ts";
 function formatTime(date: Date): string {
 	return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
 }
+
+type ReplayTui = { requestRender: () => void };
+type ReplayTheme = { fg: (color: string, text: string) => string; bold: (text: string) => string };
 
 interface HistoryItem {
 	type: "user" | "assistant" | "tool";
@@ -30,7 +33,7 @@ class SessionReplayUI {
 		this.ensureVisible(20); // rough height estimate
 	}
 
-	handleInput(data: string, tui: any): void {
+	handleInput(data: string, tui: ReplayTui): void {
 		if (matchesKey(data, Key.up)) {
 			this.selectedIndex = Math.max(0, this.selectedIndex - 1);
 		} else if (matchesKey(data, Key.down)) {
@@ -54,7 +57,7 @@ class SessionReplayUI {
 		}
 	}
 
-	render(width: number, height: number, theme: any): string[] {
+	render(width: number, height: number, theme: ReplayTheme): string[] {
 		this.ensureVisible(height);
 
 		const container = new Container();
@@ -107,7 +110,7 @@ class SessionReplayUI {
 			} else {
 				// Truncated preview
 				const preview = item.content.replace(/\n/g, " ").substring(0, width - 10);
-				cardBox.addChild(new Text(theme.fg("dim", "  " + preview + "..."), 0, 0));
+				cardBox.addChild(new Text(theme.fg("dim", `  ${preview}...`), 0, 0));
 			}
 
 			container.addChild(cardBox);
@@ -180,7 +183,7 @@ function extractContent(entry: unknown): string {
 export default function (pi: ExtensionAPI) {
 	pi.registerCommand("replay", {
 		description: "Show a scrollable timeline of the current session",
-		handler: async (args, ctx) => {
+		handler: async (_args, ctx) => {
 			const branch = ctx.sessionManager.getBranch();
 			const items: HistoryItem[] = [];
 
@@ -216,7 +219,7 @@ export default function (pi: ExtensionAPI) {
 						elapsed,
 					});
 				} else if (role === "toolResult") {
-					const toolName = (msg as any).toolName || "tool";
+					const toolName = typeof msg.toolName === "string" ? msg.toolName : "tool";
 					items.push({
 						type: "tool",
 						title: `Tool: ${toolName}`,
@@ -233,7 +236,7 @@ export default function (pi: ExtensionAPI) {
 			}
 
 			await ctx.ui.custom(
-				(tui, theme, kb, done) => {
+				(tui, theme, _kb, done) => {
 					const component = new SessionReplayUI(items, () => done(undefined));
 					return {
 						render: (w) => component.render(w, 30, theme),

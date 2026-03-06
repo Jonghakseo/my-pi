@@ -355,7 +355,7 @@ export default function askUserQuestionExtension(pi: ExtensionAPI) {
 			const allowCustomAnswer = args.allowCustomAnswer ?? true;
 			const allowMultiple = args.allowMultiple ?? false;
 
-			let text = theme.fg("toolTitle", theme.bold("AskUserQuestion")) + " " + theme.fg("accent", question);
+			let text = `${theme.fg("toolTitle", theme.bold("AskUserQuestion"))} ${theme.fg("accent", question)}`;
 			if (options.length > 0) {
 				const renderedOptions = allowCustomAnswer ? [...options, "Other"] : options;
 				text += `\n${theme.fg("dim", `options:${renderedOptions.length}${allowMultiple ? " · multi" : ""}`)}`;
@@ -383,7 +383,7 @@ export default function askUserQuestionExtension(pi: ExtensionAPI) {
 			}
 
 			if (details.allowMultiple) {
-				const answers = details.answers?.filter((answer) => answer && answer.trim()) ?? [];
+				const answers = details.answers?.filter((answer) => answer?.trim()) ?? [];
 				let text =
 					theme.fg("success", "✓ ") +
 					theme.fg("muted", `selected ${answers.length}: `) +

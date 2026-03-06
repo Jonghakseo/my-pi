@@ -9,7 +9,6 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
 import { Container, Key, matchesKey, Spacer, Text, truncateToWidth } from "@mariozechner/pi-tui";
-import { parse as parseYaml } from "yaml";
 import { discoverAgents } from "./agents.js";
 import {
 	AGENT_SYMBOL_MAP,
@@ -229,7 +228,7 @@ class SubagentHistoryOverlay {
 			new Text(
 				pad +
 					truncateToWidth(
-						theme.fg("dim", "↑↓/jk navigate · Enter switch session · q/Esc close") + "  " + theme.fg("accent", range),
+						`${theme.fg("dim", "↑↓/jk navigate · Enter switch session · q/Esc close")}  ${theme.fg("accent", range)}`,
 						innerWidth,
 					),
 				0,
@@ -264,8 +263,8 @@ async function subTransHandler(args: string, ctx: any, store: SubagentStore, pi:
 		runId = latest.id;
 		run = latest;
 	} else {
-		runId = parseInt(raw);
-		if (isNaN(runId)) {
+		runId = parseInt(raw, 10);
+		if (Number.isNaN(runId)) {
 			ctx.ui.notify("Usage: <> [runId] or /sub:trans <runId>", "error");
 			return;
 		}
@@ -1083,9 +1082,11 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 			);
 
 			ctx.ui.notify(
-				(continuedFromRunId !== undefined
-					? `Resumed subagent #${runId}: ${selectedAgent}`
-					: `Started subagent #${runId}: ${selectedAgent}`) + ` (${contextLabel} · turn ${runState.turnCount})`,
+				`${
+					continuedFromRunId !== undefined
+						? `Resumed subagent #${runId}: ${selectedAgent}`
+						: `Started subagent #${runId}: ${selectedAgent}`
+				} (${contextLabel} · turn ${runState.turnCount})`,
 				"info",
 			);
 
@@ -2030,7 +2031,7 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 
 		// Discover agents and find exact match
 		const discovery = discoverAgents(ctx.cwd);
-		const agentConfig = discovery.agents.find((a) => a.name.toLowerCase() === agentName!.toLowerCase());
+		const agentConfig = discovery.agents.find((a) => a.name.toLowerCase() === agentName?.toLowerCase());
 		if (!agentConfig?.systemPrompt?.trim()) return;
 
 		// Prepend persona block with marker

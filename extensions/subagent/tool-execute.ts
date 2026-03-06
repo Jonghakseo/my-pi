@@ -57,6 +57,11 @@ type ResultFailureDiagnosis = {
 	reason?: string;
 };
 
+type AssistantTextPart = { type: "text"; text: string };
+type AssistantToolCallPart = { type: "toolCall"; name?: string; arguments?: unknown };
+type AssistantContentPart = AssistantTextPart | AssistantToolCallPart;
+type AssistantMessageEntry = { type?: string; message?: { role?: string; content?: unknown } };
+
 function stringifyToolCallArguments(args: unknown): string {
 	if (args === undefined || args === null) return "";
 	if (typeof args === "string") return args;
@@ -70,10 +75,9 @@ function stringifyToolCallArguments(args: unknown): string {
 function getAssistantTextPart(content: unknown): string {
 	if (typeof content === "string") return content;
 	if (!Array.isArray(content)) return "";
-	for (const part of content) {
-		if (!part || typeof part !== "object") continue;
-		if ((part as any).type === "text" && typeof (part as any).text === "string") {
-			return (part as any).text;
+	for (const part of content as AssistantContentPart[]) {
+		if (part?.type === "text" && typeof part.text === "string") {
+			return part.text;
 		}
 	}
 	return "";
@@ -96,18 +100,18 @@ function parseSessionDetailSummary(sessionFile?: string): SessionDetailSummary {
 	let raw = "";
 	try {
 		raw = fs.readFileSync(sessionFile, "utf-8");
-	} catch (error: any) {
-		const message = error?.message ? String(error.message) : "Unknown read error";
+	} catch (error: unknown) {
+		const message = error instanceof Error ? error.message : "Unknown read error";
 		return { finalOutput: "", turns: [], error: `Failed to read session file: ${message}` };
 	}
 
-	const assistantMessages: any[] = [];
+	const assistantMessages: Array<{ content?: unknown }> = [];
 	const turns: SessionTurnToolCalls[] = [];
 
 	for (const line of raw.split(/\r?\n/)) {
 		if (!line.trim()) continue;
 
-		let entry: any;
+		let entry: AssistantMessageEntry;
 		try {
 			entry = JSON.parse(line);
 		} catch {
@@ -122,11 +126,10 @@ function parseSessionDetailSummary(sessionFile?: string): SessionDetailSummary {
 		const content = entry.message.content;
 
 		if (Array.isArray(content)) {
-			for (const part of content) {
-				if (!part || typeof part !== "object") continue;
-				if ((part as any).type !== "toolCall") continue;
-				const name = typeof (part as any).name === "string" ? (part as any).name : "tool";
-				const argsText = stringifyToolCallArguments((part as any).arguments);
+			for (const part of content as AssistantContentPart[]) {
+				if (part?.type !== "toolCall") continue;
+				const name = typeof part.name === "string" ? part.name : "tool";
+				const argsText = stringifyToolCallArguments(part.arguments);
 				toolCalls.push({ name, argsText });
 			}
 		}
@@ -170,8 +173,7 @@ export function diagnoseResultFailure(result: SingleResult): ResultFailureDiagno
 
 	return {
 		failed: true,
-		reason:
-			"Subagent finished without assistant text output. " + (stderr ? `stderr: ${stderr}` : "No stderr captured."),
+		reason: `Subagent finished without assistant text output. ${stderr ? `stderr: ${stderr}` : "No stderr captured."}`,
 	};
 }
 
@@ -239,13 +241,27 @@ type SubagentExecuteResult = {
 	isError?: boolean;
 };
 
+type SubagentToolExecuteContext = {
+	cwd: string;
+	hasUI?: boolean;
+	model?: { id?: string };
+	sessionManager: {
+		getSessionFile?: () => string | undefined;
+		getEntries: () => unknown[];
+	};
+	registerDispose?: (cb: () => void) => void;
+	ui?: {
+		setWidget?: (id: string, widget: unknown, options?: unknown) => void;
+	};
+};
+
 export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore) {
 	return async (
 		_toolCallId: string,
-		params: Record<string, any>,
-		signal: AbortSignal | undefined,
-		onUpdate: OnUpdateCallback | undefined,
-		ctx: any,
+		params: Record<string, unknown>,
+		_signal: AbortSignal | undefined,
+		_onUpdate: OnUpdateCallback | undefined,
+		ctx: SubagentToolExecuteContext,
 	): Promise<SubagentExecuteResult> => {
 		const emptyDetails: SubagentDetails = {
 			mode: "single",
@@ -729,7 +745,7 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 			sessionFileForRun = runState.sessionFile;
 		} else {
 			runId = store.nextCommandRunId++;
-			taskForDisplay = params.task!;
+			taskForDisplay = params.task;
 			sessionFileForRun = makeSubagentSessionFile(runId);
 
 			runState = {
@@ -804,9 +820,11 @@ Context: ${contextLabel} · turn ${runState.turnCount}` +
 
 		if (ctx.hasUI) {
 			ctx.ui.notify(
-				(continueFromRun
-					? `Resumed subagent #${runId}: ${resolvedAgent}`
-					: `Started subagent #${runId}: ${resolvedAgent}`) + ` (${contextLabel} · turn ${runState.turnCount})`,
+				`${
+					continueFromRun
+						? `Resumed subagent #${runId}: ${resolvedAgent}`
+						: `Started subagent #${runId}: ${resolvedAgent}`
+				} (${contextLabel} · turn ${runState.turnCount})`,
 				"info",
 			);
 		}
@@ -818,7 +836,7 @@ Context: ${contextLabel} · turn ${runState.turnCount}` +
 						ctx.cwd,
 						agents,
 						resolvedAgent,
-						wrapTaskWithMainContext(params.task!, stripTaskEchoFromMainContext(mainContextText, params.task!), {
+						wrapTaskWithMainContext(params.task, stripTaskEchoFromMainContext(mainContextText, params.task), {
 							mainSessionFile,
 							totalMessageCount,
 						}),
@@ -971,7 +989,7 @@ ${rawOutput}`,
 						isError ? "error" : "info",
 					);
 				}
-			} catch (error: any) {
+			} catch (error: unknown) {
 				if (runState.removed) return;
 				runState.status = "error";
 				runState.elapsedMs = Date.now() - runState.startedAt;

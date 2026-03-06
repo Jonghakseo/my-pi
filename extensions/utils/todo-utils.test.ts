@@ -24,7 +24,6 @@ import {
 	sortTodos,
 	splitFrontMatter,
 	splitTodosByAssignment,
-	TODO_ID_PREFIX,
 	type TodoFrontMatter,
 	validateTodoId,
 } from "./todo-utils.ts";

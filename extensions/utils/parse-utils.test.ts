@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import {
-	BUILTIN_TOOL_ALIASES,
 	expandArgs,
 	fallbackReason,
 	findJsonObjectEnd,
@@ -237,7 +236,7 @@ describe("fallbackReason", () => {
 	it("truncates long text", () => {
 		const long = "x".repeat(3000);
 		const result = fallbackReason(long, "");
-		expect(result!.length).toBeLessThanOrEqual(2003);
+		expect(result?.length).toBeLessThanOrEqual(2003);
 		expect(result).toContain("...");
 	});
 });
@@ -270,28 +269,28 @@ describe("parseReminderRequest", () => {
 	it("parses explicit delay", () => {
 		const result = parseReminderRequest("10분 있다가 배포 로그 확인해");
 		expect(result).not.toBeNull();
-		expect(result!.task).toBe("배포 로그 확인해");
-		expect(result!.delayMs).toBe(10 * 60 * 1000);
-		expect(result!.delayLabel).toBe("10분");
+		expect(result?.task).toBe("배포 로그 확인해");
+		expect(result?.delayMs).toBe(10 * 60 * 1000);
+		expect(result?.delayLabel).toBe("10분");
 	});
 
 	it("parses 초 unit", () => {
 		const result = parseReminderRequest("30초 후에 체크해줘");
 		expect(result).not.toBeNull();
-		expect(result!.delayMs).toBe(30 * 1000);
+		expect(result?.delayMs).toBe(30 * 1000);
 	});
 
 	it("parses 시간 unit", () => {
 		const result = parseReminderRequest("2시간 뒤에 미팅 참석");
 		expect(result).not.toBeNull();
-		expect(result!.delayMs).toBe(2 * 60 * 60 * 1000);
+		expect(result?.delayMs).toBe(2 * 60 * 60 * 1000);
 	});
 
 	it("parses '좀 있다가' form", () => {
 		const result = parseReminderRequest("좀 있다가 리뷰해줘");
 		expect(result).not.toBeNull();
-		expect(result!.task).toBe("리뷰해줘");
-		expect(result!.delayMs).toBe(10 * 60 * 1000);
+		expect(result?.task).toBe("리뷰해줘");
+		expect(result?.delayMs).toBe(10 * 60 * 1000);
 	});
 
 	it("returns null for non-reminder", () => {

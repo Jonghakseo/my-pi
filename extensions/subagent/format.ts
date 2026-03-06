@@ -21,7 +21,16 @@ export const normalizeModelRef = normalizeModelRefUtil;
 
 // ─── Context Usage ───────────────────────────────────────────────────────────
 
-export function resolveContextWindow(ctx: any, modelRef?: string): number | undefined {
+type ContextWindowResolverContext = {
+	model?: { contextWindow?: number };
+	modelRegistry?: {
+		getAll: () => Array<{ provider: string; id: string; contextWindow?: number }>;
+	};
+};
+
+type ThemeFg = (color: string, text: string) => string;
+
+export function resolveContextWindow(ctx: ContextWindowResolverContext, modelRef?: string): number | undefined {
 	const fallback = ctx?.model?.contextWindow;
 	if (!ctx?.modelRegistry || typeof ctx.modelRegistry.getAll !== "function") return fallback;
 	const models = ctx.modelRegistry.getAll() as Array<{ provider: string; id: string; contextWindow?: number }>;
@@ -61,11 +70,7 @@ function formatPathValueForPreview(value: unknown): string {
 	return text.startsWith(home) ? `~${text.slice(home.length)}` : text;
 }
 
-export function formatToolCall(
-	toolName: string,
-	args: Record<string, unknown>,
-	themeFg: (color: any, text: string) => string,
-): string {
+export function formatToolCall(toolName: string, args: Record<string, unknown>, themeFg: ThemeFg): string {
 	const shortenPath = (value: unknown) => formatPathValueForPreview(value);
 
 	switch (toolName) {

@@ -97,7 +97,7 @@ function getTodoStateKey(ctx: Pick<ExtensionContext, "cwd" | "sessionManager">):
 	return sessionFile ? `session:${sessionFile}` : `cwd:${ctx.cwd}`;
 }
 
-function isStatus(value: unknown): value is TodoStatus {
+function _isStatus(value: unknown): value is TodoStatus {
 	return value === "pending" || value === "in_progress" || value === "completed" || value === "abandoned";
 }
 

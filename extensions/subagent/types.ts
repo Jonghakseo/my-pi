@@ -83,7 +83,7 @@ export interface SessionReplayItem {
 
 export type DisplayItem =
 	| { type: "text"; text: string }
-	| { type: "toolCall"; name: string; args: Record<string, any> };
+	| { type: "toolCall"; name: string; args: Record<string, unknown> };
 
 export interface AgentAliasMatch {
 	matchedAgent?: AgentConfig;

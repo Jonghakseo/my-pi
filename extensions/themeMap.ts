@@ -13,9 +13,9 @@
 
 import * as fs from "node:fs";
 import * as os from "node:os";
+import { basename, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
-import { basename, join } from "path";
-import { fileURLToPath } from "url";
 
 // ── Theme assignments ──────────────────────────────────────────────────────
 //

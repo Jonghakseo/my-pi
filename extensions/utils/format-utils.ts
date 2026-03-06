@@ -202,7 +202,7 @@ export function agentBgIndex(name: string): number {
 export function truncateLines(text: string, maxLines = 2): string {
 	const lines = text.split("\n");
 	if (lines.length <= maxLines) return text;
-	return lines.slice(0, maxLines).join("\n") + "\n...";
+	return `${lines.slice(0, maxLines).join("\n")}\n...`;
 }
 
 function sliceToDisplayWidth(value: string, maxWidth: number): string {
@@ -311,7 +311,7 @@ export function formatTodoMetadataSuffix(todo: TodoFrontMatterLike): string {
 /** Format a full todo heading line with id, title, metadata, tags, assignment. */
 export function formatTodoHeading(todo: TodoFrontMatterLike): string {
 	const title = todo.title || "(untitled)";
-	const status = todo.status || "open";
+	const _status = todo.status || "open";
 	const metadataText = formatTodoMetadataSuffix(todo);
 	const tagText = todo.tags.length ? ` [${todo.tags.join(", ")}]` : "";
 	const assignmentSuffix = todo.assigned_to_session ? ` (assigned: ${todo.assigned_to_session})` : "";

@@ -57,7 +57,7 @@ export default function (pi: ExtensionAPI) {
 		timer = null;
 	};
 
-	const startTimer = (ctx: ExtensionContext) => {
+	const startTimer = (_ctx: ExtensionContext) => {
 		stopTimer();
 		timer = setInterval(() => {
 			if (!latestCtx?.hasUI || runStartedAt <= 0) return;
