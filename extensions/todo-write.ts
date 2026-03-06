@@ -87,6 +87,8 @@ const todoWidgetMetaStore = new Map<string, { completedAt?: number; completedTur
 const todoTurnStore = new Map<string, number>();
 const TODO_HIDE_COMPLETED_AFTER_MS = 90_000;
 const TODO_HIDE_COMPLETED_AFTER_TURNS = 2;
+const TODO_STATE_ENTRY_TYPE = "todo-write-state";
+const TODO_COMPACTION_REMINDER_TYPE = "todo-write-compaction-reminder";
 
 function createEmptyState(): TodoState {
 	return { phases: [] };
@@ -411,6 +413,65 @@ function buildTodoTurnContext(state: TodoState): string | null {
 	].join("\n");
 }
 
+type TodoStateEntryData = {
+	phases: TodoPhase[];
+	updatedAt: number;
+};
+
+function isTodoTask(value: unknown): value is TodoTask {
+	if (!value || typeof value !== "object") return false;
+	const candidate = value as Partial<TodoTask>;
+	return (
+		typeof candidate.id === "string" &&
+		typeof candidate.content === "string" &&
+		_isStatus(candidate.status) &&
+		(candidate.notes === undefined || typeof candidate.notes === "string")
+	);
+}
+
+function isTodoPhase(value: unknown): value is TodoPhase {
+	if (!value || typeof value !== "object") return false;
+	const candidate = value as Partial<TodoPhase>;
+	return (
+		typeof candidate.id === "string" &&
+		typeof candidate.name === "string" &&
+		Array.isArray(candidate.tasks) &&
+		candidate.tasks.every((task) => isTodoTask(task))
+	);
+}
+
+function isTodoStateEntryData(value: unknown): value is TodoStateEntryData {
+	if (!value || typeof value !== "object") return false;
+	const candidate = value as Partial<TodoStateEntryData>;
+	return typeof candidate.updatedAt === "number" && Array.isArray(candidate.phases) && candidate.phases.every((phase) => isTodoPhase(phase));
+}
+
+export function restoreTodoWriteState(ctx: Pick<ExtensionContext, "cwd" | "sessionManager">): TodoState {
+	const branch = ctx.sessionManager.getBranch();
+	for (let index = branch.length - 1; index >= 0; index -= 1) {
+		const entry = branch[index];
+		if (entry.type !== "custom" || entry.customType !== TODO_STATE_ENTRY_TYPE) continue;
+		if (!isTodoStateEntryData(entry.data)) continue;
+		const restored = { phases: clonePhases(entry.data.phases) };
+		writeTodoWriteState(ctx, restored);
+		return restored;
+	}
+
+	const empty = createEmptyState();
+	writeTodoWriteState(ctx, empty);
+	return empty;
+}
+
+export function buildPostCompactionTodoReminder(state: TodoState): string | null {
+	if (!hasRemainingTasks(state)) return null;
+	return [
+		"[todo-reminder] todo_write still has remaining items after compaction.",
+		"Please continue from the authoritative snapshot below.",
+		"",
+		renderTodoWriteSummary(state),
+	].join("\n");
+}
+
 
 function readTodoWriteState(ctx: Pick<ExtensionContext, "cwd" | "sessionManager">): TodoState {
 	const key = getTodoStateKey(ctx);
@@ -546,6 +607,10 @@ export default function todoWriteExtension(pi: ExtensionAPI): void {
 			const applied = applyTodoWriteOps(current, params.ops);
 			const summary = renderTodoWriteSummary(applied.state, applied.errors);
 			writeTodoWriteState(ctx, applied.state);
+			pi.appendEntry<TodoStateEntryData>(TODO_STATE_ENTRY_TYPE, {
+				phases: clonePhases(applied.state.phases),
+				updatedAt: Date.now(),
+			});
 			await syncTodoWidget(ctx);
 			return {
 				content: [{ type: "text" as const, text: summary }],
@@ -575,19 +640,44 @@ export default function todoWriteExtension(pi: ExtensionAPI): void {
 	});
 
 	pi.on("session_start", async (_event, ctx) => {
+		restoreTodoWriteState(ctx);
 		await syncTodoWidget(ctx);
 	});
 
 	pi.on("session_switch", async (_event, ctx) => {
+		restoreTodoWriteState(ctx);
 		await syncTodoWidget(ctx);
 	});
 
 	pi.on("session_fork", async (_event, ctx) => {
+		restoreTodoWriteState(ctx);
 		await syncTodoWidget(ctx);
 	});
 
 	pi.on("session_tree", async (_event, ctx) => {
+		restoreTodoWriteState(ctx);
 		await syncTodoWidget(ctx);
+	});
+
+	pi.on("session_compact", async (_event, ctx) => {
+		const state = restoreTodoWriteState(ctx);
+		await syncTodoWidget(ctx);
+		const reminder = buildPostCompactionTodoReminder(state);
+		if (!reminder) return;
+
+		if (ctx.hasUI) {
+			ctx.ui.notify("Todo reminder: remaining items still exist after compaction.", "info");
+		}
+
+		pi.sendMessage(
+			{
+				customType: TODO_COMPACTION_REMINDER_TYPE,
+				content: reminder,
+				display: true,
+				details: { summary: renderTodoWriteSummary(state) },
+			},
+			{ triggerTurn: false },
+		);
 	});
 
 	pi.on("message_end", async (_event, ctx) => {
