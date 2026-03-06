@@ -2,7 +2,7 @@
 name: searcher
 description: Research & search specialist — use for web research, documentation lookup, codebase-wide exploration, and gathering external information
 tools: bash, read, grep, find, ls
-model: openai-codex/gpt-5.4
+model: anthropic/claude-sonnet-4-6
 thinking: medium
 ---
 
