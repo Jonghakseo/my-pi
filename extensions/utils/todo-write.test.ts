@@ -1,9 +1,12 @@
 import { describe, expect, it } from "vitest";
+import type { ExtensionContext } from "@mariozechner/pi-coding-agent";
 import {
 	applyTodoWriteOps,
+	buildPostCompactionTodoReminder,
 	getTodoWidgetVisibility,
 	renderTodoWidgetLines,
 	renderTodoWriteSummary,
+	restoreTodoWriteState,
 } from "../todo-write.js";
 
 describe("todo-write ops", () => {
@@ -214,5 +217,73 @@ describe("todo-write ops", () => {
 
 	it("hides widget when todo state is empty", () => {
 		expect(renderTodoWidgetLines({ phases: [] })).toEqual([]);
+	});
+});
+
+describe("todo-write persistence", () => {
+	it("restores the latest persisted state from custom session entries", () => {
+		const ctx = {
+			cwd: "/tmp/project",
+			sessionManager: {
+				getSessionFile: () => "session.jsonl",
+				getBranch: () => [
+					{ type: "custom", customType: "todo-write-state", data: { phases: [{ id: "phase-1", name: "Old", tasks: [] }], updatedAt: 1 } },
+					{
+						type: "custom",
+						customType: "todo-write-state",
+						data: {
+							phases: [
+								{
+									id: "phase-2",
+									name: "Current",
+									tasks: [{ id: "task-1", content: "Finish patch", status: "in_progress" as const }],
+								},
+							],
+							updatedAt: 2,
+						},
+					},
+				],
+			},
+		} as unknown as Pick<ExtensionContext, "cwd" | "sessionManager">;
+
+		const restored = restoreTodoWriteState(ctx);
+
+		expect(restored).toEqual({
+			phases: [
+				{
+					id: "phase-2",
+					name: "Current",
+					tasks: [{ id: "task-1", content: "Finish patch", status: "in_progress" }],
+				},
+			],
+		});
+	});
+
+	it("returns null compaction reminder when no remaining tasks exist", () => {
+		const state = {
+			phases: [
+				{ id: "phase-1", name: "Done", tasks: [{ id: "task-1", content: "Ship", status: "completed" as const }] },
+			],
+		};
+
+		expect(buildPostCompactionTodoReminder(state)).toBeNull();
+	});
+
+	it("builds a compaction reminder when remaining tasks exist", () => {
+		const state = {
+			phases: [
+				{
+					id: "phase-1",
+					name: "Verify",
+					tasks: [{ id: "task-1", content: "Check logs", status: "in_progress" as const }],
+				},
+			],
+		};
+
+		const reminder = buildPostCompactionTodoReminder(state);
+
+		expect(reminder).toContain("after compaction");
+		expect(reminder).toContain("Remaining items (1):");
+		expect(reminder).toContain("task-1 Check logs [in_progress]");
 	});
 });
