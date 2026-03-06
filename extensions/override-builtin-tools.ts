@@ -928,7 +928,7 @@ export default function (pi: ExtensionAPI) {
 				const lines = [theme.fg("toolTitle", theme.bold("Read"))];
 				for (const [index, path] of paths.entries()) {
 					const suffix = rangePlain ? `:${rangePlain}` : "";
-					lines.push(`ㄴ ${theme.fg("muted", `파일 ${index + 1}: `)}${theme.fg("accent", shortenPath(path))}${theme.fg("warning", suffix)}`);
+					lines.push(`└ ${theme.fg("muted", `파일 ${index + 1}: `)}${theme.fg("accent", shortenPath(path))}${theme.fg("warning", suffix)}`);
 				}
 				return new Text(lines.join("\n"), 0, 0);
 			}
