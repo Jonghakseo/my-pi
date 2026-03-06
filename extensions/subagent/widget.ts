@@ -23,6 +23,19 @@ const MAX_VISIBLE_RUNS = 3;
 
 import { type SubagentStore, truncateText } from "./store.js";
 
+type WidgetTheme = {
+	fg: (color: string, text: string) => string;
+	bold: (text: string) => string;
+	bg: (color: string, text: string) => string;
+};
+
+type WidgetRenderCtx = {
+	hasUI?: boolean;
+	ui: {
+		setWidget: (id: string, widget: unknown, options?: unknown) => void;
+	};
+};
+
 /** Fast timer that drives spinner animation while any run is active. */
 let spinnerTimer: ReturnType<typeof setInterval> | undefined;
 
@@ -36,7 +49,7 @@ function manageSpinnerTimer(store: SubagentStore): void {
 	}
 }
 
-export function updateCommandRunsWidget(store: SubagentStore, ctx?: any): void {
+export function updateCommandRunsWidget(store: SubagentStore, ctx?: WidgetRenderCtx): void {
 	const activeCtx = ctx ?? store.commandWidgetCtx;
 	if (!activeCtx || !activeCtx.hasUI) return;
 	store.commandWidgetCtx = activeCtx;
@@ -45,7 +58,7 @@ export function updateCommandRunsWidget(store: SubagentStore, ctx?: any): void {
 	if (store.currentParentSessionFile) {
 		activeCtx.ui.setWidget(
 			"sub-parent",
-			(_tui: any, theme: any) => {
+			(_tui: unknown, theme: WidgetTheme) => {
 				const box = new Box(1, 0);
 				const content = new Text("", 0, 0);
 				box.addChild(content);
@@ -102,7 +115,7 @@ export function updateCommandRunsWidget(store: SubagentStore, ctx?: any): void {
 		store.renderedRunWidgetIds.add(run.id);
 		activeCtx.ui.setWidget(
 			`sub-${run.id}`,
-			(_tui: any, theme: any) => {
+			(_tui: unknown, theme: WidgetTheme) => {
 				const box = new Box(1, 0);
 				const content = new Text("", 0, 0);
 				box.addChild(content);

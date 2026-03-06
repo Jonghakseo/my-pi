@@ -3,7 +3,6 @@ import {
 	AGENT_THINKING_LEVELS,
 	type AgentConfigLike,
 	CLAUDE_MODEL_ALIAS_MAP,
-	CLAUDE_TOOL_MAP,
 	computeAgentAliasHints,
 	getAgentInitials,
 	getSubCommandAgentCompletions,
@@ -219,13 +218,13 @@ describe("getSubCommandAgentCompletions", () => {
 	it("should return completions for prefix", () => {
 		const result = getSubCommandAgentCompletions(STANDARD_AGENTS, "f");
 		expect(result).not.toBeNull();
-		expect(result!.some((c) => c.label === "finder")).toBe(true);
+		expect(result?.some((c) => c.label === "finder")).toBe(true);
 	});
 
 	it("should return all agents for empty prefix", () => {
 		const result = getSubCommandAgentCompletions(STANDARD_AGENTS, "");
 		expect(result).not.toBeNull();
-		expect(result!.length).toBe(STANDARD_AGENTS.length);
+		expect(result?.length).toBe(STANDARD_AGENTS.length);
 	});
 
 	it("should return null if prefix contains space (already past agent name)", () => {

@@ -27,6 +27,6 @@
 		}
 	},
 	"files": {
-		"includes": ["**", "!**/node_modules", "!pi-session-*.html"]
+		"includes": ["**", "!**/node_modules", "!utils/coverage", "!pi-session-*.html"]
 	}
 }

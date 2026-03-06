@@ -1,7 +1,7 @@
+import { execSync } from "node:child_process";
 import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
 import { DynamicBorder } from "@mariozechner/pi-coding-agent";
 import { visibleWidth } from "@mariozechner/pi-tui";
-import { execSync } from "child_process";
 
 /**
  * Idle screensaver extension
@@ -14,6 +14,9 @@ const PURPOSE_ENTRY_TYPE = "purpose:set" as const;
 
 let idleTimer: ReturnType<typeof setTimeout> | null = null;
 let agentRunning = false;
+type ScreensaverTui = { terminal?: { rows?: number } };
+type ScreensaverTheme = { fg: (color: string, text: string) => string; bold: (text: string) => string };
+
 let overlayActive = false;
 let askUserQuestionActive = false;
 let latestCtx: ExtensionContext | null = null;
@@ -93,8 +96,7 @@ async function showScreensaver(): Promise<void> {
 	}
 
 	await latestCtx.ui.custom(
-		// eslint-disable-next-line @typescript-eslint/no-explicit-any
-		(tui: any, theme: any, _kb: unknown, done: (v: undefined) => void) => ({
+		(tui: ScreensaverTui, theme: ScreensaverTheme, _kb: unknown, done: (v: undefined) => void) => ({
 			render: (w: number) => renderScreensaver(w, (tui.terminal?.rows as number | undefined) ?? 40, title, theme),
 			handleInput: (_data: string) => {
 				done(undefined);
@@ -110,13 +112,11 @@ async function showScreensaver(): Promise<void> {
 
 // ── Screensaver renderer ──────────────────────────────────────────────────────
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function renderScreensaver(width: number, height: number, title: string, theme: any): string[] {
+function renderScreensaver(width: number, height: number, title: string, theme: ScreensaverTheme): string[] {
 	const lines: string[] = [];
 
 	// Border color helper
-	// eslint-disable-next-line @typescript-eslint/no-explicit-any
-	const bc = (s: string): string => theme.fg("accent", s) as string;
+	const bc = (s: string): string => theme.fg("accent", s);
 
 	// Top/bottom horizontal rules via DynamicBorder
 	const hRule = new DynamicBorder(bc).render(width)[0] ?? bc("─".repeat(width));

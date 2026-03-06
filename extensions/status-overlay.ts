@@ -10,7 +10,10 @@
 
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import { DynamicBorder } from "@mariozechner/pi-coding-agent";
-import { Container, Key, matchesKey, Spacer, Text, truncateToWidth } from "@mariozechner/pi-tui";
+import { Key, matchesKey, truncateToWidth } from "@mariozechner/pi-tui";
+
+type OverlayTui = { requestRender: () => void };
+type OverlayTheme = { fg: (color: string, text: string) => string; bold: (text: string) => string };
 
 interface Section {
 	title: string;
@@ -28,7 +31,7 @@ class StatusOverlayUI {
 		private onDone: () => void,
 	) {}
 
-	handleInput(data: string, tui: any): void {
+	handleInput(data: string, tui: OverlayTui): void {
 		if (matchesKey(data, Key.up)) {
 			this.scrollOffset = Math.max(0, this.scrollOffset - 1);
 		} else if (matchesKey(data, Key.down)) {
@@ -48,7 +51,7 @@ class StatusOverlayUI {
 		tui.requestRender();
 	}
 
-	render(width: number, height: number, theme: any): string[] {
+	render(width: number, height: number, theme: OverlayTheme): string[] {
 		// Build all content lines first
 		const contentLines: string[] = [];
 		const innerWidth = width - 6;
@@ -76,7 +79,7 @@ class StatusOverlayUI {
 			// Section separator
 			if (i < this.sections.length - 1) {
 				contentLines.push("");
-				contentLines.push("  " + theme.fg("borderMuted", "─".repeat(Math.max(0, width - 6))));
+				contentLines.push(`  ${theme.fg("borderMuted", "─".repeat(Math.max(0, width - 6)))}`);
 				contentLines.push("");
 			}
 		}

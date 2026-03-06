@@ -36,7 +36,7 @@ function normalizeSessionKey(raw: unknown): string | null {
 
 function getSessionKey(ctx: ExtensionContext): string | null {
 	try {
-		const byId = (ctx.sessionManager as any)?.getSessionId?.();
+		const byId = (ctx.sessionManager as { getSessionId?: () => unknown })?.getSessionId?.();
 		const normalizedId = normalizeSessionKey(byId);
 		if (normalizedId) return `id:${normalizedId}`;
 		const byFile = ctx.sessionManager?.getSessionFile?.();
@@ -252,7 +252,7 @@ export default function (pi: ExtensionAPI) {
 		let abortGuardTriggered = false;
 		for (const entry of entries) {
 			if (entry.type !== "custom") continue;
-			const ce = entry as any;
+			const ce = entry as { customType?: unknown; data?: { mode?: unknown } };
 			if (ce.customType === "system-mode-change" && ce.data?.mode) {
 				restoredMode = ce.data.mode === "agents" || ce.data.mode === "master" ? ce.data.mode : "default";
 			}

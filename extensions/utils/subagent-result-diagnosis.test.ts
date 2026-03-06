@@ -57,7 +57,7 @@ describe("diagnoseResultFailure", () => {
 
 	it("fails when messages exist but assistant text is empty", () => {
 		const result = makeResult({
-			messages: [{ role: "assistant", content: [{ type: "toolCall", name: "read", arguments: {} }] } as any],
+			messages: [{ role: "assistant", content: [{ type: "toolCall", name: "read", arguments: {} }] } as never],
 			stderr: "diag",
 		});
 		const diagnosis = diagnoseResultFailure(result);
@@ -68,7 +68,7 @@ describe("diagnoseResultFailure", () => {
 
 	it("passes when assistant text exists", () => {
 		const result = makeResult({
-			messages: [{ role: "assistant", content: [{ type: "text", text: "done" }] } as any],
+			messages: [{ role: "assistant", content: [{ type: "text", text: "done" }] } as never],
 		});
 		const diagnosis = diagnoseResultFailure(result);
 		expect(diagnosis.failed).toBe(false);

@@ -95,7 +95,7 @@ export function shortenPath(p: string, cwd: string): string {
 	const rp = path.resolve(p);
 	const rc = path.resolve(cwd);
 	if (rp === rc) return ".";
-	if (rp.startsWith(rc + path.sep)) return "./" + rp.slice(rc.length + 1);
+	if (rp.startsWith(rc + path.sep)) return `./${rp.slice(rc.length + 1)}`;
 	return rp;
 }
 

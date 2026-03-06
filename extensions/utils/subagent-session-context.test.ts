@@ -46,7 +46,9 @@ describe("main-context wrap integration", () => {
 			{ type: "message", message: { role: "user", content: task } },
 		];
 
-		const ctx = { sessionManager: { getEntries: () => entries } } as any;
+		const ctx = { sessionManager: { getEntries: () => entries } } as {
+			sessionManager: { getEntries: () => typeof entries };
+		};
 		const { text } = buildMainContextText(ctx);
 		const stripped = stripTaskEchoFromMainContext(text, task);
 		const wrapped = wrapTaskWithMainContext(task, stripped);

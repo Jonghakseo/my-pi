@@ -445,7 +445,7 @@ export class SubagentSessionReplayOverlay {
 			: "↑↓/jk navigate · Enter open detail · PgUp/Dn page · g/G top/end · Esc close";
 		container.addChild(
 			new Text(
-				pad + truncateToWidth(theme.fg("dim", helpText) + "  " + theme.fg("accent", listRange), innerWidth),
+				pad + truncateToWidth(`${theme.fg("dim", helpText)}  ${theme.fg("accent", listRange)}`, innerWidth),
 				0,
 				0,
 			),

@@ -13,7 +13,19 @@ import type { DisplayItem, SubagentDetails } from "./types.js";
 
 // ─── Helpers (internal) ──────────────────────────────────────────────────────
 
-function renderDisplayItems(items: DisplayItem[], expanded: boolean, theme: any, limit?: number): string {
+type RenderTheme = {
+	fg: (color: string, text: string) => string;
+	bold: (text: string) => string;
+};
+
+type ToolRenderResult = {
+	details?: unknown;
+	content: Array<{ type?: string; text?: string }>;
+};
+
+type ToolRenderArgs = { command?: unknown };
+
+function renderDisplayItems(items: DisplayItem[], expanded: boolean, theme: RenderTheme, limit?: number): string {
 	const toShow = limit ? items.slice(-limit) : items;
 	const skipped = limit && items.length > limit ? items.length - limit : 0;
 	let text = "";
@@ -31,7 +43,7 @@ function renderDisplayItems(items: DisplayItem[], expanded: boolean, theme: any,
 
 // ─── renderCall ──────────────────────────────────────────────────────────────
 
-export function renderSubagentToolCall(args: any, theme: any) {
+export function renderSubagentToolCall(args: ToolRenderArgs, theme: RenderTheme) {
 	const raw = typeof args.command === "string" ? args.command.trim() : "";
 	const command = raw || "subagent help";
 	const MAX_CALL_LINES = 5;
@@ -47,7 +59,11 @@ export function renderSubagentToolCall(args: any, theme: any) {
 
 // ─── renderResult ────────────────────────────────────────────────────────────
 
-export function renderSubagentToolResult(result: any, { expanded }: { expanded: boolean }, theme: any) {
+export function renderSubagentToolResult(
+	result: ToolRenderResult,
+	{ expanded }: { expanded: boolean },
+	theme: RenderTheme,
+) {
 	const details = result.details as SubagentDetails | undefined;
 	if (!details || details.results.length === 0) {
 		const text = result.content[0];

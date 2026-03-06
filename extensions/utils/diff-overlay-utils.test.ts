@@ -38,7 +38,7 @@ describe("parseStatus", () => {
 
 describe("parseNameStatusZ", () => {
 	it("parses normal + rename entries", () => {
-		const stdout = ["M", "src/a.ts", "R100", "src/old.ts", "src/new.ts"].join("\0") + "\0";
+		const stdout = `${["M", "src/a.ts", "R100", "src/old.ts", "src/new.ts"].join("\0")}\0`;
 		const parsed = parseNameStatusZ(stdout);
 		expect(parsed).toEqual([
 			{ path: "src/a.ts", status: "modified", rawStatus: "M" },
@@ -53,7 +53,7 @@ describe("parseNameStatusZ", () => {
 
 describe("parsePorcelainStatusZ", () => {
 	it("parses tracked + untracked + rename entries", () => {
-		const stdout = [" M src/a.ts", "?? src/new.ts", "R  src/old.ts", "src/new-name.ts"].join("\0") + "\0";
+		const stdout = `${[" M src/a.ts", "?? src/new.ts", "R  src/old.ts", "src/new-name.ts"].join("\0")}\0`;
 		const parsed = parsePorcelainStatusZ(stdout);
 		expect(parsed).toEqual([
 			{ path: "src/a.ts", status: "modified", rawStatus: "M" },

@@ -209,6 +209,11 @@ type WriteRenderDetails = {
 	preview: string;
 };
 
+type RenderTheme = {
+	fg: (color: string, text: string) => string;
+	bold: (text: string) => string;
+};
+
 function normalizeReadPaths(pathValue: unknown): string[] {
 	if (typeof pathValue === "string") {
 		const path = pathValue.trim();
@@ -226,7 +231,7 @@ function normalizeReadPaths(pathValue: unknown): string[] {
 	return paths;
 }
 
-function formatReadRange(args: Record<string, unknown>, theme: any): string {
+function formatReadRange(args: Record<string, unknown>, theme: RenderTheme): string {
 	if (args.offset === undefined && args.limit === undefined) return "";
 	const start = typeof args.offset === "number" ? args.offset : 1;
 	const end = typeof args.limit === "number" ? start + args.limit - 1 : "";
@@ -569,7 +574,7 @@ function truncateLines(text: string, maxLines: number): string {
 	return `${visible}\n… (+${lines.length - maxLines} lines)`;
 }
 
-function renderFullOutput(text: string, theme: any): Text {
+function renderFullOutput(text: string, theme: RenderTheme): Text {
 	const output = text
 		.trim()
 		.split("\n")
@@ -579,13 +584,13 @@ function renderFullOutput(text: string, theme: any): Text {
 }
 
 /** Render first N lines as a dim preview with a "more" hint. */
-function renderPreviewLines(text: string, maxLines: number, theme: any): string {
+function renderPreviewLines(text: string, maxLines: number, theme: RenderTheme): string {
 	const lines = text.trim().split("\n");
 	const preview = lines.slice(0, maxLines);
 	const remaining = lines.length - maxLines;
 	let output = preview.map((l) => theme.fg("dim", l)).join("\n");
 	if (remaining > 0) {
-		output += "\n" + theme.fg("muted", `… +${remaining} lines`);
+		output += `\n${theme.fg("muted", `… +${remaining} lines`)}`;
 	}
 	return output;
 }
@@ -595,7 +600,7 @@ function getObjectDetails(value: unknown): Record<string, unknown> {
 	return value as Record<string, unknown>;
 }
 
-function renderTailPreview(text: string, maxLines: number, theme: any): string {
+function renderTailPreview(text: string, maxLines: number, theme: RenderTheme): string {
 	const lines = text.split("\n");
 	const displayLines = lines.slice(-maxLines);
 	const hidden = lines.length - displayLines.length;
@@ -692,7 +697,7 @@ function findUniqueFuzzyCandidate(fileText: string, oldText: string): FuzzyCandi
 	return found;
 }
 
-async function resolveFuzzyCandidate(cwd: string, params: EditLikeParams): Promise<FuzzyCandidate | undefined> {
+async function _resolveFuzzyCandidate(cwd: string, params: EditLikeParams): Promise<FuzzyCandidate | undefined> {
 	const path = typeof params.path === "string" ? params.path : "";
 	const oldText = typeof params.oldText === "string" ? params.oldText : "";
 	if (!path || !oldText) return undefined;
@@ -705,13 +710,13 @@ async function resolveFuzzyCandidate(cwd: string, params: EditLikeParams): Promi
 	return findUniqueFuzzyCandidate(fileText, oldText);
 }
 
-function shouldTryFuzzyEdit(params: EditLikeParams, result: unknown): boolean {
+function _shouldTryFuzzyEdit(params: EditLikeParams, result: unknown): boolean {
 	if (typeof params.oldText !== "string" || params.oldText.length < FUZZY_EDIT_MIN_OLDTEXT_LEN) return false;
 	const text = getResultText(result);
 	return text.includes("Could not find the exact text") && text.includes("The old text must match exactly");
 }
 
-function withFuzzyNote<T>(result: T, note: string): T {
+function _withFuzzyNote<T>(result: T, note: string): T {
 	if (!result || typeof result !== "object") return result;
 	const out = { ...(result as Record<string, unknown>) };
 	const content = out.content;
@@ -837,12 +842,12 @@ class SideBySideDiffView {
 	private rows: DiffRow[];
 	private maxRows?: number;
 	private lineNumWidth: number;
-	private theme: any;
-	private summaryFn: (t: any) => string;
+	private theme: RenderTheme;
+	private summaryFn: (t: RenderTheme) => string;
 	private cachedWidth?: number;
 	private cachedLines?: string[];
 
-	constructor(diffText: string, theme: any, summaryFn: (t: any) => string, maxRows?: number) {
+	constructor(diffText: string, theme: RenderTheme, summaryFn: (t: RenderTheme) => string, maxRows?: number) {
 		const parsed = parseDiffLines(diffText);
 		this.rows = buildDiffRows(parsed);
 		this.maxRows = maxRows;
@@ -1202,7 +1207,7 @@ export default function (pi: ExtensionAPI) {
 				if (line.startsWith("-")) removals++;
 			}
 
-			const makeSummary = (t: any) => {
+			const makeSummary = (t: RenderTheme) => {
 				let s = t.fg("success", `+${additions}`);
 				s += t.fg("dim", " / ");
 				s += t.fg("error", `-${removals}`);

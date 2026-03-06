@@ -72,7 +72,7 @@ export default function (pi: ExtensionAPI) {
 			// If the current session file is NOT inside the subagent sessions directory,
 			// this tool was invoked from the main session — do NOT exit the process.
 			const isSubagentSession = sessionFile
-				? sessionFile.startsWith(subagentSessionDir + path.sep) || sessionFile.startsWith(subagentSessionDir + "/")
+				? sessionFile.startsWith(subagentSessionDir + path.sep) || sessionFile.startsWith(`${subagentSessionDir}/`)
 				: false;
 
 			if (!isSubagentSession) {

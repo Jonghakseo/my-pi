@@ -11,28 +11,27 @@ import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, join } from "node:path";
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
-import { visibleWidth, wrapTextWithAnsi } from "@mariozechner/pi-tui";
 
 // --- Synthwave palette ---
-function bg(s: string): string {
+function _bg(s: string): string {
 	return `\x1b[48;2;52;20;58m${s}\x1b[49m`;
 }
-function pink(s: string): string {
+function _pink(s: string): string {
 	return `\x1b[38;2;255;126;219m${s}\x1b[39m`;
 }
-function cyan(s: string): string {
+function _cyan(s: string): string {
 	return `\x1b[38;2;54;249;246m${s}\x1b[39m`;
 }
-function green(s: string): string {
+function _green(s: string): string {
 	return `\x1b[38;2;114;241;184m${s}\x1b[39m`;
 }
-function yellow(s: string): string {
+function _yellow(s: string): string {
 	return `\x1b[38;2;254;222;93m${s}\x1b[39m`;
 }
-function dim(s: string): string {
+function _dim(s: string): string {
 	return `\x1b[38;2;120;100;140m${s}\x1b[39m`;
 }
-function bold(s: string): string {
+function _bold(s: string): string {
 	return `\x1b[1m${s}\x1b[22m`;
 }
 

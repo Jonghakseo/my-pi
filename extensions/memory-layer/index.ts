@@ -454,10 +454,10 @@ export default function memoryLayerExtension(pi: ExtensionAPI) {
 			const topic = typeof args.topic === "string" ? args.topic : undefined;
 			const scope = typeof args.scope === "string" ? args.scope : undefined;
 			let text = theme.fg("toolTitle", theme.bold("recall"));
-			if (query) text += " " + theme.fg("accent", `"${query}"`);
-			if (topic) text += " " + theme.fg("accent", `topic:${topic}`);
-			if (scope) text += " " + theme.fg("accent", `scope:${scope}`);
-			if (!query && !topic) text += " " + theme.fg("muted", "(index)");
+			if (query) text += ` ${theme.fg("accent", `"${query}"`)}`;
+			if (topic) text += ` ${theme.fg("accent", `topic:${topic}`)}`;
+			if (scope) text += ` ${theme.fg("accent", `scope:${scope}`)}`;
+			if (!query && !topic) text += ` ${theme.fg("muted", "(index)")}`;
 			return new Text(text, 0, 0);
 		},
 

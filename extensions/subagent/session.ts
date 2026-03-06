@@ -142,10 +142,10 @@ export function buildMainContextText(ctx: any): { text: string; totalMessageCoun
 			parts.push(compactionSummary);
 		}
 		if (messageParts.length > 0) {
-			parts.push("[Recent Conversation]\n" + messageParts.join("\n\n"));
+			parts.push(`[Recent Conversation]\n${messageParts.join("\n\n")}`);
 		}
 		if (subagentParts.length > 0) {
-			parts.push("[Subagent Results]\n" + subagentParts.join("\n\n---\n\n"));
+			parts.push(`[Subagent Results]\n${subagentParts.join("\n\n---\n\n")}`);
 		}
 
 		return { text: parts.join("\n\n"), totalMessageCount: messageEntries.length };
