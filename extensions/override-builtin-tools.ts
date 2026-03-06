@@ -120,6 +120,21 @@ const EditParams = Type.Object(
 	{ additionalProperties: true },
 );
 
+type ReadRenderDetails = {
+	mode: "single-read" | "multi-read";
+	paths: string[];
+	count: number;
+	offset?: number;
+	limit?: number;
+};
+
+type WriteRenderDetails = {
+	path: string;
+	lineCount: number;
+	byteCount: number;
+	preview: string;
+};
+
 function normalizeReadPaths(pathValue: unknown): string[] {
 	if (typeof pathValue === "string") {
 		const path = pathValue.trim();
@@ -476,6 +491,23 @@ function renderPreviewLines(text: string, maxLines: number, theme: any): string 
 	return output;
 }
 
+function getObjectDetails(value: unknown): Record<string, unknown> {
+	if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+	return value as Record<string, unknown>;
+}
+
+function renderTailPreview(text: string, maxLines: number, theme: any): string {
+	const lines = text.split("\n");
+	const displayLines = lines.slice(-maxLines);
+	const hidden = lines.length - displayLines.length;
+
+	let output = displayLines.map((line) => theme.fg("dim", truncateToWidth(line, 80))).join("\n");
+	if (hidden > 0) {
+		output = `${theme.fg("muted", `… (${hidden} earlier lines)`)}\n${output}`;
+	}
+	return output;
+}
+
 // ── Edit Fuzzy Fallback (Levenshtein=1, unique candidate) ─────────────────
 
 const FUZZY_EDIT_MIN_OLDTEXT_LEN = 5;
@@ -827,19 +859,33 @@ export default function (pi: ExtensionAPI) {
 			const builtInRead = getBuiltInTools(ctx.cwd).read;
 			const readParams = params as Record<string, unknown>;
 			const paths = normalizeReadPaths(readParams.path);
+			const offset = typeof readParams.offset === "number" ? readParams.offset : undefined;
+			const limit = typeof readParams.limit === "number" ? readParams.limit : undefined;
 
 			if (paths.length === 0) {
 				return {
 					isError: true,
 					content: [{ type: "text" as const, text: "read requires a non-empty path (string or string[])." }],
-					details: { mode: "multi-read", paths: [] as string[] },
+					details: { mode: "multi-read", paths: [] as string[], count: 0, offset, limit } satisfies ReadRenderDetails,
 				};
 			}
 
 			if (paths.length === 1) {
 				const single = await builtInRead.execute(toolCallId, { ...readParams, path: paths[0] }, signal, onUpdate);
-				const startLine = typeof readParams.offset === "number" ? readParams.offset : 1;
-				return withHashTaggedReadResult(single, startLine);
+				const startLine = offset ?? 1;
+				const tagged = withHashTaggedReadResult(single, startLine);
+				const originalDetails = getObjectDetails(single.details as unknown);
+				return {
+					...tagged,
+					details: {
+						...originalDetails,
+						mode: "single-read",
+						paths,
+						count: 1,
+						offset,
+						limit,
+					} satisfies ReadRenderDetails & Record<string, unknown>,
+				};
 			}
 
 			const sharedParams = { ...readParams };
@@ -850,7 +896,7 @@ export default function (pi: ExtensionAPI) {
 			);
 
 			const hasError = results.some((result) => Boolean((result as { isError?: boolean }).isError));
-			const startLine = typeof readParams.offset === "number" ? readParams.offset : 1;
+			const startLine = offset ?? 1;
 			const text = results
 				.map((result, index) => {
 					const body = getResultText(result) || "[No text output]";
@@ -861,7 +907,7 @@ export default function (pi: ExtensionAPI) {
 			return {
 				isError: hasError,
 				content: [{ type: "text" as const, text }],
-				details: { mode: "multi-read", paths, count: paths.length },
+				details: { mode: "multi-read", paths, count: paths.length, offset, limit } satisfies ReadRenderDetails,
 			};
 		},
 
@@ -878,14 +924,21 @@ export default function (pi: ExtensionAPI) {
 			}
 
 			display += formatReadRange(argObj, theme);
-			return new Text(`${theme.fg("toolTitle", theme.bold("read"))} ${display}`, 0, 0);
+			return new Text(`${theme.fg("toolTitle", theme.bold("Read"))} ${display}`, 0, 0);
 		},
 
 		renderResult(result, { expanded }, theme) {
 			const tc = result.content.find((c) => c.type === "text");
 			if (!tc || tc.type !== "text") return new Text("", 0, 0);
-			if (!expanded) return new Text(renderPreviewLines(tc.text, 5, theme), 0, 0);
-			return renderFullOutput(tc.text, theme);
+
+			if (!expanded) {
+				const preview = renderPreviewLines(tc.text, 5, theme);
+				return new Text(preview || "", 0, 0);
+			}
+
+			const body = renderFullOutput(tc.text, theme);
+			const bodyText = (body as unknown as { text?: string }).text ?? "";
+			return new Text(bodyText || "", 0, 0);
 		},
 	});
 
@@ -941,22 +994,56 @@ export default function (pi: ExtensionAPI) {
 					details: undefined,
 				};
 			}
-			return getBuiltInTools(ctx.cwd).write.execute(toolCallId, { path, content: writeParams.content }, signal, onUpdate);
+
+			const builtInResult = await getBuiltInTools(ctx.cwd).write.execute(
+				toolCallId,
+				{ path, content: writeParams.content },
+				signal,
+				onUpdate,
+			);
+			const originalDetails = getObjectDetails(builtInResult.details as unknown);
+			return {
+				...builtInResult,
+				details: {
+					...originalDetails,
+					path,
+					lineCount: countLines(writeParams.content),
+					byteCount: Buffer.byteLength(writeParams.content, "utf8"),
+					preview: writeParams.content,
+				} satisfies WriteRenderDetails & Record<string, unknown>,
+			};
 		},
 
 		renderCall(args, theme) {
 			const path = shortenPath(args.path || "");
 			const display = path ? theme.fg("accent", path) : theme.fg("toolOutput", "...");
-			const lines = args.content ? args.content.split("\n").length : 0;
-			const info = lines > 0 ? theme.fg("muted", ` (${lines} lines)`) : "";
-			return new Text(`${theme.fg("toolTitle", theme.bold("write"))} ${display}${info}`, 0, 0);
+			const content = typeof args.content === "string" ? args.content : "";
+			const lines = content ? countLines(content) : 0;
+			let text = `${theme.fg("toolTitle", theme.bold("Write"))} ${display}`;
+			if (lines > 0) text += theme.fg("muted", ` (${lines} lines)`);
+			if (content) text += `\n${renderTailPreview(content, 6, theme)}`;
+			return new Text(text, 0, 0);
 		},
 
 		renderResult(result, { expanded }, theme) {
+			const details = getObjectDetails(result.details) as WriteRenderDetails & Record<string, unknown>;
+			const path = typeof details.path === "string" ? details.path : "";
+			const preview = typeof details.preview === "string" ? details.preview : "";
+			const lineCount = typeof details.lineCount === "number" ? details.lineCount : (preview ? countLines(preview) : 0);
+			const byteCount = typeof details.byteCount === "number" ? details.byteCount : (preview ? Buffer.byteLength(preview, "utf8") : 0);
+			const header = `${theme.fg("toolTitle", theme.bold("Write"))} ${theme.fg("accent", shortenPath(path || "..."))}`;
+			const meta = theme.fg("muted", `${lineCount} lines • ${byteCount} bytes`);
 			const tc = result.content.find((c) => c.type === "text");
-			if (!tc || tc.type !== "text" || !tc.text) return new Text("", 0, 0);
-			if (!expanded) return new Text(renderPreviewLines(tc.text, 5, theme), 0, 0);
-			return renderFullOutput(tc.text, theme);
+			const summary = tc?.type === "text" && tc.text ? theme.fg("toolOutput", tc.text) : "";
+
+			if (!expanded) {
+				const previewText = preview ? renderTailPreview(preview, 6, theme) : "";
+				return new Text([header, meta, previewText, summary].filter(Boolean).join("\n"), 0, 0);
+			}
+
+			const fullPreview = preview ? renderFullOutput(preview, theme) : new Text("", 0, 0);
+			const fullPreviewText = (fullPreview as unknown as { text?: string }).text ?? "";
+			return new Text([header, meta, fullPreviewText ? fullPreviewText.trimStart() : "", summary].filter(Boolean).join("\n"), 0, 0);
 		},
 	});
 
