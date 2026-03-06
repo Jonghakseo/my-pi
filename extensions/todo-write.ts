@@ -12,14 +12,8 @@ type TodoTask = {
 	notes?: string;
 };
 
-type TodoPhase = {
-	id: string;
-	name: string;
-	tasks: TodoTask[];
-};
-
 type TodoState = {
-	phases: TodoPhase[];
+	tasks: TodoTask[];
 };
 
 const StatusEnum = StringEnum(["pending", "in_progress", "completed", "abandoned"] as const, {
@@ -32,27 +26,16 @@ const InputTask = Type.Object({
 	notes: Type.Optional(Type.String({ description: "Additional context or notes" })),
 });
 
-const InputPhase = Type.Object({
-	name: Type.String({ description: "Phase name" }),
-	tasks: Type.Optional(Type.Array(InputTask)),
-});
-
 const TodoWriteParams = Type.Object(
 	{
 		ops: Type.Array(
 			Type.Union([
 				Type.Object({
 					op: Type.Literal("replace"),
-					phases: Type.Array(InputPhase),
-				}),
-				Type.Object({
-					op: Type.Literal("add_phase"),
-					name: Type.String({ description: "Phase name" }),
-					tasks: Type.Optional(Type.Array(InputTask)),
+					tasks: Type.Array(InputTask),
 				}),
 				Type.Object({
 					op: Type.Literal("add_task"),
-					phase: Type.String({ description: "Phase ID, e.g. phase-1" }),
 					content: Type.String({ description: "Task description" }),
 					notes: Type.Optional(Type.String({ description: "Additional context or notes" })),
 				}),
@@ -85,13 +68,12 @@ let todoWidgetTimer: ReturnType<typeof setInterval> | undefined;
 const todoWidgetHideTimerByKey = new Map<string, ReturnType<typeof setTimeout>>();
 const todoWidgetMetaStore = new Map<string, { completedAt?: number; completedTurn?: number }>();
 const todoTurnStore = new Map<string, number>();
-const TODO_HIDE_COMPLETED_AFTER_MS = 90_000;
 const TODO_HIDE_COMPLETED_AFTER_TURNS = 2;
 const TODO_STATE_ENTRY_TYPE = "todo-write-state";
 const TODO_COMPACTION_REMINDER_TYPE = "todo-write-compaction-reminder";
 
 function createEmptyState(): TodoState {
-	return { phases: [] };
+	return { tasks: [] };
 }
 
 function getTodoStateKey(ctx: Pick<ExtensionContext, "cwd" | "sessionManager">): string {
@@ -103,73 +85,29 @@ function _isStatus(value: unknown): value is TodoStatus {
 	return value === "pending" || value === "in_progress" || value === "completed" || value === "abandoned";
 }
 
-function findTask(phases: TodoPhase[], id: string): TodoTask | undefined {
-	for (const phase of phases) {
-		const task = phase.tasks.find((entry) => entry.id === id);
-		if (task) return task;
+function findTask(tasks: TodoTask[], id: string): TodoTask | undefined {
+	return tasks.find((entry) => entry.id === id);
+}
+
+function getNextTaskId(tasks: TodoTask[]): number {
+	let maxId = 0;
+	for (const task of tasks) {
+		const match = /^task-(\d+)$/.exec(task.id);
+		if (!match) continue;
+		const value = Number.parseInt(match[1], 10);
+		if (Number.isFinite(value) && value > maxId) maxId = value;
 	}
-	return undefined;
+	return maxId + 1;
 }
 
-function buildPhaseFromInput(
-	input: { name: string; tasks?: Array<{ content: string; status?: TodoStatus; notes?: string }> },
-	phaseId: string,
-	nextTaskId: number,
-): { phase: TodoPhase; nextTaskId: number } {
-	const tasks: TodoTask[] = [];
-	let taskId = nextTaskId;
-	for (const task of input.tasks ?? []) {
-		tasks.push({
-			id: `task-${taskId++}`,
-			content: task.content,
-			status: task.status ?? "pending",
-			notes: task.notes,
-		});
-	}
-	return {
-		phase: {
-			id: phaseId,
-			name: input.name,
-			tasks,
-		},
-		nextTaskId: taskId,
-	};
+function cloneTasks(tasks: TodoTask[]): TodoTask[] {
+	return tasks.map((task) => ({ ...task }));
 }
 
-function getNextIds(phases: TodoPhase[]): { nextTaskId: number; nextPhaseId: number } {
-	let maxTaskId = 0;
-	let maxPhaseId = 0;
+function normalizeInProgressTask(tasks: TodoTask[]): void {
+	if (tasks.length === 0) return;
 
-	for (const phase of phases) {
-		const phaseMatch = /^phase-(\d+)$/.exec(phase.id);
-		if (phaseMatch) {
-			const value = Number.parseInt(phaseMatch[1], 10);
-			if (Number.isFinite(value) && value > maxPhaseId) maxPhaseId = value;
-		}
-
-		for (const task of phase.tasks) {
-			const taskMatch = /^task-(\d+)$/.exec(task.id);
-			if (!taskMatch) continue;
-			const value = Number.parseInt(taskMatch[1], 10);
-			if (Number.isFinite(value) && value > maxTaskId) maxTaskId = value;
-		}
-	}
-
-	return { nextTaskId: maxTaskId + 1, nextPhaseId: maxPhaseId + 1 };
-}
-
-function clonePhases(phases: TodoPhase[]): TodoPhase[] {
-	return phases.map((phase) => ({
-		...phase,
-		tasks: phase.tasks.map((task) => ({ ...task })),
-	}));
-}
-
-function normalizeInProgressTask(phases: TodoPhase[]): void {
-	const orderedTasks = phases.flatMap((phase) => phase.tasks);
-	if (orderedTasks.length === 0) return;
-
-	const inProgressTasks = orderedTasks.filter((task) => task.status === "in_progress");
+	const inProgressTasks = tasks.filter((task) => task.status === "in_progress");
 	if (inProgressTasks.length > 1) {
 		for (const task of inProgressTasks.slice(1)) {
 			task.status = "pending";
@@ -178,29 +116,22 @@ function normalizeInProgressTask(phases: TodoPhase[]): void {
 
 	if (inProgressTasks.length > 0) return;
 
-	const firstPendingTask = orderedTasks.find((task) => task.status === "pending");
+	const firstPendingTask = tasks.find((task) => task.status === "pending");
 	if (firstPendingTask) firstPendingTask.status = "in_progress";
 }
 
-function isPhaseCompleted(phase: TodoPhase): boolean {
-	return phase.tasks.length > 0 && phase.tasks.every((task) => task.status === "completed");
-}
-
 function hasRemainingTasks(state: TodoState): boolean {
-	return state.phases.some((phase) =>
-		phase.tasks.some((task) => task.status === "pending" || task.status === "in_progress"),
-	);
+	return state.tasks.some((task) => task.status === "pending" || task.status === "in_progress");
 }
 
 function getTodoTaskCount(state: TodoState): number {
-	return state.phases.reduce((count, phase) => count + phase.tasks.length, 0);
+	return state.tasks.length;
 }
 
 type TodoWidgetVisibility = {
 	hidden: boolean;
 	completionGraceActive: boolean;
 	meta?: { completedAt: number; completedTurn: number };
-	remainingMs?: number;
 };
 
 export function getTodoWidgetVisibility(
@@ -210,19 +141,17 @@ export function getTodoWidgetVisibility(
 	now: number,
 ): TodoWidgetVisibility {
 	if (getTodoTaskCount(state) === 0) return { hidden: true, completionGraceActive: false };
-	if (hasRemainingTasks(state)) return { hidden: false, completionGraceActive: false };
+	// Preserve existing meta when tasks are still remaining (don't reset completion tracking)
+	if (hasRemainingTasks(state)) return { hidden: false, completionGraceActive: false, meta: meta as TodoWidgetVisibility["meta"] };
 
-	const completedAt = meta?.completedAt ?? now;
 	const completedTurn = meta?.completedTurn ?? currentTurn;
-	const elapsedMs = Math.max(0, now - completedAt);
 	const elapsedTurns = Math.max(0, currentTurn - completedTurn);
-	const hidden = elapsedMs >= TODO_HIDE_COMPLETED_AFTER_MS || elapsedTurns >= TODO_HIDE_COMPLETED_AFTER_TURNS;
+	const hidden = elapsedTurns >= TODO_HIDE_COMPLETED_AFTER_TURNS;
 
 	return {
 		hidden,
 		completionGraceActive: !hidden,
-		meta: { completedAt, completedTurn },
-		remainingMs: hidden ? 0 : Math.max(0, TODO_HIDE_COMPLETED_AFTER_MS - elapsedMs),
+		meta: { completedAt: meta?.completedAt ?? now, completedTurn },
 	};
 }
 
@@ -234,41 +163,29 @@ export function applyTodoWriteOps(
 	errors: string[];
 } {
 	const errors: string[] = [];
-	let next: TodoState = { phases: clonePhases(state.phases) };
-	let { nextTaskId, nextPhaseId } = getNextIds(next.phases);
+	let next: TodoState = { tasks: cloneTasks(state.tasks) };
+	let nextTaskId = getNextTaskId(next.tasks);
 
 	for (const op of ops) {
 		switch (op.op) {
 			case "replace": {
-				const replaced: TodoState = { phases: [] };
+				const replaced: TodoState = { tasks: [] };
 				let replaceTaskId = 1;
-				let replacePhaseId = 1;
-				for (const inputPhase of op.phases) {
-					const phaseId = `phase-${replacePhaseId++}`;
-					const { phase, nextTaskId: updatedTaskId } = buildPhaseFromInput(inputPhase, phaseId, replaceTaskId);
-					replaced.phases.push(phase);
-					replaceTaskId = updatedTaskId;
+				for (const inputTask of op.tasks) {
+					replaced.tasks.push({
+						id: `task-${replaceTaskId++}`,
+						content: inputTask.content,
+						status: inputTask.status ?? "pending",
+						notes: inputTask.notes,
+					});
 				}
 				next = replaced;
-				({ nextTaskId, nextPhaseId } = getNextIds(next.phases));
-				break;
-			}
-
-			case "add_phase": {
-				const phaseId = `phase-${nextPhaseId++}`;
-				const { phase, nextTaskId: updatedTaskId } = buildPhaseFromInput(op, phaseId, nextTaskId);
-				next.phases.push(phase);
-				nextTaskId = updatedTaskId;
+				nextTaskId = getNextTaskId(next.tasks);
 				break;
 			}
 
 			case "add_task": {
-				const phase = next.phases.find((entry) => entry.id === op.phase);
-				if (!phase) {
-					errors.push(`Phase "${op.phase}" not found`);
-					break;
-				}
-				phase.tasks.push({
+				next.tasks.push({
 					id: `task-${nextTaskId++}`,
 					content: op.content,
 					status: "pending",
@@ -278,7 +195,7 @@ export function applyTodoWriteOps(
 			}
 
 			case "update": {
-				const task = findTask(next.phases, op.id);
+				const task = findTask(next.tasks, op.id);
 				if (!task) {
 					errors.push(`Task "${op.id}" not found`);
 					break;
@@ -290,21 +207,18 @@ export function applyTodoWriteOps(
 			}
 
 			case "remove_task": {
-				let removed = false;
-				for (const phase of next.phases) {
-					const index = phase.tasks.findIndex((task) => task.id === op.id);
-					if (index === -1) continue;
-					phase.tasks.splice(index, 1);
-					removed = true;
+				const index = next.tasks.findIndex((task) => task.id === op.id);
+				if (index === -1) {
+					errors.push(`Task "${op.id}" not found`);
 					break;
 				}
-				if (!removed) errors.push(`Task "${op.id}" not found`);
+				next.tasks.splice(index, 1);
 				break;
 			}
 		}
 	}
 
-	normalizeInProgressTask(next.phases);
+	normalizeInProgressTask(next.tasks);
 	return { state: next, errors };
 }
 
@@ -312,57 +226,22 @@ export function renderTodoWidgetLines(state: TodoState): string[] {
 	if (getTodoTaskCount(state) === 0) return [];
 
 	const lines: string[] = [];
-	const remainingByPhase = state.phases.map((phase) => ({
-		name: phase.name,
-		tasks: phase.tasks.filter((task) => task.status === "pending" || task.status === "in_progress"),
-	}));
-	const hasRemaining = remainingByPhase.some((phase) => phase.tasks.length > 0);
 
-	if (hasRemaining) {
-		for (const [index, phase] of state.phases.entries()) {
-			const remainingPhase = remainingByPhase[index];
-			lines.push(isPhaseCompleted(phase) ? `${phase.name} ✓` : phase.name);
-			for (const task of remainingPhase.tasks) {
-				const marker = task.status === "in_progress" ? "→" : "○";
-				lines.push(`  ${marker} ${task.content}`);
-			}
-		}
-		return lines;
-	}
-
-	for (const phase of state.phases) {
-		lines.push(isPhaseCompleted(phase) ? `${phase.name} ✓` : phase.name);
-		for (const task of phase.tasks) {
-			const marker = task.status === "completed" ? "●" : task.status === "abandoned" ? "✗" : "○";
-			lines.push(`  ${marker} ${task.content}`);
-		}
+	for (const task of state.tasks) {
+		const isDone = task.status === "completed" || task.status === "abandoned";
+		const marker = task.status === "in_progress" ? "→" : isDone ? "●" : "○";
+		// Prefix with ~~ for strikethrough styling (applied in widget render)
+		lines.push(isDone ? `~~${marker} ${task.content}` : `${marker} ${task.content}`);
 	}
 
 	return lines;
 }
 
 export function renderTodoWriteSummary(state: TodoState, errors: string[] = []): string {
-	const tasks = state.phases.flatMap((phase) => phase.tasks);
-	if (tasks.length === 0) return errors.length > 0 ? `Errors: ${errors.join("; ")}` : "Todo list cleared.";
+	if (state.tasks.length === 0) return errors.length > 0 ? `Errors: ${errors.join("; ")}` : "Todo list cleared.";
 
-	const remainingByPhase = state.phases
-		.map((phase) => ({
-			name: phase.name,
-			tasks: phase.tasks.filter((task) => task.status === "pending" || task.status === "in_progress"),
-		}))
-		.filter((phase) => phase.tasks.length > 0);
-	const remainingTasks = remainingByPhase.flatMap((phase) =>
-		phase.tasks.map((task) => ({ ...task, phase: phase.name })),
-	);
-
-	let currentIndex = state.phases.findIndex((phase) =>
-		phase.tasks.some((task) => task.status === "pending" || task.status === "in_progress"),
-	);
-	if (currentIndex === -1) currentIndex = state.phases.length - 1;
-	const currentPhase = state.phases[currentIndex];
-	const doneCount = currentPhase
-		? currentPhase.tasks.filter((task) => task.status === "completed" || task.status === "abandoned").length
-		: 0;
+	const remainingTasks = state.tasks.filter((task) => task.status === "pending" || task.status === "in_progress");
+	const doneCount = state.tasks.filter((task) => task.status === "completed" || task.status === "abandoned").length;
 
 	const lines: string[] = [];
 	if (errors.length > 0) lines.push(`Errors: ${errors.join("; ")}`);
@@ -371,37 +250,29 @@ export function renderTodoWriteSummary(state: TodoState, errors: string[] = []):
 	} else {
 		lines.push(`Remaining items (${remainingTasks.length}):`);
 		for (const task of remainingTasks) {
-			lines.push(`  - ${task.id} ${task.content} [${task.status}] (${task.phase})`);
+			lines.push(`  - ${task.id} ${task.content} [${task.status}]`);
 		}
 	}
 
-	if (currentPhase) {
-		lines.push(
-			`Phase ${currentIndex + 1}/${state.phases.length} "${currentPhase.name}" — ${doneCount}/${currentPhase.tasks.length} tasks complete`,
-		);
-	}
+	lines.push(`Progress: ${doneCount}/${state.tasks.length} tasks complete`);
 
-	for (const phase of state.phases) {
-		lines.push(`  ${phase.name}:`);
-		for (const task of phase.tasks) {
-			const marker =
-				task.status === "completed"
-					? "✓"
-					: task.status === "in_progress"
-						? "→"
-						: task.status === "abandoned"
-							? "✗"
-							: "○";
-			lines.push(`    ${marker} ${task.id} ${task.content}`);
-		}
+	for (const task of state.tasks) {
+		const marker =
+			task.status === "completed"
+				? "✓"
+				: task.status === "in_progress"
+					? "→"
+					: task.status === "abandoned"
+						? "✗"
+						: "○";
+		lines.push(`  ${marker} ${task.id} ${task.content}`);
 	}
 
 	return lines.join("\n");
 }
 
 function buildTodoTurnContext(state: TodoState): string | null {
-	const tasks = state.phases.flatMap((phase) => phase.tasks);
-	if (tasks.length === 0) return null;
+	if (state.tasks.length === 0) return null;
 	const summary = renderTodoWriteSummary(state);
 	return [
 		"[todo-reminder] internal todo_write state snapshot",	
@@ -414,7 +285,7 @@ function buildTodoTurnContext(state: TodoState): string | null {
 }
 
 type TodoStateEntryData = {
-	phases: TodoPhase[];
+	tasks: TodoTask[];
 	updatedAt: number;
 };
 
@@ -429,32 +300,23 @@ function isTodoTask(value: unknown): value is TodoTask {
 	);
 }
 
-function isTodoPhase(value: unknown): value is TodoPhase {
-	if (!value || typeof value !== "object") return false;
-	const candidate = value as Partial<TodoPhase>;
-	return (
-		typeof candidate.id === "string" &&
-		typeof candidate.name === "string" &&
-		Array.isArray(candidate.tasks) &&
-		candidate.tasks.every((task) => isTodoTask(task))
-	);
-}
-
 function isTodoStateEntryData(value: unknown): value is TodoStateEntryData {
 	if (!value || typeof value !== "object") return false;
 	const candidate = value as Partial<TodoStateEntryData>;
-	return typeof candidate.updatedAt === "number" && Array.isArray(candidate.phases) && candidate.phases.every((phase) => isTodoPhase(phase));
+	return typeof candidate.updatedAt === "number" && Array.isArray(candidate.tasks) && candidate.tasks.every((task) => isTodoTask(task));
 }
+
 
 export function restoreTodoWriteState(ctx: Pick<ExtensionContext, "cwd" | "sessionManager">): TodoState {
 	const branch = ctx.sessionManager.getBranch();
 	for (let index = branch.length - 1; index >= 0; index -= 1) {
 		const entry = branch[index];
 		if (entry.type !== "custom" || entry.customType !== TODO_STATE_ENTRY_TYPE) continue;
-		if (!isTodoStateEntryData(entry.data)) continue;
-		const restored = { phases: clonePhases(entry.data.phases) };
-		writeTodoWriteState(ctx, restored);
-		return restored;
+		if (isTodoStateEntryData(entry.data)) {
+			const restored = { tasks: cloneTasks(entry.data.tasks) };
+			writeTodoWriteState(ctx, restored);
+			return restored;
+		}
 	}
 
 	const empty = createEmptyState();
@@ -476,28 +338,20 @@ export function buildPostCompactionTodoReminder(state: TodoState): string | null
 function readTodoWriteState(ctx: Pick<ExtensionContext, "cwd" | "sessionManager">): TodoState {
 	const key = getTodoStateKey(ctx);
 	const state = todoStateStore.get(key);
-	return state ? { phases: clonePhases(state.phases) } : createEmptyState();
+	return state ? { tasks: cloneTasks(state.tasks) } : createEmptyState();
 }
 
 function writeTodoWriteState(ctx: Pick<ExtensionContext, "cwd" | "sessionManager">, state: TodoState): void {
 	const key = getTodoStateKey(ctx);
-	if (state.phases.length === 0) {
+	if (state.tasks.length === 0) {
 		todoStateStore.delete(key);
 		return;
 	}
-	todoStateStore.set(key, { phases: clonePhases(state.phases) });
+	todoStateStore.set(key, { tasks: cloneTasks(state.tasks) });
 }
 
 function hasInProgressTask(state: TodoState): boolean {
-	return state.phases.some((phase) => phase.tasks.some((task) => task.status === "in_progress"));
-}
-
-function getCurrentPhaseName(state: TodoState): string | undefined {
-	const currentPhase = state.phases.find((phase) => phase.tasks.some((task) => task.status === "in_progress"));
-	if (currentPhase) return currentPhase.name;
-	const nextPhase = state.phases.find((phase) => phase.tasks.some((task) => task.status === "pending"));
-	if (nextPhase) return nextPhase.name;
-	return state.phases.at(-1)?.name;
+	return state.tasks.some((task) => task.status === "in_progress");
 }
 
 function clearTodoWidgetTimer(): void {
@@ -544,22 +398,10 @@ async function syncTodoWidget(ctx: ExtensionContext): Promise<void> {
 	}
 
 	clearTodoWidgetHideTimer(key);
-	if (visibility.completionGraceActive && visibility.remainingMs !== undefined) {
-		todoWidgetHideTimerByKey.set(
-			key,
-			setTimeout(
-				() => {
-					void syncTodoWidget(ctx);
-				},
-				Math.max(0, visibility.remainingMs + 50),
-			),
-		);
-	}
 
 	ctx.ui.setWidget(TODO_WIDGET_KEY, (tui, theme) => {
 		const renderedLines = [...lines];
 		const hasRunning = hasInProgressTask(state);
-		const currentPhaseName = getCurrentPhaseName(state);
 		const content = new Text("", 0, 0);
 
 		clearTodoWidgetTimer();
@@ -573,15 +415,12 @@ async function syncTodoWidget(ctx: ExtensionContext): Promise<void> {
 				const spinner =
 					TODO_SPINNER_FRAMES[Math.floor(Date.now() / TODO_SPINNER_INTERVAL_MS) % TODO_SPINNER_FRAMES.length] ?? "•";
 				const styledLines = renderedLines.map((line) => {
-					if (!line.startsWith("  ")) {
-						const phaseLine = truncateToWidth(line, lineWidth);
-						return line === currentPhaseName
-							? theme.bold(theme.fg("accent", phaseLine))
-							: theme.fg("toolOutput", phaseLine);
-					}
-					if (line.startsWith("  → ")) {
-						const runningLine = `  ${spinner} ${line.slice(4)}`;
+					if (line.startsWith("→ ")) {
+						const runningLine = `${spinner} ${line.slice(2)}`;
 						return theme.bold(theme.fg("accent", truncateToWidth(runningLine, lineWidth)));
+					}
+					if (line.startsWith("~~")) {
+						return theme.fg("dim", theme.strikethrough(truncateToWidth(line.slice(2), lineWidth)));
 					}
 					return theme.fg("toolOutput", truncateToWidth(line, lineWidth));
 				});
@@ -600,7 +439,7 @@ export default function todoWriteExtension(pi: ExtensionAPI): void {
 		name: "todo_write",
 		label: "Todo Write",
 		description:
-			"Manage phased todos via ops. Use replace/add_phase/add_task/update/remove_task. replace phases require { name, tasks? }; tasks require { content, status?, notes? }. Status values: pending, in_progress, completed, abandoned.",
+			"Manage todos via ops. Use replace/add_task/update/remove_task. replace requires { tasks }; tasks require { content, status?, notes? }. Status values: pending, in_progress, completed, abandoned.",
 		parameters: TodoWriteParams,
 		async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
 			const current = readTodoWriteState(ctx);
@@ -608,13 +447,13 @@ export default function todoWriteExtension(pi: ExtensionAPI): void {
 			const summary = renderTodoWriteSummary(applied.state, applied.errors);
 			writeTodoWriteState(ctx, applied.state);
 			pi.appendEntry<TodoStateEntryData>(TODO_STATE_ENTRY_TYPE, {
-				phases: clonePhases(applied.state.phases),
+				tasks: cloneTasks(applied.state.tasks),
 				updatedAt: Date.now(),
 			});
 			await syncTodoWidget(ctx);
 			return {
 				content: [{ type: "text" as const, text: summary }],
-				details: { phases: applied.state.phases, summary },
+				details: { tasks: applied.state.tasks, summary },
 			};
 		},
 		renderResult(result, { expanded }, theme) {
