@@ -55,7 +55,10 @@ export const SUBVIEW_OVERLAY_MAX_HEIGHT = "95%";
 export const MAX_CONCURRENT_ASYNC_SUBAGENT_RUNS = 30;
 
 /** Warn when non-removed idle runs (done/error) pile up to this count or more. */
-export const IDLE_RUN_WARNING_THRESHOLD = 8;
+export const IDLE_RUN_WARNING_THRESHOLD = Infinity;
+
+/** Max number of runs shown to the LLM in `subagent runs` list output. */
+export const MAX_LISTED_RUNS = 6;
 
 // ─── replay.ts ─────────────────────────────────────────────────────────────
 
