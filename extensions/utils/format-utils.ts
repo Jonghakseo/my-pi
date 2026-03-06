@@ -71,6 +71,7 @@ export const AGENT_SYMBOL_MAP: Record<string, string> = {
 	"%": "challenger",
 	"!": "decider",
 	"@": "browser",
+	"$": "simplifier",
 };
 
 /** Vibrant ANSI-256 foreground colors for per-agent name coloring. */
