@@ -4,22 +4,22 @@ import os from "node:os";
 import path from "node:path";
 import type { ExtensionAPI, ExtensionContext, ToolCallEvent, ToolResultEvent } from "@mariozechner/pi-coding-agent";
 
-type ClaudeHookEventName = "SessionStart" | "UserPromptSubmit" | "PreToolUse" | "PostToolUse" | "Stop";
+export type ClaudeHookEventName = "SessionStart" | "UserPromptSubmit" | "PreToolUse" | "PostToolUse" | "Stop";
 
-type JsonRecord = Record<string, unknown>;
+export type JsonRecord = Record<string, unknown>;
 
-interface ClaudeCommandHook {
+export interface ClaudeCommandHook {
 	type?: string;
 	command?: string;
 	timeout?: number;
 }
 
-interface ClaudeHookGroup {
+export interface ClaudeHookGroup {
 	matcher?: string;
 	hooks?: ClaudeCommandHook[];
 }
 
-interface ClaudeSettings {
+export interface ClaudeSettings {
 	hooks?: Record<string, ClaudeHookGroup[]>;
 }
 
@@ -34,7 +34,7 @@ interface SettingsCacheEntry {
 	loaded: LoadedSettings;
 }
 
-interface HookExecResult {
+export interface HookExecResult {
 	command: string;
 	code: number;
 	stdout: string;
@@ -43,16 +43,27 @@ interface HookExecResult {
 	json: unknown | null;
 }
 
-interface HookDecision {
+export interface HookDecision {
 	action: "none" | "allow" | "ask" | "block";
 	reason?: string;
 }
 
 const SETTINGS_REL_PATH = path.join(".claude", "settings.json");
 const TRANSCRIPT_TMP_DIR = path.join(os.tmpdir(), "pi-claude-hooks-bridge");
-const DEFAULT_HOOK_TIMEOUT_MS = 30_000;
+export const DEFAULT_HOOK_TIMEOUT_MS = 600_000;
 
-const BUILTIN_TOOL_ALIASES: Record<string, string> = {
+/**
+ * Convert Claude Code hook timeout (seconds) to milliseconds.
+ * Official docs: "Seconds before canceling. Defaults: 600 for command"
+ */
+export function convertHookTimeoutToMs(timeoutSeconds: number | undefined): number {
+	if (typeof timeoutSeconds === "number" && Number.isFinite(timeoutSeconds) && timeoutSeconds > 0) {
+		return timeoutSeconds * 1000;
+	}
+	return DEFAULT_HOOK_TIMEOUT_MS;
+}
+
+export const BUILTIN_TOOL_ALIASES: Record<string, string> = {
 	bash: "Bash",
 	read: "Read",
 	edit: "Edit",
@@ -137,24 +148,24 @@ function loadSettings(cwd: string): LoadedSettings {
 	}
 }
 
-function getHookGroups(settings: ClaudeSettings | null, eventName: ClaudeHookEventName): ClaudeHookGroup[] {
+export function getHookGroups(settings: ClaudeSettings | null, eventName: ClaudeHookEventName): ClaudeHookGroup[] {
 	if (!settings?.hooks) return [];
 	const groups = settings.hooks[eventName];
 	if (!Array.isArray(groups)) return [];
 	return groups;
 }
 
-function getClaudeToolName(toolName: string): string {
+export function getClaudeToolName(toolName: string): string {
 	return BUILTIN_TOOL_ALIASES[toolName] || toolName;
 }
 
-function getMatcherCandidates(toolName: string): string[] {
+export function getMatcherCandidates(toolName: string): string[] {
 	const canonical = getClaudeToolName(toolName);
 	const set = new Set<string>([toolName, toolName.toLowerCase(), canonical, canonical.toLowerCase()]);
 	return Array.from(set);
 }
 
-function matcherMatches(matcher: string | undefined, toolName: string): boolean {
+export function matcherMatches(matcher: string | undefined, toolName: string): boolean {
 	if (!matcher || matcher.trim() === "") return true;
 
 	const candidates = getMatcherCandidates(toolName);
@@ -177,7 +188,7 @@ function matcherMatches(matcher: string | undefined, toolName: string): boolean 
 	);
 }
 
-function getCommandHooks(
+export function getCommandHooks(
 	settings: ClaudeSettings | null,
 	eventName: ClaudeHookEventName,
 	toolName?: string,
@@ -205,7 +216,7 @@ function resolveMaybePath(inputPath: string, cwd: string): string {
 	return path.resolve(cwd, inputPath);
 }
 
-function normalizeToolInput(toolName: string, rawInput: unknown, cwd: string): JsonRecord {
+export function normalizeToolInput(toolName: string, rawInput: unknown, cwd: string): JsonRecord {
 	const input: JsonRecord = rawInput && typeof rawInput === "object" ? { ...(rawInput as JsonRecord) } : {};
 
 	const pathCandidate =
@@ -231,7 +242,7 @@ function normalizeToolInput(toolName: string, rawInput: unknown, cwd: string): J
 	return input;
 }
 
-function extractTextFromBlocks(content: unknown): string {
+export function extractTextFromBlocks(content: unknown): string {
 	if (typeof content === "string") return content;
 	if (!Array.isArray(content)) return "";
 
@@ -242,6 +253,18 @@ function extractTextFromBlocks(content: unknown): string {
 		if (typeof text === "string") lines.push(text);
 	}
 	return lines.join("");
+}
+
+function getLastAssistantMessage(ctx: ExtensionContext): string | undefined {
+	const entries = ctx.sessionManager.getEntries();
+	for (let i = entries.length - 1; i >= 0; i -= 1) {
+		const entry = entries[i];
+		if (!entry || entry.type !== "message") continue;
+		if (entry.message.role !== "assistant") continue;
+		const text = extractTextFromBlocks(entry.message.content);
+		if (text) return text;
+	}
+	return undefined;
 }
 
 function toClaudeTranscriptLines(ctx: ExtensionContext): string[] {
@@ -329,7 +352,7 @@ function createTranscriptFile(ctx: ExtensionContext, sessionId: string): string 
 	}
 }
 
-function parseJsonFromStdout(stdout: string): unknown | null {
+export function parseJsonFromStdout(stdout: string): unknown | null {
 	const trimmed = stdout.trim();
 	if (!trimmed) return null;
 
@@ -355,13 +378,13 @@ function parseJsonFromStdout(stdout: string): unknown | null {
 	return null;
 }
 
-function fallbackReason(stderr: string, stdout: string): string | undefined {
+export function fallbackReason(stderr: string, stdout: string): string | undefined {
 	const text = stderr.trim() || stdout.trim();
 	if (!text) return undefined;
 	return text.length > 2000 ? `${text.slice(0, 2000)}...` : text;
 }
 
-function extractDecision(result: HookExecResult): HookDecision {
+export function extractDecision(result: HookExecResult): HookDecision {
 	const payload = result.json;
 	const asObj = payload && typeof payload === "object" ? (payload as JsonRecord) : undefined;
 	const hookSpecific = asObj?.hookSpecificOutput;
@@ -474,7 +497,7 @@ function buildPreToolUsePayload(event: ToolCallEvent, ctx: ExtensionContext): Js
 		...makeBasePayload("PreToolUse", ctx),
 		tool_name: getClaudeToolName(event.toolName),
 		tool_input: toolInput,
-		tool_call_id: event.toolCallId,
+		tool_use_id: event.toolCallId,
 	};
 }
 
@@ -489,7 +512,7 @@ function buildPostToolUsePayload(event: ToolResultEvent, ctx: ExtensionContext):
 			content: event.content,
 			details: event.details,
 		},
-		tool_call_id: event.toolCallId,
+		tool_use_id: event.toolCallId,
 	};
 }
 
@@ -501,7 +524,7 @@ function notifyOnceForParseError(ctx: ExtensionContext, loaded: LoadedSettings):
 	ctx.ui.notify(`[claude-hooks-bridge] ${loaded.parseError}`, "warning");
 }
 
-function countHooks(settings: ClaudeSettings): number {
+export function countHooks(settings: ClaudeSettings): number {
 	if (!settings.hooks) return 0;
 	let total = 0;
 	for (const groups of Object.values(settings.hooks)) {
@@ -514,7 +537,7 @@ function countHooks(settings: ClaudeSettings): number {
 	return total;
 }
 
-function toBlockReason(reason: string | undefined, fallback: string): string {
+export function toBlockReason(reason: string | undefined, fallback: string): string {
 	const text = (reason || "").trim();
 	if (!text) return fallback;
 	if (text.length <= 2000) return text;
@@ -534,10 +557,7 @@ async function runHooks(
 	const results: HookExecResult[] = [];
 
 	for (const hook of hooks) {
-		const timeoutMs =
-			typeof hook.timeout === "number" && Number.isFinite(hook.timeout) && hook.timeout > 0
-				? hook.timeout
-				: DEFAULT_HOOK_TIMEOUT_MS;
+		const timeoutMs = convertHookTimeoutToMs(hook.timeout);
 		const result = await execCommandHook(hook.command as string, ctx.cwd, payload, timeoutMs);
 		results.push(result);
 	}
@@ -670,11 +690,13 @@ export default function claudeHooksBridge(pi: ExtensionAPI) {
 		const stopHookActive = stopHookActiveBySession.get(sessionId) || false;
 		const transcriptPath = createTranscriptFile(ctx, sessionId);
 
+		const lastAssistantMessage = getLastAssistantMessage(ctx);
 		const payload: JsonRecord = {
 			...makeBasePayload("Stop", ctx),
 			stop_hook_active: stopHookActive,
 		};
 		if (transcriptPath) payload.transcript_path = transcriptPath;
+		if (lastAssistantMessage) payload.last_assistant_message = lastAssistantMessage;
 
 		const results = await runHooks(settings, "Stop", ctx, payload);
 
