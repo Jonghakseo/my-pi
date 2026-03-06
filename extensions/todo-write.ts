@@ -397,6 +397,21 @@ export function renderTodoWriteSummary(state: TodoState, errors: string[] = []):
 	return lines.join("\n");
 }
 
+function buildTodoTurnContext(state: TodoState): string | null {
+	const tasks = state.phases.flatMap((phase) => phase.tasks);
+	if (tasks.length === 0) return null;
+	const summary = renderTodoWriteSummary(state);
+	return [
+		"[todo-reminder] internal todo_write state snapshot",	
+		"Source: in-memory session state maintained by the todo_write tool.",
+		"Treat this as the latest authoritative todo status for the current turn.",
+		"Do not contradict this snapshot. If progress/status differs, update todo_write first.",
+		"",	
+		summary,
+	].join("\n");
+}
+
+
 function readTodoWriteState(ctx: Pick<ExtensionContext, "cwd" | "sessionManager">): TodoState {
 	const key = getTodoStateKey(ctx);
 	const state = todoStateStore.get(key);
@@ -543,6 +558,20 @@ export default function todoWriteExtension(pi: ExtensionAPI): void {
 			const summary = typeof details?.summary === "string" ? details.summary : "";
 			return new Text(summary ? theme.fg("toolOutput", summary) : "", 0, 0);
 		},
+	});
+
+	pi.on("before_agent_start", async (_event, ctx) => {
+		const state = readTodoWriteState(ctx);
+		const content = buildTodoTurnContext(state);
+		if (!content) return;
+		return {
+			message: {
+				customType: "todo-write-context",
+				content,
+				display: false,
+				details: { summary: renderTodoWriteSummary(state) },
+			},
+		};
 	});
 
 	pi.on("session_start", async (_event, ctx) => {
