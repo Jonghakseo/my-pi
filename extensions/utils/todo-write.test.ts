@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { applyTodoWriteOps, renderTodoWriteSummary } from "../todo-write.js";
+import { applyTodoWriteOps, renderTodoWidgetLines, renderTodoWriteSummary } from "../todo-write.js";
 
 describe("todo-write ops", () => {
 	it("replaces full state and assigns deterministic ids", () => {
@@ -142,5 +142,28 @@ describe("todo-write ops", () => {
 	it("renders empty summary when no tasks remain", () => {
 		const state = { phases: [] };
 		expect(renderTodoWriteSummary(state)).toBe("Todo list cleared.");
+	});
+
+	it("renders widget lines when todos exist", () => {
+		const state = {
+			phases: [
+				{
+					id: "phase-1",
+					name: "Planning",
+					tasks: [
+						{ id: "task-1", content: "Read source", status: "completed" as const },
+						{ id: "task-2", content: "Map callsites", status: "in_progress" as const },
+						{ id: "task-3", content: "Write patch", status: "pending" as const },
+					],
+				},
+			],
+		};
+
+		const lines = renderTodoWidgetLines(state);
+		expect(lines).toEqual(["Planning", "  → Map callsites", "  ○ Write patch"]);
+	});
+
+	it("hides widget when todo state is empty", () => {
+		expect(renderTodoWidgetLines({ phases: [] })).toEqual([]);
 	});
 });
