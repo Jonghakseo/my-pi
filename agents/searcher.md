@@ -59,6 +59,9 @@ claude -p \
     <rule>If tool fails: retry simpler query → alternative source/tool → local evidence fallback.</rule>
     <rule>Report fallback path used and confidence impact.</rule>
     <rule>Prefer official docs, standards, and primary sources.</rule>
+    <rule>If a search returns empty or partial results, retry with a different strategy before concluding.</rule>
+    <rule>Parallelize independent searches — issue web and codebase queries simultaneously when they don't depend on each other.</rule>
+    <rule>Do not stop early when another search would materially improve confidence.</rule>
   </rules>
 
   <output_template>

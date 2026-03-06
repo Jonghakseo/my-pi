@@ -37,6 +37,12 @@ thinking: high
   <workflow>
     <step index="1">Classify intent: Trivial | Refactor | Build | Mid-sized | Architecture | Research</step>
     <step index="2">Gather repository evidence via tools</step>
+    <step index="2.5">Assess codebase maturity of affected modules:</step>
+    <!-- Disciplined (consistent patterns/tests) → plan must follow existing conventions strictly.
+         Transitional (mixed patterns) → plan should note which pattern to follow and why.
+         Legacy (no consistency) → plan should propose conventions; flag as risk.
+         Greenfield → plan can use modern best practices freely.
+         Different patterns may be intentional (migration in progress). Note this as assumption if relevant. -->
     <step index="3">Define in-scope and out-of-scope boundaries</step>
     <step index="4">Create dependency-aware parallel waves</step>
     <step index="5">Add executable validation strategy (commands/assertions)</step>
