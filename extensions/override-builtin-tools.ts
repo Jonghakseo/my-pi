@@ -26,6 +26,42 @@ import { Type } from "@sinclair/typebox";
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
+/** Generate a unified diff string (same format as pi's built-in edit tool). */
+async function makeDiffString(oldContent: string, newContent: string, contextLines = 4) {
+	const Diff = await import("diff");
+	const parts = Diff.diffLines(oldContent, newContent);
+	const output: string[] = [];
+	const maxLineNum = Math.max(oldContent.split("\n").length, newContent.split("\n").length);
+	const lnw = String(maxLineNum).length;
+	let oldLn = 1, newLn = 1, lastWasChange = false;
+	let firstChangedLine: number | undefined;
+	for (let i = 0; i < parts.length; i++) {
+		const part = parts[i];
+		const raw = part.value.split("\n");
+		if (raw.at(-1) === "") raw.pop();
+		if (part.added || part.removed) {
+			if (firstChangedLine === undefined) firstChangedLine = newLn;
+			for (const line of raw) {
+				if (part.added) { output.push(`+${String(newLn).padStart(lnw)} ${line}`); newLn++; }
+				else { output.push(`-${String(oldLn).padStart(lnw)} ${line}`); oldLn++; }
+			}
+			lastWasChange = true;
+		} else {
+			const nextIsChange = i < parts.length - 1 && (parts[i + 1].added || parts[i + 1].removed);
+			if (lastWasChange || nextIsChange) {
+				let lines = raw, skipStart = 0, skipEnd = 0;
+				if (!lastWasChange) { skipStart = Math.max(0, raw.length - contextLines); lines = raw.slice(skipStart); }
+				if (!nextIsChange && lines.length > contextLines) { skipEnd = lines.length - contextLines; lines = lines.slice(0, contextLines); }
+				if (skipStart > 0) { output.push(` ${" ".repeat(lnw)} ...`); oldLn += skipStart; newLn += skipStart; }
+				for (const line of lines) { output.push(` ${String(oldLn).padStart(lnw)} ${line}`); oldLn++; newLn++; }
+				if (skipEnd > 0) { output.push(` ${" ".repeat(lnw)} ...`); oldLn += skipEnd; newLn += skipEnd; }
+			} else { oldLn += raw.length; newLn += raw.length; }
+			lastWasChange = false;
+		}
+	}
+	return { diff: output.join("\n"), firstChangedLine };
+}
+
 /** Current working directory — updated on session events. */
 let currentCwd = process.cwd();
 
@@ -449,13 +485,14 @@ finalPath = resolvedMove;
 }
 
 const changed = next !== original;
+const diffResult = changed ? await makeDiffString(original, next) : undefined;
 const message = [
 changed ? `Applied ${parsed.ops?.length ?? 0} edit operation(s)` : "No content changes",
 moveTarget ? `Moved to ${finalPath}` : "",
 ].filter(Boolean).join(". ");
 return {
 content: [{ type: "text" as const, text: message }],
-details: undefined,
+details: diffResult ? { diff: diffResult.diff, firstChangedLine: diffResult.firstChangedLine } as EditToolDetails : undefined,
 };
 } catch (error) {
 return {
