@@ -45,8 +45,39 @@ disable-model-invocation: false
    - 핵심 리뷰 결과
 5. `Challenger`
    - 핵심 질문/리스크
-6. `Recommended Next Step`
+6. `Severity Classification`
+   - 🔴 Must-fix: blocker, correctness 오류, 재현 가능한 버그
+   - 🟡 Should-fix: maintainability, clarity, 저위험 개선
+   - ⚪ Won't-fix: 근거 부족, 의도된 설계, 대규모 변경 필요
+7. `Recommended Next Step`
    - 수정 필요 시 가장 먼저 할 일 1~3개
+
+## 2-Pass 리뷰 모드
+
+`$ARGUMENTS`에 `--2pass` 또는 "2단계 리뷰"가 포함되면 아래 순서를 따른다:
+
+### Pass 1: Spec Compliance (명세 적합성)
+목적: 구현이 요구사항/계획/명세를 **정확히** 충족하는지 확인.
+
+1. `verifier`에게: 명세 대비 구현 일치 여부 검증 요청
+2. `reviewer`에게: 요구사항 누락/초과 구현 집중 리뷰 요청
+
+판정:
+- **누락(Under-built)**: 명세에 있는데 구현에 없는 것
+- **초과(Over-built)**: 명세에 없는데 구현에 있는 것 → YAGNI 위반
+- 누락/초과가 있으면 수정 후 Pass 1 재실행
+
+### Pass 2: Code Quality (코드 품질)
+**Pass 1 통과 후에만** 진행한다.
+
+1. `reviewer`에게: correctness, regressions, maintainability 리뷰 요청
+2. `challenger`에게: 숨은 가정, 실패 시나리오 압박 검토 요청
+
+판정:
+- Critical/Important 이슈 → 수정 후 Pass 2 재실행
+- Minor 이슈 → 기록만 하고 통과
+
+**주의: Pass 1 전에 Pass 2를 시작하지 않는다.** 명세 미충족 상태에서 코드 품질을 논하는 것은 무의미하다.
 
 ## 주의
 - 3개 결과가 모두 오기 전 성급히 결론 내리지 않는다.
