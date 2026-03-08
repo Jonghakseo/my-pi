@@ -550,9 +550,14 @@ export default function (pi: ExtensionAPI) {
 		},
 
 		renderResult(result, { expanded }, theme) {
-			if (!expanded) return new Text("", 0, 0);
 			const tc = result.content.find((c) => c.type === "text");
 			if (!tc || tc.type !== "text") return new Text("", 0, 0);
+
+			if (!expanded) {
+				const preview = renderPreviewLines(tc.text, 5, theme);
+				return new Text(preview || "", 0, 0);
+			}
+
 			return renderFullOutput(tc.text, theme);
 		},
 	});
