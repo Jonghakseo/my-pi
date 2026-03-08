@@ -78,10 +78,13 @@ function savePersistedFirstAbortSessions(sessionKeys: Set<string>): void {
 
 const PROMPTS_DIR = path.join(import.meta.dirname, "prompts");
 const TODO_COMPLETION_POLICY = [
-	"### Todo Completion Guard",
+	"### Todo Transition Guard",
+	"- Todo state changes must be recorded immediately when they happen.",
+	"- If a task or phase finishes, your very next action must be `todo_write`.",
+	"- Do not retroactively batch-complete multiple tasks at the end.",
+	"- In one `todo_write` call, complete at most one task. You may start the next task as `in_progress` in the same call.",
 	"- Before giving any completion-style response, check whether `todo_write` still has remaining items.",
 	"- If remaining items exist, do not imply that the overall task is finished.",
-	"- When progress changes materially, update `todo_write` before reporting status or completion.",
 ].join("\n");
 
 
