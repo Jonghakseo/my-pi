@@ -141,8 +141,8 @@ export function getTodoWidgetVisibility(
 	now: number,
 ): TodoWidgetVisibility {
 	if (getTodoTaskCount(state) === 0) return { hidden: true, completionGraceActive: false };
-	// Preserve existing meta when tasks are still remaining (don't reset completion tracking)
-	if (hasRemainingTasks(state)) return { hidden: false, completionGraceActive: false, meta: meta as TodoWidgetVisibility["meta"] };
+	// Reset completion tracking when tasks are still remaining — stale completedTurn causes immediate hide on next full completion
+	if (hasRemainingTasks(state)) return { hidden: false, completionGraceActive: false };
 
 	const completedTurn = meta?.completedTurn ?? currentTurn;
 	const elapsedTurns = Math.max(0, currentTurn - completedTurn);
@@ -439,7 +439,7 @@ export default function todoWriteExtension(pi: ExtensionAPI): void {
 		name: "todo_write",
 		label: "Todo Write",
 		description:
-			"Manage todos via ops. Use replace/add_task/update/remove_task. replace requires { tasks }; tasks require { content, status?, notes? }. Status values: pending, in_progress, completed, abandoned. If requirements change mid-task, revise the todo list with todo_write to reflect the new plan before continuing.",
+			"Manage todos via ops. Only use for tasks with 3+ clearly distinct phases (e.g. research → implement → verify). Do NOT create separate todos for multiple simple edits within a single theme — just do them. When each phase completes, update status promptly so the user always sees clear progress. Use replace/add_task/update/remove_task. replace requires { tasks }; tasks require { content, status?, notes? }. Status values: pending, in_progress, completed, abandoned. If requirements change mid-task, revise the todo list with todo_write to reflect the new plan before continuing.",
 		parameters: TodoWriteParams,
 		async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
 			const current = readTodoWriteState(ctx);
