@@ -8,9 +8,8 @@
  * Usage: auto-loaded from ~/.pi/agent/extensions/
  */
 
-import { mkdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
-import { dirname, isAbsolute, relative, resolve } from "node:path";
+import { isAbsolute, relative } from "node:path";
 import type { EditToolDetails, ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import {
 	createBashTool,
@@ -25,72 +24,6 @@ import { Text, truncateToWidth, visibleWidth } from "@mariozechner/pi-tui";
 import { Type } from "@sinclair/typebox";
 
 // ── Helpers ────────────────────────────────────────────────────────────────
-
-/** Generate a unified diff string (same format as pi's built-in edit tool). */
-async function makeDiffString(oldContent: string, newContent: string, contextLines = 4) {
-	const Diff = await import("diff");
-	const parts = Diff.diffLines(oldContent, newContent);
-	const output: string[] = [];
-	const maxLineNum = Math.max(oldContent.split("\n").length, newContent.split("\n").length);
-	const lnw = String(maxLineNum).length;
-	let oldLn = 1,
-		newLn = 1,
-		lastWasChange = false;
-	let firstChangedLine: number | undefined;
-	for (let i = 0; i < parts.length; i++) {
-		const part = parts[i];
-		const raw = part.value.split("\n");
-		if (raw.at(-1) === "") raw.pop();
-		if (part.added || part.removed) {
-			if (firstChangedLine === undefined) firstChangedLine = newLn;
-			for (const line of raw) {
-				if (part.added) {
-					output.push(`+${String(newLn).padStart(lnw)} ${line}`);
-					newLn++;
-				} else {
-					output.push(`-${String(oldLn).padStart(lnw)} ${line}`);
-					oldLn++;
-				}
-			}
-			lastWasChange = true;
-		} else {
-			const nextIsChange = i < parts.length - 1 && (parts[i + 1].added || parts[i + 1].removed);
-			if (lastWasChange || nextIsChange) {
-				let lines = raw,
-					skipStart = 0,
-					skipEnd = 0;
-				if (!lastWasChange) {
-					skipStart = Math.max(0, raw.length - contextLines);
-					lines = raw.slice(skipStart);
-				}
-				if (!nextIsChange && lines.length > contextLines) {
-					skipEnd = lines.length - contextLines;
-					lines = lines.slice(0, contextLines);
-				}
-				if (skipStart > 0) {
-					output.push(` ${" ".repeat(lnw)} ...`);
-					oldLn += skipStart;
-					newLn += skipStart;
-				}
-				for (const line of lines) {
-					output.push(` ${String(oldLn).padStart(lnw)} ${line}`);
-					oldLn++;
-					newLn++;
-				}
-				if (skipEnd > 0) {
-					output.push(` ${" ".repeat(lnw)} ...`);
-					oldLn += skipEnd;
-					newLn += skipEnd;
-				}
-			} else {
-				oldLn += raw.length;
-				newLn += raw.length;
-			}
-			lastWasChange = false;
-		}
-	}
-	return { diff: output.join("\n"), firstChangedLine };
-}
 
 /** Current working directory — updated on session events. */
 let currentCwd = process.cwd();
@@ -160,39 +93,7 @@ const WriteParams = Type.Object(
 	{ additionalProperties: true },
 );
 
-const EditParams = Type.Object(
-	{
-		path: Type.String({ description: "Target file path" }),
-		edits: Type.Array(
-			Type.Object(
-				{
-					op: Type.Union([
-						Type.Literal("replace"),
-						Type.Literal("append"),
-						Type.Literal("prepend"),
-						Type.Literal("insert"),
-						Type.Literal("delete"),
-					]),
-					pos: Type.Optional(
-						Type.Union([Type.String(), Type.Null()], {
-							description: "Anchor line tag in LINE#ID format, e.g. 33#BX. Use the exact tag shown by read output.",
-						}),
-					),
-					end: Type.Optional(
-						Type.Union([Type.String(), Type.Null()], {
-							description: "End line tag in LINE#ID format, e.g. 34#YS. Use the exact tag shown by read output.",
-						}),
-					),
-					lines: Type.Optional(Type.Union([Type.Array(Type.String()), Type.String(), Type.Null()])),
-				},
-				{ additionalProperties: false },
-			),
-		),
-		delete: Type.Optional(Type.Boolean()),
-		move: Type.Optional(Type.String()),
-	},
-	{ additionalProperties: true },
-);
+const EditParams = getBuiltInTools(process.cwd()).edit.parameters;
 
 type ReadRenderDetails = {
 	mode: "single-read" | "multi-read";
@@ -246,323 +147,10 @@ function formatReadRangePlain(args: Record<string, unknown>): string {
 }
 
 const READ_SECTION_SEPARATOR = "=".repeat(72);
-const HASH_ALPHABET = "ZPMQVRWSNKTXJBYH";
-const HASH_LINE_PATTERN = /^\d+#[A-Z]{2}:/;
-const RE_SIGNIFICANT = /[\p{L}\p{N}]/u;
 
-function fnv1a32(text: string, seed = 0): number {
-	let hash = (0x811c9dc5 ^ seed) >>> 0;
-	for (let i = 0; i < text.length; i++) {
-		hash ^= text.charCodeAt(i);
-		hash = Math.imul(hash, 0x01000193) >>> 0;
-	}
-	return hash >>> 0;
-}
-
-function computeLineHash(lineNumber: number, line: string): string {
-	const normalized = line.endsWith("\r") ? line.slice(0, -1) : line;
-	const compact = normalized.replace(/\s+/g, "");
-	const seed = RE_SIGNIFICANT.test(compact) ? 0 : lineNumber;
-	const value = fnv1a32(compact, seed) & 0xff;
-	const high = HASH_ALPHABET[(value >>> 4) & 0x0f] ?? "Z";
-	const low = HASH_ALPHABET[value & 0x0f] ?? "Z";
-	return `${high}${low}`;
-}
-
-function formatHashTaggedLines(text: string, startLine: number): string {
-	const lines = text.split("\n");
-	if (lines.every((line) => HASH_LINE_PATTERN.test(line))) return text;
-	// Strip trailing phantom line from files ending with \n (matches applyStructuredEdits behavior)
-	if (text.endsWith("\n") && lines.length > 0 && lines[lines.length - 1] === "") lines.pop();
-	return lines
-		.map((line, index) => `${startLine + index}#${computeLineHash(startLine + index, line)}:${line}`)
-		.join("\n");
-}
-
-function formatMultiReadSection(path: string, index: number, total: number, body: string, startLine: number): string {
+function formatMultiReadSection(path: string, index: number, total: number, body: string): string {
 	const header = [READ_SECTION_SEPARATOR, `[${index}/${total}] ${path}`, READ_SECTION_SEPARATOR].join("\n");
-	return `${header}\n${formatHashTaggedLines(body, startLine)}`;
-}
-
-function withHashTaggedReadResult<T>(result: T, startLine: number): T {
-	if (!result || typeof result !== "object") return result;
-	const out = { ...(result as Record<string, unknown>) };
-	const content = out.content;
-	if (!Array.isArray(content)) return result;
-	let changed = false;
-	out.content = content.map((part) => {
-		if (!part || typeof part !== "object") return part;
-		if ((part as { type?: unknown }).type !== "text") return part;
-		const text = (part as { text?: unknown }).text;
-		if (typeof text !== "string") return part;
-		changed = true;
-		return { ...(part as Record<string, unknown>), text: formatHashTaggedLines(text, startLine) };
-	});
-	return (changed ? out : result) as T;
-}
-
-type LineTag = {
-	line: number;
-	hash: string;
-};
-
-type StructuredEditOp = {
-	op: "replace" | "append" | "prepend";
-	posTag: LineTag | null;
-	endTag: LineTag | null;
-	lines: string[] | null;
-};
-
-function parseLineTag(tag: unknown): LineTag | null {
-	if (tag == null) return null;
-	if (typeof tag !== "string") return null;
-	const match = tag.trim().match(/^(\d+)#([A-Z]{2})$/);
-	if (!match) return null;
-	const line = Number(match[1]);
-	if (!Number.isInteger(line) || line < 1) return null;
-	return { line, hash: match[2] };
-}
-
-function normalizeEditLines(value: unknown): string[] | null | undefined {
-	if (value == null) return null;
-	if (typeof value === "string") return value.split("\n");
-	if (Array.isArray(value)) {
-		if (!value.every((entry) => typeof entry === "string")) return undefined;
-		return value as string[];
-	}
-	return undefined;
-}
-
-function parseStructuredEditOps(rawOps: unknown): { ops: StructuredEditOp[] | null; error?: string } {
-	if (rawOps == null) return { ops: null };
-	if (!Array.isArray(rawOps)) return { ops: null, error: "edits must be an array." };
-
-	const ops: StructuredEditOp[] = [];
-	for (const raw of rawOps) {
-		if (!raw || typeof raw !== "object") return { ops: null, error: "Each edit must be an object." };
-		const entry = raw as Record<string, unknown>;
-		const rawOp = entry.op;
-		let op: StructuredEditOp["op"] | null = null;
-		if (rawOp === "replace" || rawOp === "append" || rawOp === "prepend") op = rawOp;
-		else if (rawOp === "insert") op = "append";
-		else if (rawOp === "delete") op = "replace";
-		if (!op) {
-			return { ops: null, error: "edit.op must be one of replace, append, prepend, insert, delete." };
-		}
-
-		const posTag = parseLineTag(entry.pos);
-		const endTag = parseLineTag(entry.end);
-		const lines = normalizeEditLines(entry.lines);
-		if (lines === undefined) return { ops: null, error: "edit.lines must be string[], string, or null." };
-
-		if ((rawOp === "replace" || rawOp === "delete") && posTag == null) {
-			return {
-				ops: null,
-				error:
-					'replace/delete operations require pos in LINE#ID format (for example: "33#BX"). Use the exact tag shown by read output.',
-			};
-		}
-
-		if (rawOp === "delete" && lines != null && lines.length > 0) {
-			return { ops: null, error: "delete operations cannot include lines." };
-		}
-
-		if (entry.end != null && endTag == null) {
-			return {
-				ops: null,
-				error: 'end must be a valid LINE#ID tag (for example: "34#YS"). Use the exact tag shown by read output.',
-			};
-		}
-
-		if (entry.pos != null && posTag == null) {
-			return {
-				ops: null,
-				error: 'pos must be a valid LINE#ID tag (for example: "33#BX"). Use the exact tag shown by read output.',
-			};
-		}
-
-		ops.push({ op, posTag, endTag, lines: rawOp === "delete" ? [] : lines });
-	}
-
-	return { ops };
-}
-
-function validateTagAgainstLine(tag: LineTag, lines: string[]): string | undefined {
-	if (tag.line < 1 || tag.line > lines.length) return `line ${tag.line} does not exist`;
-	const lineText = lines[tag.line - 1] ?? "";
-	const actualHash = computeLineHash(tag.line, lineText);
-	if (actualHash !== tag.hash) {
-		return `line ${tag.line} has changed since last read (${tag.hash} != ${actualHash})`;
-	}
-	return undefined;
-}
-
-function applyStructuredEdits(fileText: string, ops: StructuredEditOp[]): { text?: string; error?: string } {
-	const hasTrailingNewline = fileText.endsWith("\n");
-	const lines = fileText.length === 0 ? [] : fileText.split("\n");
-	if (hasTrailingNewline && lines[lines.length - 1] === "") lines.pop();
-
-	const withAnchor = ops.map((op, index) => {
-		const anchor =
-			op.posTag?.line ?? (op.op === "append" ? Number.MAX_SAFE_INTEGER - index : op.op === "prepend" ? 0 : -1);
-		return { ...op, index, anchor };
-	});
-	withAnchor.sort((a, b) => (b.anchor !== a.anchor ? b.anchor - a.anchor : a.index - b.index));
-
-	for (const op of withAnchor) {
-		if (op.op === "replace") {
-			const startTag = op.posTag as LineTag;
-			const endTag = op.endTag ?? startTag;
-			const startError = validateTagAgainstLine(startTag, lines);
-			if (startError) return { error: startError };
-			const endError = validateTagAgainstLine(endTag, lines);
-			if (endError) return { error: endError };
-			const start = startTag.line;
-			const end = endTag.line;
-			if (end < start) return { error: "replace end must be >= pos." };
-			const replacement = op.lines ?? [];
-			lines.splice(start - 1, end - start + 1, ...replacement);
-			continue;
-		}
-
-		if (op.op === "prepend") {
-			const insert = op.lines ?? [];
-			if (insert.length === 0) continue;
-			if (op.posTag) {
-				const tagError = validateTagAgainstLine(op.posTag, lines);
-				if (tagError) return { error: tagError };
-			}
-			const at = op.posTag == null ? 0 : op.posTag.line - 1;
-			if (at < 0 || at > lines.length) return { error: `prepend pos out of range: ${op.posTag?.line ?? 0}` };
-			lines.splice(at, 0, ...insert);
-			continue;
-		}
-
-		const insert = op.lines ?? [];
-		if (insert.length === 0) continue;
-		if (op.posTag) {
-			const tagError = validateTagAgainstLine(op.posTag, lines);
-			if (tagError) return { error: tagError };
-		}
-		const at = op.posTag == null ? lines.length : op.posTag.line;
-		if (at < 0 || at > lines.length) return { error: `append pos out of range: ${op.posTag?.line ?? 0}` };
-		lines.splice(at, 0, ...insert);
-	}
-
-	const out = lines.join("\n");
-	return { text: hasTrailingNewline ? `${out}\n` : out };
-}
-
-export async function executeStructuredEdit(cwd: string, params: Record<string, unknown>) {
-	const relPath = typeof params.path === "string" ? params.path.trim() : "";
-	if (!relPath) {
-		return {
-			isError: true,
-			content: [{ type: "text" as const, text: "Error: path is required." }],
-			details: undefined,
-		};
-	}
-
-	const sourcePath = isAbsolute(relPath) ? relPath : resolve(cwd, relPath);
-	const shouldDelete = params.delete === true;
-	const moveTarget = typeof params.move === "string" ? params.move.trim() : "";
-	const parsed = parseStructuredEditOps(params.edits);
-	if (parsed.error) {
-		return {
-			isError: true,
-			content: [{ type: "text" as const, text: `Error: ${parsed.error}` }],
-			details: undefined,
-		};
-	}
-
-	if (shouldDelete) {
-		if (parsed.ops && parsed.ops.length > 0) {
-			return {
-				isError: true,
-				content: [{ type: "text" as const, text: "Error: delete cannot be combined with edits." }],
-				details: undefined,
-			};
-		}
-		if (moveTarget) {
-			return {
-				isError: true,
-				content: [{ type: "text" as const, text: "Error: delete cannot be combined with move." }],
-				details: undefined,
-			};
-		}
-		try {
-			await unlink(sourcePath);
-			return {
-				content: [{ type: "text" as const, text: `Deleted ${relPath}` }],
-				details: undefined,
-			};
-		} catch (error) {
-			return {
-				isError: true,
-				content: [{ type: "text" as const, text: `Error: ${(error as Error).message}` }],
-				details: undefined,
-			};
-		}
-	}
-
-	let original = "";
-	try {
-		original = await readFile(sourcePath, "utf8");
-	} catch (error) {
-		return {
-			isError: true,
-			content: [{ type: "text" as const, text: `Error: ${(error as Error).message}` }],
-			details: undefined,
-		};
-	}
-
-	let next = original;
-	if (parsed.ops && parsed.ops.length > 0) {
-		const applied = applyStructuredEdits(original, parsed.ops);
-		if (applied.error || applied.text == null) {
-			return {
-				isError: true,
-				content: [{ type: "text" as const, text: `Error: ${applied.error ?? "failed to apply edits"}` }],
-				details: undefined,
-			};
-		}
-		next = applied.text;
-	}
-
-	try {
-		if (next !== original) {
-			await writeFile(sourcePath, next, "utf8");
-		}
-
-		let finalPath = sourcePath;
-		if (moveTarget) {
-			const resolvedMove = isAbsolute(moveTarget) ? moveTarget : resolve(cwd, moveTarget);
-			await mkdir(dirname(resolvedMove), { recursive: true });
-			await rename(sourcePath, resolvedMove);
-			finalPath = resolvedMove;
-		}
-
-		const changed = next !== original;
-		const diffResult = changed ? await makeDiffString(original, next) : undefined;
-		const message = [
-			changed ? `Applied ${parsed.ops?.length ?? 0} edit operation(s)` : "No content changes",
-			moveTarget ? `Moved to ${finalPath}` : "",
-		]
-			.filter(Boolean)
-			.join(". ");
-		return {
-			content: [{ type: "text" as const, text: message }],
-			details: diffResult
-				? ({ diff: diffResult.diff, firstChangedLine: diffResult.firstChangedLine } as EditToolDetails)
-				: undefined,
-		};
-	} catch (error) {
-		return {
-			isError: true,
-			content: [{ type: "text" as const, text: `Error: ${(error as Error).message}` }],
-			details: undefined,
-		};
-	}
+	return `${header}\n${body}`;
 }
 
 function countLines(text: string): number {
@@ -614,24 +202,6 @@ function renderTailPreview(text: string, maxLines: number, theme: RenderTheme): 
 	return output;
 }
 
-// ── Edit Fuzzy Fallback (Levenshtein=1, unique candidate) ─────────────────
-
-const FUZZY_EDIT_MIN_OLDTEXT_LEN = 5;
-const FUZZY_EDIT_MAX_FILE_CHARS = 400_000;
-
-interface EditLikeParams {
-	path?: unknown;
-	oldText?: unknown;
-	newText?: unknown;
-	[key: string]: unknown;
-}
-
-interface FuzzyCandidate {
-	text: string;
-	index: number;
-	distance: 1;
-}
-
 function getResultText(result: unknown): string {
 	if (!result || typeof result !== "object") return "";
 	const content = (result as { content?: unknown }).content;
@@ -643,101 +213,6 @@ function getResultText(result: unknown): string {
 		}
 	}
 	return "";
-}
-
-function distanceAtMostOne(a: string, b: string): 0 | 1 | 2 {
-	const la = a.length;
-	const lb = b.length;
-	if (Math.abs(la - lb) > 1) return 2;
-
-	let i = 0;
-	let j = 0;
-	let edits = 0;
-
-	while (i < la && j < lb) {
-		if (a[i] === b[j]) {
-			i++;
-			j++;
-			continue;
-		}
-
-		edits++;
-		if (edits > 1) return 2;
-
-		if (la > lb) i++;
-		else if (lb > la) j++;
-		else {
-			i++;
-			j++;
-		}
-	}
-
-	if (i < la || j < lb) edits++;
-	if (edits > 1) return 2;
-	return edits === 0 ? 0 : 1;
-}
-
-function findUniqueFuzzyCandidate(fileText: string, oldText: string): FuzzyCandidate | undefined {
-	const targetLen = oldText.length;
-	const lengths = [targetLen - 1, targetLen, targetLen + 1].filter((len) => len > 0);
-	let found: FuzzyCandidate | undefined;
-
-	for (const windowLen of lengths) {
-		if (windowLen > fileText.length) continue;
-		for (let i = 0; i <= fileText.length - windowLen; i++) {
-			const candidate = fileText.slice(i, i + windowLen);
-			const distance = distanceAtMostOne(oldText, candidate);
-			if (distance !== 1) continue;
-
-			if (found) {
-				return undefined;
-			}
-			found = { text: candidate, index: i, distance };
-		}
-	}
-
-	return found;
-}
-
-async function _resolveFuzzyCandidate(cwd: string, params: EditLikeParams): Promise<FuzzyCandidate | undefined> {
-	const path = typeof params.path === "string" ? params.path : "";
-	const oldText = typeof params.oldText === "string" ? params.oldText : "";
-	if (!path || !oldText) return undefined;
-	if (oldText.length < FUZZY_EDIT_MIN_OLDTEXT_LEN) return undefined;
-
-	const absolutePath = isAbsolute(path) ? path : resolve(cwd, path);
-	const fileText = await readFile(absolutePath, "utf8");
-	if (fileText.length > FUZZY_EDIT_MAX_FILE_CHARS) return undefined;
-
-	return findUniqueFuzzyCandidate(fileText, oldText);
-}
-
-function _shouldTryFuzzyEdit(params: EditLikeParams, result: unknown): boolean {
-	if (typeof params.oldText !== "string" || params.oldText.length < FUZZY_EDIT_MIN_OLDTEXT_LEN) return false;
-	const text = getResultText(result);
-	return text.includes("Could not find the exact text") && text.includes("The old text must match exactly");
-}
-
-function _withFuzzyNote<T>(result: T, note: string): T {
-	if (!result || typeof result !== "object") return result;
-	const out = { ...(result as Record<string, unknown>) };
-	const content = out.content;
-	if (!Array.isArray(content)) return result;
-
-	let replaced = false;
-	out.content = content.map((part) => {
-		if (replaced) return part;
-		if (part && typeof part === "object" && (part as { type?: unknown }).type === "text") {
-			const text = (part as { text?: unknown }).text;
-			if (typeof text === "string") {
-				replaced = true;
-				return { ...(part as Record<string, unknown>), text: `${note}\n${text}` };
-			}
-		}
-		return part;
-	});
-
-	return out as T;
 }
 
 // ── Side-by-Side Diff ──────────────────────────────────────────────────────
@@ -958,7 +433,7 @@ export default function (pi: ExtensionAPI) {
 		name: "read",
 		label: "read",
 		description:
-			"Read the contents of one or more files. Supports text files and images (jpg, png, gif, webp). For text files, output is truncated to 2000 lines or 50KB (whichever is hit first). Use offset/limit for large files. When path is an array, files are read in parallel and returned with per-file separators and line numbers.",
+			"Read the contents of one or more files. Supports text files and images (jpg, png, gif, webp). For text files, output is truncated to 2000 lines or 50KB (whichever is hit first). Use offset/limit for large files. When path is an array, files are read in parallel and returned with per-file separators.",
 		parameters: ReadParams,
 
 		async execute(toolCallId, params, signal, onUpdate, ctx) {
@@ -978,11 +453,9 @@ export default function (pi: ExtensionAPI) {
 
 			if (paths.length === 1) {
 				const single = await builtInRead.execute(toolCallId, { ...readParams, path: paths[0] }, signal, onUpdate);
-				const startLine = offset ?? 1;
-				const tagged = withHashTaggedReadResult(single, startLine);
 				const originalDetails = getObjectDetails(single.details as unknown);
 				return {
-					...tagged,
+					...single,
 					details: {
 						...originalDetails,
 						mode: "single-read",
@@ -1002,11 +475,10 @@ export default function (pi: ExtensionAPI) {
 			);
 
 			const hasError = results.some((result) => Boolean((result as { isError?: boolean }).isError));
-			const startLine = offset ?? 1;
 			const text = results
 				.map((result, index) => {
 					const body = getResultText(result) || "[No text output]";
-					return formatMultiReadSection(paths[index], index + 1, paths.length, body, startLine);
+					return formatMultiReadSection(paths[index], index + 1, paths.length, body);
 				})
 				.join("\n\n");
 
@@ -1135,36 +607,26 @@ export default function (pi: ExtensionAPI) {
 			const display = path ? theme.fg("accent", path) : theme.fg("toolOutput", "...");
 			const content = typeof args.content === "string" ? args.content : "";
 			const lines = content ? countLines(content) : 0;
+			const bytes = content ? Buffer.byteLength(content, "utf8") : 0;
 			let text = `${theme.fg("toolTitle", theme.bold("Write"))} ${display}`;
-			if (lines > 0) text += theme.fg("muted", ` (${lines} lines)`);
+			if (content) text += theme.fg("muted", ` (${lines} lines • ${bytes} bytes)`);
 			if (content) text += `\n${renderTailPreview(content, 6, theme)}`;
 			return new Text(text, 0, 0);
 		},
 
 		renderResult(result, { expanded }, theme) {
 			const details = getObjectDetails(result.details) as WriteRenderDetails & Record<string, unknown>;
-			const path = typeof details.path === "string" ? details.path : "";
 			const preview = typeof details.preview === "string" ? details.preview : "";
-			const lineCount = typeof details.lineCount === "number" ? details.lineCount : preview ? countLines(preview) : 0;
-			const byteCount =
-				typeof details.byteCount === "number" ? details.byteCount : preview ? Buffer.byteLength(preview, "utf8") : 0;
-			const header = `${theme.fg("toolTitle", theme.bold("Write"))} ${theme.fg("accent", shortenPath(path || "..."))}`;
-			const meta = theme.fg("muted", `${lineCount} lines • ${byteCount} bytes`);
 			const tc = result.content.find((c) => c.type === "text");
 			const summary = tc?.type === "text" && tc.text ? theme.fg("toolOutput", tc.text) : "";
 
 			if (!expanded) {
-				const previewText = preview ? renderTailPreview(preview, 6, theme) : "";
-				return new Text([header, meta, previewText, summary].filter(Boolean).join("\n"), 0, 0);
+				return new Text(summary, 0, 0);
 			}
 
 			const fullPreview = preview ? renderFullOutput(preview, theme) : new Text("", 0, 0);
 			const fullPreviewText = (fullPreview as unknown as { text?: string }).text ?? "";
-			return new Text(
-				[header, meta, fullPreviewText ? fullPreviewText.trimStart() : "", summary].filter(Boolean).join("\n"),
-				0,
-				0,
-			);
+			return new Text([fullPreviewText ? fullPreviewText.trimStart() : "", summary].filter(Boolean).join("\n"), 0, 0);
 		},
 	});
 
@@ -1172,12 +634,11 @@ export default function (pi: ExtensionAPI) {
 	pi.registerTool({
 		name: "edit",
 		label: "edit",
-		description:
-			"Edit files via line-tag operations: path + edits[{ op, pos, end, lines }], with optional delete/move. pos/end must use the exact LINE#ID tag from read output (for example: 33#BX).",
+		description: getBuiltInTools(process.cwd()).edit.description,
 		parameters: EditParams,
 
-		async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
-			return executeStructuredEdit(ctx.cwd, params as Record<string, unknown>);
+		async execute(toolCallId, params, signal, _onUpdate, ctx) {
+			return getBuiltInTools(ctx.cwd).edit.execute(toolCallId, params, signal);
 		},
 
 		renderCall(args, theme) {
