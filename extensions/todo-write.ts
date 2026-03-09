@@ -67,6 +67,7 @@ const TODO_SPINNER_INTERVAL_MS = 120;
 let todoWidgetTimer: ReturnType<typeof setInterval> | undefined;
 const todoWidgetHideTimerByKey = new Map<string, ReturnType<typeof setTimeout>>();
 const todoWidgetMetaStore = new Map<string, { completedAt?: number; completedTurn?: number }>();
+const todoWidgetAgentRunningStore = new Map<string, boolean>();
 const todoTurnStore = new Map<string, number>();
 const TODO_HIDE_COMPLETED_AFTER_TURNS = 2;
 const TODO_STATE_ENTRY_TYPE = "todo-write-state";
@@ -387,6 +388,11 @@ function incrementTodoTurn(ctx: Pick<ExtensionContext, "cwd" | "sessionManager">
 	todoTurnStore.set(key, getTodoTurn(key) + 1);
 }
 
+function setTodoWidgetAgentRunning(ctx: Pick<ExtensionContext, "cwd" | "sessionManager">, running: boolean): void {
+	const key = getTodoStateKey(ctx);
+	todoWidgetAgentRunningStore.set(key, running);
+}
+
 async function syncTodoWidget(ctx: ExtensionContext): Promise<void> {
 	if (!ctx.hasUI) return;
 
@@ -412,7 +418,7 @@ async function syncTodoWidget(ctx: ExtensionContext): Promise<void> {
 
 	ctx.ui.setWidget(TODO_WIDGET_KEY, (tui, theme) => {
 		const renderedLines = [...lines];
-		const hasRunning = hasInProgressTask(state);
+		const hasRunning = hasInProgressTask(state) && (todoWidgetAgentRunningStore.get(key) ?? false);
 		const content = new Text("", 0, 0);
 
 		clearTodoWidgetTimer();
@@ -427,8 +433,11 @@ async function syncTodoWidget(ctx: ExtensionContext): Promise<void> {
 					TODO_SPINNER_FRAMES[Math.floor(Date.now() / TODO_SPINNER_INTERVAL_MS) % TODO_SPINNER_FRAMES.length] ?? "•";
 				const styledLines = renderedLines.map((line) => {
 					if (line.startsWith("→ ")) {
-						const runningLine = `${spinner} ${line.slice(2)}`;
-						return theme.bold(theme.fg("accent", truncateToWidth(runningLine, lineWidth)));
+						if (hasRunning) {
+							const runningLine = `${spinner} ${line.slice(2)}`;
+							return theme.bold(theme.fg("accent", truncateToWidth(runningLine, lineWidth)));
+						}
+						return theme.fg("accent", truncateToWidth(`○ ${line.slice(2)}`, lineWidth));
 					}
 					if (line.startsWith("~~")) {
 						return theme.fg("dim", theme.strikethrough(truncateToWidth(line.slice(2), lineWidth)));
@@ -489,22 +498,36 @@ export default function todoWriteExtension(pi: ExtensionAPI): void {
 		};
 	});
 
+	pi.on("agent_start", async (_event, ctx) => {
+		setTodoWidgetAgentRunning(ctx, true);
+		await syncTodoWidget(ctx);
+	});
+
+	pi.on("agent_end", async (_event, ctx) => {
+		setTodoWidgetAgentRunning(ctx, false);
+		await syncTodoWidget(ctx);
+	});
+
 	pi.on("session_start", async (_event, ctx) => {
+		setTodoWidgetAgentRunning(ctx, false);
 		restoreTodoWriteState(ctx);
 		await syncTodoWidget(ctx);
 	});
 
 	pi.on("session_switch", async (_event, ctx) => {
+		setTodoWidgetAgentRunning(ctx, false);
 		restoreTodoWriteState(ctx);
 		await syncTodoWidget(ctx);
 	});
 
 	pi.on("session_fork", async (_event, ctx) => {
+		setTodoWidgetAgentRunning(ctx, false);
 		restoreTodoWriteState(ctx);
 		await syncTodoWidget(ctx);
 	});
 
 	pi.on("session_tree", async (_event, ctx) => {
+		setTodoWidgetAgentRunning(ctx, false);
 		restoreTodoWriteState(ctx);
 		await syncTodoWidget(ctx);
 	});
@@ -540,6 +563,7 @@ export default function todoWriteExtension(pi: ExtensionAPI): void {
 		clearTodoWidgetTimer();
 		clearTodoWidgetHideTimer(key);
 		todoWidgetMetaStore.delete(key);
+		todoWidgetAgentRunningStore.delete(key);
 		todoTurnStore.delete(key);
 		if (!ctx.hasUI) return;
 		ctx.ui.setWidget(TODO_WIDGET_KEY, undefined);
