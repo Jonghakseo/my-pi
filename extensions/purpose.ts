@@ -85,10 +85,10 @@ function readPurposeFromSession(ctx: ExtensionContext): string {
 	return "";
 }
 
-async function detectPurposeFromMessage(userMessage: string): Promise<string> {
+async function detectPurposeFromHistory(historyText: string): Promise<string> {
 	return new Promise((resolve) => {
 		const systemPrompt =
-			"사용자 메시지를 분석해서 세션의 목적을 20자 이내 한 줄로 추출해. 오직 목적 텍스트만 출력하고, 설명이나 다른 텍스트는 절대 출력하지 마.";
+			"대화 히스토리를 분석해서 이 세션의 핵심 목적을 20자 이내 한 줄로 추출해. 오직 목적 텍스트만 출력하고, 설명이나 다른 텍스트는 절대 출력하지 마.";
 
 		const args = [
 			"--no-extensions",
@@ -98,7 +98,7 @@ async function detectPurposeFromMessage(userMessage: string): Promise<string> {
 			"--system-prompt",
 			systemPrompt,
 			"-p",
-			`사용자 메시지: ${userMessage.slice(0, 500)}`,
+			historyText.slice(0, 2000),
 		];
 
 		let output = "";
@@ -208,47 +208,81 @@ export default function purposeExtension(pi: ExtensionAPI) {
 		},
 	});
 
-	// ── Auto Purpose (async) ──────────────────────────────────────
+	// ── Auto Purpose (every 5 user messages) ─────────────────────
 
-	pi.on("before_agent_start", async (event, ctx) => {
+	const AUTO_PURPOSE_INTERVAL = 5;
+	let userMessageCount = 0;
+	let purposeDetectionInFlight = false;
+
+	pi.on("before_agent_start", async (_event, ctx) => {
 		// Do not auto-generate purpose in subagent sessions
 		if (isSubagentSession(ctx)) return;
 
-		// purpose가 이미 있으면 스킵
-		if (hasPurpose()) return;
+		userMessageCount++;
 
-		const text = event.prompt.trim();
-		if (!text) return;
+		// 5 메시지마다 purpose 존재 확인 → 없으면 감지 시도
+		if (userMessageCount % AUTO_PURPOSE_INTERVAL !== 0) return;
+		if (hasPurpose()) return;
+		if (purposeDetectionInFlight) return;
+
+		// 대화 히스토리에서 user/assistant 메시지 추출
+		const branch = ctx.sessionManager.getBranch();
+		const lines: string[] = [];
+		for (const entry of branch) {
+			if (!("type" in entry) || entry.type !== "message") continue;
+			const msg = (entry as { message?: { role?: string; content?: unknown } }).message;
+			if (!msg?.role) continue;
+			if (msg.role !== "user" && msg.role !== "assistant") continue;
+			const text = typeof msg.content === "string"
+				? msg.content
+				: Array.isArray(msg.content)
+					? msg.content.filter((c: any) => c.type === "text").map((c: any) => c.text).join(" ")
+					: "";
+			if (!text) continue;
+			const label = msg.role === "user" ? "User" : "Assistant";
+			lines.push(`${label}: ${text.slice(0, 200)}`);
+		}
+
+		if (lines.length === 0) return;
+
+		purposeDetectionInFlight = true;
 
 		// Fire-and-forget: 비동기로 purpose 감지 후 설정
 		(async () => {
 			try {
-				const detected = await detectPurposeFromMessage(text);
-				if (detected) {
+				const detected = await detectPurposeFromHistory(lines.join("\n"));
+				if (detected && !hasPurpose()) {
 					persistPurpose(ctx, detected, "auto");
 				}
 			} catch {
 				// 실패 시 무시
+			} finally {
+				purposeDetectionInFlight = false;
 			}
 		})();
 	});
 
 	// ── Lifecycle ─────────────────────────────────────────────────
 
-	pi.on("session_start", async (_event, ctx) => {
+	const resetAndSync = (ctx: ExtensionContext) => {
+		userMessageCount = 0;
 		syncPurpose(ctx);
+	};
+
+	pi.on("session_start", async (_event, ctx) => {
+		resetAndSync(ctx);
 	});
 
 	pi.on("session_switch", async (_event, ctx) => {
-		syncPurpose(ctx);
+		resetAndSync(ctx);
 	});
 
 	pi.on("session_fork", async (_event, ctx) => {
-		syncPurpose(ctx);
+		resetAndSync(ctx);
 	});
 
 	pi.on("session_tree", async (_event, ctx) => {
-		syncPurpose(ctx);
+		resetAndSync(ctx);
 	});
 
 	pi.on("session_shutdown", async (_event, ctx) => {
