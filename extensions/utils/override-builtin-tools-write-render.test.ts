@@ -1,14 +1,20 @@
 import { describe, expect, it } from "vitest";
 import overrideBuiltinTools from "../override-builtin-tools.ts";
 
+interface WidthAwareComponent {
+	render(width: number): string[];
+}
+
+type RenderResult = WidthAwareComponent | { text?: string };
+
 type RegisteredTool = {
 	name: string;
-	renderCall?: (args: Record<string, unknown>, theme: TestTheme) => { text?: string };
+	renderCall?: (args: Record<string, unknown>, theme: TestTheme) => RenderResult;
 	renderResult?: (
 		result: { content: Array<{ type: string; text?: string }>; details?: unknown },
 		options: { expanded: boolean },
 		theme: TestTheme,
-	) => { text?: string };
+	) => RenderResult;
 };
 
 type TestTheme = {
@@ -21,6 +27,14 @@ function createTheme(): TestTheme {
 		fg: (_color, text) => text,
 		bold: (text) => text,
 	};
+}
+
+/** Extract text from a render result (supports both Text and TruncatedText). */
+function getText(result: RenderResult): string {
+	if (typeof (result as WidthAwareComponent).render === "function") {
+		return (result as WidthAwareComponent).render(500).join("\n");
+	}
+	return (result as { text?: string }).text ?? "";
 }
 
 function getWriteTool(): RegisteredTool {
@@ -43,21 +57,22 @@ describe("override-builtin-tools write renderer", () => {
 		const theme = createTheme();
 		const content = ["alpha", "beta", "gamma"].join("\n");
 
-		const callText = writeTool.renderCall?.({ path: "docs/test.md", content }, theme).text ?? "";
-		const resultText =
-			writeTool.renderResult?.(
-				{
-					content: [],
-					details: {
-						path: "docs/test.md",
-						lineCount: 3,
-						byteCount: Buffer.byteLength(content, "utf8"),
-						preview: content,
-					},
+		const callResult = writeTool.renderCall?.({ path: "docs/test.md", content }, theme);
+		const callText = callResult ? getText(callResult) : "";
+		const resultObj = writeTool.renderResult?.(
+			{
+				content: [],
+				details: {
+					path: "docs/test.md",
+					lineCount: 3,
+					byteCount: Buffer.byteLength(content, "utf8"),
+					preview: content,
 				},
-				{ expanded: false },
-				theme,
-			).text ?? "";
+			},
+			{ expanded: false },
+			theme,
+		);
+		const resultText = resultObj ? getText(resultObj) : "";
 
 		expect(callText).toContain("Write docs/test.md");
 		expect(callText).toContain("3 lines");
@@ -70,20 +85,20 @@ describe("override-builtin-tools write renderer", () => {
 		const theme = createTheme();
 		const content = ["first", "second", "third"].join("\n");
 
-		const resultText =
-			writeTool.renderResult?.(
-				{
-					content: [{ type: "text", text: "Successfully wrote file." }],
-					details: {
-						path: "docs/test.md",
-						lineCount: 3,
-						byteCount: Buffer.byteLength(content, "utf8"),
-						preview: content,
-					},
+		const resultObj = writeTool.renderResult?.(
+			{
+				content: [{ type: "text", text: "Successfully wrote file." }],
+				details: {
+					path: "docs/test.md",
+					lineCount: 3,
+					byteCount: Buffer.byteLength(content, "utf8"),
+					preview: content,
 				},
-				{ expanded: true },
-				theme,
-			).text ?? "";
+			},
+			{ expanded: true },
+			theme,
+		);
+		const resultText = resultObj ? getText(resultObj) : "";
 
 		expect(resultText).toContain("first");
 		expect(resultText).toContain("second");
