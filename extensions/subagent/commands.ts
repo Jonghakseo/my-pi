@@ -27,6 +27,12 @@ import {
 	SUBVIEW_OVERLAY_WIDTH,
 } from "./constants.js";
 import { formatUsageStats, truncateLines } from "./format.js";
+import {
+	clearPendingGroupCompletion,
+	consumePendingGroupCompletionsForSession,
+	evictStalePendingGroupCompletions,
+	upsertPendingGroupCompletion,
+} from "./group-pending.js";
 import { enqueueSubagentInvocation } from "./invocation-queue.js";
 import { readSessionReplayItems, SubagentSessionReplayOverlay } from "./replay.js";
 import { invokeWithAutoRetry, MAX_SUBAGENT_AUTO_RETRIES } from "./retry.js";
@@ -640,22 +646,21 @@ function restoreRunsFromSession(store: SubagentStore, ctx: any, pi?: ExtensionAP
 	}
 
 	// ── Merge global live runs (origin session only) ────────────────────
-	// Only re-integrate runs that originated from the current session.
-	// Runs from other sessions stay hidden — they will appear when the
-	// user switches back to their origin session.
+	// Re-integrate all non-removed runs that originated from the current session
+	// so grouped batch/chain progress remains visible across session switches.
 	const mergeSessionFile = currentSessionFile;
 	if (mergeSessionFile) {
 		for (const [runId, entry] of store.globalLiveRuns) {
 			if (entry.originSessionFile !== mergeSessionFile) continue;
-			if (entry.runState.status === "running" && !entry.runState.removed) {
+			if (!entry.runState.removed) {
 				store.commandRuns.set(runId, entry.runState);
 			}
 		}
 	}
 
 	// ── Deliver pending completions ─────────────────────────────────────
-	// If a run finished while the user was in a different session and the
-	// user has now switched back to the origin session, deliver the stored
+	// If a run/batch/pipeline finished while the user was in a different session
+	// and the user has now switched back to the origin session, deliver the stored
 	// completion message via pi.sendMessage().
 	if (pi && currentSessionFile) {
 		for (const [runId, entry] of store.globalLiveRuns) {
@@ -663,12 +668,61 @@ function restoreRunsFromSession(store: SubagentStore, ctx: any, pi?: ExtensionAP
 			if (entry.originSessionFile === currentSessionFile) {
 				try {
 					pi.sendMessage(entry.pendingCompletion.message, entry.pendingCompletion.options);
+					store.commandRuns.set(runId, entry.runState);
+					store.globalLiveRuns.delete(runId);
 				} catch {
-					/* ignore delivery errors */
+					/* keep pending completion for later retry */
 				}
-				// Restore the completed run state into commandRuns for display.
-				store.commandRuns.set(runId, entry.runState);
-				store.globalLiveRuns.delete(runId);
+			}
+		}
+
+		for (const [batchId, batch] of store.batchGroups) {
+			if (!batch.pendingCompletion) continue;
+			if (batch.originSessionFile !== currentSessionFile) continue;
+			try {
+				pi.sendMessage(batch.pendingCompletion.message, batch.pendingCompletion.options);
+				clearPendingGroupCompletion("batch", batchId);
+				for (const runId of batch.runIds) {
+					store.globalLiveRuns.delete(runId);
+				}
+				store.batchGroups.delete(batchId);
+			} catch {
+				upsertPendingGroupCompletion({
+					scope: "batch",
+					groupId: batchId,
+					originSessionFile: batch.originSessionFile,
+					runIds: batch.runIds,
+					pendingCompletion: batch.pendingCompletion,
+				});
+			}
+		}
+
+		for (const [pipelineId, pipeline] of store.pipelines) {
+			if (!pipeline.pendingCompletion) continue;
+			if (pipeline.originSessionFile !== currentSessionFile) continue;
+			try {
+				pi.sendMessage(pipeline.pendingCompletion.message, pipeline.pendingCompletion.options);
+				clearPendingGroupCompletion("chain", pipelineId);
+				for (const runId of pipeline.stepRunIds) {
+					store.globalLiveRuns.delete(runId);
+				}
+				store.pipelines.delete(pipelineId);
+			} catch {
+				upsertPendingGroupCompletion({
+					scope: "chain",
+					groupId: pipelineId,
+					originSessionFile: pipeline.originSessionFile,
+					runIds: pipeline.stepRunIds,
+					pendingCompletion: pipeline.pendingCompletion,
+				});
+			}
+		}
+
+		for (const pending of consumePendingGroupCompletionsForSession(currentSessionFile)) {
+			try {
+				pi.sendMessage(pending.pendingCompletion.message, pending.pendingCompletion.options);
+			} catch {
+				upsertPendingGroupCompletion(pending);
 			}
 		}
 	}
@@ -680,11 +734,31 @@ function restoreRunsFromSession(store: SubagentStore, ctx: any, pi?: ExtensionAP
 	for (const [runId, entry] of store.globalLiveRuns) {
 		if (!entry.pendingCompletion) continue;
 		if (entry.runState.status === "running") continue;
-		const age = Date.now() - (entry.runState.startedAt + entry.runState.elapsedMs);
-		if (age > STALE_PENDING_COMPLETION_MS) {
+		const pendingSince = entry.pendingCompletion.createdAt ?? (entry.runState.startedAt + entry.runState.elapsedMs);
+		if (Date.now() - pendingSince > STALE_PENDING_COMPLETION_MS) {
 			store.globalLiveRuns.delete(runId);
 		}
 	}
+
+	for (const [batchId, batch] of store.batchGroups) {
+		if (!batch.pendingCompletion) continue;
+		const pendingSince = batch.pendingCompletion.createdAt ?? batch.createdAt;
+		if (Date.now() - pendingSince > STALE_PENDING_COMPLETION_MS) {
+			clearPendingGroupCompletion("batch", batchId);
+			store.batchGroups.delete(batchId);
+		}
+	}
+
+	for (const [pipelineId, pipeline] of store.pipelines) {
+		if (!pipeline.pendingCompletion) continue;
+		const pendingSince = pipeline.pendingCompletion.createdAt ?? pipeline.createdAt;
+		if (Date.now() - pendingSince > STALE_PENDING_COMPLETION_MS) {
+			clearPendingGroupCompletion("chain", pipelineId);
+			store.pipelines.delete(pipelineId);
+		}
+	}
+
+	evictStalePendingGroupCompletions(STALE_PENDING_COMPLETION_MS);
 
 	// Fallback: if this session has no subagent markers at all, but we recently
 	// had in-memory runs for the same session file, reuse that snapshot so
@@ -759,7 +833,7 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 		name: "subagent",
 		label: "Subagent",
 		description:
-			'CLI-style subagent delegation interface. Always start with `subagent help` to learn available commands, then execute run/continue/runs/status/detail/abort/remove via `{ command: "subagent ..." }`. For async launches, wait for automatic follow-up instead of polling status/detail in loops.',
+			'CLI-style subagent delegation interface. Always start with `subagent help` to learn available commands, then execute run/continue/batch/chain/runs/status/detail/abort/remove via `{ command: "subagent ..." }`. After any async launch, stop making subagent calls and wait for automatic follow-up unless the user explicitly asks for manual inspection.',
 		parameters: SubagentParams,
 
 		execute: createSubagentToolExecute(pi, store) as any,
@@ -1214,6 +1288,7 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 						globalEntry.pendingCompletion = {
 							message: completionMessage,
 							options: completionOptions,
+							createdAt: Date.now(),
 						};
 						// Re-insert into commandRuns so the widget shows completion.
 						store.commandRuns.set(runId, runState);
@@ -1278,6 +1353,7 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 						cmdErrGlobalEntry.pendingCompletion = {
 							message: cmdErrorMessage,
 							options: { deliverAs: "followUp" },
+							createdAt: Date.now(),
 						};
 						store.commandRuns.set(runId, runState);
 					}

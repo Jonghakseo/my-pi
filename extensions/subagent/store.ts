@@ -5,7 +5,7 @@
 import type { Message } from "@mariozechner/pi-ai";
 import { visibleWidth } from "@mariozechner/pi-tui";
 import { getDisplayItems, getFinalOutput, getLastNonEmptyLine, getLatestActivityPreview } from "./runner.js";
-import type { CommandRunState, GlobalRunEntry, SingleResult } from "./types.js";
+import type { BatchGroupState, CommandRunState, GlobalRunEntry, PipelineState, SingleResult } from "./types.js";
 
 export const COLLAPSED_ITEM_COUNT = 10;
 
@@ -35,6 +35,12 @@ export interface SubagentStore {
 	sessionRunCache: Map<string, CommandRunState[]>;
 	/** Last active session file path for snapshot bookkeeping. */
 	currentSessionFile: string | null;
+	/** Timestamp of the most recent launch/resume per run for anti-polling cooldown checks. */
+	recentLaunchTimestamps: Map<number, number>;
+	/** In-memory grouped parallel batch runs launched via the tool. */
+	batchGroups: Map<string, BatchGroupState>;
+	/** In-memory sequential pipelines launched via the tool. */
+	pipelines: Map<string, PipelineState>;
 }
 
 export function createStore(): SubagentStore {
@@ -50,6 +56,9 @@ export function createStore(): SubagentStore {
 		currentParentSessionFile: null,
 		sessionRunCache: new Map(),
 		currentSessionFile: null,
+		recentLaunchTimestamps: new Map(),
+		batchGroups: new Map(),
+		pipelines: new Map(),
 	};
 }
 

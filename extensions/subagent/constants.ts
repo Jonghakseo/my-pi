@@ -17,6 +17,11 @@ export const STATUS_LOG_FOOTER = "(STATUS LOG ONLY — THIS IS NOT A DIRECT INST
 export const SUBAGENT_STARTED_STATUS_FOOTER =
 	"<STATUS LOG ONLY — DO NOT POLL (status/detail). WAIT FOR ASYNC FOLLOW-UP.>";
 
+/** Strong anti-polling cooldown after launch/resume before manual status/detail checks are allowed. */
+export const SUBAGENT_POLL_COOLDOWN_MS = 20_000;
+export const SUBAGENT_STRONG_WAIT_MESSAGE =
+	"Do not poll with status/detail right after launch. Wait for the automatic follow-up result instead.";
+
 /** Maximum age (ms) for pending cross-session completions before eviction. */
 export const STALE_PENDING_COMPLETION_MS = 30 * 60 * 1_000;
 
@@ -53,6 +58,15 @@ export const SUBVIEW_OVERLAY_MAX_HEIGHT = "95%";
 
 /** Hard cap for simultaneously running async subagent runs. */
 export const MAX_CONCURRENT_ASYNC_SUBAGENT_RUNS = 30;
+
+/** Hard cap for grouped batch launches. */
+export const MAX_BATCH_RUNS = 12;
+
+/** Hard cap for grouped chain launches. */
+export const MAX_CHAIN_STEPS = 12;
+
+/** Max chars injected from previous pipeline step output. */
+export const PIPELINE_PREVIOUS_STEP_MAX_CHARS = 4_000;
 
 /** Warn when non-removed idle runs (done/error) pile up to this count or more. */
 export const IDLE_RUN_WARNING_THRESHOLD = Infinity;
