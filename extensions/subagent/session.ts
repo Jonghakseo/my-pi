@@ -5,6 +5,7 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
+import { PIPELINE_PREVIOUS_STEP_MAX_CHARS } from "./constants.js";
 
 const SUBAGENT_SESSION_DIR = path.join(os.homedir(), ".pi", "agent", "sessions", "subagents");
 
@@ -163,14 +164,15 @@ export function buildMainContextText(ctx: any): { text: string; totalMessageCoun
 export function wrapTaskWithMainContext(
 	task: string,
 	contextText: string,
-	options?: { mainSessionFile?: string; totalMessageCount?: number },
+	options?: { mainSessionFile?: string; totalMessageCount?: number; referenceSections?: string[] },
 ): string {
 	const rawSessionFile = options?.mainSessionFile;
 	const sessionFile =
 		typeof rawSessionFile === "string" ? rawSessionFile.replace(/[\r\n\t]+/g, "").trim() || undefined : undefined;
 	const totalMessageCount = options?.totalMessageCount;
+	const referenceSections = (options?.referenceSections ?? []).map((section) => section.trim()).filter(Boolean);
 
-	if (!contextText && !sessionFile) return task;
+	if (!contextText && !sessionFile && referenceSections.length === 0) return task;
 
 	const sections: string[] = [];
 	sections.push(
@@ -209,6 +211,7 @@ export function wrapTaskWithMainContext(
 		);
 		sections.push(logLines.join("\n"));
 	}
+	sections.push(...referenceSections);
 	sections.push(`[REQUEST — AUTHORITATIVE]\n${task}`);
 
 	return sections.join("\n\n");
@@ -259,6 +262,46 @@ export function stripTaskEchoFromMainContext(contextText: string, task: string):
 	});
 
 	return filtered.join("\n");
+}
+
+function truncatePipelineReference(text: string): string {
+	if (!text) return "";
+	if (text.length <= PIPELINE_PREVIOUS_STEP_MAX_CHARS) return text;
+	return `${text.slice(0, PIPELINE_PREVIOUS_STEP_MAX_CHARS)}\n... [truncated]`;
+}
+
+export function buildPipelineReferenceSection(
+	previousStepOutput: string,
+	metadata?: { agent?: string; task?: string; stepNumber?: number; totalSteps?: number },
+): string {
+	const reference = truncatePipelineReference(previousStepOutput).trim();
+	if (!reference) return "";
+
+	return [
+		"[PIPELINE PREVIOUS STEP — REFERENCE ONLY]",
+		metadata?.stepNumber !== undefined && metadata?.totalSteps !== undefined
+			? `Previous step: ${metadata.stepNumber}/${metadata.totalSteps}`
+			: undefined,
+		metadata?.agent ? `Agent: ${metadata.agent}` : undefined,
+		metadata?.task ? `Task: ${metadata.task}` : undefined,
+		"Output:",
+		reference,
+	]
+		.filter(Boolean)
+		.join("\n");
+}
+
+export function wrapTaskWithPipelineContext(
+	task: string,
+	previousStepOutput: string,
+	metadata?: { agent?: string; task?: string; stepNumber?: number; totalSteps?: number },
+): string {
+	const referenceSection = buildPipelineReferenceSection(previousStepOutput, metadata);
+	if (!referenceSection) return task;
+
+	return wrapTaskWithMainContext(task, "", {
+		referenceSections: [referenceSection],
+	});
 }
 
 export function writePromptToTempFile(agentName: string, prompt: string): { dir: string; filePath: string } {

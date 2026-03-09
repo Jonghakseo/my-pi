@@ -37,8 +37,13 @@ export interface SingleResult {
 	sessionFile?: string;
 }
 
+export interface BatchOrChainItem {
+	agent: string;
+	task: string;
+}
+
 export interface SubagentDetails {
-	mode: "single";
+	mode: "single" | "batch" | "chain";
 	inheritMainContext: boolean;
 	projectAgentsDir: string | null;
 	results: SingleResult[];
@@ -71,6 +76,12 @@ export interface CommandRunState {
 	lastRetryReason?: string;
 	/** Origin of this run: "tool" = LLM called subagent tool, "command" = user slash-command / >> shorthand. */
 	source?: "tool" | "command";
+	/** Optional batch group id for tool-level grouped parallel launches. */
+	batchId?: string;
+	/** Optional pipeline id for tool-level sequential launches. */
+	pipelineId?: string;
+	/** Zero-based step index inside batch/pipeline metadata. */
+	pipelineStepIndex?: number;
 }
 
 export interface SessionReplayItem {
@@ -107,6 +118,7 @@ export interface PendingCompletion {
 		deliverAs: "followUp";
 		triggerTurn?: boolean;
 	};
+	createdAt: number;
 }
 
 /**
@@ -122,11 +134,40 @@ export interface GlobalRunEntry {
 	pendingCompletion?: PendingCompletion;
 }
 
+export interface BatchGroupState {
+	batchId: string;
+	runIds: number[];
+	completedRunIds: Set<number>;
+	failedRunIds: Set<number>;
+	originSessionFile: string;
+	createdAt: number;
+	pendingResults: Map<number, string>;
+	pendingCompletion?: PendingCompletion;
+}
+
+export interface PipelineStepResult {
+	runId: number;
+	agent: string;
+	task: string;
+	output: string;
+	status: "done" | "error";
+}
+
+export interface PipelineState {
+	pipelineId: string;
+	currentIndex: number;
+	stepRunIds: number[];
+	stepResults: PipelineStepResult[];
+	originSessionFile: string;
+	createdAt: number;
+	pendingCompletion?: PendingCompletion;
+}
+
 export const ListAgentsParams = Type.Object({});
 
 export const SubagentParams = Type.Object({
 	command: Type.String({
 		description:
-			"CLI-style subagent command. Always start with 'subagent help' to discover commands. Notes: 'continue' reuses an existing run's session but does NOT auto-sync main context; run/continue are async-only at the CLI, and after launch do NOT poll status/detail in loops—wait for automatic follow-up and use status/detail only for user-requested or occasional manual checks. Examples: 'subagent run planner --main -- <task>', 'subagent continue 22 -- 아까 진행하던거 마무리해서 커밋해줘', 'subagent runs', 'subagent status 22', 'subagent abort 22', 'subagent remove all'.",
+			"CLI-style subagent command. Always start with 'subagent help' to discover commands. Supported launch forms: run, continue, batch, and chain. After any launch, stop making subagent calls and wait for automatic follow-up unless the user explicitly asks for manual inspection. Examples: 'subagent run planner --main -- <task>', 'subagent continue 22 -- 아까 진행하던거 마무리해서 커밋해줘', 'subagent batch --main --agent worker --task \"A\" --agent reviewer --task \"B\"', 'subagent chain --main --agent worker --task \"구현\" --agent reviewer --task \"리뷰\"', 'subagent runs', 'subagent status 22', 'subagent abort 22', 'subagent remove all'.",
 	}),
 });

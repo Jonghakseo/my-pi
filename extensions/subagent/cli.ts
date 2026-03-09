@@ -4,6 +4,13 @@
  * LLM-facing interface: { command: "subagent ..." }
  */
 
+type ContextMode = "main" | "isolated";
+
+type BatchOrChainBlock = {
+	agent: string;
+	task: string;
+};
+
 export type SubagentCliParseResult =
 	| { type: "help" }
 	| { type: "agents" }
@@ -28,10 +35,15 @@ export const SUBAGENT_CLI_HELP_TEXT = [
 	"   • continue: Resume an EXISTING run's session by its runId; reuses conversation context",
 	"              but does NOT automatically sync the latest main context (provide it explicitly if needed)",
 	"",
-	"3. Follow-up policy:",
-	"   • After a launch, do NOT repeatedly call `subagent status/detail` to poll.",
-	"   • Wait for automatic completion/failure/cancellation follow-up messages.",
-	"   • Use `status/detail` only when the USER explicitly asks (or for one-off manual checks).",
+	"3. BATCH vs CHAIN:",
+	"   • batch:    Launch MULTIPLE independent runs in parallel",
+	"   • chain:    Launch MULTIPLE dependent steps sequentially; previous output is passed as reference",
+	"              Each block must be exactly: --agent <agent> --task <task>",
+	"",
+	"4. Follow-up policy:",
+	"   • After a launch, do NOT call `subagent status/detail` to poll right away.",
+	"   • Stop making subagent calls and wait for the automatic completion/failure follow-up.",
+	"   • Use `status/detail` only when the USER explicitly asks (or for one-off manual inspection).",
 	"",
 	"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
 	"COMMANDS",
@@ -47,6 +59,8 @@ export const SUBAGENT_CLI_HELP_TEXT = [
 	"  Execution:",
 	"    subagent run <agent> [--main|--isolated] -- <task>",
 	"    subagent continue <runId> [--agent <agent>] [--main|--isolated] -- <task>",
+	"    subagent batch [--main|--isolated] --agent <agent> --task <task> --agent <agent> --task <task> ...",
+	"    subagent chain [--main|--isolated] --agent <agent> --task <task> --agent <agent> --task <task> ...",
 	"",
 	"  Cleanup:",
 	"    subagent abort <runId|runId,runId|all>",
@@ -62,6 +76,12 @@ export const SUBAGENT_CLI_HELP_TEXT = [
 	"  Continue existing run (runId 22):",
 	"    subagent continue 22 -- 아까 진행하던거 마무리해서 커밋해줘",
 	"",
+	"  Parallel batch:",
+	"    subagent batch --main --agent worker --task \"A 기능 구현\" --agent reviewer --task \"B 코드 리뷰\"",
+	"",
+	"  Sequential chain:",
+	"    subagent chain --main --agent worker --task \"로그인 API 구현\" --agent reviewer --task \"위 결과 리뷰\"",
+	"",
 	"  Manual status & cleanup (occasional checks):",
 	"    subagent runs",
 	"    subagent status 22",
@@ -73,6 +93,7 @@ export const SUBAGENT_CLI_HELP_TEXT = [
 	"",
 	"💡 Tips:",
 	"  • Runs notify you when done automatically.",
+	"  • Batch waits for the whole group; chain waits for the whole pipeline.",
 	"  • After launch, end the turn and wait for follow-up (no status/detail polling loops).",
 	"  • Use `--main` to share context with the main agent; `--isolated` for a fresh scope.",
 	"  • When using `continue`, the main context is NOT auto-synced. Include recent changes in the task text.",
@@ -197,7 +218,7 @@ function parseRunLike(
 
 	let runId: number | undefined;
 	let agent: string | undefined;
-	let contextMode: "main" | "isolated" | undefined;
+	let contextMode: ContextMode | undefined;
 
 	for (let i = 0; i < head.length; i++) {
 		const token = head[i];
@@ -251,7 +272,6 @@ function parseRunLike(
 			};
 		}
 
-		// run
 		if (!agent) {
 			agent = token;
 			continue;
@@ -279,6 +299,98 @@ function parseRunLike(
 	return { params };
 }
 
+function parseBatchOrChain(
+	verb: "batch" | "chain",
+	args: string[],
+): { params: Record<string, unknown> } | { error: string } {
+	let contextMode: ContextMode | undefined;
+	const blocks: BatchOrChainBlock[] = [];
+	let index = 0;
+	let sawBlock = false;
+
+	while (index < args.length) {
+		const token = args[index];
+
+		if (!sawBlock && (token === "--main" || token === "--isolated")) {
+			contextMode = token === "--main" ? "main" : "isolated";
+			index++;
+			continue;
+		}
+
+		if (token !== "--agent") {
+			if (token === "--task") {
+				return {
+					error:
+						`❌ ${verb} blocks must start with \`--agent <agent> --task <task>\`\n\n` +
+						`Found \`--task\` before \`--agent\`.\n\n` +
+						`✓ Example: subagent ${verb} --main --agent worker --task \"A 작업\" --agent reviewer --task \"B 작업\"`,
+				};
+			}
+			if (token.startsWith("--")) {
+				return {
+					error:
+						`❌ Unknown or misplaced option: ${token}\n\n` +
+						`Valid ${verb} syntax: subagent ${verb} [--main|--isolated] --agent <agent> --task <task> --agent <agent> --task <task> ...`,
+				};
+			}
+			return {
+				error:
+					`❌ ${verb} does not allow free text outside \`--task\` blocks\n\n` +
+					`Unexpected token: ${token}\n\n` +
+					`✓ Example: subagent ${verb} --agent worker --task \"A 작업\" --agent reviewer --task \"B 작업\"`,
+			};
+		}
+
+		sawBlock = true;
+		const agent = args[index + 1];
+		if (!agent || agent.startsWith("--")) {
+			return {
+				error:
+					`❌ ${verb} requires \`--agent <value>\`\n\n` +
+					`✓ Example: subagent ${verb} --agent worker --task \"A 작업\" --agent reviewer --task \"B 작업\"`,
+			};
+		}
+
+		const taskFlag = args[index + 2];
+		if (taskFlag !== "--task") {
+			return {
+				error:
+					`❌ ${verb} blocks must be exactly \`--agent <agent> --task <task>\`\n\n` +
+					`After \`--agent ${agent}\`, expected \`--task\`.`,
+			};
+		}
+
+		const task = args[index + 3];
+		if (!task || task.startsWith("--")) {
+			return {
+				error:
+					`❌ ${verb} requires \`--task <value>\`\n\n` +
+					`✓ Example: subagent ${verb} --agent worker --task \"A 작업\" --agent reviewer --task \"B 작업\"`,
+			};
+		}
+
+		blocks.push({ agent, task });
+		index += 4;
+	}
+
+	if (blocks.length < 2) {
+		return {
+			error:
+				`❌ ${verb} requires at least 2 blocks\n\n` +
+				`Use repeated \`--agent <agent> --task <task>\` blocks.\n\n` +
+				`✓ Example: subagent ${verb} --agent worker --task \"A 작업\" --agent reviewer --task \"B 작업\"`,
+		};
+	}
+
+	return {
+		params: {
+			asyncAction: verb,
+			...(contextMode ? { contextMode } : {}),
+			...(verb === "batch" ? { runs: blocks } : { steps: blocks }),
+		},
+	};
+}
+
 function extractVerb(tokens: string[]): { verb: string; args: string[] } {
 	if (tokens.length === 0) return { verb: "help", args: [] };
 	if (tokens[0] === "subagent") {
@@ -304,9 +416,7 @@ export function isSubagentAsyncLaunchCommand(command: unknown): boolean {
 	const tokenized = tokenizeCli(trimmed);
 	if ("error" in tokenized) return false;
 	const { verb } = extractVerb(tokenized.tokens);
-	if (verb !== "run" && verb !== "continue") return false;
-
-	return true;
+	return verb === "run" || verb === "continue" || verb === "batch" || verb === "chain";
 }
 
 export function parseSubagentToolCommand(
@@ -332,7 +442,7 @@ export function parseSubagentToolCommand(
 	if ("error" in tokenized) {
 		return {
 			type: "error",
-			message: `❌ Syntax error: ${tokenized.error}\n\nCheck that quotes are balanced and the command is well-formed.\n\n✓ Correct: subagent run planner -- "task with spaces"`,
+			message: `❌ Syntax error: ${tokenized.error}\n\nCheck that quotes are balanced and the command is well-formed.\n\n✓ Correct: subagent run planner -- \"task with spaces\"`,
 		};
 	}
 
@@ -415,10 +525,22 @@ export function parseSubagentToolCommand(
 			return { type: "params", params: parsed.params };
 		}
 
+		case "batch": {
+			const parsed = parseBatchOrChain("batch", args);
+			if ("error" in parsed) return { type: "error", message: parsed.error };
+			return { type: "params", params: parsed.params };
+		}
+
+		case "chain": {
+			const parsed = parseBatchOrChain("chain", args);
+			if ("error" in parsed) return { type: "error", message: parsed.error };
+			return { type: "params", params: parsed.params };
+		}
+
 		default:
 			return {
 				type: "error",
-				message: `❌ Unknown subcommand: "${verb}"\n\nValid commands: help, agents, run, continue, runs, status, detail, abort, remove\n\n✓ Try: subagent help`,
+				message: `❌ Unknown subcommand: "${verb}"\n\nValid commands: help, agents, run, continue, batch, chain, runs, status, detail, abort, remove\n\n✓ Try: subagent help`,
 			};
 	}
 }
