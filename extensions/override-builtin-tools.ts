@@ -9,7 +9,7 @@
  */
 
 import { homedir } from "node:os";
-import { isAbsolute, relative } from "node:path";
+import { extname, isAbsolute, relative } from "node:path";
 import type { EditToolDetails, ExtensionAPI, ThemeColor } from "@mariozechner/pi-coding-agent";
 import {
 	createBashTool,
@@ -77,7 +77,7 @@ function getBuiltInTools(cwd: string) {
 const ReadParams = Type.Object(
 	{
 		path: Type.Union([Type.String(), Type.Array(Type.String(), { minItems: 1 })], {
-			description: "Path to read, or multiple paths to read in parallel",
+			description: "Path to read, or multiple non-image paths to read in parallel",
 		}),
 		offset: Type.Optional(Type.Integer({ description: "Line number to start reading from (1-indexed)" })),
 		limit: Type.Optional(Type.Integer({ description: "Maximum number of lines to read" })),
@@ -130,6 +130,12 @@ function normalizeReadPaths(pathValue: unknown): string[] {
 		if (path) paths.push(path);
 	}
 	return paths;
+}
+
+const READ_IMAGE_EXTENSIONS = new Set([".jpg", ".jpeg", ".png", ".gif", ".webp"]);
+
+function isImageReadPath(path: string): boolean {
+	return READ_IMAGE_EXTENSIONS.has(extname(path).toLowerCase());
 }
 
 function formatReadRange(args: Record<string, unknown>, theme: RenderTheme): string {
@@ -459,7 +465,7 @@ export default function (pi: ExtensionAPI) {
 		name: "read",
 		label: "read",
 		description:
-			"Read the contents of one or more files. Supports text files and images (jpg, png, gif, webp). For text files, output is truncated to 2000 lines or 50KB (whichever is hit first). Use offset/limit for large files. When path is an array, files are read in parallel and returned with per-file separators.",
+			"Read the contents of one or more files. Supports text files and images (jpg, png, gif, webp). For text files, output is truncated to 2000 lines or 50KB (whichever is hit first). Use offset/limit for large files. When path is an array, non-image files are read in parallel and returned with per-file separators.",
 		parameters: ReadParams,
 
 		async execute(toolCallId, params, signal, onUpdate, ctx) {
@@ -490,6 +496,19 @@ export default function (pi: ExtensionAPI) {
 						offset,
 						limit,
 					} satisfies ReadRenderDetails & Record<string, unknown>,
+				};
+			}
+
+			if (paths.some(isImageReadPath)) {
+				return {
+					isError: true,
+					content: [
+						{
+							type: "text" as const,
+							text: "Image files must be read one at a time to be understood.",
+						},
+					],
+					details: { mode: "multi-read", paths, count: paths.length, offset, limit } satisfies ReadRenderDetails,
 				};
 			}
 
