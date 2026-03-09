@@ -3,6 +3,7 @@
  */
 
 import * as os from "node:os";
+import type { ThemeColor } from "@mariozechner/pi-coding-agent";
 import { normalizeModelRef as normalizeModelRefUtil } from "../utils/format-utils.js";
 
 export {
@@ -28,7 +29,7 @@ type ContextWindowResolverContext = {
 	};
 };
 
-type ThemeFg = (color: string, text: string) => string;
+type ThemeFg = (color: ThemeColor, text: string) => string;
 
 export function resolveContextWindow(ctx: ContextWindowResolverContext, modelRef?: string): number | undefined {
 	const fallback = ctx?.model?.contextWindow;

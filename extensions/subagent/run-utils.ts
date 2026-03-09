@@ -9,10 +9,10 @@
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import type { SubagentStore } from "./store.js";
 import type { CommandRunState } from "./types.js";
-import { updateCommandRunsWidget } from "./widget.js";
+import { type WidgetRenderCtx, updateCommandRunsWidget } from "./widget.js";
 
 export interface RemoveRunOptions {
-	ctx?: unknown;
+	ctx?: WidgetRenderCtx;
 	pi?: ExtensionAPI;
 	abortIfRunning?: boolean;
 	reason?: string;
@@ -28,7 +28,7 @@ export interface RemoveRunResult {
 
 export interface TrimCommandRunHistoryOptions {
 	maxRuns?: number;
-	ctx?: unknown;
+	ctx?: WidgetRenderCtx;
 	pi?: ExtensionAPI;
 	updateWidget?: boolean;
 	removalReason?: string;

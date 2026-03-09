@@ -8,17 +8,17 @@
  *   - Themes (from ctx.ui.getAllThemes())
  */
 
-import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
+import type { ExtensionAPI, ThemeColor } from "@mariozechner/pi-coding-agent";
 import { DynamicBorder } from "@mariozechner/pi-coding-agent";
 import { Key, matchesKey, truncateToWidth } from "@mariozechner/pi-tui";
 
 type OverlayTui = { requestRender: () => void };
-type OverlayTheme = { fg: (color: string, text: string) => string; bold: (text: string) => string };
+type OverlayTheme = { fg: (color: ThemeColor, text: string) => string; bold: (text: string) => string };
 
 interface Section {
 	title: string;
 	icon: string;
-	color: string;
+	color: ThemeColor;
 	items: string[];
 }
 

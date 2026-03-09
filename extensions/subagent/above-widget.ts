@@ -13,7 +13,7 @@ export function updatePixelWidget(
 	const activeCtx = ctx ?? store.pixelWidgetCtx;
 	if (!activeCtx?.hasUI) return;
 	store.pixelWidgetCtx = activeCtx;
-	activeCtx.ui.setWidget("pixel-subagents", undefined);
+	activeCtx.ui?.setWidget("pixel-subagents", undefined);
 }
 
 export function cleanupPixelTimer(): void {

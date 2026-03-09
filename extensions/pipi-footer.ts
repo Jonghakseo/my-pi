@@ -6,16 +6,17 @@
  * - Second line (optional) shows extension statuses from ctx.ui.setStatus()
  */
 
-import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
+import type { ExtensionAPI, ExtensionContext, Theme, ThemeColor } from "@mariozechner/pi-coding-agent";
 import { truncateToWidth, visibleWidth } from "@mariozechner/pi-tui";
 import { ELAPSED_STATUS_KEY, PURPOSE_STATUS_KEY } from "./utils/status-keys.ts";
 
 const BAR_WIDTH = 10;
 const DIRTY_CHECK_INTERVAL_MS = 3000;
 
+type ThemeBg = Parameters<Theme["bg"]>[0];
 type FooterTheme = {
-	fg: (color: string, text: string) => string;
-	bg: (color: string, text: string) => string;
+	fg: (color: ThemeColor, text: string) => string;
+	bg: (color: ThemeBg, text: string) => string;
 	bold: (text: string) => string;
 };
 

@@ -9,7 +9,7 @@
  */
 
 import path from "node:path";
-import type { ExtensionAPI, ExtensionCommandContext } from "@mariozechner/pi-coding-agent";
+import type { ExtensionAPI, ExtensionCommandContext, ThemeColor } from "@mariozechner/pi-coding-agent";
 import { DynamicBorder } from "@mariozechner/pi-coding-agent";
 import { Key, matchesKey, truncateToWidth, visibleWidth } from "@mariozechner/pi-tui";
 import {
@@ -73,7 +73,7 @@ interface DiffState {
 }
 
 interface Theme {
-	fg: (color: string, text: string) => string;
+	fg: (color: ThemeColor, text: string) => string;
 	bold: (text: string) => string;
 }
 
@@ -278,13 +278,13 @@ function icon(s: DiffFileStatus): string {
 	return "~";
 }
 
-function statusColor(s: DiffFileStatus): string {
+function statusColor(s: DiffFileStatus): ThemeColor {
 	if (s === "added" || s === "untracked") return "success";
 	if (s === "deleted") return "error";
 	return "warning";
 }
 
-function commitStateColor(state: CommitState): string {
+function commitStateColor(state: CommitState): ThemeColor {
 	if (state === "both") return "accent";
 	if (state === "committed") return "success";
 	return "warning";
