@@ -549,7 +549,7 @@ export default function todoWriteExtension(pi: ExtensionAPI): void {
 				display: true,
 				details: { summary: renderTodoWriteSummary(state) },
 			},
-			{ triggerTurn: false },
+			{ deliverAs: "followUp", triggerTurn: true },
 		);
 	});
 
