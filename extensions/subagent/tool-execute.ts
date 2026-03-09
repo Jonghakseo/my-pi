@@ -28,8 +28,8 @@ import {
 	resolveContextWindow,
 	truncateLines,
 } from "./format.js";
+import { clearPendingGroupCompletion, upsertPendingGroupCompletion } from "./group-pending.js";
 import { enqueueSubagentInvocation } from "./invocation-queue.js";
-import { upsertPendingGroupCompletion, clearPendingGroupCompletion } from "./group-pending.js";
 import { formatCommandRunSummary, removeRun, trimCommandRunHistory } from "./run-utils.js";
 import { getFinalOutput, getLastNonEmptyLine, runSingleAgent } from "./runner.js";
 import {
@@ -50,7 +50,7 @@ import type {
 	SingleResult,
 	SubagentDetails,
 } from "./types.js";
-import { type WidgetRenderCtx, updateCommandRunsWidget } from "./widget.js";
+import { updateCommandRunsWidget, type WidgetRenderCtx } from "./widget.js";
 
 type SessionToolCall = {
 	name: string;
@@ -310,7 +310,11 @@ function isInOriginSession(ctx: SubagentToolExecuteContext, originSessionFile: s
 	return !currentSessionFile || !originSessionFile || currentSessionFile === originSessionFile;
 }
 
-function createEmptyDetails(mode: LaunchMode, inheritMainContext: boolean, projectAgentsDir: string | null): SubagentDetails {
+function createEmptyDetails(
+	mode: LaunchMode,
+	inheritMainContext: boolean,
+	projectAgentsDir: string | null,
+): SubagentDetails {
 	return {
 		mode,
 		inheritMainContext,
@@ -447,11 +451,7 @@ function finalizeRunState(runState: CommandRunState, result: SingleResult): Fina
 	return { runState, result, isError, rawOutput };
 }
 
-function formatBatchSummary(
-	batchId: string,
-	runs: CommandRunState[],
-	terminalStatus: "completed" | "error",
-): string {
+function formatBatchSummary(batchId: string, runs: CommandRunState[], terminalStatus: "completed" | "error"): string {
 	const headerStatus = runs.map((run) => `#${run.id} ${run.status === "done" ? "done" : "error"}`).join(", ");
 	const body = runs
 		.map((run) => {
@@ -468,7 +468,10 @@ function formatPipelineSummary(
 	terminalStatus: "completed" | "stopped" | "error",
 ): string {
 	const steps = stepResults
-		.map((step, index) => `Step ${index + 1} · #${step.runId} ${step.agent} · ${step.status}\nTask: ${step.task}\n${step.output}`)
+		.map(
+			(step, index) =>
+				`Step ${index + 1} · #${step.runId} ${step.agent} · ${step.status}\nTask: ${step.task}\n${step.output}`,
+		)
 		.join("\n\n");
 	return `[subagent-chain#${pipelineId}] ${terminalStatus}\n\n${steps}`;
 }
@@ -594,9 +597,10 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 				const taskPreview = truncateLines(run.task, 2).replace(/\n/g, "\n  ");
 				return `${formatCommandRunSummary(run)}${usageSuffix}\n  ${taskPreview}`;
 			});
-			const header = hiddenCount > 0
-				? `Subagent runs (showing ${visibleRuns.length} of ${allRuns.length}, oldest ${hiddenCount} hidden)`
-				: "Subagent runs";
+			const header =
+				hiddenCount > 0
+					? `Subagent runs (showing ${visibleRuns.length} of ${allRuns.length}, oldest ${hiddenCount} hidden)`
+					: "Subagent runs";
 			return {
 				content: [{ type: "text", text: withIdleRunWarning(`${header}\n\n${lines.join("\n\n")}`) }],
 				details: makeDetails("single"),
@@ -659,7 +663,9 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 
 				const launchedAt = store.recentLaunchTimestamps.get(run.id);
 				const withinCooldown =
-					run.status === "running" && typeof launchedAt === "number" && Date.now() - launchedAt <= SUBAGENT_POLL_COOLDOWN_MS;
+					run.status === "running" &&
+					typeof launchedAt === "number" &&
+					Date.now() - launchedAt <= SUBAGENT_POLL_COOLDOWN_MS;
 				if (withinCooldown) {
 					return {
 						content: [{ type: "text", text: buildStrongWaitMessage(run.id) }],
@@ -682,7 +688,9 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 
 				if (run.status === "running") {
 					return {
-						content: [{ type: "text", text: `Subagent run #${run.id} is still running. detail is available after completion.` }],
+						content: [
+							{ type: "text", text: `Subagent run #${run.id} is still running. detail is available after completion.` },
+						],
 						details: makeDetails("single"),
 						isError: true,
 					};
@@ -803,13 +811,7 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 			}
 		}
 
-		const requestedLaunchCount = hasBatch
-			? Array.isArray(params.runs)
-				? params.runs.length
-				: 0
-			: hasChain
-				? 1
-				: 1;
+		const requestedLaunchCount = hasBatch ? (Array.isArray(params.runs) ? params.runs.length : 0) : hasChain ? 1 : 1;
 		if (runCounts.running + requestedLaunchCount > MAX_CONCURRENT_ASYNC_SUBAGENT_RUNS) {
 			return {
 				content: [
@@ -888,16 +890,6 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 			return runState;
 		}
 
-		function maybePersistHiddenRunCompletion(finalized: FinalizedRun) {
-			const entry = store.globalLiveRuns.get(finalized.runState.id);
-			if (!entry) return;
-			if (!isInOriginSession(ctx, entry.originSessionFile)) return;
-			pi.sendMessage(buildRunCompletionMessage(finalized, { display: false }), {
-				deliverAs: "followUp",
-				triggerTurn: false,
-			});
-		}
-
 		function cleanupRunAfterFinalDelivery(runId: number) {
 			store.globalLiveRuns.delete(runId);
 			store.recentLaunchTimestamps.delete(runId);
@@ -971,11 +963,10 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 			}
 
 			const taskForDisplay = continueFromRun ? `[continue #${continueFromRun.id}] ${rawTask}` : rawTask;
-			const taskForAgent = wrapTaskWithMainContext(
-				rawTask,
-				stripTaskEchoFromMainContext(mainContextText, rawTask),
-				{ mainSessionFile, totalMessageCount },
-			);
+			const taskForAgent = wrapTaskWithMainContext(rawTask, stripTaskEchoFromMainContext(mainContextText, rawTask), {
+				mainSessionFile,
+				totalMessageCount,
+			});
 			const runState = registerRunLaunch({
 				agent: resolvedAgent,
 				taskForDisplay,
@@ -1270,11 +1261,11 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 						const pipelineReferenceSection =
 							index > 0
 								? buildPipelineReferenceSection(previousOutput, {
-									agent: steps[index - 1]?.agent,
-									task: steps[index - 1]?.task,
-									stepNumber: index,
-									totalSteps: steps.length,
-								})
+										agent: steps[index - 1]?.agent,
+										task: steps[index - 1]?.task,
+										stepNumber: index,
+										totalSteps: steps.length,
+									})
 								: "";
 						let taskForAgent = step.task;
 						if (inheritMainContext) {
@@ -1350,43 +1341,44 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 					}
 				} finally {
 					const pipeline = store.pipelines.get(pipelineId);
-					if (!pipeline) return;
-					const hasError = pipeline.stepResults.some((step) => step.status === "error");
-					if (terminalStatus === "completed" && hasError) {
-						terminalStatus = "error";
-					}
-					const message = {
-						customType: "subagent-tool" as const,
-						content: formatPipelineSummary(pipelineId, pipeline.stepResults, terminalStatus),
-						display: true,
-						details: {
-							pipelineId,
-							stepRunIds: pipeline.stepRunIds,
-							status: terminalStatus === "completed" ? "done" : terminalStatus,
-						},
-					};
-					if (isInOriginSession(ctx, pipeline.originSessionFile)) {
-						pi.sendMessage(message, { deliverAs: "followUp", triggerTurn: true });
-						clearPendingGroupCompletion("chain", pipelineId);
-						for (const runId of pipeline.stepRunIds) cleanupRunAfterFinalDelivery(runId);
-						store.pipelines.delete(pipelineId);
-					} else {
-						pipeline.pendingCompletion = makePendingCompletion(message, true);
-						upsertPendingGroupCompletion({
-							scope: "chain",
-							groupId: pipelineId,
-							originSessionFile: pipeline.originSessionFile,
-							runIds: pipeline.stepRunIds,
-							pendingCompletion: pipeline.pendingCompletion,
+					if (pipeline) {
+						const hasError = pipeline.stepResults.some((step) => step.status === "error");
+						if (terminalStatus === "completed" && hasError) {
+							terminalStatus = "error";
+						}
+						const message = {
+							customType: "subagent-tool" as const,
+							content: formatPipelineSummary(pipelineId, pipeline.stepResults, terminalStatus),
+							display: true,
+							details: {
+								pipelineId,
+								stepRunIds: pipeline.stepRunIds,
+								status: terminalStatus === "completed" ? "done" : terminalStatus,
+							},
+						};
+						if (isInOriginSession(ctx, pipeline.originSessionFile)) {
+							pi.sendMessage(message, { deliverAs: "followUp", triggerTurn: true });
+							clearPendingGroupCompletion("chain", pipelineId);
+							for (const runId of pipeline.stepRunIds) cleanupRunAfterFinalDelivery(runId);
+							store.pipelines.delete(pipelineId);
+						} else {
+							pipeline.pendingCompletion = makePendingCompletion(message, true);
+							upsertPendingGroupCompletion({
+								scope: "chain",
+								groupId: pipelineId,
+								originSessionFile: pipeline.originSessionFile,
+								runIds: pipeline.stepRunIds,
+								pendingCompletion: pipeline.pendingCompletion,
+							});
+						}
+						trimCommandRunHistory(store, {
+							maxRuns: 10,
+							ctx,
+							pi,
+							updateWidget: false,
+							removalReason: "trim",
 						});
 					}
-					trimCommandRunHistory(store, {
-						maxRuns: 10,
-						ctx,
-						pi,
-						updateWidget: false,
-						removalReason: "trim",
-					});
 					updateCommandRunsWidget(store);
 				}
 			})();

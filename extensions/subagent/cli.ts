@@ -77,10 +77,10 @@ export const SUBAGENT_CLI_HELP_TEXT = [
 	"    subagent continue 22 -- 아까 진행하던거 마무리해서 커밋해줘",
 	"",
 	"  Parallel batch:",
-	"    subagent batch --main --agent worker --task \"A 기능 구현\" --agent reviewer --task \"B 코드 리뷰\"",
+	'    subagent batch --main --agent worker --task "A 기능 구현" --agent reviewer --task "B 코드 리뷰"',
 	"",
 	"  Sequential chain:",
-	"    subagent chain --main --agent worker --task \"로그인 API 구현\" --agent reviewer --task \"위 결과 리뷰\"",
+	'    subagent chain --main --agent worker --task "로그인 API 구현" --agent reviewer --task "위 결과 리뷰"',
 	"",
 	"  Manual status & cleanup (occasional checks):",
 	"    subagent runs",
@@ -323,7 +323,7 @@ function parseBatchOrChain(
 					error:
 						`❌ ${verb} blocks must start with \`--agent <agent> --task <task>\`\n\n` +
 						`Found \`--task\` before \`--agent\`.\n\n` +
-						`✓ Example: subagent ${verb} --main --agent worker --task \"A 작업\" --agent reviewer --task \"B 작업\"`,
+						`✓ Example: subagent ${verb} --main --agent worker --task "A 작업" --agent reviewer --task "B 작업"`,
 				};
 			}
 			if (token.startsWith("--")) {
@@ -337,7 +337,7 @@ function parseBatchOrChain(
 				error:
 					`❌ ${verb} does not allow free text outside \`--task\` blocks\n\n` +
 					`Unexpected token: ${token}\n\n` +
-					`✓ Example: subagent ${verb} --agent worker --task \"A 작업\" --agent reviewer --task \"B 작업\"`,
+					`✓ Example: subagent ${verb} --agent worker --task "A 작업" --agent reviewer --task "B 작업"`,
 			};
 		}
 
@@ -347,7 +347,7 @@ function parseBatchOrChain(
 			return {
 				error:
 					`❌ ${verb} requires \`--agent <value>\`\n\n` +
-					`✓ Example: subagent ${verb} --agent worker --task \"A 작업\" --agent reviewer --task \"B 작업\"`,
+					`✓ Example: subagent ${verb} --agent worker --task "A 작업" --agent reviewer --task "B 작업"`,
 			};
 		}
 
@@ -365,7 +365,7 @@ function parseBatchOrChain(
 			return {
 				error:
 					`❌ ${verb} requires \`--task <value>\`\n\n` +
-					`✓ Example: subagent ${verb} --agent worker --task \"A 작업\" --agent reviewer --task \"B 작업\"`,
+					`✓ Example: subagent ${verb} --agent worker --task "A 작업" --agent reviewer --task "B 작업"`,
 			};
 		}
 
@@ -378,7 +378,7 @@ function parseBatchOrChain(
 			error:
 				`❌ ${verb} requires at least 2 blocks\n\n` +
 				`Use repeated \`--agent <agent> --task <task>\` blocks.\n\n` +
-				`✓ Example: subagent ${verb} --agent worker --task \"A 작업\" --agent reviewer --task \"B 작업\"`,
+				`✓ Example: subagent ${verb} --agent worker --task "A 작업" --agent reviewer --task "B 작업"`,
 		};
 	}
 
@@ -442,7 +442,7 @@ export function parseSubagentToolCommand(
 	if ("error" in tokenized) {
 		return {
 			type: "error",
-			message: `❌ Syntax error: ${tokenized.error}\n\nCheck that quotes are balanced and the command is well-formed.\n\n✓ Correct: subagent run planner -- \"task with spaces\"`,
+			message: `❌ Syntax error: ${tokenized.error}\n\nCheck that quotes are balanced and the command is well-formed.\n\n✓ Correct: subagent run planner -- "task with spaces"`,
 		};
 	}
 
