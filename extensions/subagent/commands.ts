@@ -44,7 +44,7 @@ import { createSubagentToolExecute } from "./tool-execute.js";
 import { renderSubagentToolCall, renderSubagentToolResult } from "./tool-render.js";
 import type { CommandRunState, SingleResult, SubagentDetails } from "./types.js";
 import { ListAgentsParams, SubagentParams } from "./types.js";
-import { updateCommandRunsWidget } from "./widget.js";
+import { type WidgetRenderCtx, updateCommandRunsWidget } from "./widget.js";
 
 /**
  * Capture switchSession from an ExtensionCommandContext into the shared store.
@@ -470,7 +470,7 @@ function restoreRunsFromSession(store: SubagentStore, ctx: any, pi?: ExtensionAP
 	store.currentSessionFile = currentSessionFile;
 
 	store.commandRuns.clear();
-	store.commandWidgetCtx = ctx;
+	store.commandWidgetCtx = ctx as WidgetRenderCtx;
 	let sawSubagentMarkers = false;
 
 	try {
@@ -706,7 +706,7 @@ function restoreRunsFromSession(store: SubagentStore, ctx: any, pi?: ExtensionAP
 		}
 	}
 
-	updateCommandRunsWidget(store, ctx);
+	updateCommandRunsWidget(store, ctx as WidgetRenderCtx);
 }
 
 export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
@@ -762,11 +762,11 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 			'CLI-style subagent delegation interface. Always start with `subagent help` to learn available commands, then execute run/continue/runs/status/detail/abort/remove via `{ command: "subagent ..." }`. For async launches, wait for automatic follow-up instead of polling status/detail in loops.',
 		parameters: SubagentParams,
 
-		execute: createSubagentToolExecute(pi, store),
+		execute: createSubagentToolExecute(pi, store) as any,
 
-		renderCall: renderSubagentToolCall,
+		renderCall: renderSubagentToolCall as any,
 
-		renderResult: renderSubagentToolResult,
+		renderResult: renderSubagentToolResult as any,
 	});
 
 	const subCommand = {
@@ -1042,8 +1042,8 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 				originSessionFile,
 			});
 
-			store.commandWidgetCtx = ctx;
-			updateCommandRunsWidget(store, ctx);
+			store.commandWidgetCtx = ctx as WidgetRenderCtx;
+			updateCommandRunsWidget(store, ctx as WidgetRenderCtx);
 
 			const makeDetails = (results: SingleResult[]): SubagentDetails => ({
 				mode: "single",
@@ -1555,7 +1555,7 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 				removed++;
 				if (result.aborted) aborted++;
 			}
-			updateCommandRunsWidget(store, ctx);
+			updateCommandRunsWidget(store, ctx as WidgetRenderCtx);
 			ctx.ui.notify(
 				aborted > 0
 					? `Cleared ${removed} subagent job(s), aborting ${aborted} running job(s).`
@@ -1577,7 +1577,7 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 			});
 			if (result.removed) removed++;
 		}
-		updateCommandRunsWidget(store, ctx);
+		updateCommandRunsWidget(store, ctx as WidgetRenderCtx);
 		ctx.ui.notify(`Cleared ${removed} finished subagent job(s).`, "info");
 	};
 
@@ -1616,7 +1616,7 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 				ctx.ui.notify(`Subagent #${target.id} is not abortable right now.`, "warning");
 				return;
 			}
-			updateCommandRunsWidget(store, ctx);
+			updateCommandRunsWidget(store, ctx as WidgetRenderCtx);
 			ctx.ui.notify(`Aborting subagent #${target.id} (${target.agent})...`, "warning");
 			return;
 		}
@@ -1626,7 +1626,7 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 			for (const run of running) {
 				if (abortRun(run)) count++;
 			}
-			updateCommandRunsWidget(store, ctx);
+			updateCommandRunsWidget(store, ctx as WidgetRenderCtx);
 			ctx.ui.notify(
 				count > 0 ? `Aborting ${count} running subagent job(s)...` : "No abortable subagent jobs.",
 				count > 0 ? "warning" : "info",
@@ -1649,7 +1649,7 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 				ctx.ui.notify(`Subagent #${id} is not abortable right now.`, "warning");
 				return;
 			}
-			updateCommandRunsWidget(store, ctx);
+			updateCommandRunsWidget(store, ctx as WidgetRenderCtx);
 			ctx.ui.notify(`Aborting subagent #${id} (${run.agent})...`, "warning");
 			return;
 		}
@@ -1946,7 +1946,7 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 				if (result.removed) cleared++;
 			}
 		}
-		updateCommandRunsWidget(store, ctx);
+		updateCommandRunsWidget(store, ctx as WidgetRenderCtx);
 
 		const parts: string[] = [];
 		if (aborted) parts.push(`${aborted} aborted`);

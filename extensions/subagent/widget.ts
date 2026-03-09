@@ -2,6 +2,7 @@
  * Subagent run status widget — renders per-run status boxes below the editor.
  */
 
+import type { ThemeColor, Theme } from "@mariozechner/pi-coding-agent";
 import { Box, Text, truncateToWidth, visibleWidth } from "@mariozechner/pi-tui";
 import { HANG_WARNING_IDLE_MS, PARENT_HINT } from "./constants.js";
 import {
@@ -23,16 +24,21 @@ const MAX_VISIBLE_RUNS = 3;
 
 import { type SubagentStore, truncateText } from "./store.js";
 
+type ThemeBg = Parameters<Theme["bg"]>[0];
 type WidgetTheme = {
-	fg: (color: string, text: string) => string;
+	fg: (color: ThemeColor, text: string) => string;
 	bold: (text: string) => string;
-	bg: (color: string, text: string) => string;
+	bg: (color: ThemeBg, text: string) => string;
 };
 
-type WidgetRenderCtx = {
+export type WidgetRenderCtx = {
 	hasUI?: boolean;
-	ui: {
-		setWidget: (id: string, widget: unknown, options?: unknown) => void;
+	ui?: {
+		setWidget: (...args: any[]) => void;
+	};
+	model?: { contextWindow?: number };
+	modelRegistry?: {
+		getAll: () => Array<{ provider: string; id: string; contextWindow?: number }>;
 	};
 };
 
@@ -51,12 +57,12 @@ function manageSpinnerTimer(store: SubagentStore): void {
 
 export function updateCommandRunsWidget(store: SubagentStore, ctx?: WidgetRenderCtx): void {
 	const activeCtx = ctx ?? store.commandWidgetCtx;
-	if (!activeCtx || !activeCtx.hasUI) return;
+	if (!activeCtx || !activeCtx.hasUI || !activeCtx.ui) return;
 	store.commandWidgetCtx = activeCtx;
 
 	// Parent session hint — visible when inside a child session (persistent parent link exists)
 	if (store.currentParentSessionFile) {
-		activeCtx.ui.setWidget(
+		activeCtx.ui!.setWidget(
 			"sub-parent",
 			(_tui: unknown, theme: WidgetTheme) => {
 				const box = new Box(1, 0);
@@ -76,7 +82,7 @@ export function updateCommandRunsWidget(store: SubagentStore, ctx?: WidgetRender
 			{ placement: "belowEditor" },
 		);
 	} else {
-		activeCtx.ui.setWidget("sub-parent", undefined);
+		activeCtx.ui!.setWidget("sub-parent", undefined);
 	}
 
 	const statusPriority = (status: "running" | "done" | "error") =>
@@ -96,24 +102,24 @@ export function updateCommandRunsWidget(store: SubagentStore, ctx?: WidgetRender
 
 	for (const id of Array.from(store.renderedRunWidgetIds)) {
 		if (!visibleRunIds.has(id)) {
-			activeCtx.ui.setWidget(`sub-${id}`, undefined);
+			activeCtx.ui!.setWidget(`sub-${id}`, undefined);
 			store.renderedRunWidgetIds.delete(id);
 		}
 	}
 
 	if (runs.length === 0) {
-		activeCtx.ui.setWidget("subagent-runs", undefined);
+		activeCtx.ui!.setWidget("subagent-runs", undefined);
 		manageSpinnerTimer(store);
 		return;
 	}
 
-	activeCtx.ui.setWidget("subagent-runs", undefined);
+	activeCtx.ui!.setWidget("subagent-runs", undefined);
 
 	for (const [runIndex, run] of runs.entries()) {
 		const showSeparator = runIndex > 0;
 		const showBottomSeparator = runIndex === runs.length - 1;
 		store.renderedRunWidgetIds.add(run.id);
-		activeCtx.ui.setWidget(
+		activeCtx.ui!.setWidget(
 			`sub-${run.id}`,
 			(_tui: unknown, theme: WidgetTheme) => {
 				const box = new Box(1, 0);

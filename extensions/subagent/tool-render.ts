@@ -4,7 +4,7 @@
  * Extracted from commands.ts — output format is identical.
  */
 
-import { getMarkdownTheme } from "@mariozechner/pi-coding-agent";
+import { getMarkdownTheme, type ThemeColor } from "@mariozechner/pi-coding-agent";
 import { Container, Markdown, Spacer, Text } from "@mariozechner/pi-tui";
 import { formatToolCall, formatUsageStats } from "./format.js";
 import { getDisplayItems, getFinalOutput } from "./runner.js";
@@ -14,7 +14,7 @@ import type { DisplayItem, SubagentDetails } from "./types.js";
 // ─── Helpers (internal) ──────────────────────────────────────────────────────
 
 type RenderTheme = {
-	fg: (color: string, text: string) => string;
+	fg: (color: ThemeColor, text: string) => string;
 	bold: (text: string) => string;
 };
 

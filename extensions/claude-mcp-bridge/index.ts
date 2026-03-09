@@ -976,6 +976,7 @@ class McpActionOverlay {
 	private tui: TUI;
 	private theme: Theme;
 	private done: (value: ServerAction | null) => void;
+	private state: McpServerState;
 	private actions: Array<{ id: ServerAction; label: string; hint: string }> = [
 		{ id: "tools", label: "Tools", hint: "Enable/disable tools" },
 		{ id: "reconnect", label: "Reconnect", hint: "Disconnect & reconnect" },

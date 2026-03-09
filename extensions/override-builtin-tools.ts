@@ -10,7 +10,7 @@
 
 import { homedir } from "node:os";
 import { isAbsolute, relative } from "node:path";
-import type { EditToolDetails, ExtensionAPI } from "@mariozechner/pi-coding-agent";
+import type { EditToolDetails, ExtensionAPI, ThemeColor } from "@mariozechner/pi-coding-agent";
 import {
 	createBashTool,
 	createEditTool,
@@ -111,7 +111,7 @@ type WriteRenderDetails = {
 };
 
 type RenderTheme = {
-	fg: (color: string, text: string) => string;
+	fg: (color: ThemeColor, text: string) => string;
 	bold: (text: string) => string;
 };
 

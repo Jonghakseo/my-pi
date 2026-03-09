@@ -35,7 +35,7 @@ import {
 } from "./session.js";
 import { type SubagentStore, updateRunFromResult } from "./store.js";
 import type { CommandRunState, OnUpdateCallback, SingleResult, SubagentDetails } from "./types.js";
-import { updateCommandRunsWidget } from "./widget.js";
+import { type WidgetRenderCtx, updateCommandRunsWidget } from "./widget.js";
 
 type SessionToolCall = {
 	name: string;
@@ -245,21 +245,25 @@ type SubagentExecuteResult = {
 type SubagentToolExecuteContext = {
 	cwd: string;
 	hasUI?: boolean;
-	model?: { id?: string };
+	model?: { id?: string; contextWindow?: number };
+	modelRegistry?: {
+		getAll: () => Array<{ provider: string; id: string; contextWindow?: number }>;
+	};
 	sessionManager: {
 		getSessionFile?: () => string | undefined;
 		getEntries: () => unknown[];
 	};
 	registerDispose?: (cb: () => void) => void;
 	ui?: {
-		setWidget?: (id: string, widget: unknown, options?: unknown) => void;
+		setWidget: (...args: any[]) => void;
+		notify?: (message: string, type?: "info" | "warning" | "error") => void;
 	};
 };
 
 export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore) {
 	return async (
 		_toolCallId: string,
-		params: Record<string, unknown>,
+		params: Record<string, any>,
 		_signal: AbortSignal | undefined,
 		_onUpdate: OnUpdateCallback | undefined,
 		ctx: SubagentToolExecuteContext,
@@ -327,7 +331,7 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 		const contextMode = params.contextMode ?? "isolated";
 		const inheritMainContext = contextMode === "main";
 		const asyncActionRequested = params.asyncAction ?? "run";
-		const rawMainSessionFile = inheritMainContext ? (ctx.sessionManager.getSessionFile() ?? undefined) : undefined;
+		const rawMainSessionFile = inheritMainContext ? (ctx.sessionManager.getSessionFile?.()  ?? undefined) : undefined;
 		const mainSessionFile =
 			typeof rawMainSessionFile === "string"
 				? rawMainSessionFile.replace(/[\r\n\t]+/g, "").trim() || undefined
@@ -374,7 +378,7 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 			runCounts.idle >= IDLE_RUN_WARNING_THRESHOLD ? formatIdleRunWarning(runCounts.idle) : undefined;
 
 		if (idleRunWarning && ctx.hasUI) {
-			ctx.ui.notify(idleRunWarning, "warning");
+			ctx.ui?.notify?.(idleRunWarning, "warning");
 		}
 
 		const withIdleRunWarning = (text: string): string => (idleRunWarning ? `${idleRunWarning}\n\n${text}` : text);
@@ -518,7 +522,7 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 				}
 
 				if (aborting.length > 0) {
-					updateCommandRunsWidget(store, ctx);
+					updateCommandRunsWidget(store, ctx as WidgetRenderCtx);
 				}
 
 				if (targetRunIds.length === 1 && aborting.length === 1 && notRunning.length === 0 && unknown.length === 0) {
@@ -569,7 +573,7 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 				}
 
 				if (removed.length > 0) {
-					updateCommandRunsWidget(store, ctx);
+					updateCommandRunsWidget(store, ctx as WidgetRenderCtx);
 				}
 
 				if (targetRunIds.length === 1 && removed.length === 1 && unknown.length === 0) {
@@ -780,7 +784,7 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 		// Register in global live run registry (survives session switches).
 		let originSessionFile = "";
 		try {
-			const raw = ctx.sessionManager.getSessionFile() ?? "";
+			const raw = ctx.sessionManager.getSessionFile?.()  ?? "";
 			originSessionFile = raw.replace(/[\r\n\t]+/g, "").trim();
 		} catch {
 			/* ignore */
@@ -791,8 +795,8 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 			originSessionFile,
 		});
 
-		store.commandWidgetCtx = ctx;
-		updateCommandRunsWidget(store, ctx);
+		store.commandWidgetCtx = ctx as WidgetRenderCtx;
+		updateCommandRunsWidget(store, ctx as WidgetRenderCtx);
 
 		const startedState = continueFromRun ? "resumed" : "started";
 		const contextLabel = runState.contextMode === "main" ? "main context" : "dedicated sub-session";
@@ -825,7 +829,7 @@ Context: ${contextLabel} · turn ${runState.turnCount}` +
 		);
 
 		if (ctx.hasUI) {
-			ctx.ui.notify(
+			ctx.ui?.notify?.(
 				`${
 					continueFromRun
 						? `Resumed subagent #${runId}: ${resolvedAgent}`
@@ -963,7 +967,7 @@ ${rawOutput}`,
 				const toolGlobalEntry = store.globalLiveRuns.get(runId);
 				let toolCurrentSession: string | null = null;
 				try {
-					const rawSession = ctx.sessionManager.getSessionFile() ?? null;
+					const rawSession = ctx.sessionManager.getSessionFile?.()  ?? null;
 					toolCurrentSession = rawSession ? rawSession.replace(/[\r\n\t]+/g, "").trim() : null;
 				} catch {
 					/* ignore */
@@ -988,7 +992,7 @@ ${rawOutput}`,
 				}
 
 				if (ctx.hasUI) {
-					ctx.ui.notify(
+					ctx.ui?.notify?.(
 						isError
 							? `subagent tool run #${runId} (${resolvedAgent}) failed`
 							: `subagent tool run #${runId} (${resolvedAgent}) completed`,
@@ -999,7 +1003,7 @@ ${rawOutput}`,
 				if (runState.removed) return;
 				runState.status = "error";
 				runState.elapsedMs = Date.now() - runState.startedAt;
-				runState.lastLine = error?.message ? String(error.message) : "Subagent execution failed";
+				runState.lastLine = error instanceof Error ? error.message : "Subagent execution failed";
 				runState.lastOutput = runState.lastLine;
 
 				const errorMessage = {
@@ -1033,7 +1037,7 @@ ${runState.lastLine}`,
 				const errGlobalEntry = store.globalLiveRuns.get(runId);
 				let errCurrentSession: string | null = null;
 				try {
-					const rawErrSession = ctx.sessionManager.getSessionFile() ?? null;
+					const rawErrSession = ctx.sessionManager.getSessionFile?.()  ?? null;
 					errCurrentSession = rawErrSession ? rawErrSession.replace(/[\r\n\t]+/g, "").trim() : null;
 				} catch {
 					/* ignore */
@@ -1056,7 +1060,7 @@ ${runState.lastLine}`,
 					store.commandRuns.set(runId, runState);
 				}
 
-				if (ctx.hasUI) ctx.ui.notify(`subagent tool run #${runId} failed: ${runState.lastLine}`, "error");
+				if (ctx.hasUI) ctx.ui?.notify?.(`subagent tool run #${runId} failed: ${runState.lastLine}`, "error");
 				updateCommandRunsWidget(store);
 			} finally {
 				runState.abortController = undefined;

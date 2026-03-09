@@ -1,4 +1,4 @@
-import { DynamicBorder, type ExtensionAPI, getMarkdownTheme as getPiMdTheme } from "@mariozechner/pi-coding-agent";
+import { DynamicBorder, type ExtensionAPI, type Theme, type ThemeColor, getMarkdownTheme as getPiMdTheme } from "@mariozechner/pi-coding-agent";
 import { Box, Container, Key, Markdown, matchesKey, Spacer, Text } from "@mariozechner/pi-tui";
 import { applyExtensionDefaults } from "./themeMap.ts";
 import { formatDurationBetween } from "./utils/time-utils.ts";
@@ -9,7 +9,8 @@ function formatTime(date: Date): string {
 }
 
 type ReplayTui = { requestRender: () => void };
-type ReplayTheme = { fg: (color: string, text: string) => string; bold: (text: string) => string };
+type ThemeBg = Parameters<Theme["bg"]>[0];
+type ReplayTheme = { fg: (color: ThemeColor, text: string) => string; bg: (color: ThemeBg, text: string) => string; bold: (text: string) => string };
 
 interface HistoryItem {
 	type: "user" | "assistant" | "tool";
@@ -86,7 +87,7 @@ class SessionReplayUI {
 
 			// Icon and Title
 			let icon = "○";
-			let color = "dim";
+			let color: ThemeColor = "dim";
 			if (item.type === "user") {
 				icon = "👤";
 				color = "success";

@@ -1,5 +1,5 @@
 import { execSync } from "node:child_process";
-import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
+import type { ExtensionAPI, ExtensionContext, ThemeColor } from "@mariozechner/pi-coding-agent";
 import { DynamicBorder } from "@mariozechner/pi-coding-agent";
 import { visibleWidth } from "@mariozechner/pi-tui";
 
@@ -15,7 +15,7 @@ const PURPOSE_ENTRY_TYPE = "purpose:set" as const;
 let idleTimer: ReturnType<typeof setTimeout> | null = null;
 let agentRunning = false;
 type ScreensaverTui = { terminal?: { rows?: number } };
-type ScreensaverTheme = { fg: (color: string, text: string) => string; bold: (text: string) => string };
+type ScreensaverTheme = { fg: (color: ThemeColor, text: string) => string; bold: (text: string) => string };
 
 let overlayActive = false;
 let askUserQuestionActive = false;
