@@ -50,7 +50,7 @@ import { createSubagentToolExecute } from "./tool-execute.js";
 import { renderSubagentToolCall, renderSubagentToolResult } from "./tool-render.js";
 import type { CommandRunState, SingleResult, SubagentDetails } from "./types.js";
 import { ListAgentsParams, SubagentParams } from "./types.js";
-import { type WidgetRenderCtx, updateCommandRunsWidget } from "./widget.js";
+import { updateCommandRunsWidget, type WidgetRenderCtx } from "./widget.js";
 
 /**
  * Capture switchSession from an ExtensionCommandContext into the shared store.
@@ -734,7 +734,7 @@ function restoreRunsFromSession(store: SubagentStore, ctx: any, pi?: ExtensionAP
 	for (const [runId, entry] of store.globalLiveRuns) {
 		if (!entry.pendingCompletion) continue;
 		if (entry.runState.status === "running") continue;
-		const pendingSince = entry.pendingCompletion.createdAt ?? (entry.runState.startedAt + entry.runState.elapsedMs);
+		const pendingSince = entry.pendingCompletion.createdAt ?? entry.runState.startedAt + entry.runState.elapsedMs;
 		if (Date.now() - pendingSince > STALE_PENDING_COMPLETION_MS) {
 			store.globalLiveRuns.delete(runId);
 		}

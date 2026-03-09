@@ -19,7 +19,12 @@ export interface SubagentStore {
 	globalLiveRuns: Map<number, GlobalRunEntry>;
 	renderedRunWidgetIds: Set<number>;
 	nextCommandRunId: number;
-	commandWidgetCtx: { hasUI?: boolean; ui?: { setWidget: (...args: any[]) => void }; model?: { contextWindow?: number }; modelRegistry?: { getAll: () => Array<{ provider: string; id: string; contextWindow?: number }> } } | null;
+	commandWidgetCtx: {
+		hasUI?: boolean;
+		ui?: { setWidget: (...args: any[]) => void };
+		model?: { contextWindow?: number };
+		modelRegistry?: { getAll: () => Array<{ provider: string; id: string; contextWindow?: number }> };
+	} | null;
 	/** Context reference for the above-editor run status widget (tool-invoked runs). */
 	pixelWidgetCtx: { hasUI?: boolean; ui?: { setWidget: (...args: any[]) => void } } | null;
 	/** @deprecated Kept for backward compat; persistent parent link now used instead. */
