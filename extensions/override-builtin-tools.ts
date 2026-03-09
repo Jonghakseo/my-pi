@@ -164,17 +164,17 @@ function truncateLines(text: string, maxLines: number): string {
 	return `${visible}\n… (+${lines.length - maxLines} lines)`;
 }
 
-function renderFullOutput(text: string, theme: RenderTheme): Text {
+function renderFullOutput(text: string, theme: RenderTheme): TruncatedText & Text {
 	const output = text
 		.trim()
 		.split("\n")
 		.map((line) => theme.fg("toolOutput", line))
 		.join("\n");
-	return output ? new Text(`\n${output}`, 0, 0) : new Text("", 0, 0);
+	return new TruncatedText(output ? `\n${output}` : "") as TruncatedText & Text;
 }
 
 /** Render first N lines as a dim preview with a "more" hint. */
-function renderPreviewLines(text: string, maxLines: number, theme: RenderTheme): string {
+function renderPreviewLines(text: string, maxLines: number, theme: RenderTheme): TruncatedText & Text {
 	const lines = text.trim().split("\n");
 	const preview = lines.slice(0, maxLines);
 	const remaining = lines.length - maxLines;
@@ -182,7 +182,33 @@ function renderPreviewLines(text: string, maxLines: number, theme: RenderTheme):
 	if (remaining > 0) {
 		output += `\n${theme.fg("muted", `… +${remaining} lines`)}`;
 	}
-	return output;
+	return new TruncatedText(output) as TruncatedText & Text;
+}
+
+/**
+ * Width-aware text component that truncates each line to the terminal width.
+ * Works like SideBySideDiffView — pi calls render(width) instead of using raw text.
+ */
+class TruncatedText {
+	private rawText: string;
+	private cachedWidth?: number;
+	private cachedLines?: string[];
+
+	constructor(text: string) {
+		this.rawText = text;
+	}
+
+	render(width: number): string[] {
+		if (this.cachedWidth === width && this.cachedLines) return this.cachedLines;
+		this.cachedLines = this.rawText.split("\n").map((line) => truncateToWidth(line, width));
+		this.cachedWidth = width;
+		return this.cachedLines;
+	}
+
+	invalidate(): void {
+		this.cachedWidth = undefined;
+		this.cachedLines = undefined;
+	}
 }
 
 function getObjectDetails(value: unknown): Record<string, unknown> {
@@ -520,13 +546,10 @@ export default function (pi: ExtensionAPI) {
 			if (!tc || tc.type !== "text") return new Text("", 0, 0);
 
 			if (!expanded) {
-				const preview = renderPreviewLines(tc.text, 5, theme);
-				return new Text(preview || "", 0, 0);
+				return renderPreviewLines(tc.text, 5, theme);
 			}
 
-			const body = renderFullOutput(tc.text, theme);
-			const bodyText = (body as unknown as { text?: string }).text ?? "";
-			return new Text(bodyText || "", 0, 0);
+			return renderFullOutput(tc.text, theme);
 		},
 	});
 
@@ -554,8 +577,7 @@ export default function (pi: ExtensionAPI) {
 			if (!tc || tc.type !== "text") return new Text("", 0, 0);
 
 			if (!expanded) {
-				const preview = renderPreviewLines(tc.text, 5, theme);
-				return new Text(preview || "", 0, 0);
+				return renderPreviewLines(tc.text, 5, theme);
 			}
 
 			return renderFullOutput(tc.text, theme);
@@ -626,12 +648,18 @@ export default function (pi: ExtensionAPI) {
 			const summary = tc?.type === "text" && tc.text ? theme.fg("toolOutput", tc.text) : "";
 
 			if (!expanded) {
-				return new Text(summary, 0, 0);
+				return new TruncatedText(summary) as TruncatedText & Text;
 			}
 
-			const fullPreview = preview ? renderFullOutput(preview, theme) : new Text("", 0, 0);
-			const fullPreviewText = (fullPreview as unknown as { text?: string }).text ?? "";
-			return new Text([fullPreviewText ? fullPreviewText.trimStart() : "", summary].filter(Boolean).join("\n"), 0, 0);
+			const previewText = preview
+				? preview
+						.trim()
+						.split("\n")
+						.map((l) => theme.fg("toolOutput", l))
+						.join("\n")
+				: "";
+			const combined = [previewText ? `\n${previewText}` : "", summary].filter(Boolean).join("\n");
+			return new TruncatedText(combined) as TruncatedText & Text;
 		},
 	});
 
