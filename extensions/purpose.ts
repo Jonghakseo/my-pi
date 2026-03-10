@@ -6,6 +6,7 @@ import { PURPOSE_STATUS_KEY } from "./utils/status-keys.ts";
 
 const PURPOSE_ENTRY_TYPE = "purpose:set";
 const PURPOSE_COMMAND_NAME = "purpose";
+const PURPOSE_RESET_COMMAND_NAME = "purpose:reset";
 const LEGACY_WIDGET_KEY = "purpose";
 // Backward-compat alias for old builds that referenced WIDGET_KEY directly.
 const WIDGET_KEY = LEGACY_WIDGET_KEY;
@@ -85,10 +86,10 @@ function readPurposeFromSession(ctx: ExtensionContext): string {
 	return "";
 }
 
-async function detectPurposeFromHistory(historyText: string): Promise<string> {
+async function detectPurposeFromMessage(userMessage: string): Promise<string> {
 	return new Promise((resolve) => {
 		const systemPrompt =
-			"대화 히스토리를 분석해서 이 세션의 핵심 목적을 20자 이내 한 줄로 추출해. 오직 목적 텍스트만 출력하고, 설명이나 다른 텍스트는 절대 출력하지 마.";
+			"사용자 메시지를 분석해서 세션의 목적을 20자 이내 한 줄로 추출해. 오직 목적 텍스트만 출력하고, 설명이나 다른 텍스트는 절대 출력하지 마.";
 
 		const args = [
 			"--no-extensions",
@@ -98,7 +99,7 @@ async function detectPurposeFromHistory(historyText: string): Promise<string> {
 			"--system-prompt",
 			systemPrompt,
 			"-p",
-			historyText.slice(0, 2000),
+			`사용자 메시지: ${userMessage.slice(0, 500)}`,
 		];
 
 		let output = "";
@@ -183,8 +184,13 @@ export default function purposeExtension(pi: ExtensionAPI) {
 
 	// ── Command ──────────────────────────────────────────────────
 
+	const clearPurpose = (ctx: ExtensionContext) => {
+		persistPurpose(ctx, "", "command");
+		notify(ctx, "세션 목적을 비웠습니다.", "warning");
+	};
+
 	pi.registerCommand(PURPOSE_COMMAND_NAME, {
-		description: "Set or view session purpose. Usage: /purpose <text> | /purpose clear",
+		description: "Set or view session purpose. Usage: /purpose <text> | /purpose clear | /purpose:reset",
 		handler: async (args, ctx) => {
 			const raw = args.trim();
 
@@ -198,8 +204,7 @@ export default function purposeExtension(pi: ExtensionAPI) {
 			}
 
 			if (/^(clear|reset|none|empty)$/i.test(raw)) {
-				persistPurpose(ctx, "", "command");
-				notify(ctx, "세션 목적을 비웠습니다.", "warning");
+				clearPurpose(ctx);
 				return;
 			}
 
@@ -208,81 +213,54 @@ export default function purposeExtension(pi: ExtensionAPI) {
 		},
 	});
 
-	// ── Auto Purpose (every 5 user messages) ─────────────────────
+	pi.registerCommand(PURPOSE_RESET_COMMAND_NAME, {
+		description: "Clear the current session purpose.",
+		handler: async (_args, ctx) => {
+			clearPurpose(ctx);
+		},
+	});
 
-	const AUTO_PURPOSE_INTERVAL = 5;
-	let userMessageCount = 0;
-	let purposeDetectionInFlight = false;
+	// ── Auto Purpose (async) ──────────────────────────────────────
 
-	pi.on("before_agent_start", async (_event, ctx) => {
+	pi.on("before_agent_start", async (event, ctx) => {
 		// Do not auto-generate purpose in subagent sessions
 		if (isSubagentSession(ctx)) return;
 
-		userMessageCount++;
-
-		// 5 메시지마다 purpose 존재 확인 → 없으면 감지 시도
-		if (userMessageCount % AUTO_PURPOSE_INTERVAL !== 0) return;
+		// purpose가 이미 있으면 스킵
 		if (hasPurpose()) return;
-		if (purposeDetectionInFlight) return;
 
-		// 대화 히스토리에서 user/assistant 메시지 추출
-		const branch = ctx.sessionManager.getBranch();
-		const lines: string[] = [];
-		for (const entry of branch) {
-			if (!("type" in entry) || entry.type !== "message") continue;
-			const msg = (entry as { message?: { role?: string; content?: unknown } }).message;
-			if (!msg?.role) continue;
-			if (msg.role !== "user" && msg.role !== "assistant") continue;
-			const text = typeof msg.content === "string"
-				? msg.content
-				: Array.isArray(msg.content)
-					? msg.content.filter((c: any) => c.type === "text").map((c: any) => c.text).join(" ")
-					: "";
-			if (!text) continue;
-			const label = msg.role === "user" ? "User" : "Assistant";
-			lines.push(`${label}: ${text.slice(0, 200)}`);
-		}
-
-		if (lines.length === 0) return;
-
-		purposeDetectionInFlight = true;
+		const text = event.prompt.trim();
+		if (!text) return;
 
 		// Fire-and-forget: 비동기로 purpose 감지 후 설정
 		(async () => {
 			try {
-				const detected = await detectPurposeFromHistory(lines.join("\n"));
-				if (detected && !hasPurpose()) {
+				const detected = await detectPurposeFromMessage(text);
+				if (detected) {
 					persistPurpose(ctx, detected, "auto");
 				}
 			} catch {
 				// 실패 시 무시
-			} finally {
-				purposeDetectionInFlight = false;
 			}
 		})();
 	});
 
 	// ── Lifecycle ─────────────────────────────────────────────────
 
-	const resetAndSync = (ctx: ExtensionContext) => {
-		userMessageCount = 0;
-		syncPurpose(ctx);
-	};
-
 	pi.on("session_start", async (_event, ctx) => {
-		resetAndSync(ctx);
+		syncPurpose(ctx);
 	});
 
 	pi.on("session_switch", async (_event, ctx) => {
-		resetAndSync(ctx);
+		syncPurpose(ctx);
 	});
 
 	pi.on("session_fork", async (_event, ctx) => {
-		resetAndSync(ctx);
+		syncPurpose(ctx);
 	});
 
 	pi.on("session_tree", async (_event, ctx) => {
-		resetAndSync(ctx);
+		syncPurpose(ctx);
 	});
 
 	pi.on("session_shutdown", async (_event, ctx) => {
