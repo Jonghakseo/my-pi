@@ -206,7 +206,9 @@ class TruncatedText {
 
 	render(width: number): string[] {
 		if (this.cachedWidth === width && this.cachedLines) return this.cachedLines;
-		this.cachedLines = this.rawText.split("\n").map((line) => truncateToWidth(line, width));
+		this.cachedLines = this.rawText
+			.split("\n")
+			.map((line) => truncateToWidth(line.replace(/\t/g, "    "), width));
 		this.cachedWidth = width;
 		return this.cachedLines;
 	}
@@ -227,7 +229,7 @@ function renderTailPreview(text: string, maxLines: number, theme: RenderTheme): 
 	const displayLines = lines.slice(-maxLines);
 	const hidden = lines.length - displayLines.length;
 
-	let output = displayLines.map((line) => theme.fg("dim", truncateToWidth(line, 80))).join("\n");
+	let output = displayLines.map((line) => theme.fg("dim", truncateToWidth(line.replace(/\t/g, "    "), 80))).join("\n");
 	if (hidden > 0) {
 		output = `${theme.fg("muted", `… (${hidden} earlier lines)`)}\n${output}`;
 	}

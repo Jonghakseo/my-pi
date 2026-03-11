@@ -967,7 +967,7 @@ class DiffOverlay {
 			body.push(`${l}${" ".repeat(pad)} ${t.fg("dim", "│")} ${r}`);
 		}
 
-		return [...header, ...body, ...footer].map((line) => truncateToWidth(line, w));
+		return [...header, ...body, ...footer].map((line) => truncateToWidth(expandTabs(line), w));
 	}
 }
 
