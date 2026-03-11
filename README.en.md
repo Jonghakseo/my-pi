@@ -6,11 +6,11 @@
 
 **A personal AI operating system built on [pi](https://github.com/mariozechner/pi-coding-agent)**
 
-*11 specialized agents · 20+ extensions · one developer's opinionated setup*
+*11 specialized agents · 25+ extensions · one developer's opinionated setup*
 
 <br/>
 
-`🤖 11 Agents` &nbsp; `🧩 20+ Extensions` &nbsp; `🎨 5 Themes`
+`🤖 11 Agents` &nbsp; `🧩 25+ Extensions` &nbsp; `🎨 5 Themes`
 
 <br/>
 
@@ -38,7 +38,7 @@ The system is organized in **four layers**:
 | Layer | Purpose |
 |---|---|
 | **User / pi TUI** | Interactive terminal interface |
-| **Extensions** | 20+ TypeScript plugins — subagent management, voice I/O, MCP bridge, UI overlays, safety guards |
+| **Extensions** | 25+ TypeScript plugins — subagent management, voice I/O, MCP bridge, UI overlays, safety guards |
 | **Agent Orchestra** | 11 purpose-built agents with distinct models and roles |
 | **Infrastructure** | MCP tool integrations via [claude-mcp-bridge](./extensions/claude-mcp-bridge/) — reuses your existing Claude Code MCP setup (Jira, Slack, Gmail, Calendar, GA4, Figma, DB, etc.) |
 
@@ -54,26 +54,26 @@ Eleven agents, three models, one orchestrator. Each agent has a specific mandate
 
 | Agent | Model | Role | When to Use |
 |---|---|---|---|
-| 🔍 **finder** | `gpt-5.3-codex-spark` | Fast file & code locator | Quick lookups, grep-like tasks |
-| ⚡ **worker** | `gpt-5.3-codex` | General-purpose executor | Implementation, writing, fixes (complex multi-file) |
-| 🏃 **worker-fast** | `gpt-5.3-codex-spark` | Lightweight simple executor | Single-file edits, quick changes |
-| 📐 **planner** | `gpt-5.3-codex` | Implementation architect | Breaking down complex tasks |
-| ✨ **simplifier** | `gpt-5.3-codex` | Code simplification specialist | Clean up recently modified code, improve readability, preserve behavior |
-| 🔎 **reviewer** | `gpt-5.3-codex` | Code review (P0–P3 severity) | PR reviews, quality checks |
-| 🥊 **challenger** | `gpt-5.3-codex` | Pressure tester | Stress-test plans before execution |
-| ✅ **verifier** | `gpt-5.3-codex` | 3-tier evidence validation | Verify claims, check correctness |
-| ⚖️ **decider** | `gpt-5.3-codex` | Technical decision maker | Architecture choices, trade-offs |
+| 🔍 **finder** | `anthropic/claude-sonnet-4-6` | Fast file & code locator | Quick lookups, grep-like tasks |
+| ⚡ **worker** | `openai-codex/gpt-5.4` | General-purpose executor | Implementation, writing, fixes (complex multi-file) |
+| 🏃 **worker-fast** | `openai-codex/gpt-5.4` | Lightweight simple executor | Single-file edits, quick changes |
+| 📐 **planner** | `anthropic/claude-opus-4-6` | Implementation architect | Breaking down complex tasks |
+| ✨ **simplifier** | `anthropic/claude-sonnet-4-6` | Code simplification specialist | Clean up recently modified code, improve readability, preserve behavior |
+| 🔎 **reviewer** | `openai-codex/gpt-5.4` | Code review (P0–P3 severity) | PR reviews, quality checks |
+| 🥊 **challenger** | `openai-codex/gpt-5.4` | Pressure tester | Stress-test plans before execution |
+| ✅ **verifier** | `anthropic/claude-opus-4-6` | 3-tier evidence validation | Verify claims, check correctness |
+| ⚖️ **decider** | `openai-codex/gpt-5.4` | Technical decision maker | Architecture choices, trade-offs |
 | 🌐 **searcher** | `anthropic/claude-sonnet-4-6` | Research & web search | Documentation lookup, exploration |
-| 🖥️ **browser** | `gpt-5.3-codex` | Browser automation & UI testing | E2E testing, visual verification |
+| 🖥️ **browser** | `openai-codex/gpt-5.4` | Browser automation & UI testing | E2E testing, visual verification |
 
 <details>
 <summary><strong>Model Selection Philosophy</strong></summary>
 
-- **gpt-5.3-codex-spark** — Ultra-fast lightweight tasks (simple single-file changes, quick exploration)
-- **gpt-5.3-codex** — Structured reasoning tasks (planning, reviewing, decision-making, implementation)
-- **anthropic/claude-sonnet-4-6** — Research and documentation-heavy tasks
+- **openai-codex/gpt-5.4** — General-purpose execution & review (implementation, testing, reviewing, decision-making, browser automation)
+- **anthropic/claude-sonnet-4-6** — Fast exploration & research (file search, web research, code simplification)
+- **anthropic/claude-opus-4-6** — Deep reasoning tasks (strategic planning, verification)
 
-The orchestrator (main agent) runs on `gpt-5.3-codex`, ensuring strong reasoning depth for delegation decisions.
+The orchestrator (main agent) runs on `anthropic/claude-opus-4-6`, ensuring strong reasoning depth for delegation decisions.
 
 </details>
 
@@ -81,7 +81,7 @@ The orchestrator (main agent) runs on `gpt-5.3-codex`, ensuring strong reasoning
 
 ## 🧩 Extensions
 
-Over 20 custom TypeScript extensions organized by domain:
+Over 25 custom TypeScript extensions organized by domain:
 
 ### Core System
 
@@ -92,6 +92,9 @@ Over 20 custom TypeScript extensions organized by domain:
 | **claude-mcp-bridge/** | Reuses Claude Code's MCP server configurations — zero-duplication setup |
 | **cross-agent.ts** | Load agent definitions from `.claude/`, `.gemini/`, `.codex/` directories |
 | **memory-layer/** | Persistent memory system across sessions |
+| **dynamic-agents-md.ts** | Dynamically loads AGENTS.md at runtime to enforce edit/write scope restrictions |
+| **escalate-tool.ts** | Escalation tool for subagents to signal the master when judgment is needed |
+| **claude-hooks-bridge.ts** | Bridge connecting Claude Code hook events to Pi sessions |
 
 ### UI / UX
 
@@ -106,19 +109,20 @@ Over 20 custom TypeScript extensions organized by domain:
 | **github-overlay.ts** | GitHub PR view directly in the terminal |
 | **status-overlay.ts** | `/status` — extension and skill status dashboard |
 | **override-builtin-tools.ts** | Collapse/expand verbose tool output for cleaner sessions |
+| **files.ts** | `/files` — git tree file browser with open/edit/diff quick actions |
 
 ### Developer Tools
 
 | Extension | Description |
 |---|---|
-| **todos.ts** | Task management with persistent storage and TUI |
+| **todo-write.ts** | Task management — todo_write tool, persistent storage, TUI rendering |
 | **session-replay.ts** | `/replay` — browse and replay past sessions |
-| **context.ts** | `/context` — context window usage statistics |
 | **purpose.ts** | Pin a session purpose that persists across compactions |
 | **upload-image-url.ts** | Upload images to GitHub CDN for embedding |
 | **ask-user-question.ts** | Interactive question tool with predefined options |
 | **delayed-action.ts** | Schedule deferred actions |
 | **archive-to-html.ts** | Auto-archive HTML files generated by the to-html skill to `~/Documents` |
+| **clipboard.ts** | Copy text to clipboard via OSC52 escape sequences |
 
 ### Safety
 
@@ -196,6 +200,9 @@ Five hand-picked themes, hot-swappable with `Ctrl+X`:
 |---|---|
 | `Ctrl+T` | Toggle thinking visibility |
 | `Ctrl+X` | Cycle themes |
+| `Ctrl+Q` | Cycle themes backward |
+| `Ctrl+Shift+O` | Open file browser |
+| `Ctrl+O` | Toggle tool output collapse/expand |
 | `Option+V` | Voice input (dictation + TTS) |
 
 
@@ -234,7 +241,7 @@ This is not a demo project. It's a **living configuration** used daily for produ
 
 | Metric | Value |
 |---|---|
-| Active extensions | 20+ |
+| Active extensions | 25+ |
 | Agent definitions | 11 |
 | Themes | 5 |
 
