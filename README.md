@@ -6,11 +6,11 @@
 
 **[pi](https://github.com/mariozechner/pi-coding-agent) 기반 개인 AI 오퍼레이팅 시스템**
 
-*11개의 전문 에이전트 · 20개 이상의 확장 기능 · 한 개발자의 주관적인 셋업*
+*11개의 전문 에이전트 · 25개 이상의 확장 기능 · 한 개발자의 주관적인 셋업*
 
 <br/>
 
-`🤖 11 에이전트` &nbsp; `🧩 20+ 확장 기능` &nbsp; `🎨 5 테마`
+`🤖 11 에이전트` &nbsp; `🧩 25+ 확장 기능` &nbsp; `🎨 5 테마`
 
 <br/>
 
@@ -38,7 +38,7 @@
 | 레이어 | 역할 |
 |---|---|
 | **사용자 / pi TUI** | 터미널 기반 인터랙티브 인터페이스 |
-| **확장 기능** | 20개 이상의 TypeScript 플러그인 — 서브에이전트, 음성 I/O, MCP 브릿지, UI 오버레이, 안전 장치 |
+| **확장 기능** | 25개 이상의 TypeScript 플러그인 — 서브에이전트, 음성 I/O, MCP 브릿지, UI 오버레이, 안전 장치 |
 | **에이전트 오케스트라** | 역할과 모델이 다른 11개의 전문 에이전트 |
 | **인프라** | [claude-mcp-bridge](./extensions/claude-mcp-bridge/)를 통한 MCP 도구 연동 — 기존 Claude Code MCP 설정을 그대로 재사용 (Jira, Slack, Gmail, Calendar, GA4, Figma, DB 등) |
 
@@ -54,26 +54,26 @@
 
 | 에이전트 | 모델 | 역할 | 사용 시점 |
 |---|---|---|---|
-| 🔍 **finder** | `gpt-5.3-codex-spark` | 빠른 파일·코드 탐색 | 빠른 조회, grep 스타일 탐색 |
-| ⚡ **worker** | `gpt-5.3-codex` | 범용 작업 실행기 | 구현, 작성, 수정 (복잡한 다중 파일) |
-| 🏃 **worker-fast** | `gpt-5.3-codex-spark` | 경량 단순 작업 실행기 | 단일 파일 수정, 간단한 변경 |
-| 📐 **planner** | `gpt-5.3-codex` | 구현 설계자 | 복잡한 작업 분할 |
-| ✨ **simplifier** | `gpt-5.3-codex` | 코드 단순화 전문가 | 최근 수정 코드 정리, 가독성 개선, 동작 보존 리팩터링 |
-| 🔎 **reviewer** | `gpt-5.3-codex` | 코드 리뷰 (P0–P3 심각도) | PR 리뷰, 품질 점검 |
-| 🥊 **challenger** | `gpt-5.3-codex` | 스트레스 테스터 | 실행 전 계획 검증 |
-| ✅ **verifier** | `gpt-5.3-codex` | 3단계 근거 검증 | 주장 확인, 정확성 점검 |
-| ⚖️ **decider** | `gpt-5.3-codex` | 기술 의사 결정 | 아키텍처 선택, 트레이드오프 분석 |
+| 🔍 **finder** | `anthropic/claude-sonnet-4-6` | 빠른 파일·코드 탐색 | 빠른 조회, grep 스타일 탐색 |
+| ⚡ **worker** | `openai-codex/gpt-5.4` | 범용 작업 실행기 | 구현, 작성, 수정 (복잡한 다중 파일) |
+| 🏃 **worker-fast** | `openai-codex/gpt-5.4` | 경량 단순 작업 실행기 | 단일 파일 수정, 간단한 변경 |
+| 📐 **planner** | `anthropic/claude-opus-4-6` | 구현 설계자 | 복잡한 작업 분할 |
+| ✨ **simplifier** | `anthropic/claude-sonnet-4-6` | 코드 단순화 전문가 | 최근 수정 코드 정리, 가독성 개선, 동작 보존 리팩터링 |
+| 🔎 **reviewer** | `openai-codex/gpt-5.4` | 코드 리뷰 (P0–P3 심각도) | PR 리뷰, 품질 점검 |
+| 🥊 **challenger** | `openai-codex/gpt-5.4` | 스트레스 테스터 | 실행 전 계획 검증 |
+| ✅ **verifier** | `anthropic/claude-opus-4-6` | 3단계 근거 검증 | 주장 확인, 정확성 점검 |
+| ⚖️ **decider** | `openai-codex/gpt-5.4` | 기술 의사 결정 | 아키텍처 선택, 트레이드오프 분석 |
 | 🌐 **searcher** | `anthropic/claude-sonnet-4-6` | 리서치·웹 검색 | 문서 탐색, 조사 |
-| 🖥️ **browser** | `gpt-5.3-codex` | 브라우저 자동화·UI 테스트 | E2E 테스트, 시각 검증 |
+| 🖥️ **browser** | `openai-codex/gpt-5.4` | 브라우저 자동화·UI 테스트 | E2E 테스트, 시각 검증 |
 
 <details>
 <summary><strong>모델 선택 기준</strong></summary>
 
-- **gpt-5.3-codex-spark** — 초고속 경량 작업 (단순 단일 파일 변경, 빠른 탐색)
-- **gpt-5.3-codex** — 구조적 추론 중심 작업 (설계, 리뷰, 의사 결정, 구현)
-- **anthropic/claude-sonnet-4-6** — 리서치·웹 검색 특화 작업
+- **openai-codex/gpt-5.4** — 범용 실행·리뷰 (구현, 테스트, 리뷰, 의사결정, 브라우저 자동화)
+- **anthropic/claude-sonnet-4-6** — 빠른 탐색·리서치 (파일 검색, 웹 리서치, 코드 단순화)
+- **anthropic/claude-opus-4-6** — 깊은 추론 작업 (전략 설계, 검증)
 
-오케스트레이터(메인 에이전트)는 `gpt-5.3-codex` 기반으로 동작하여 위임 결정을 수행한다.
+오케스트레이터(메인 에이전트)는 `anthropic/claude-opus-4-6` 기반으로 동작하여 위임 결정을 수행한다.
 
 </details>
 
@@ -81,7 +81,7 @@
 
 ## 🧩 확장 기능
 
-20개 이상의 커스텀 TypeScript 확장을 도메인별로 정리했다:
+25개 이상의 커스텀 TypeScript 확장을 도메인별로 정리했다:
 
 ### 코어 시스템
 
@@ -91,6 +91,9 @@
 | **system-mode/** | "마스터 모드" (위임 전용 오케스트레이터) ↔ 일반 모드 전환 |
 | **claude-mcp-bridge/** | Claude Code의 MCP 서버 설정을 그대로 재사용 — 중복 설정 제로 |
 | **cross-agent.ts** | `.claude/`, `.gemini/`, `.codex/` 디렉터리에서 에이전트 정의 로드 |
+| **dynamic-agents-md.ts** | 런타임에 AGENTS.md를 동적 로드하여 편집·쓰기 범위 제한 강제 |
+| **escalate-tool.ts** | 서브에이전트가 마스터에게 에스컬레이션 신호를 보내는 도구 |
+| **claude-hooks-bridge.ts** | Claude Code의 훅(hook) 이벤트를 Pi 세션에 연결하는 브릿지 |
 | **memory-layer/** | 세션 간 영속 메모리 시스템 |
 
 ### UI / UX
@@ -105,17 +108,18 @@
 | **diff-overlay.ts** | `/diff` — 분할 화면 git diff 뷰어 오버레이 |
 | **github-overlay.ts** | 터미널에서 바로 GitHub PR 확인 |
 | **status-overlay.ts** | `/status` — 확장 기능·스킬 상태 대시보드 |
+| **files.ts** | `/files` — git 트리 파일 브라우저 + 열기/편집/diff 빠른 액션 |
 | **override-builtin-tools.ts** | 도구 출력 접기/펼치기로 세션 깔끔하게 유지 |
 
 ### 개발 도구
 
 | 확장 | 설명 |
 |---|---|
-| **todos.ts** | 영속 저장소와 TUI를 갖춘 할 일 관리 |
+| **todo-write.ts** | 할 일 관리 — todo_write 도구, 영속 저장소, TUI 렌더링 |
 | **session-replay.ts** | `/replay` — 과거 세션 탐색·재생 |
-| **context.ts** | `/context` — 컨텍스트 윈도우 사용 통계 |
 | **purpose.ts** | 컴팩션을 거쳐도 유지되는 세션 목적 고정 |
 | **upload-image-url.ts** | GitHub CDN으로 이미지 업로드 후 임베딩 |
+| **clipboard.ts** | OSC52 이스케이프 시퀀스로 클립보드에 텍스트 복사 |
 | **ask-user-question.ts** | 사전 정의 옵션을 갖춘 인터랙티브 질문 도구 |
 | **delayed-action.ts** | 지연 실행 예약 |
 | **archive-to-html.ts** | to-html 스킬로 생성된 HTML 파일을 `~/Documents`에 자동 아카이브 |
@@ -196,6 +200,9 @@ final     = reviewer("전체 변경사항 리뷰")
 |---|---|
 | `Ctrl+T` | 사고(thinking) 표시 토글 |
 | `Ctrl+X` | 테마 순환 |
+| `Ctrl+Q` | 테마 역순 순환 |
+| `Ctrl+Shift+O` | 파일 브라우저 열기 |
+| `Ctrl+O` | 도구 출력 접기/펼치기 |
 | `Option+V` | 음성 입력 (받아쓰기 + TTS) |
 
 
@@ -234,7 +241,7 @@ pi install npm:pi-web-access
 
 | 지표 | 값 |
 |---|---|
-| 활성 확장 기능 | 20+ |
+| 활성 확장 기능 | 25+ |
 | 에이전트 정의 | 11개 |
 | 테마 | 5개 |
 
