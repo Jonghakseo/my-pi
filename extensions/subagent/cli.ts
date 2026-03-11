@@ -97,6 +97,8 @@ export const SUBAGENT_CLI_HELP_TEXT = [
 	"  • After launch, end the turn and wait for follow-up (no status/detail polling loops).",
 	"  • Use `--main` to share context with the main agent; `--isolated` for a fresh scope.",
 	"  • When using `continue`, the main context is NOT auto-synced. Include recent changes in the task text.",
+	"  • Long task? Write context to a temp file and reference it in the task:",
+	'    e.g. subagent run worker -- "read /tmp/task-ctx.md and follow the instructions"',
 	"",
 ].join("\n");
 

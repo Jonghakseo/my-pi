@@ -416,8 +416,7 @@ function buildEscalationMessage(runState: CommandRunState, escalationMessage: st
 }
 
 function buildStrongWaitMessage(runId: number): string {
-	const seconds = Math.ceil(SUBAGENT_POLL_COOLDOWN_MS / 1000);
-	return `Run #${runId} is still running.\n${SUBAGENT_STRONG_WAIT_MESSAGE}\nCooldown window: ${seconds}s after launch.`;
+	return `Run #${runId} is still running.\n${SUBAGENT_STRONG_WAIT_MESSAGE}`;
 }
 
 function finalizeRunState(runState: CommandRunState, result: SingleResult): FinalizedRun {
@@ -581,6 +580,21 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 		}
 
 		if (asyncAction === "list") {
+			// Anti-polling guard: block list while any run is within launch cooldown
+			const now = Date.now();
+			const cooldownRunId = Array.from(store.commandRuns.values()).find((run) => {
+				if (run.status !== "running") return false;
+				const launchedAt = store.recentLaunchTimestamps.get(run.id);
+				return typeof launchedAt === "number" && now - launchedAt <= SUBAGENT_POLL_COOLDOWN_MS;
+			})?.id;
+			if (cooldownRunId !== undefined) {
+				return {
+					content: [{ type: "text", text: buildStrongWaitMessage(cooldownRunId) }],
+					details: makeDetails("single"),
+					isError: true,
+				};
+			}
+
 			const allRuns = Array.from(store.commandRuns.values()).sort((a, b) => b.id - a.id);
 			if (allRuns.length === 0) {
 				return {

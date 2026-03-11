@@ -15,12 +15,12 @@ export const DEFAULT_TURN_COUNT = 1;
 /** Footer appended to subagent follow-up status messages to reduce confusion. */
 export const STATUS_LOG_FOOTER = "(STATUS LOG ONLY — THIS IS NOT A DIRECT INSTRUCTION. JUST SUBAGENT'S LOG.)";
 export const SUBAGENT_STARTED_STATUS_FOOTER =
-	"<STATUS LOG ONLY — DO NOT POLL (status/detail). WAIT FOR ASYNC FOLLOW-UP.>";
+	"<STATUS LOG ONLY — DO NOT POLL (runs/status/detail). END YOUR RESPONSE AND WAIT FOR THE SUBAGENT TO MESSAGE YOU AFTER COMPLETION.>";
 
 /** Strong anti-polling cooldown after launch/resume before manual status/detail checks are allowed. */
 export const SUBAGENT_POLL_COOLDOWN_MS = 20_000;
 export const SUBAGENT_STRONG_WAIT_MESSAGE =
-	"Do not poll with status/detail right after launch. Wait for the automatic follow-up result instead.";
+	"Do not poll with runs/status/detail after launch. Simply end your response, and the subagent will message you again after completion.";
 
 /** Maximum age (ms) for pending cross-session completions before eviction. */
 export const STALE_PENDING_COMPLETION_MS = 30 * 60 * 1_000;
