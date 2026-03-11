@@ -833,7 +833,7 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 		name: "subagent",
 		label: "Subagent",
 		description:
-			'CLI-style subagent delegation interface. Always start with `subagent help` to learn available commands, then execute run/continue/batch/chain/runs/status/detail/abort/remove via `{ command: "subagent ..." }`. After any async launch, stop making subagent calls and wait for automatic follow-up unless the user explicitly asks for manual inspection.',
+			'CLI-style subagent delegation interface. Always start with `subagent help` to learn available commands, then execute run/continue/batch/chain/runs/status/detail/abort/remove via `{ command: "subagent ..." }`. After any async launch, stop making subagent calls and simply end your response. The subagent will message you again after completion unless the user explicitly asks for manual inspection. Do NOT poll with runs/status/detail right after launch. Tip: when a task description is long, write context to a temp file and pass the file path in the task (e.g. "read /tmp/ctx.md and follow the instructions") — the subagent can read it.',
 		parameters: SubagentParams,
 
 		execute: createSubagentToolExecute(pi, store) as any,
