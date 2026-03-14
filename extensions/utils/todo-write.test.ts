@@ -112,7 +112,7 @@ describe("todo-write ops", () => {
 		};
 
 		const lines = renderTodoWidgetLines(state);
-		expect(lines).toEqual(["→ Map callsites", "○ Write patch"]);
+		expect(lines).toEqual(["~~● Read source", "→ Map callsites", "○ Write patch"]);
 	});
 
 	it("keeps completed widget visible during grace period", () => {

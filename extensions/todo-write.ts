@@ -70,6 +70,7 @@ const todoWidgetMetaStore = new Map<string, { completedAt?: number; completedTur
 const todoWidgetAgentRunningStore = new Map<string, boolean>();
 const todoTurnStore = new Map<string, number>();
 const TODO_HIDE_COMPLETED_AFTER_TURNS = 2;
+const TODO_HIDE_COMPLETED_AFTER_MS = 90_000;
 const TODO_STATE_ENTRY_TYPE = "todo-write-state";
 const TODO_COMPACTION_REMINDER_TYPE = "todo-write-compaction-reminder";
 
@@ -146,13 +147,15 @@ export function getTodoWidgetVisibility(
 	if (hasRemainingTasks(state)) return { hidden: false, completionGraceActive: false };
 
 	const completedTurn = meta?.completedTurn ?? currentTurn;
+	const completedAt = meta?.completedAt ?? now;
 	const elapsedTurns = Math.max(0, currentTurn - completedTurn);
-	const hidden = elapsedTurns >= TODO_HIDE_COMPLETED_AFTER_TURNS;
+	const elapsedMs = Math.max(0, now - completedAt);
+	const hidden = elapsedTurns >= TODO_HIDE_COMPLETED_AFTER_TURNS || elapsedMs >= TODO_HIDE_COMPLETED_AFTER_MS;
 
 	return {
 		hidden,
 		completionGraceActive: !hidden,
-		meta: { completedAt: meta?.completedAt ?? now, completedTurn },
+		meta: { completedAt, completedTurn },
 	};
 }
 
@@ -415,6 +418,15 @@ async function syncTodoWidget(ctx: ExtensionContext): Promise<void> {
 	}
 
 	clearTodoWidgetHideTimer(key);
+	if (visibility.completionGraceActive && !hasRemainingTasks(state) && visibility.meta?.completedAt !== undefined) {
+		const elapsedMs = Math.max(0, Date.now() - visibility.meta.completedAt);
+		const remainingMs = Math.max(0, TODO_HIDE_COMPLETED_AFTER_MS - elapsedMs);
+		const hideTimer = setTimeout(() => {
+			todoWidgetHideTimerByKey.delete(key);
+			void syncTodoWidget(ctx);
+		}, remainingMs);
+		todoWidgetHideTimerByKey.set(key, hideTimer);
+	}
 
 	ctx.ui.setWidget(TODO_WIDGET_KEY, (tui, theme) => {
 		const renderedLines = [...lines];
