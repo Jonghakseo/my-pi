@@ -116,6 +116,15 @@ const LINT_OUTPUT = [
 	"✖ 8 problems (0 errors, 8 warnings)",
 ].join("\n");
 
+/** Exact crash-shaped git pull output captured from pi-crash.log. */
+const GIT_PULL_OUTPUT = [
+	"From https://github.com/creatrip/product",
+	"   64378a1345d..e0681ce2639  development -> origin/development",
+	"   199cc0ced91..ca69ab49782  feature/admin-save-shortcut -> origin/feature/admin-save-shortcut",
+	"   b76f6249415..578fade20db  fix/open-date-notification-error-boundary -> origin/fix/open-date-notification-error-boundary",
+	"Already up to date.",
+].join("\n");
+
 /** CJK-heavy text (Korean) — each char is 2 columns wide. */
 const CJK_LONG = "한글테스트문자열".repeat(30); // 8 * 30 = 240 chars → 480 columns
 
@@ -202,6 +211,16 @@ describe("TruncatedText via tool renderResult", () => {
 				ansiTheme(),
 			);
 			assertAllLinesFit(result, 127, "bash collapsed ANSI ");
+		});
+
+		it("expanded: reproduces the narrow split-panel git pull crash shape safely at width=75", () => {
+			const result = bash.renderResult!(
+				{ content: [{ type: "text", text: GIT_PULL_OUTPUT }] },
+				{ expanded: true },
+				ansiTheme(),
+			);
+			const lines = assertAllLinesFit(result, 75, "bash git-pull crash repro ");
+			expect(lines.join("\n")).toContain("fix/open-date-notification-error-boundary");
 		});
 
 		it("expanded: preserves content (does not lose text)", () => {
@@ -633,15 +652,15 @@ describe("edge cases", () => {
 		assertAllLinesFit(result, 80, "single long ");
 	});
 
-	it("empty lines are preserved", () => {
+	it("empty lines are preserved as blank visual rows", () => {
 		const result = bash.renderResult!(
 			{ content: [{ type: "text", text: "a\n\nb\n\nc" }] },
 			{ expanded: true },
 			plainTheme(),
 		);
 		const lines = renderAt(result, 200);
-		// Should have empty lines in the output
-		expect(lines.filter((l) => l === "").length).toBeGreaterThan(0);
+		const blankRows = lines.filter((l) => l.trim() === "").length;
+		expect(blankRows).toBeGreaterThanOrEqual(2);
 	});
 
 	it("mixed CJK + ASCII + ANSI within same line", () => {
