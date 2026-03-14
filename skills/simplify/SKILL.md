@@ -1,5 +1,5 @@
 ---
-name: code-polishing
+name: simplify
 description: simplifier 서브에이전트를 호출해 최근 수정 코드를 동작 변경 없이 다듬는 스킬.
 argument-hint: "방금 수정한 코드 다듬어줘 | 이 변경사항 polish 해줘 | 가독성만 개선해줘"
 disable-model-invocation: false
