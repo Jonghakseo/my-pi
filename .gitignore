@@ -47,3 +47,5 @@ extensions/pnpm-lock.yaml
 
 # claude-mcp-bridge local runtime settings
 claude-mcp-bridge-tools.json
+extensions/remote/dist/
+extensions/remote/web-dist/
