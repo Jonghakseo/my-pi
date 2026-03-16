@@ -10,14 +10,23 @@
 
 import path from "node:path";
 import type { ExtensionAPI, ExtensionCommandContext, ThemeColor } from "@mariozechner/pi-coding-agent";
-import { DynamicBorder } from "@mariozechner/pi-coding-agent";
+import { DynamicBorder, getLanguageFromPath, highlightCode } from "@mariozechner/pi-coding-agent";
 import { Key, matchesKey, truncateToWidth, visibleWidth } from "@mariozechner/pi-tui";
 import {
 	type BranchCommitEntry,
 	type CommitState,
+	type FileTreeNode,
+	type VisibleRow,
+	buildFileTree,
+	collapseFileTree,
+	collectAllDirPaths,
 	commitStateBadge,
 	type DiffFileStatus,
+	applyHighlightToDiff,
+	extractCodeBlock,
+	flattenVisibleTree,
 	mergeDiffEntries,
+	parseDiffLines,
 	type OverlayViewMode,
 	parseGitLogOutput,
 	parseNameStatusZ,
@@ -48,7 +57,13 @@ interface DiffState {
 	selectedIndex: number;
 	fileScrollOffset: number;
 	diffCache: Map<string, string>;
+	highlightedDiffCache: Map<string, string[]>;
 	diffScrollOffset: number;
+
+	// Tree state for diff mode
+	treeNodes: FileTreeNode[];
+	expandedDirs: Set<string>;
+	selectedFilePath: string | null;
 
 	// Commit mode
 	commits: BranchCommitEntry[];
@@ -79,7 +94,7 @@ interface Theme {
 
 interface Tui {
 	requestRender: () => void;
-	height?: number;
+	terminal?: { rows?: number };
 }
 
 // ─── Utils ─────────────────────────────────────────────────────────────────
@@ -134,6 +149,53 @@ function buildCommitRowsMeta(
 	}
 
 	return { totalRows: row, fileStarts, fileEnds };
+}
+
+const UNCOMMITTED_HASH = "__uncommitted__";
+
+// ─── Tree helpers ──────────────────────────────────────────────────────────
+
+function rebuildTree(files: DiffFile[]): { treeNodes: FileTreeNode[]; expandedDirs: Set<string> } {
+	const treeNodes = collapseFileTree(buildFileTree(files.map((f) => f.path)));
+	const expandedDirs = new Set(collectAllDirPaths(treeNodes));
+	return { treeNodes, expandedDirs };
+}
+
+function getVisibleRows(st: DiffState): VisibleRow[] {
+	return flattenVisibleTree(st.treeNodes, st.expandedDirs);
+}
+
+function findFileByPath(st: DiffState, filePath: string | null): DiffFile | null {
+	if (!filePath) return null;
+	return st.files.find((f) => f.path === filePath) ?? null;
+}
+
+// ─── Syntax highlight ──────────────────────────────────────────────────────
+
+function buildHighlightedDiff(rawDiff: string, filePath: string, t: Theme): string[] {
+	const expanded = rawDiff
+		.split("\n")
+		.map((l) => expandTabs(l))
+		.join("\n");
+	const parsed = parseDiffLines(expanded);
+	const lang = getLanguageFromPath(filePath);
+	const { code } = extractCodeBlock(parsed);
+	const highlighted = lang ? highlightCode(code, lang) : code.split("\n");
+
+	return applyHighlightToDiff(
+		parsed,
+		highlighted,
+		(line) => {
+			if (line.startsWith("+++") || line.startsWith("---")) return t.fg("muted", line);
+			return t.fg("dim", line);
+		},
+		(line) => t.fg("accent", line),
+		(category, prefix) => {
+			if (category === "added") return t.fg("success", prefix);
+			if (category === "removed") return t.fg("error", prefix);
+			return prefix;
+		},
+	);
 }
 
 // ─── Git helpers ───────────────────────────────────────────────────────────
@@ -230,6 +292,21 @@ async function commitFilesForHash(pi: ExtensionAPI, cwd: string, commitHash: str
 }
 
 async function commitFileDiff(pi: ExtensionAPI, cwd: string, commitHash: string, filePath: string): Promise<string> {
+	if (commitHash === UNCOMMITTED_HASH) {
+		// Working tree diff — try unstaged, then staged
+		const unstaged = await pi.exec("git", ["diff", "--no-color", "--", filePath], { cwd });
+		if (unstaged.code === 0 && (unstaged.stdout ?? "").trim()) return (unstaged.stdout ?? "").trim();
+		const staged = await pi.exec("git", ["diff", "--cached", "--no-color", "--", filePath], { cwd });
+		if (staged.code === 0 && (staged.stdout ?? "").trim()) return (staged.stdout ?? "").trim();
+		// Untracked — show file content as additions
+		const cat = await pi.exec("cat", [filePath], { cwd });
+		if (cat.code === 0 && cat.stdout)
+			return cat.stdout
+				.split("\n")
+				.map((l) => `+ ${l}`)
+				.join("\n");
+		return "(no diff available)";
+	}
 	const r = await pi.exec("git", ["show", "--no-color", "--format=", commitHash, "--", filePath], { cwd });
 	if (r.code === 0 && (r.stdout ?? "").trim()) return (r.stdout ?? "").trim();
 	return "(no diff available)";
@@ -304,49 +381,63 @@ function colorDiffLine(t: Theme, line: string): string {
 }
 
 function renderFiles(t: Theme, st: DiffState, w: number, h: number): string[] {
-	if (st.files.length === 0) return [t.fg("muted", " (no changes)")];
+	const visibleRows = getVisibleRows(st);
+	if (visibleRows.length === 0) return [t.fg("muted", " (no changes)")];
 
 	const active = st.focus === "left";
 	const max = Math.max(1, h);
 
+	st.selectedIndex = clamp(st.selectedIndex, 0, Math.max(0, visibleRows.length - 1));
 	if (st.selectedIndex < st.fileScrollOffset) st.fileScrollOffset = st.selectedIndex;
 	if (st.selectedIndex >= st.fileScrollOffset + max) st.fileScrollOffset = st.selectedIndex - max + 1;
 
 	const start = st.fileScrollOffset;
-	const end = Math.min(st.files.length, start + max);
+	const end = Math.min(visibleRows.length, start + max);
 	const lines: string[] = [];
 
+	const fileByPath = new Map(st.files.map((f) => [f.path, f]));
+
 	for (let i = start; i < end; i++) {
-		const f = st.files[i];
+		const row = visibleRows[i];
 		const sel = i === st.selectedIndex;
+		const indent = " ".repeat(row.depth * 2);
 		const cursor = sel ? (active ? t.fg("accent", "▶") : t.fg("muted", "▸")) : " ";
-		const ic = t.fg(statusColor(f.status), icon(f.status));
-		const badge = t.fg(commitStateColor(f.commitState), `[${commitStateBadge(f.commitState)}]`);
-		const prefix = `${cursor} ${ic} ${badge} `;
-		const nameW = Math.max(4, w - visibleWidth(prefix));
 
-		let label: string;
-		if (sel && active) {
-			label = t.fg("accent", truncateToWidth(f.path, nameW));
-		} else if (sel) {
-			label = t.fg("muted", truncateToWidth(f.path, nameW));
+		if (row.type === "dir") {
+			const fold = row.expanded ? "▾" : "▸";
+			const foldColored = row.expanded ? t.fg("accent", fold) : t.fg("dim", fold);
+			const prefix = `${cursor} ${indent}${foldColored} `;
+			const nameW = Math.max(4, w - visibleWidth(prefix) - 1);
+			const dirName =
+				sel && active
+					? t.fg("accent", t.bold(truncateToWidth(`${row.name}/`, nameW)))
+					: sel
+						? t.fg("muted", truncateToWidth(`${row.name}/`, nameW))
+						: t.fg("muted", truncateToWidth(`${row.name}/`, nameW));
+			lines.push(truncateToWidth(`${prefix}${dirName}`, w));
 		} else {
-			const slash = f.path.lastIndexOf("/");
-			if (slash >= 0) {
-				const dir = f.path.slice(0, slash + 1);
-				const name = f.path.slice(slash + 1);
-				const dirW = Math.min(visibleWidth(dir), Math.floor(nameW * 0.55));
-				label = `${t.fg("dim", truncateToWidth(dir, dirW))}${t.fg("text", truncateToWidth(name, Math.max(4, nameW - dirW)))}`;
-			} else {
-				label = t.fg("text", truncateToWidth(f.path, nameW));
-			}
-		}
+			const file = fileByPath.get(row.fullPath);
+			const ic = file ? t.fg(statusColor(file.status), icon(file.status)) : " ";
+			const badge = file
+				? t.fg(commitStateColor(file.commitState), `[${commitStateBadge(file.commitState)}]`)
+				: "";
+			const prefix = `${cursor} ${indent}${ic} ${badge} `;
+			const nameW = Math.max(4, w - visibleWidth(prefix));
 
-		lines.push(truncateToWidth(`${prefix}${label}`, w));
+			let label: string;
+			if (sel && active) {
+				label = t.fg("accent", truncateToWidth(row.name, nameW));
+			} else if (sel) {
+				label = t.fg("muted", truncateToWidth(row.name, nameW));
+			} else {
+				label = t.fg("text", truncateToWidth(row.name, nameW));
+			}
+			lines.push(truncateToWidth(`${prefix}${label}`, w));
+		}
 	}
 
-	if (st.files.length > max) {
-		const info = t.fg("dim", ` ${start + 1}–${end}/${st.files.length}`);
+	if (visibleRows.length > max) {
+		const info = t.fg("dim", ` ${start + 1}–${end}/${visibleRows.length}`);
 		while (lines.length < max) lines.push("");
 		lines[max - 1] = info;
 	}
@@ -373,14 +464,27 @@ function renderCommits(t: Theme, st: DiffState, w: number, h: number): string[] 
 		const c = st.commits[i];
 		const sel = i === st.commitSelectedIndex;
 		const cursor = sel ? (active ? t.fg("accent", "▶") : t.fg("muted", "▸")) : " ";
-		const hash = t.fg(sel && active ? "accent" : "muted", c.shortHash);
-		const prefix = `${cursor} ${hash} `;
-		const subjectW = Math.max(4, w - visibleWidth(prefix));
-		const subject =
-			sel && active
-				? t.fg("accent", truncateToWidth(c.subject, subjectW))
-				: t.fg("text", truncateToWidth(c.subject, subjectW));
-		lines.push(truncateToWidth(`${prefix}${subject}`, w));
+		const isUncommitted = c.hash === UNCOMMITTED_HASH;
+
+		if (isUncommitted) {
+			const marker = t.fg(sel && active ? "accent" : "warning", "●●●");
+			const prefix = `${cursor} ${marker} `;
+			const subjectW = Math.max(4, w - visibleWidth(prefix));
+			const subject =
+				sel && active
+					? t.fg("accent", truncateToWidth(c.subject, subjectW))
+					: t.fg("warning", truncateToWidth(c.subject, subjectW));
+			lines.push(truncateToWidth(`${prefix}${subject}`, w));
+		} else {
+			const hash = t.fg(sel && active ? "accent" : "muted", c.shortHash);
+			const prefix = `${cursor} ${hash} `;
+			const subjectW = Math.max(4, w - visibleWidth(prefix));
+			const subject =
+				sel && active
+					? t.fg("accent", truncateToWidth(c.subject, subjectW))
+					: t.fg("text", truncateToWidth(c.subject, subjectW));
+			lines.push(truncateToWidth(`${prefix}${subject}`, w));
+		}
 	}
 
 	if (st.commits.length > max) {
@@ -396,13 +500,17 @@ function renderCommits(t: Theme, st: DiffState, w: number, h: number): string[] 
 function renderDiff(t: Theme, st: DiffState, w: number, h: number): string[] {
 	if (st.files.length === 0) return [t.fg("muted", "  No changes")];
 
-	const f = st.files[st.selectedIndex];
-	if (!f) return [];
+	const f = findFileByPath(st, st.selectedFilePath);
+	if (!f) return [t.fg("muted", "  Select a file to view diff")];
 
 	const raw = st.diffCache.get(f.path);
 	if (raw === undefined) return [t.fg("muted", "  Loading…")];
 
-	const all = raw.split("\n");
+	// Build syntax-highlighted lines on first render (lazy, cached)
+	if (!st.highlightedDiffCache.has(f.path)) {
+		st.highlightedDiffCache.set(f.path, buildHighlightedDiff(raw, f.path, t));
+	}
+	const all = st.highlightedDiffCache.get(f.path)!;
 	if (all.length === 0) return [t.fg("muted", "  (empty diff)")];
 
 	const max = Math.max(1, h);
@@ -414,7 +522,7 @@ function renderDiff(t: Theme, st: DiffState, w: number, h: number): string[] {
 
 	const lines: string[] = [];
 	for (let i = start; i < end; i++) {
-		lines.push(truncateToWidth(` ${colorDiffLine(t, expandTabs(all[i] ?? ""))}`, w));
+		lines.push(truncateToWidth(` ${all[i] ?? ""}`, w));
 	}
 
 	while (lines.length < max) lines.push("");
@@ -558,7 +666,7 @@ class DiffOverlay {
 	}
 
 	private async ensureDiff(tui: Tui): Promise<void> {
-		const f = this.st.files[this.st.selectedIndex];
+		const f = findFileByPath(this.st, this.st.selectedFilePath);
 		if (!f || this.st.diffCache.has(f.path) || this.diffLoading) return;
 		this.diffLoading = true;
 		try {
@@ -577,8 +685,16 @@ class DiffOverlay {
 		this.st.commitFilesLoading.add(commit.hash);
 		tui.requestRender();
 		try {
-			const files = await commitFilesForHash(this.pi, this.cwd, commit.hash);
-			this.st.commitFilesCache.set(commit.hash, files);
+			if (commit.hash === UNCOMMITTED_HASH) {
+				const wtFiles = await workingTreeFiles(this.pi, this.cwd);
+				this.st.commitFilesCache.set(
+					UNCOMMITTED_HASH,
+					wtFiles.map((f) => ({ path: f.path, status: f.status, rawStatus: f.rawStatus })),
+				);
+			} else {
+				const files = await commitFilesForHash(this.pi, this.cwd, commit.hash);
+				this.st.commitFilesCache.set(commit.hash, files);
+			}
 		} finally {
 			this.st.commitFilesLoading.delete(commit.hash);
 		}
@@ -617,14 +733,19 @@ class DiffOverlay {
 	private async refreshFiles(): Promise<void> {
 		const files = await changedFiles(this.pi, this.cwd, this.st.mergeBase);
 		this.st.files = files;
+		const { treeNodes, expandedDirs } = rebuildTree(files);
+		this.st.treeNodes = treeNodes;
+		this.st.expandedDirs = expandedDirs;
 		if (files.length === 0) {
 			this.st.selectedIndex = 0;
 			this.st.fileScrollOffset = 0;
 			this.st.diffScrollOffset = 0;
+			this.st.selectedFilePath = null;
 			this.st.focus = "left";
 			return;
 		}
-		this.st.selectedIndex = Math.min(this.st.selectedIndex, files.length - 1);
+		const rows = getVisibleRows(this.st);
+		this.st.selectedIndex = Math.min(this.st.selectedIndex, Math.max(0, rows.length - 1));
 	}
 
 	private async stashChanges(tui: Tui): Promise<void> {
@@ -636,6 +757,7 @@ class DiffOverlay {
 
 		this.st.error = null;
 		this.st.diffCache.clear();
+		this.st.highlightedDiffCache.clear();
 		await this.refreshFiles();
 		if (this.st.viewMode === "diff") void this.ensureDiff(tui);
 	}
@@ -649,10 +771,23 @@ class DiffOverlay {
 		void this.ensureCommitFiles(tui);
 	}
 
+	/** After navigating in the tree, update selectedFilePath if on a file row. */
+	private syncSelectedFile(tui: Tui): void {
+		const rows = getVisibleRows(this.st);
+		const row = rows[this.st.selectedIndex];
+		if (row?.type === "file") {
+			this.st.selectedFilePath = row.fullPath;
+			this.st.diffScrollOffset = 0;
+			void this.ensureDiff(tui);
+		}
+	}
+
 	private handleDiffModeInput(data: string, tui: Tui): void {
 		const st = this.st;
-		const n = st.files.length;
-		const f = st.files[st.selectedIndex];
+		const rows = getVisibleRows(st);
+		const n = rows.length;
+		const currentRow = rows[st.selectedIndex];
+		const f = findFileByPath(st, st.selectedFilePath);
 
 		if (st.focus === "left") {
 			if (matchesKey(data, Key.escape)) {
@@ -662,25 +797,29 @@ class DiffOverlay {
 			if (matchesKey(data, Key.up) || data === "k") {
 				if (st.selectedIndex > 0) {
 					st.selectedIndex -= 1;
-					st.diffScrollOffset = 0;
-					void this.ensureDiff(tui);
+					this.syncSelectedFile(tui);
 				}
 			} else if (matchesKey(data, Key.down) || data === "j") {
 				if (st.selectedIndex < n - 1) {
 					st.selectedIndex += 1;
-					st.diffScrollOffset = 0;
-					void this.ensureDiff(tui);
+					this.syncSelectedFile(tui);
 				}
 			} else if (data === "g") {
 				st.selectedIndex = 0;
-				st.diffScrollOffset = 0;
-				void this.ensureDiff(tui);
+				this.syncSelectedFile(tui);
 			} else if (data === "G") {
 				st.selectedIndex = Math.max(0, n - 1);
-				st.diffScrollOffset = 0;
-				void this.ensureDiff(tui);
+				this.syncSelectedFile(tui);
 			} else if (matchesKey(data, Key.enter)) {
-				if (n > 0) {
+				if (currentRow?.type === "dir") {
+					// Toggle expand/collapse
+					if (st.expandedDirs.has(currentRow.fullPath)) {
+						st.expandedDirs.delete(currentRow.fullPath);
+					} else {
+						st.expandedDirs.add(currentRow.fullPath);
+					}
+				} else if (currentRow?.type === "file") {
+					st.selectedFilePath = currentRow.fullPath;
 					st.focus = "right";
 					st.diffScrollOffset = 0;
 					void this.ensureDiff(tui);
@@ -782,7 +921,7 @@ class DiffOverlay {
 		const expanded = this.expandedSet(commit.hash);
 		const selectedExpanded = Boolean(selectedFile && expanded.has(selectedFile.path));
 
-		const contentH = overlayContentHeight(tui.height ?? 40);
+		const contentH = overlayContentHeight(tui.terminal?.rows ?? 40);
 		const rowsMeta = buildCommitRowsMeta(files, commit.hash, expanded, st.commitFileDiffCache);
 		const maxOffset = Math.max(0, rowsMeta.totalRows - contentH);
 		st.commitFileScrollOffset = clamp(st.commitFileScrollOffset, 0, maxOffset);
@@ -929,7 +1068,7 @@ class DiffOverlay {
 		const leftTitle = st.focus === "left" ? t.fg("accent", t.bold(leftTitleLabel)) : t.fg("dim", leftTitleLabel);
 		const rightTitle = st.focus === "right" ? t.fg("accent", t.bold(rightTitleLabel)) : t.fg("dim", rightTitleLabel);
 
-		const selectedFile = st.files[st.selectedIndex];
+		const selectedFile = findFileByPath(st, st.selectedFilePath);
 		const fileLabel = selectedFile
 			? `${t.fg(statusColor(selectedFile.status), icon(selectedFile.status))} ${t.fg(commitStateColor(selectedFile.commitState), `[${commitStateBadge(selectedFile.commitState)}]`)} ${t.fg("muted", selectedFile.path)}`
 			: t.fg("muted", "(no file)");
@@ -943,7 +1082,11 @@ class DiffOverlay {
 				: st.commitFilesLoading.has(selectedCommit.hash)
 					? "loading files…"
 					: "files: -";
-			commitLabel = `${t.fg("muted", selectedCommit.shortHash)} ${t.fg("text", selectedCommit.subject)} ${t.fg("dim", `· ${filesInfo}`)}`;
+			if (selectedCommit.hash === UNCOMMITTED_HASH) {
+				commitLabel = `${t.fg("warning", "●●●")} ${t.fg("warning", selectedCommit.subject)} ${t.fg("dim", `· ${filesInfo}`)}`;
+			} else {
+				commitLabel = `${t.fg("muted", selectedCommit.shortHash)} ${t.fg("text", selectedCommit.subject)} ${t.fg("dim", `· ${filesInfo}`)}`;
+			}
 		}
 
 		const rightHeader = st.viewMode === "diff" ? `${rightTitle} ${fileLabel}` : `${rightTitle} ${commitLabel}`;
@@ -985,14 +1128,39 @@ export default function diffOverlayExtension(pi: ExtensionAPI) {
 		const branch = await currentBranch(pi, root);
 		const mergeBaseInfo = await findMergeBase(pi, root, branch);
 		const mergeBase = mergeBaseInfo?.commit ?? null;
-		const [files, commits] = await Promise.all([changedFiles(pi, root, mergeBase), branchCommits(pi, root, mergeBase)]);
+		const [files, commits, uncommittedFiles] = await Promise.all([
+			changedFiles(pi, root, mergeBase),
+			branchCommits(pi, root, mergeBase),
+			workingTreeFiles(pi, root),
+		]);
+
+		// Prepend "Uncommitted Changes" as a virtual commit if there are working tree changes
+		if (uncommittedFiles.length > 0) {
+			commits.unshift({
+				hash: UNCOMMITTED_HASH,
+				shortHash: "•••",
+				author: "",
+				relativeDate: "now",
+				subject: `Uncommitted Changes (${uncommittedFiles.length} file${uncommittedFiles.length !== 1 ? "s" : ""})`,
+			});
+		}
+
+		const { treeNodes, expandedDirs } = rebuildTree(files);
+		// Find the first file in the tree for initial selection
+		const firstVisibleRows = flattenVisibleTree(treeNodes, expandedDirs);
+		const firstFileRow = firstVisibleRows.find((r) => r.type === "file");
 
 		const st: DiffState = {
 			files,
 			selectedIndex: 0,
 			fileScrollOffset: 0,
 			diffCache: new Map(),
+			highlightedDiffCache: new Map(),
 			diffScrollOffset: 0,
+
+			treeNodes,
+			expandedDirs,
+			selectedFilePath: firstFileRow ? firstFileRow.fullPath : files.length > 0 ? files[0].path : null,
 
 			commits,
 			commitSelectedIndex: 0,
@@ -1014,6 +1182,14 @@ export default function diffOverlayExtension(pi: ExtensionAPI) {
 			error: null,
 		};
 
+		// Pre-populate uncommitted files cache for commit mode
+		if (uncommittedFiles.length > 0) {
+			st.commitFilesCache.set(
+				UNCOMMITTED_HASH,
+				uncommittedFiles.map((f) => ({ path: f.path, status: f.status, rawStatus: f.rawStatus })),
+			);
+		}
+
 		if (!ctx.hasUI) {
 			if (files.length === 0) {
 				console.log("No changes.");
@@ -1023,21 +1199,24 @@ export default function diffOverlayExtension(pi: ExtensionAPI) {
 			return;
 		}
 
-		if (files.length > 0) {
-			st.diffCache.set(files[0].path, await fileDiff(pi, root, files[0], mergeBase));
+		if (st.selectedFilePath) {
+			const firstFile = files.find((f) => f.path === st.selectedFilePath);
+			if (firstFile) {
+				st.diffCache.set(firstFile.path, await fileDiff(pi, root, firstFile, mergeBase));
+			}
 		}
 
 		await ctx.ui.custom<void>(
 			(tui, theme, _kb, done) => {
 				const overlay = new DiffOverlay(pi, root, st, () => done(undefined));
-				const tuiWithHeight = tui as Tui & { height?: number };
+				const tuiRef = tui as Tui;
 				return {
-					render: (w) => overlay.render(w, tuiWithHeight.height ?? 40, theme),
-					handleInput: (data) => overlay.handleInput(data, tuiWithHeight),
+					render: (w) => overlay.render(w, tuiRef.terminal?.rows ?? 40, theme),
+					handleInput: (data) => overlay.handleInput(data, tuiRef),
 					invalidate: () => {},
 				};
 			},
-			{ overlay: true, overlayOptions: { width: "95%", maxHeight: "90%", anchor: "center" } },
+			{ overlay: true, overlayOptions: { width: "100%", maxHeight: "100%", anchor: "center" } },
 		);
 	};
 
