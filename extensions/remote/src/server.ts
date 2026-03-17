@@ -277,7 +277,7 @@ async function listenWithPortSearch(
         };
 
         server.once("error", onError);
-        server.listen(port, host, () => {
+        server.listen({ port, host, exclusive: false }, () => {
           server.off("error", onError);
           resolveListen();
         });
