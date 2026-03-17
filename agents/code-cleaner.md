@@ -90,6 +90,7 @@ findings:
       end: <int>
     duplicate_of: "<file path of existing code, if reuse finding>"
     suggested_action: "<concrete 1-2 sentence recommendation>"
+    exceeds_cleanup_scope: <boolean, true if fix requires architectural redesign, cross-module API change, or large-scale refactoring>
 
 summary:
   total_findings: <int>
@@ -110,6 +111,6 @@ summary:
     <rule>No extra prose outside YAML.</rule>
     <rule>Sort findings by priority (P0 first).</rule>
     <rule>Skip P3 findings if total findings exceed 20.</rule>
-    <rule>Do not suggest fixes that require architectural redesign — flag those as "exceeds cleanup scope".</rule>
+    <rule>Set `exceeds_cleanup_scope: true` for findings that require architectural redesign, cross-module API changes, or large-scale refactoring. These will be reported to the user but not auto-fixed.</rule>
   </output_rules>
 </system_prompt>
