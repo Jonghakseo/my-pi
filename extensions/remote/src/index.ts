@@ -1,4 +1,5 @@
 import { execSync } from "node:child_process";
+import QRCode from "qrcode-terminal";
 import { initializeAuth } from "./auth.js";
 import { killPty, onPtyExit, spawnInPty, writeToPty } from "./pty.js";
 import { setPublicUrl, startServer, type ServerResult } from "./server.js";
@@ -177,5 +178,11 @@ function printRemoteSummary(input: {
   }
   if (input.reason) {
     process.stdout.write(`[pi-remote] ${input.reason}\n`);
+  }
+
+  try {
+    QRCode.generate(input.url, { small: true });
+  } catch {
+    // ignore QR rendering failure
   }
 }
