@@ -386,12 +386,24 @@ export class SessionManager {
 
     const id = randomUUID().slice(0, 8);
     const fromSession = options.fromSessionId ? this.sessions.get(options.fromSessionId) : undefined;
+    if (options.fromSessionId && !fromSession) {
+      throw new Error("from_session_not_found");
+    }
     const fallbackName = `session-${this.nextFallbackIndex}`;
     this.nextFallbackIndex += 1;
 
     const baseArgs = [...(options.args ?? this.options.args ?? [])];
     if (options.sessionFile) {
+      // Replace existing --session with the new one
+      for (let index = baseArgs.indexOf("--session"); index !== -1; index = baseArgs.indexOf("--session")) {
+        baseArgs.splice(index, 2);
+      }
       baseArgs.push("--session", options.sessionFile);
+    } else if (!options.attachLocal) {
+      // Web-created sessions must NOT inherit the launcher's --session file
+      for (let index = baseArgs.indexOf("--session"); index !== -1; index = baseArgs.indexOf("--session")) {
+        baseArgs.splice(index, 2);
+      }
     }
 
     const merged: CreateSessionOptions = {

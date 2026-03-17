@@ -1,7 +1,9 @@
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
+import { randomUUID } from "node:crypto";
 import { spawnSync } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
+import { copyFileSync, existsSync, readFileSync, unlinkSync } from "node:fs";
 import http from "node:http";
+import https from "node:https";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -48,12 +50,16 @@ function discoverExistingServer(): DiscoveredServer | null {
     };
     if (!parsed.port || !parsed.url || !parsed.mode) return null;
 
-    // Verify process is still alive
     if (parsed.pid) {
       try {
         process.kill(parsed.pid, 0);
       } catch {
-        return null; // stale lockfile
+        try {
+          unlinkSync(LOCKFILE_PATH);
+        } catch {
+          // ignore stale lockfile cleanup failure
+        }
+        return null;
       }
     }
 
@@ -81,6 +87,7 @@ async function joinExistingServer(
       cols: 80,
       rows: 24,
     });
+    const localServerOrigin = `${server.mode === "tailscale" ? "https" : "http"}://127.0.0.1:${server.port}`;
 
     // Build auth — LAN uses token query, Tailscale/Funnel uses PIN→JWT
     let headers: Record<string, string> = {
@@ -90,11 +97,7 @@ async function joinExistingServer(
 
     if (server.mode === "lan" && server.token) {
       // LAN: token as query param
-      const result = await httpPost(
-        `http://127.0.0.1:${server.port}/api/sessions?token=${server.token}`,
-        body,
-        headers,
-      );
+      const result = await httpPost(`${localServerOrigin}/api/sessions?token=${server.token}`, body, headers);
       const parsed = JSON.parse(result) as { session?: { id: string } };
       return !!parsed.session?.id;
     }
@@ -102,17 +105,12 @@ async function joinExistingServer(
     if (server.pin) {
       // Tailscale/Funnel: first get JWT via PIN, then create session
       const authBody = JSON.stringify({ pin: server.pin });
-      const authResult = await httpPost(
-        `https://127.0.0.1:${server.port}/api/auth`,
-        authBody,
-        { "Content-Type": "application/json", "Content-Length": String(Buffer.byteLength(authBody)) },
-      ).catch(() =>
-        // HTTPS might fail if self-signed, try HTTP (funnel upstream)
-        httpPost(
-          `http://127.0.0.1:${server.port}/api/auth`,
-          authBody,
-          { "Content-Type": "application/json", "Content-Length": String(Buffer.byteLength(authBody)) },
-        ),
+      const authHeaders = {
+        "Content-Type": "application/json",
+        "Content-Length": String(Buffer.byteLength(authBody)),
+      };
+      const authResult = await httpPost(`${localServerOrigin}/api/auth`, authBody, authHeaders).catch(() =>
+        server.mode === "tailscale" ? httpPost(`http://127.0.0.1:${server.port}/api/auth`, authBody, authHeaders) : Promise.reject(),
       );
       const authParsed = JSON.parse(authResult) as { token?: string };
       if (!authParsed.token) return false;
@@ -123,11 +121,7 @@ async function joinExistingServer(
       };
     }
 
-    const result = await httpPost(
-      `http://127.0.0.1:${server.port}/api/sessions`,
-      body,
-      headers,
-    );
+    const result = await httpPost(`${localServerOrigin}/api/sessions`, body, headers);
     const parsed = JSON.parse(result) as { session?: { id: string } };
     return !!parsed.session?.id;
   } catch {
@@ -137,27 +131,15 @@ async function joinExistingServer(
 
 function httpGet(url: string): Promise<string> {
   return new Promise((resolve, reject) => {
-    const req = http.get(url, { timeout: 3000 }, (res) => {
-      const chunks: Buffer[] = [];
-      res.on("data", (chunk: Buffer) => chunks.push(chunk));
-      res.on("end", () => resolve(Buffer.concat(chunks).toString("utf-8")));
-    });
-    req.on("error", reject);
-    req.on("timeout", () => { req.destroy(); reject(new Error("timeout")); });
-  });
-}
-
-function httpPost(url: string, body: string, headers?: Record<string, string>): Promise<string> {
-  return new Promise((resolve, reject) => {
     const parsed = new URL(url);
-    const req = http.request(
+    const client = parsed.protocol === "https:" ? https : http;
+    const req = client.get(
       {
         hostname: parsed.hostname,
         port: parsed.port,
         path: parsed.pathname + parsed.search,
-        method: "POST",
-        timeout: 5000,
-        headers: headers ?? { "Content-Type": "application/json", "Content-Length": String(Buffer.byteLength(body)) },
+        timeout: 3000,
+        ...(parsed.protocol === "https:" ? { rejectUnauthorized: false } : {}),
       },
       (res) => {
         const chunks: Buffer[] = [];
@@ -166,7 +148,38 @@ function httpPost(url: string, body: string, headers?: Record<string, string>): 
       },
     );
     req.on("error", reject);
-    req.on("timeout", () => { req.destroy(); reject(new Error("timeout")); });
+    req.on("timeout", () => {
+      req.destroy();
+      reject(new Error("timeout"));
+    });
+  });
+}
+
+function httpPost(url: string, body: string, headers?: Record<string, string>): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const parsed = new URL(url);
+    const client = parsed.protocol === "https:" ? https : http;
+    const req = client.request(
+      {
+        hostname: parsed.hostname,
+        port: parsed.port,
+        path: parsed.pathname + parsed.search,
+        method: "POST",
+        timeout: 5000,
+        headers: headers ?? { "Content-Type": "application/json", "Content-Length": String(Buffer.byteLength(body)) },
+        ...(parsed.protocol === "https:" ? { rejectUnauthorized: false } : {}),
+      },
+      (res) => {
+        const chunks: Buffer[] = [];
+        res.on("data", (chunk: Buffer) => chunks.push(chunk));
+        res.on("end", () => resolve(Buffer.concat(chunks).toString("utf-8")));
+      },
+    );
+    req.on("error", reject);
+    req.on("timeout", () => {
+      req.destroy();
+      reject(new Error("timeout"));
+    });
     req.write(body);
     req.end();
   });
@@ -204,8 +217,15 @@ export default function (pi: ExtensionAPI) {
     if (!process.env.PI_REMOTE_URL) {
       const existing = discoverExistingServer();
       if (existing) {
+        let joinSessionFile = sessionFile;
+        if (sessionFile && existsSync(sessionFile)) {
+          const copyPath = join(tmpdir(), `pi-remote-session-${randomUUID().slice(0, 8)}.json`);
+          copyFileSync(sessionFile, copyPath);
+          joinSessionFile = copyPath;
+        }
+
         // Register this pi session on the existing remote server
-        const joined = await joinExistingServer(existing, sessionFile, cwd);
+        const joined = await joinExistingServer(existing, joinSessionFile, cwd);
         if (joined) {
           ctx.ui.notify(`Session added to remote server at ${existing.url}`, "info");
           return; // pi keeps running locally — no shutdown

@@ -139,6 +139,10 @@ async function handleRequest(
 
     if (method === "POST") {
       const body = (await readJsonBody(req)) as Record<string, unknown> | null;
+      if (body === null) {
+        respondJson(res, 400, { error: "Invalid or oversized request body" });
+        return;
+      }
       try {
         const session = options.sessions.create({
           name: typeof body?.name === "string" ? body.name : undefined,
@@ -171,8 +175,13 @@ async function handleRequest(
     }
 
     const sessionId = decodeURIComponent(sessionDeleteMatch[1]);
-    if (!options.sessions.get(sessionId)) {
+    const deleteTarget = options.sessions.get(sessionId);
+    if (!deleteTarget) {
       respondJson(res, 404, { error: "session_not_found" });
+      return;
+    }
+    if (deleteTarget.getState().attachLocal) {
+      respondJson(res, 403, { error: "cannot_kill_local_session" });
       return;
     }
 
@@ -246,10 +255,17 @@ function respondJson(res: ServerResponse, statusCode: number, payload: unknown):
   res.end(JSON.stringify(payload));
 }
 
-async function readJsonBody(req: IncomingMessage): Promise<unknown> {
+async function readJsonBody(req: IncomingMessage, maxSize = 64 * 1024): Promise<unknown> {
   const chunks: Buffer[] = [];
+  let totalSize = 0;
+
   for await (const chunk of req) {
-    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+    const bufferChunk = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+    totalSize += bufferChunk.length;
+    if (totalSize > maxSize) {
+      return null;
+    }
+    chunks.push(bufferChunk);
   }
 
   if (chunks.length === 0) {
