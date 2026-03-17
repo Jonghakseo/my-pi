@@ -333,7 +333,10 @@ export class TerminalView {
         }
         break;
       case "reset":
-        if (message.sessionId !== this.activeSessionId || this.pendingResumeMode !== "switch") {
+        if (message.sessionId !== this.activeSessionId) {
+          return;
+        }
+        if (this.pendingResumeMode !== "switch" && this.pendingResumeMode !== "reconnect") {
           return;
         }
         if (this.activeResumeId === null) {
@@ -429,6 +432,7 @@ export class TerminalView {
     this.activeResumeId = null;
     this.pendingResumeMode = null;
     this.pendingExitCodeBySession.delete(sessionId);
+    this.lastOffsets.delete(sessionId);
     this.showBlankState("Session ended. Select a session from the list.");
     this.options.onActiveSessionEnded?.(sessionId);
   }

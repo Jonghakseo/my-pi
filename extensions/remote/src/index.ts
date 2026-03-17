@@ -50,6 +50,21 @@ export async function startRemote(options: RemoteOptions = {}): Promise<() => Pr
   let cleanupRegistered = false;
   let graceTimer: NodeJS.Timeout | null = null;
 
+  const syncLockfile = (): void => {
+    if (!serverResult) {
+      return;
+    }
+
+    writeLockfile({
+      port: serverResult.port,
+      mode: activeMode,
+      token: activeMode === "lan" ? getLanToken() : undefined,
+      pin: activeMode !== "lan" ? (getCurrentPin() ?? pin) : undefined,
+      pid: process.pid,
+      url: remoteUrl,
+    });
+  };
+
   const baseEnv: Record<string, string> = {
     ...(options.env ?? (process.env as Record<string, string>)),
   };
@@ -78,7 +93,11 @@ export async function startRemote(options: RemoteOptions = {}): Promise<() => Pr
 
     // Cleanup with timeout — don't block exit for slow WS/server close
     const cleanupWithTimeout = async (fn: () => Promise<void>, ms = 3000): Promise<void> => {
-      await Promise.race([fn(), new Promise<void>((r) => setTimeout(r, ms))]);
+      try {
+        await Promise.race([fn(), new Promise<void>((r) => setTimeout(r, ms))]);
+      } catch {
+        // cleanup must continue even if one step fails
+      }
     };
 
     await cleanupWithTimeout(() => closeWebSocket?.() ?? Promise.resolve());
@@ -120,6 +139,13 @@ export async function startRemote(options: RemoteOptions = {}): Promise<() => Pr
     initializeAuth({
       mode,
       onPinChange: (nextPin, reason) => {
+        pin = nextPin;
+        if (nextPin) {
+          baseEnv.PI_REMOTE_PIN = nextPin;
+        } else {
+          delete baseEnv.PI_REMOTE_PIN;
+        }
+        syncLockfile();
         if (reason !== "initial_pin") {
           process.stdout.write(`\r\n\x1b[33m⚠ PIN rotated (${reason}). New PIN: ${nextPin}\x1b[0m\r\n`);
         }
@@ -198,14 +224,7 @@ export async function startRemote(options: RemoteOptions = {}): Promise<() => Pr
     registerCleanupHandlers();
 
     // Write lockfile for server discovery by other pi instances
-    writeLockfile({
-      port: serverResult.port,
-      mode: activeMode,
-      token: activeMode === "lan" ? getLanToken() : undefined,
-      pin: activeMode !== "lan" ? (getCurrentPin() ?? undefined) : undefined,
-      pid: process.pid,
-      url: remoteUrl,
-    });
+    syncLockfile();
 
     printRemoteSummary({
       url: remoteUrl,

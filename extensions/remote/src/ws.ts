@@ -303,8 +303,13 @@ export function setupTerminalWebSocket(
             break;
           }
           case "session_kill": {
-            if (!sessionManager.get(message.sessionId)) {
+            const killTarget = sessionManager.get(message.sessionId);
+            if (!killTarget) {
               send(ws, { type: "session_error", reason: "session_not_found", sessionId: message.sessionId });
+              return;
+            }
+            if (killTarget.getState().attachLocal) {
+              send(ws, { type: "session_error", reason: "cannot_kill_local_session", sessionId: message.sessionId });
               return;
             }
             sessionManager.kill(message.sessionId);
