@@ -1,7 +1,8 @@
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import { spawnSync } from "node:child_process";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import http from "node:http";
+import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -21,31 +22,51 @@ function resolveLauncherPath(): string {
   return launcherPath;
 }
 
-// ── Server discovery & join ──────────────────────────────────────────────────
+// ── Server discovery via lockfile ─────────────────────────────────────────────
 
-const START_PORT = 7009;
-const END_PORT = 7099;
+const LOCKFILE_PATH = join(tmpdir(), "pi-remote.lock");
 
 interface DiscoveredServer {
   port: number;
   url: string;
   mode: string;
   token?: string;
+  pin?: string;
 }
 
-async function discoverExistingServer(): Promise<DiscoveredServer | null> {
-  for (let port = START_PORT; port <= END_PORT; port++) {
-    try {
-      const info = await httpGet(`http://127.0.0.1:${port}/api/info`);
-      const parsed = JSON.parse(info) as { url?: string; mode?: string; token?: string };
-      if (parsed.url && parsed.mode) {
-        return { port, url: parsed.url, mode: parsed.mode, token: parsed.token };
+function discoverExistingServer(): DiscoveredServer | null {
+  try {
+    if (!existsSync(LOCKFILE_PATH)) return null;
+    const content = readFileSync(LOCKFILE_PATH, "utf-8");
+    const parsed = JSON.parse(content) as {
+      port?: number;
+      url?: string;
+      mode?: string;
+      token?: string;
+      pin?: string;
+      pid?: number;
+    };
+    if (!parsed.port || !parsed.url || !parsed.mode) return null;
+
+    // Verify process is still alive
+    if (parsed.pid) {
+      try {
+        process.kill(parsed.pid, 0);
+      } catch {
+        return null; // stale lockfile
       }
-    } catch {
-      // port not responding or not our server
     }
+
+    return {
+      port: parsed.port,
+      url: parsed.url,
+      mode: parsed.mode,
+      token: parsed.token,
+      pin: parsed.pin,
+    };
+  } catch {
+    return null;
   }
-  return null;
 }
 
 async function joinExistingServer(
@@ -60,8 +81,53 @@ async function joinExistingServer(
       cols: 80,
       rows: 24,
     });
-    const tokenQuery = server.token ? `?token=${server.token}` : "";
-    const result = await httpPost(`http://127.0.0.1:${server.port}/api/sessions${tokenQuery}`, body);
+
+    // Build auth — LAN uses token query, Tailscale/Funnel uses PIN→JWT
+    let headers: Record<string, string> = {
+      "Content-Type": "application/json",
+      "Content-Length": String(Buffer.byteLength(body)),
+    };
+
+    if (server.mode === "lan" && server.token) {
+      // LAN: token as query param
+      const result = await httpPost(
+        `http://127.0.0.1:${server.port}/api/sessions?token=${server.token}`,
+        body,
+        headers,
+      );
+      const parsed = JSON.parse(result) as { session?: { id: string } };
+      return !!parsed.session?.id;
+    }
+
+    if (server.pin) {
+      // Tailscale/Funnel: first get JWT via PIN, then create session
+      const authBody = JSON.stringify({ pin: server.pin });
+      const authResult = await httpPost(
+        `https://127.0.0.1:${server.port}/api/auth`,
+        authBody,
+        { "Content-Type": "application/json", "Content-Length": String(Buffer.byteLength(authBody)) },
+      ).catch(() =>
+        // HTTPS might fail if self-signed, try HTTP (funnel upstream)
+        httpPost(
+          `http://127.0.0.1:${server.port}/api/auth`,
+          authBody,
+          { "Content-Type": "application/json", "Content-Length": String(Buffer.byteLength(authBody)) },
+        ),
+      );
+      const authParsed = JSON.parse(authResult) as { token?: string };
+      if (!authParsed.token) return false;
+
+      headers = {
+        ...headers,
+        Authorization: `Bearer ${authParsed.token}`,
+      };
+    }
+
+    const result = await httpPost(
+      `http://127.0.0.1:${server.port}/api/sessions`,
+      body,
+      headers,
+    );
     const parsed = JSON.parse(result) as { session?: { id: string } };
     return !!parsed.session?.id;
   } catch {
@@ -81,7 +147,7 @@ function httpGet(url: string): Promise<string> {
   });
 }
 
-function httpPost(url: string, body: string): Promise<string> {
+function httpPost(url: string, body: string, headers?: Record<string, string>): Promise<string> {
   return new Promise((resolve, reject) => {
     const parsed = new URL(url);
     const req = http.request(
@@ -91,7 +157,7 @@ function httpPost(url: string, body: string): Promise<string> {
         path: parsed.pathname + parsed.search,
         method: "POST",
         timeout: 5000,
-        headers: { "Content-Type": "application/json", "Content-Length": Buffer.byteLength(body) },
+        headers: headers ?? { "Content-Type": "application/json", "Content-Length": String(Buffer.byteLength(body)) },
       },
       (res) => {
         const chunks: Buffer[] = [];
@@ -134,17 +200,20 @@ export default function (pi: ExtensionAPI) {
     const sessionFile = ctx.sessionManager.getSessionFile() ?? undefined;
     const cwd = process.cwd();
 
-    // Try to join an existing remote server (LAN mode only — token is auto-available)
+    // Try to join an existing remote server via lockfile
     if (!process.env.PI_REMOTE_URL) {
-      ctx.ui.notify("Searching for existing remote server...", "info");
-      const existing = await discoverExistingServer();
-      if (existing && existing.mode === "lan") {
+      const existing = discoverExistingServer();
+      if (existing) {
+        ctx.ui.notify(`Found remote server at ${existing.url}. Joining...`, "info");
         const joined = await joinExistingServer(existing, sessionFile, cwd);
         if (joined) {
-          ctx.ui.notify(`Joined remote server at ${existing.url}`, "info");
+          ctx.ui.notify(`Session joined at ${existing.url}. This pi will exit.`, "info");
+          // pendingLaunch stays null → session_shutdown won't start a launcher
+          // Current pi exits, session is now managed by the existing remote server
           ctx.shutdown();
           return;
         }
+        ctx.ui.notify("Join failed. Starting new remote server...", "info");
       }
     }
 
