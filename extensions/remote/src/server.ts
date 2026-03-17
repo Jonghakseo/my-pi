@@ -1,10 +1,16 @@
 import { existsSync, readFileSync, statSync } from "node:fs";
-import { createServer as createHttpServer, type IncomingMessage, type Server as HttpServer, type ServerResponse } from "node:http";
+import {
+  createServer as createHttpServer,
+  type IncomingMessage,
+  type Server as HttpServer,
+  type ServerResponse,
+} from "node:http";
 import { createServer as createHttpsServer, type Server as HttpsServer } from "node:https";
 import { networkInterfaces } from "node:os";
 import { dirname, extname, join, normalize, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { getCurrentPin, getLanToken, handleAuthRequest, httpAuthMiddleware } from "./auth.js";
+import { SessionManager } from "./session-manager.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const START_PORT = 7009;
@@ -29,6 +35,7 @@ export type ServerMode = "lan" | "tailscale" | "funnel";
 
 export interface ServerOptions {
   mode: ServerMode;
+  sessions: SessionManager;
   reason?: string;
   port?: number;
   certPath?: string;
@@ -90,7 +97,10 @@ async function handleRequest(
   webDir: string,
   actualPort: number,
 ): Promise<void> {
-  const requestUrl = new URL(req.url ?? "/", `${options.mode === "tailscale" ? "https" : "http"}://${req.headers.host ?? "127.0.0.1"}`);
+  const requestUrl = new URL(
+    req.url ?? "/",
+    `${options.mode === "tailscale" ? "https" : "http"}://${req.headers.host ?? "127.0.0.1"}`,
+  );
   const pathname = requestUrl.pathname;
   const method = req.method ?? "GET";
 
@@ -116,6 +126,58 @@ async function handleRequest(
 
   if (method === "POST" && pathname === "/api/auth") {
     await handleAuthRequest(req, res);
+    return;
+  }
+
+  if (pathname === "/api/sessions") {
+    if (!(await httpAuthMiddleware(req, res))) return;
+
+    if (method === "GET") {
+      respondJson(res, 200, { sessions: options.sessions.list() });
+      return;
+    }
+
+    if (method === "POST") {
+      const body = (await readJsonBody(req)) as Record<string, unknown> | null;
+      try {
+        const session = options.sessions.create({
+          name: typeof body?.name === "string" ? body.name : undefined,
+          cols: typeof body?.cols === "number" ? body.cols : undefined,
+          rows: typeof body?.rows === "number" ? body.rows : undefined,
+          fromSessionId: typeof body?.fromSessionId === "string" ? body.fromSessionId : undefined,
+          sessionFile: typeof body?.sessionFile === "string" ? body.sessionFile : undefined,
+          cwd: typeof body?.cwd === "string" ? body.cwd : undefined,
+        });
+        respondJson(res, 201, { session: session.getState() });
+      } catch (error) {
+        respondJson(res, 400, { error: error instanceof Error ? error.message : "session_create_failed" });
+      }
+      return;
+    }
+
+    res.writeHead(405);
+    res.end("Method Not Allowed");
+    return;
+  }
+
+  const sessionDeleteMatch = pathname.match(/^\/api\/sessions\/([^/]+)$/);
+  if (sessionDeleteMatch) {
+    if (!(await httpAuthMiddleware(req, res))) return;
+
+    if (method !== "DELETE") {
+      res.writeHead(405);
+      res.end("Method Not Allowed");
+      return;
+    }
+
+    const sessionId = decodeURIComponent(sessionDeleteMatch[1]);
+    if (!options.sessions.get(sessionId)) {
+      respondJson(res, 404, { error: "session_not_found" });
+      return;
+    }
+
+    options.sessions.kill(sessionId);
+    respondJson(res, 200, { ok: true, sessionId });
     return;
   }
 
@@ -154,7 +216,12 @@ async function shouldAllowStaticRequest(
   pathname: string,
   mode: ServerMode,
 ): Promise<boolean> {
-  const staticAsset = pathname.startsWith("/assets/") || pathname === "/favicon.ico" || pathname.endsWith(".js") || pathname.endsWith(".css") || pathname.endsWith(".map");
+  const staticAsset =
+    pathname.startsWith("/assets/") ||
+    pathname === "/favicon.ico" ||
+    pathname.endsWith(".js") ||
+    pathname.endsWith(".css") ||
+    pathname.endsWith(".map");
   if (mode !== "lan") {
     return true;
   }
@@ -177,6 +244,23 @@ function resolveStaticPath(webDir: string, pathname: string): string | null {
 function respondJson(res: ServerResponse, statusCode: number, payload: unknown): void {
   res.writeHead(statusCode, { "Content-Type": "application/json; charset=utf-8" });
   res.end(JSON.stringify(payload));
+}
+
+async function readJsonBody(req: IncomingMessage): Promise<unknown> {
+  const chunks: Buffer[] = [];
+  for await (const chunk of req) {
+    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+  }
+
+  if (chunks.length === 0) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(Buffer.concat(chunks).toString("utf-8"));
+  } catch {
+    return null;
+  }
 }
 
 async function listenWithPortSearch(

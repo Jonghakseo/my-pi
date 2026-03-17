@@ -2,6 +2,7 @@ import { FitAddon } from "@xterm/addon-fit";
 import { WebglAddon } from "@xterm/addon-webgl";
 import { Terminal } from "@xterm/xterm";
 import "@xterm/xterm/css/xterm.css";
+import type { BrowserMessage, ConnectionState, ServerMessage, SessionInfo } from "./session-types.js";
 
 export const isMobile = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
 
@@ -16,39 +17,33 @@ export const VIRTUAL_KEYS = [
   { label: "Ctrl+C", seq: "\x03" },
 ] as const;
 
-export type ConnectionState = "connected" | "reconnecting" | "disconnected";
-
 interface TerminalViewOptions {
   requiresAuth: boolean;
   initialToken?: string;
   onConnectionStateChange?: (state: ConnectionState) => void;
   onAuthRequired?: (reason?: string) => void;
+  onSessionList?: (sessions: SessionInfo[]) => void;
+  onSessionCreated?: (session: SessionInfo, shouldAutoSelect: boolean) => void;
+  onSessionUpdated?: (session: SessionInfo) => void;
+  onSessionKilled?: (sessionId: string) => void;
+  onSessionRemoved?: (sessionId: string) => void;
+  onSessionError?: (reason: string, sessionId?: string) => void;
+  onActiveSessionEnded?: (sessionId: string) => void;
 }
 
-type BrowserMessage =
-  | { type: "input"; data: string }
-  | { type: "resize"; cols: number; rows: number; mobile?: boolean }
-  | { type: "auth_token"; token: string }
-  | { type: "resume"; lastOffset: number }
-  | { type: "pong" };
-
-type ServerMessage =
-  | { type: "data"; data: string; offset?: number }
-  | { type: "exit"; exitCode: number | null }
-  | { type: "state"; running: boolean; exitCode: number | null }
-  | { type: "auth_required"; pinLength: number }
-  | { type: "auth_ok"; token: string }
-  | { type: "auth_fail"; reason: string }
-  | { type: "ping" }
-  | { type: "reset" };
+type ResumeMode = "switch" | "reconnect";
 
 export class TerminalView {
-  private terminal: Terminal;
-  private fitAddon: FitAddon;
+  activeSessionId: string | null = null;
+
+  private readonly terminal: Terminal;
+  private readonly fitAddon: FitAddon;
   private webglAddon: WebglAddon | null = null;
   private ws: WebSocket | null = null;
   private resizeObserver: ResizeObserver | null = null;
-  private container: HTMLElement;
+  private readonly root: HTMLElement;
+  private readonly terminalHost: HTMLElement;
+  private readonly blankState: HTMLElement;
   private writeBuffer = "";
   private writeTimer: number | null = null;
   private stopMobileMomentum: (() => void) | null = null;
@@ -57,13 +52,29 @@ export class TerminalView {
   private composing = false;
   private reconnectTimer: number | null = null;
   private token: string | null;
-  private lastOffset = 0;
+  private readonly lastOffsets = new Map<string, number>();
   private connectionState: ConnectionState = "disconnected";
   private disposed = false;
+  private activeResumeId: number | null = null;
+  private pendingResumeMode: ResumeMode | null = null;
+  private pendingCreateSelect = false;
+  private pendingExitCodeBySession = new Map<string, number | null>();
 
-  constructor(container: HTMLElement, private readonly options: TerminalViewOptions) {
-    this.container = container;
+  constructor(
+    container: HTMLElement,
+    private readonly options: TerminalViewOptions,
+  ) {
     this.token = options.initialToken ?? sessionStorage.getItem("piRemoteJwt");
+
+    this.root = document.createElement("div");
+    this.root.className = "terminal-shell";
+    this.terminalHost = document.createElement("div");
+    this.terminalHost.className = "terminal-host";
+    this.blankState = document.createElement("div");
+    this.blankState.className = "terminal-blank hidden";
+    this.blankState.textContent = "Select a session from the list.";
+    this.root.append(this.terminalHost, this.blankState);
+    container.replaceChildren(this.root);
 
     this.terminal = new Terminal({
       cursorBlink: !isMobile,
@@ -81,7 +92,7 @@ export class TerminalView {
 
     this.fitAddon = new FitAddon();
     this.terminal.loadAddon(this.fitAddon);
-    this.terminal.open(container);
+    this.terminal.open(this.terminalHost);
 
     try {
       this.webglAddon = new WebglAddon();
@@ -94,8 +105,7 @@ export class TerminalView {
       this.webglAddon = null;
     }
 
-    // IME composition tracking — suppress input during Korean/CJK composition
-    const textareaEl = this.container.querySelector(".xterm-helper-textarea") as HTMLTextAreaElement | null;
+    const textareaEl = this.root.querySelector(".xterm-helper-textarea") as HTMLTextAreaElement | null;
     if (textareaEl) {
       textareaEl.addEventListener("compositionstart", () => {
         this.composing = true;
@@ -105,9 +115,14 @@ export class TerminalView {
       });
     }
 
-    this.terminal.onData((data) => {
-      if (this.composing) return; // suppress intermediate IME keystrokes
+    this.terminal.onData((data: string) => {
+      if (this.composing) return;
       this.bufferInput(data);
+    });
+
+    this.terminal.onTitleChange((title: string) => {
+      if (!this.activeSessionId) return;
+      this.send({ type: "session_title", sessionId: this.activeSessionId, title });
     });
 
     if (isMobile) {
@@ -125,21 +140,64 @@ export class TerminalView {
   }
 
   sendInput(data: string): void {
-    this.send({ type: "input", data });
+    if (!this.activeSessionId || !this.blankState.classList.contains("hidden")) return;
+    this.send({ type: "input", data, sessionId: this.activeSessionId });
   }
 
-  /** Buffer rapid keystrokes and flush once per animation frame */
-  private bufferInput(data: string): void {
-    this.inputBuffer += data;
-    if (this.inputTimer === null) {
-      this.inputTimer = requestAnimationFrame(() => {
-        this.inputTimer = null;
-        if (this.inputBuffer) {
-          this.send({ type: "input", data: this.inputBuffer });
-          this.inputBuffer = "";
+  requestSessionList(): void {
+    this.send({ type: "session_list" });
+  }
+
+  createSession(fromSessionId?: string): void {
+    this.pendingCreateSelect = true;
+    this.send({
+      type: "session_create",
+      cols: this.terminal.cols,
+      rows: this.terminal.rows,
+      fromSessionId,
+    });
+  }
+
+  killSession(sessionId: string): void {
+    this.send({ type: "session_kill", sessionId });
+  }
+
+  switchSession(sessionId: string): void {
+    this.flushWrite();
+    this.hideBlankState();
+    this.terminal.reset();
+    this.activeSessionId = sessionId;
+    this.lastOffsets.set(sessionId, 0);
+    this.activeResumeId = null;
+    this.pendingResumeMode = "switch";
+    this.sendResize();
+    this.send({ type: "resume", sessionId, lastOffset: 0 });
+  }
+
+  show(): void {
+    this.root.style.display = "";
+    requestAnimationFrame(() => {
+      // Refresh renderer after display:none → visible transition
+      this.terminal.refresh(0, this.terminal.rows - 1);
+      if (isMobile) {
+        this.mobileFixedResize();
+      } else {
+        try {
+          this.fitAddon.fit();
+          this.sendResize();
+        } catch {
+          // ignore resize race
         }
-      });
-    }
+      }
+    });
+  }
+
+  hide(): void {
+    this.root.style.display = "none";
+  }
+
+  mobileFixedResizePublic(): void {
+    this.mobileFixedResize();
   }
 
   setToken(token: string | null): void {
@@ -152,6 +210,7 @@ export class TerminalView {
   }
 
   private connect(): void {
+    this.pendingCreateSelect = false;
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
     const token = new URLSearchParams(window.location.search).get("token");
     const tokenQuery = token ? `?token=${encodeURIComponent(token)}` : "";
@@ -161,9 +220,8 @@ export class TerminalView {
     this.ws = new WebSocket(wsUrl);
 
     this.ws.onopen = () => {
-      this.sendResize();
       if (!this.options.requiresAuth) {
-        this.sendResume();
+        this.afterAuthenticatedOpen();
       }
     };
 
@@ -177,12 +235,17 @@ export class TerminalView {
     };
 
     this.ws.onclose = (event) => {
-      if (this.disposed || !this.container.isConnected) return;
+      if (this.disposed || !this.root.isConnected) return;
 
       if (event.code === 4001) {
         this.setToken(null);
         this.setConnectionState("disconnected");
         this.options.onAuthRequired?.("PIN changed. Re-enter the new PIN.");
+        return;
+      }
+
+      if (event.code === 4003) {
+        this.scheduleReconnect();
         return;
       }
 
@@ -192,6 +255,20 @@ export class TerminalView {
     this.ws.onerror = () => {
       this.setConnectionState("reconnecting");
     };
+  }
+
+  private afterAuthenticatedOpen(): void {
+    this.requestSessionList();
+    if (this.activeSessionId) {
+      this.activeResumeId = null;
+      this.pendingResumeMode = "reconnect";
+      this.sendResize();
+      this.send({
+        type: "resume",
+        sessionId: this.activeSessionId,
+        lastOffset: this.lastOffsets.get(this.activeSessionId) ?? 0,
+      });
+    }
   }
 
   private handleServerMessage(message: ServerMessage): void {
@@ -206,41 +283,154 @@ export class TerminalView {
         break;
       case "auth_ok":
         this.setToken(message.token);
-        this.sendResume();
         this.setConnectionState("connected");
+        this.afterAuthenticatedOpen();
         break;
       case "auth_fail":
         this.setToken(null);
         this.setConnectionState("disconnected");
         this.options.onAuthRequired?.(message.reason);
         break;
+      case "session_list":
+        this.options.onSessionList?.(message.sessions);
+        break;
+      case "session_created": {
+        const shouldAutoSelect = this.pendingCreateSelect;
+        if (shouldAutoSelect) {
+          this.pendingCreateSelect = false;
+        }
+        this.options.onSessionCreated?.(message.session, shouldAutoSelect);
+        break;
+      }
+      case "session_updated":
+        this.options.onSessionUpdated?.(message.session);
+        break;
+      case "session_killed":
+        this.handleActiveSessionEnded(message.sessionId);
+        this.options.onSessionKilled?.(message.sessionId);
+        break;
+      case "session_removed":
+        this.handleActiveSessionEnded(message.sessionId);
+        this.options.onSessionRemoved?.(message.sessionId);
+        break;
+      case "session_error":
+        if (!message.sessionId) {
+          this.pendingCreateSelect = false;
+        }
+        if (message.reason === "session_not_found" && message.sessionId === this.activeSessionId) {
+          this.handleActiveSessionEnded(message.sessionId);
+        }
+        this.options.onSessionError?.(message.reason, message.sessionId);
+        break;
       case "state":
-        if (!message.running && message.exitCode !== null) {
-          this.flushWrite();
-          this.terminal.write(`\x1b[33mProcess exited (code ${message.exitCode})\x1b[0m\r\n`);
+        if (message.sessionId !== this.activeSessionId) {
+          return;
+        }
+        if (!message.running) {
+          this.pendingExitCodeBySession.set(message.sessionId, message.exitCode);
+        } else {
+          this.pendingExitCodeBySession.delete(message.sessionId);
         }
         break;
+      case "reset":
+        if (message.sessionId !== this.activeSessionId || this.pendingResumeMode !== "switch") {
+          return;
+        }
+        if (this.activeResumeId === null) {
+          this.activeResumeId = message.resumeId;
+        }
+        if (message.resumeId !== this.activeResumeId) {
+          return;
+        }
+        this.flushWrite();
+        this.terminal.reset();
+        this.hideBlankState();
+        this.lastOffsets.set(message.sessionId, 0);
+        break;
       case "data":
+        if (!this.shouldRenderData(message.sessionId, message.resumeId)) {
+          return;
+        }
+        this.hideBlankState();
         this.throttledWrite(message.data);
         if (typeof message.offset === "number") {
-          this.lastOffset = message.offset;
+          this.lastOffsets.set(message.sessionId, message.offset);
         } else {
-          this.lastOffset += message.data.length;
+          const prev = this.lastOffsets.get(message.sessionId) ?? 0;
+          this.lastOffsets.set(message.sessionId, prev + message.data.length);
         }
         this.setConnectionState("connected");
         break;
+      case "replay_complete": {
+        if (message.sessionId !== this.activeSessionId) {
+          return;
+        }
+        if (this.activeResumeId === null) {
+          this.activeResumeId = message.resumeId;
+        }
+        if (message.resumeId !== this.activeResumeId) {
+          return;
+        }
+        this.pendingResumeMode = null;
+        this.hideBlankState();
+        const pendingExitCode = this.pendingExitCodeBySession.get(message.sessionId);
+        if (this.pendingExitCodeBySession.has(message.sessionId)) {
+          this.flushWrite();
+          this.terminal.write(`\r\n\x1b[33mProcess exited (code ${pendingExitCode ?? "?"})\x1b[0m\r\n`);
+          this.pendingExitCodeBySession.delete(message.sessionId);
+        }
+        break;
+      }
       case "exit":
-        this.flushWrite();
-        this.terminal.write(`\r\n\x1b[33mProcess exited (code ${message.exitCode ?? "?"})\x1b[0m\r\n`);
+        if (message.sessionId !== this.activeSessionId) {
+          return;
+        }
+        if (this.pendingResumeMode !== null) {
+          // Defer banner until replay_complete
+          this.pendingExitCodeBySession.set(message.sessionId, message.exitCode);
+        } else {
+          this.pendingExitCodeBySession.delete(message.sessionId);
+          this.flushWrite();
+          this.terminal.write(`\r\n\x1b[33mProcess exited (code ${message.exitCode ?? "?"})\x1b[0m\r\n`);
+        }
         break;
       case "ping":
         this.send({ type: "pong" });
         break;
-      case "reset":
-        this.terminal.reset();
-        this.lastOffset = 0;
-        break;
     }
+  }
+
+  private shouldRenderData(sessionId: string, resumeId?: number): boolean {
+    if (sessionId !== this.activeSessionId) {
+      return false;
+    }
+
+    if (typeof resumeId !== "number") {
+      return this.pendingResumeMode === null;
+    }
+
+    if (this.pendingResumeMode === "switch") {
+      if (this.activeResumeId === null) {
+        return false;
+      }
+      return resumeId === this.activeResumeId;
+    }
+
+    if (this.activeResumeId === null) {
+      this.activeResumeId = resumeId;
+    }
+
+    return resumeId === this.activeResumeId;
+  }
+
+  private handleActiveSessionEnded(sessionId: string): void {
+    if (this.activeSessionId !== sessionId) return;
+    this.activeSessionId = null;
+    this.activeResumeId = null;
+    this.pendingResumeMode = null;
+    this.pendingExitCodeBySession.delete(sessionId);
+    this.showBlankState("Session ended. Select a session from the list.");
+    this.options.onActiveSessionEnded?.(sessionId);
   }
 
   private send(message: BrowserMessage): void {
@@ -250,8 +440,10 @@ export class TerminalView {
   }
 
   private sendResize(): void {
+    if (!this.activeSessionId) return;
     const payload: BrowserMessage = {
       type: "resize",
+      sessionId: this.activeSessionId,
       cols: this.terminal.cols,
       rows: this.terminal.rows,
       ...(isMobile ? { mobile: true } : {}),
@@ -259,16 +451,12 @@ export class TerminalView {
     this.send(payload);
   }
 
-  private sendResume(): void {
-    this.send({ type: "resume", lastOffset: this.lastOffset });
-  }
-
   private scheduleReconnect(): void {
     if (this.reconnectTimer !== null) return;
     this.setConnectionState("reconnecting");
     this.reconnectTimer = window.setTimeout(() => {
       this.reconnectTimer = null;
-      if (!this.disposed && this.container.isConnected) {
+      if (!this.disposed && this.root.isConnected) {
         this.connect();
       }
     }, 2000);
@@ -297,6 +485,29 @@ export class TerminalView {
     }
   }
 
+  private showBlankState(message: string): void {
+    this.flushWrite();
+    this.blankState.textContent = message;
+    this.blankState.classList.remove("hidden");
+  }
+
+  private hideBlankState(): void {
+    this.blankState.classList.add("hidden");
+  }
+
+  private bufferInput(data: string): void {
+    this.inputBuffer += data;
+    if (this.inputTimer === null) {
+      this.inputTimer = requestAnimationFrame(() => {
+        this.inputTimer = null;
+        if (this.inputBuffer) {
+          this.sendInput(this.inputBuffer);
+          this.inputBuffer = "";
+        }
+      });
+    }
+  }
+
   private setupResizeObserver(): void {
     this.resizeObserver = new ResizeObserver(() => {
       try {
@@ -306,11 +517,13 @@ export class TerminalView {
         // ignore resize race
       }
     });
-    this.resizeObserver.observe(this.container);
+    this.resizeObserver.observe(this.root);
   }
 
   private mobileFixedResize(): void {
-    const cellDims = (this.terminal as Terminal & { _core?: { _renderService?: { dimensions?: { css?: { cell?: { width?: number; height?: number } } } } } })._core?._renderService?.dimensions?.css?.cell;
+    const cellDims = (this.terminal as Terminal & {
+      _core?: { _renderService?: { dimensions?: { css?: { cell?: { width?: number; height?: number } } } } };
+    })._core?._renderService?.dimensions?.css?.cell;
     if (!cellDims?.width || !cellDims?.height) {
       setTimeout(() => this.mobileFixedResize(), 50);
       return;
@@ -320,12 +533,15 @@ export class TerminalView {
     const availableWidth = window.innerWidth - 16;
     const availableHeight = window.innerHeight - 40 - (isMobile ? 52 : 0) - 8;
     const currentFontSize = this.terminal.options.fontSize ?? 11;
-    const targetFontSize = Math.floor((currentFontSize * availableWidth) / (mobileCols * cellDims.width) * 10) / 10;
+    const targetFontSize =
+      Math.floor((((currentFontSize * availableWidth) / (mobileCols * cellDims.width)) * 10)) / 10;
 
     this.terminal.options.fontSize = targetFontSize;
 
     requestAnimationFrame(() => {
-      const newDims = (this.terminal as Terminal & { _core?: { _renderService?: { dimensions?: { css?: { cell?: { height?: number } } } } } })._core?._renderService?.dimensions?.css?.cell;
+      const newDims = (this.terminal as Terminal & {
+        _core?: { _renderService?: { dimensions?: { css?: { cell?: { height?: number } } } } };
+      })._core?._renderService?.dimensions?.css?.cell;
       const lineHeight = newDims?.height ?? cellDims.height ?? 15;
       const rows = Math.max(5, Math.min(Math.floor(availableHeight / lineHeight), 100));
       this.terminal.resize(mobileCols, rows);
@@ -334,12 +550,14 @@ export class TerminalView {
   }
 
   private setupMobileTouchScroll(): void {
-    const screen = this.container.querySelector(".xterm-screen") as HTMLElement | null;
+    const screen = this.root.querySelector(".xterm-screen") as HTMLElement | null;
     if (!screen) return;
 
     const term = this.terminal;
     const getLineHeight = (): number => {
-      const cellDims = (term as Terminal & { _core?: { _renderService?: { dimensions?: { css?: { cell?: { height?: number } } } } } })._core?._renderService?.dimensions?.css?.cell;
+      const cellDims = (term as Terminal & {
+        _core?: { _renderService?: { dimensions?: { css?: { cell?: { height?: number } } } } };
+      })._core?._renderService?.dimensions?.css?.cell;
       return cellDims?.height ?? 15;
     };
 
