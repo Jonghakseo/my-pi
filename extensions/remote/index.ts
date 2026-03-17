@@ -204,10 +204,10 @@ export default function (pi: ExtensionAPI) {
     if (!process.env.PI_REMOTE_URL) {
       const existing = discoverExistingServer();
       if (existing) {
-        // Register a new session on the existing server (current pi stays running locally)
-        const joined = await joinExistingServer(existing, undefined, cwd);
+        // Register this pi session on the existing remote server
+        const joined = await joinExistingServer(existing, sessionFile, cwd);
         if (joined) {
-          ctx.ui.notify(`New session added to remote server at ${existing.url}`, "info");
+          ctx.ui.notify(`Session added to remote server at ${existing.url}`, "info");
           return; // pi keeps running locally — no shutdown
         }
         ctx.ui.notify("Join failed. Starting new remote server...", "info");
