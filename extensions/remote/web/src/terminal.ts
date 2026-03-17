@@ -52,6 +52,9 @@ export class TerminalView {
   private writeBuffer = "";
   private writeTimer: number | null = null;
   private stopMobileMomentum: (() => void) | null = null;
+  private inputBuffer = "";
+  private inputTimer: number | null = null;
+  private composing = false;
   private reconnectTimer: number | null = null;
   private token: string | null;
   private lastOffset = 0;
@@ -91,8 +94,20 @@ export class TerminalView {
       this.webglAddon = null;
     }
 
+    // IME composition tracking — suppress input during Korean/CJK composition
+    const textareaEl = this.container.querySelector(".xterm-helper-textarea") as HTMLTextAreaElement | null;
+    if (textareaEl) {
+      textareaEl.addEventListener("compositionstart", () => {
+        this.composing = true;
+      });
+      textareaEl.addEventListener("compositionend", () => {
+        this.composing = false;
+      });
+    }
+
     this.terminal.onData((data) => {
-      this.sendInput(data);
+      if (this.composing) return; // suppress intermediate IME keystrokes
+      this.bufferInput(data);
     });
 
     if (isMobile) {
@@ -111,6 +126,20 @@ export class TerminalView {
 
   sendInput(data: string): void {
     this.send({ type: "input", data });
+  }
+
+  /** Buffer rapid keystrokes and flush once per animation frame */
+  private bufferInput(data: string): void {
+    this.inputBuffer += data;
+    if (this.inputTimer === null) {
+      this.inputTimer = requestAnimationFrame(() => {
+        this.inputTimer = null;
+        if (this.inputBuffer) {
+          this.send({ type: "input", data: this.inputBuffer });
+          this.inputBuffer = "";
+        }
+      });
+    }
   }
 
   setToken(token: string | null): void {
@@ -454,6 +483,9 @@ export class TerminalView {
     this.stopMobileMomentum?.();
     if (this.writeTimer !== null) {
       cancelAnimationFrame(this.writeTimer);
+    }
+    if (this.inputTimer !== null) {
+      cancelAnimationFrame(this.inputTimer);
     }
     if (this.reconnectTimer !== null) {
       clearTimeout(this.reconnectTimer);
