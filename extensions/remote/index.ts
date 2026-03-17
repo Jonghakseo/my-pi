@@ -1,12 +1,14 @@
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import { randomUUID } from "node:crypto";
 import { spawnSync } from "node:child_process";
-import { copyFileSync, existsSync, readFileSync, unlinkSync } from "node:fs";
+import { copyFileSync, existsSync } from "node:fs";
 import http from "node:http";
 import https from "node:https";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+
+import { readLockfile } from "./src/lockfile.ts";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -26,8 +28,6 @@ function resolveLauncherPath(): string {
 
 // ── Server discovery via lockfile ─────────────────────────────────────────────
 
-const LOCKFILE_PATH = join(tmpdir(), "pi-remote.lock");
-
 interface DiscoveredServer {
   port: number;
   url: string;
@@ -37,42 +37,16 @@ interface DiscoveredServer {
 }
 
 function discoverExistingServer(): DiscoveredServer | null {
-  try {
-    if (!existsSync(LOCKFILE_PATH)) return null;
-    const content = readFileSync(LOCKFILE_PATH, "utf-8");
-    const parsed = JSON.parse(content) as {
-      port?: number;
-      url?: string;
-      mode?: string;
-      token?: string;
-      pin?: string;
-      pid?: number;
-    };
-    if (!parsed.port || !parsed.url || !parsed.mode) return null;
+  const data = readLockfile();
+  if (!data) return null;
 
-    if (parsed.pid) {
-      try {
-        process.kill(parsed.pid, 0);
-      } catch {
-        try {
-          unlinkSync(LOCKFILE_PATH);
-        } catch {
-          // ignore stale lockfile cleanup failure
-        }
-        return null;
-      }
-    }
-
-    return {
-      port: parsed.port,
-      url: parsed.url,
-      mode: parsed.mode,
-      token: parsed.token,
-      pin: parsed.pin,
-    };
-  } catch {
-    return null;
-  }
+  return {
+    port: data.port,
+    url: data.url,
+    mode: data.mode,
+    token: data.token,
+    pin: data.pin,
+  };
 }
 
 async function joinExistingServer(
@@ -227,8 +201,11 @@ export default function (pi: ExtensionAPI) {
         // Register this pi session on the existing remote server
         const joined = await joinExistingServer(existing, joinSessionFile, cwd);
         if (joined) {
-          ctx.ui.notify(`Session added to remote server at ${existing.url}`, "info");
-          return; // pi keeps running locally — no shutdown
+          ctx.ui.notify(`Session transferred to ${existing.url}. Exiting.`, "info");
+          // pendingLaunch stays null → session_shutdown won't start a launcher
+          // This pi exits, session is now managed by the existing remote server
+          ctx.shutdown();
+          return;
         }
         ctx.ui.notify("Join failed. Starting new remote server...", "info");
       }
