@@ -2,38 +2,15 @@ import { chmodSync, statSync } from "node:fs";
 import { createRequire } from "node:module";
 import { arch, platform } from "node:os";
 import { dirname, join } from "node:path";
-import type { IPty } from "node-pty";
-import pty from "node-pty";
-import { OutputBuffer } from "./session.js";
 
 const require = createRequire(import.meta.url);
-
-export interface PtyState {
-  running: boolean;
-  exitCode: number | null;
-}
-
-export interface SpawnOptions {
-  command: string;
-  args?: string[];
-  cwd?: string;
-  env?: Record<string, string>;
-  cols?: number;
-  rows?: number;
-  attachLocal?: boolean;
-}
 
 export type PtyDataListener = (data: string, offset: number) => void;
 export type PtyExitListener = (exitCode: number) => void;
 
-let ptyProcess: IPty | null = null;
-let lastExitCode: number | null = null;
-let outputBuffer = new OutputBuffer();
-let dataListeners: PtyDataListener[] = [];
-let exitListeners: PtyExitListener[] = [];
 let stdinDataListener: ((data: Buffer) => void) | null = null;
 
-function fixSpawnHelperPermissions(): void {
+export function fixSpawnHelperPermissions(): void {
   try {
     const ptyPkg = require.resolve("node-pty/package.json");
     const ptyDir = dirname(ptyPkg);
@@ -47,115 +24,27 @@ function fixSpawnHelperPermissions(): void {
   }
 }
 
-function detachLocalStdin(): void {
-  if (!stdinDataListener || !process.stdin.isTTY) return;
+export function registerLocalStdinListener(listener: (data: Buffer) => void): void {
+  detachLocalStdin();
+  stdinDataListener = listener;
+
+  if (!process.stdin.isTTY) {
+    return;
+  }
+
+  process.stdin.setRawMode(true);
+  process.stdin.resume();
+  process.stdin.on("data", listener);
+}
+
+export function detachLocalStdin(): void {
+  if (!stdinDataListener || !process.stdin.isTTY) {
+    stdinDataListener = null;
+    return;
+  }
+
   process.stdin.off("data", stdinDataListener);
   process.stdin.setRawMode(false);
   process.stdin.pause();
   stdinDataListener = null;
-}
-
-export async function spawnInPty(options: SpawnOptions): Promise<void> {
-  if (ptyProcess) {
-    throw new Error("PTY process already running");
-  }
-
-  fixSpawnHelperPermissions();
-
-  lastExitCode = null;
-  outputBuffer = new OutputBuffer();
-
-  ptyProcess = pty.spawn(options.command, options.args ?? [], {
-    name: "xterm-256color",
-    cols: options.cols ?? 120,
-    rows: options.rows ?? 30,
-    cwd: options.cwd ?? process.cwd(),
-    env: options.env ?? (process.env as Record<string, string>),
-  });
-
-  ptyProcess.onData((data: string) => {
-    outputBuffer.append(data);
-    const currentOffset = outputBuffer.getCurrentOffset();
-
-    if (options.attachLocal) {
-      process.stdout.write(data);
-    }
-
-    for (const listener of dataListeners) {
-      try {
-        listener(data, currentOffset);
-      } catch {
-        // ignore listener errors
-      }
-    }
-  });
-
-  ptyProcess.onExit(({ exitCode }: { exitCode: number }) => {
-    lastExitCode = exitCode;
-    ptyProcess = null;
-    detachLocalStdin();
-
-    for (const listener of exitListeners) {
-      try {
-        listener(exitCode);
-      } catch {
-        // ignore listener errors
-      }
-    }
-  });
-
-  if (options.attachLocal && process.stdin.isTTY) {
-    process.stdin.setRawMode(true);
-    process.stdin.resume();
-    stdinDataListener = (data: Buffer) => {
-      ptyProcess?.write(data.toString());
-    };
-    process.stdin.on("data", stdinDataListener);
-  }
-}
-
-export function writeToPty(data: string): void {
-  ptyProcess?.write(data);
-}
-
-export function resizePty(cols: number, rows: number): void {
-  if (!ptyProcess) return;
-  try {
-    ptyProcess.resize(cols, rows);
-  } catch {
-    // ignore resize failures while exiting
-  }
-}
-
-export function killPty(): void {
-  detachLocalStdin();
-  if (!ptyProcess) return;
-  try {
-    ptyProcess.kill();
-  } catch {
-    // ignore
-  }
-  ptyProcess = null;
-}
-
-export function onPtyData(cb: PtyDataListener): () => void {
-  dataListeners.push(cb);
-  return () => {
-    dataListeners = dataListeners.filter((listener) => listener !== cb);
-  };
-}
-
-export function onPtyExit(cb: PtyExitListener): () => void {
-  exitListeners.push(cb);
-  return () => {
-    exitListeners = exitListeners.filter((listener) => listener !== cb);
-  };
-}
-
-export function getPtyState(): PtyState {
-  return { running: ptyProcess !== null, exitCode: lastExitCode };
-}
-
-export function getPtyOutputBuffer(): OutputBuffer {
-  return outputBuffer;
 }

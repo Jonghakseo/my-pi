@@ -47,6 +47,19 @@ export class OutputBuffer {
     };
   }
 
+  getLastN(maxBytes: number): BufferSnapshot {
+    if (maxBytes <= 0) {
+      return { data: "", offset: this.getCurrentOffset() };
+    }
+
+    const full = this.chunks.join("");
+    const data = full.slice(-maxBytes);
+    return {
+      data,
+      offset: this.getCurrentOffset(),
+    };
+  }
+
   getCurrentOffset(): number {
     return this.bufferStartOffset + this.totalLength;
   }

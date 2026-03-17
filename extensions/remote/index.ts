@@ -1,6 +1,7 @@
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
+import http from "node:http";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -18,6 +19,91 @@ function resolveLauncherPath(): string {
     throw new Error(`Remote launcher not found: ${launcherPath}`);
   }
   return launcherPath;
+}
+
+// ── Server discovery & join ──────────────────────────────────────────────────
+
+const START_PORT = 7009;
+const END_PORT = 7099;
+
+interface DiscoveredServer {
+  port: number;
+  url: string;
+  mode: string;
+  token?: string;
+}
+
+async function discoverExistingServer(): Promise<DiscoveredServer | null> {
+  for (let port = START_PORT; port <= END_PORT; port++) {
+    try {
+      const info = await httpGet(`http://127.0.0.1:${port}/api/info`);
+      const parsed = JSON.parse(info) as { url?: string; mode?: string; token?: string };
+      if (parsed.url && parsed.mode) {
+        return { port, url: parsed.url, mode: parsed.mode, token: parsed.token };
+      }
+    } catch {
+      // port not responding or not our server
+    }
+  }
+  return null;
+}
+
+async function joinExistingServer(
+  server: DiscoveredServer,
+  sessionFile: string | undefined,
+  cwd: string,
+): Promise<boolean> {
+  try {
+    const body = JSON.stringify({
+      sessionFile,
+      cwd,
+      cols: 80,
+      rows: 24,
+    });
+    const tokenQuery = server.token ? `?token=${server.token}` : "";
+    const result = await httpPost(`http://127.0.0.1:${server.port}/api/sessions${tokenQuery}`, body);
+    const parsed = JSON.parse(result) as { session?: { id: string } };
+    return !!parsed.session?.id;
+  } catch {
+    return false;
+  }
+}
+
+function httpGet(url: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const req = http.get(url, { timeout: 3000 }, (res) => {
+      const chunks: Buffer[] = [];
+      res.on("data", (chunk: Buffer) => chunks.push(chunk));
+      res.on("end", () => resolve(Buffer.concat(chunks).toString("utf-8")));
+    });
+    req.on("error", reject);
+    req.on("timeout", () => { req.destroy(); reject(new Error("timeout")); });
+  });
+}
+
+function httpPost(url: string, body: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const parsed = new URL(url);
+    const req = http.request(
+      {
+        hostname: parsed.hostname,
+        port: parsed.port,
+        path: parsed.pathname + parsed.search,
+        method: "POST",
+        timeout: 5000,
+        headers: { "Content-Type": "application/json", "Content-Length": Buffer.byteLength(body) },
+      },
+      (res) => {
+        const chunks: Buffer[] = [];
+        res.on("data", (chunk: Buffer) => chunks.push(chunk));
+        res.on("end", () => resolve(Buffer.concat(chunks).toString("utf-8")));
+      },
+    );
+    req.on("error", reject);
+    req.on("timeout", () => { req.destroy(); reject(new Error("timeout")); });
+    req.write(body);
+    req.end();
+  });
 }
 
 function buildWidgetLines(): string[] {
@@ -45,15 +131,32 @@ export default function (pi: ExtensionAPI) {
 
     await ctx.waitForIdle();
 
-    const sessionFile = ctx.sessionManager.getSessionFile();
+    const sessionFile = ctx.sessionManager.getSessionFile() ?? undefined;
+    const cwd = process.cwd();
+
+    // Try to join an existing remote server (LAN mode only — token is auto-available)
+    if (!process.env.PI_REMOTE_URL) {
+      ctx.ui.notify("Searching for existing remote server...", "info");
+      const existing = await discoverExistingServer();
+      if (existing && existing.mode === "lan") {
+        const joined = await joinExistingServer(existing, sessionFile, cwd);
+        if (joined) {
+          ctx.ui.notify(`Joined remote server at ${existing.url}`, "info");
+          ctx.shutdown();
+          return;
+        }
+      }
+    }
+
+    // No existing server or join failed — start a new launcher
     pendingLaunch = {
-      sessionFile: sessionFile ?? undefined,
+      sessionFile,
       funnel: variant.funnel,
       lan: variant.lan,
     };
 
     const modeLabel = variant.lan ? "LAN" : variant.funnel ? "Funnel" : "auto";
-    ctx.ui.notify(`Restarting pi in remote mode (${modeLabel}). Session will be preserved.`, "info");
+    ctx.ui.notify(`Starting remote server (${modeLabel})...`, "info");
     ctx.shutdown();
   };
 

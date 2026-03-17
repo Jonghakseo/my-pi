@@ -1,7 +1,7 @@
 import { execSync } from "node:child_process";
 import QRCode from "qrcode-terminal";
 import { initializeAuth } from "./auth.js";
-import { killPty, onPtyExit, spawnInPty, writeToPty } from "./pty.js";
+import { SessionManager } from "./session-manager.js";
 import { setPublicUrl, startServer, type ServerResult } from "./server.js";
 import { resolveMode, startFunnel, stopFunnel } from "./tailscale.js";
 import { setupTerminalWebSocket } from "./ws.js";
@@ -14,6 +14,8 @@ export interface RemoteOptions {
   funnel?: boolean;
   forceLan?: boolean;
 }
+
+const GRACE_PERIOD_MS = 30_000;
 
 function resolvePiPath(piPath?: string): string {
   if (piPath) return piPath;
@@ -45,11 +47,32 @@ export async function startRemote(options: RemoteOptions = {}): Promise<() => Pr
   let funnelCleanupPort: number | null = null;
   let cleaningUp = false;
   let cleanupRegistered = false;
+  let graceTimer: NodeJS.Timeout | null = null;
+
+  const baseEnv: Record<string, string> = {
+    ...(options.env ?? (process.env as Record<string, string>)),
+  };
+  const launcherCwd = options.cwd ?? process.cwd();
+
+  const sessionManager = new SessionManager({
+    piPath,
+    args: options.args ?? [],
+    cwd: launcherCwd,
+    env: baseEnv,
+    cols: process.stdout.columns || 120,
+    rows: process.stdout.rows || 30,
+  });
 
   const cleanup = async (): Promise<void> => {
     if (cleaningUp) return;
     cleaningUp = true;
-    killPty();
+
+    if (graceTimer) {
+      clearTimeout(graceTimer);
+      graceTimer = null;
+    }
+
+    sessionManager.killAll();
     await closeWebSocket?.();
     await serverResult?.cleanup();
     if (funnelCleanupPort !== null) {
@@ -58,14 +81,24 @@ export async function startRemote(options: RemoteOptions = {}): Promise<() => Pr
     setPublicUrl(null);
   };
 
+  const scheduleGracefulExit = (): void => {
+    if (cleaningUp || graceTimer) return;
+    graceTimer = setTimeout(async () => {
+      graceTimer = null;
+      await cleanup();
+      process.exit(0);
+    }, GRACE_PERIOD_MS);
+  };
+
+  const cancelGracefulExit = (): void => {
+    if (!graceTimer) return;
+    clearTimeout(graceTimer);
+    graceTimer = null;
+  };
+
   const registerCleanupHandlers = (): void => {
     if (cleanupRegistered) return;
     cleanupRegistered = true;
-
-    onPtyExit(async (exitCode) => {
-      await cleanup();
-      process.exit(exitCode ?? 0);
-    });
 
     for (const signal of ["SIGINT", "SIGTERM"] as const) {
       process.on(signal, async () => {
@@ -80,7 +113,7 @@ export async function startRemote(options: RemoteOptions = {}): Promise<() => Pr
       mode,
       onPinChange: (nextPin, reason) => {
         if (reason !== "initial_pin") {
-          writeToPty(`\r\n\x1b[33m⚠ PIN rotated (${reason}). New PIN: ${nextPin}\x1b[0m\r\n`);
+          process.stdout.write(`\r\n\x1b[33m⚠ PIN rotated (${reason}). New PIN: ${nextPin}\x1b[0m\r\n`);
         }
       },
     });
@@ -90,6 +123,7 @@ export async function startRemote(options: RemoteOptions = {}): Promise<() => Pr
     applyAuth(activeMode);
     serverResult = await startServer({
       mode: activeMode,
+      sessions: sessionManager,
       reason: activeReason,
       certPath: modeResult.cert?.certPath,
       keyPath: modeResult.cert?.keyPath,
@@ -113,43 +147,53 @@ export async function startRemote(options: RemoteOptions = {}): Promise<() => Pr
 
         activeMode = "lan";
         applyAuth(activeMode);
-        serverResult = await startServer({ mode: activeMode, reason: activeReason });
+        serverResult = await startServer({ mode: activeMode, sessions: sessionManager, reason: activeReason });
         remoteUrl = serverResult.url;
         pin = serverResult.pin;
       }
     }
 
-    closeWebSocket = setupTerminalWebSocket(serverResult.server, activeMode);
+    baseEnv.PI_REMOTE_URL = remoteUrl;
+    baseEnv.PI_REMOTE_MODE = activeMode;
+    if (activeReason) {
+      baseEnv.PI_REMOTE_REASON = activeReason;
+    }
+    if (pin) {
+      baseEnv.PI_REMOTE_PIN = pin;
+    }
+
+    closeWebSocket = setupTerminalWebSocket(serverResult.server, activeMode, sessionManager);
+
+    const initialSession = sessionManager.create({
+      attachLocal: true,
+      cols: process.stdout.columns || 120,
+      rows: process.stdout.rows || 30,
+    });
+
+    sessionManager.onRunningCountChange((count) => {
+      if (count === 0) {
+        scheduleGracefulExit();
+        return;
+      }
+      cancelGracefulExit();
+    });
+
+    initialSession.onExit(() => {
+      const remaining = sessionManager.runningCount();
+      if (remaining > 0) {
+        process.stdout.write(
+          `\r\n\x1b[33mInitial session exited. ${remaining} remote sessions still active. Press Ctrl+C to shut down.\x1b[0m\r\n`,
+        );
+      }
+    });
+
+    registerCleanupHandlers();
 
     printRemoteSummary({
       url: remoteUrl,
       mode: activeMode,
       pin,
       reason: activeReason,
-    });
-
-    const piEnv: Record<string, string> = {
-      ...(options.env ?? (process.env as Record<string, string>)),
-      PI_REMOTE_URL: remoteUrl,
-      PI_REMOTE_MODE: activeMode,
-    };
-
-    if (activeReason) {
-      piEnv.PI_REMOTE_REASON = activeReason;
-    }
-    if (pin) {
-      piEnv.PI_REMOTE_PIN = pin;
-    }
-
-    registerCleanupHandlers();
-    await spawnInPty({
-      command: piPath,
-      args: options.args ?? [],
-      cwd: options.cwd ?? process.cwd(),
-      env: piEnv,
-      cols: process.stdout.columns || 120,
-      rows: process.stdout.rows || 30,
-      attachLocal: true,
     });
 
     return cleanup;
