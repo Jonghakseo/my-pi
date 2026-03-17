@@ -1,6 +1,7 @@
 import { execSync } from "node:child_process";
 import QRCode from "qrcode-terminal";
-import { initializeAuth } from "./auth.js";
+import { initializeAuth, getCurrentPin, getLanToken } from "./auth.js";
+import { removeLockfile, writeLockfile } from "./lockfile.js";
 import { SessionManager } from "./session-manager.js";
 import { setPublicUrl, startServer, type ServerResult } from "./server.js";
 import { resolveMode, startFunnel, stopFunnel } from "./tailscale.js";
@@ -72,6 +73,7 @@ export async function startRemote(options: RemoteOptions = {}): Promise<() => Pr
       graceTimer = null;
     }
 
+    removeLockfile();
     sessionManager.killAll();
     await closeWebSocket?.();
     await serverResult?.cleanup();
@@ -188,6 +190,16 @@ export async function startRemote(options: RemoteOptions = {}): Promise<() => Pr
     });
 
     registerCleanupHandlers();
+
+    // Write lockfile for server discovery by other pi instances
+    writeLockfile({
+      port: serverResult.port,
+      mode: activeMode,
+      token: activeMode === "lan" ? getLanToken() : undefined,
+      pin: activeMode !== "lan" ? (getCurrentPin() ?? undefined) : undefined,
+      pid: process.pid,
+      url: remoteUrl,
+    });
 
     printRemoteSummary({
       url: remoteUrl,
