@@ -15,16 +15,27 @@ disable-model-invocation: false
 - false positive를 최소화하여 실제 조치가 필요한 항목만 전달한다.
 
 ## 실행 규칙
-1. 검토 대상을 파악한다:
-   - 브랜치명이 주어지면: `git diff main...<branch>` 로 diff를 생성한다.
-   - 파일 목록이 주어지면: 해당 파일들을 직접 전달한다.
-   - 커밋 범위가 주어지면: `git diff <from>..<to>` 로 diff를 생성한다.
-   - 아무것도 명시되지 않으면: `git diff HEAD` (uncommitted changes)를 사용한다.
-2. diff를 임시 파일에 저장한다.
-3. `security-auditor`에게 diff 파일 경로와 함께 리뷰를 요청한다.
 
-## 권장 호출 프롬프트
+### 1. diff 생성
+검토 대상에 맞는 diff를 생성하여 임시 파일에 저장한다.
+
+| 입력 | diff 생성 방법 |
+|------|---------------|
+| 브랜치명 | `git diff main...<branch>` |
+| 커밋 범위 | `git diff <from>..<to>` |
+| 파일 목록 | 각 파일에 대해 `git diff HEAD -- <file>` 실행. tracked 파일이 아니면 `diff /dev/null <file>`로 전체 내용을 diff 형식으로 생성 |
+| 아무것도 명시 안 됨 | `git diff HEAD` + untracked 파일은 `git ls-files --others --exclude-standard`로 목록을 구한 뒤 각각 `diff /dev/null <file>`로 추가 |
+
+**핵심:** untracked(신규) 파일이 누락되지 않도록 항상 확인한다. `git diff HEAD`만으로는 untracked 파일이 빠진다.
+
+### 2. security-auditor 호출 (`subagent run`)
+생성된 diff 파일 경로와 변경 파일 목록을 함께 전달한다.
+
+**호출 프롬프트:**
 > 보안 리뷰를 수행해줘. diff 파일: {diff_path}. 변경된 파일 목록: {file_list}. 각 파일의 전체 컨텍스트를 읽고, 사용자 입력에서 민감한 연산(SQL, LLM, 파일 시스템)까지의 데이터 플로우를 추적해줘.
+
+### 3. 결과 정리
+security-auditor의 YAML 출력을 요약한다.
 
 ## 최종 응답 형식
 
