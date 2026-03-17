@@ -83,9 +83,12 @@ async function joinExistingServer(
         "Content-Type": "application/json",
         "Content-Length": String(Buffer.byteLength(authBody)),
       };
-      const authResult = await httpPost(`${localServerOrigin}/api/auth`, authBody, authHeaders).catch(() =>
-        server.mode === "tailscale" ? httpPost(`http://127.0.0.1:${server.port}/api/auth`, authBody, authHeaders) : Promise.reject(),
-      );
+      const authResult = await httpPost(`${localServerOrigin}/api/auth`, authBody, authHeaders).catch(() => {
+        if (server.mode === "tailscale") {
+          return httpPost(`http://127.0.0.1:${server.port}/api/auth`, authBody, authHeaders);
+        }
+        return Promise.reject();
+      });
       const authParsed = JSON.parse(authResult) as { token?: string };
       if (!authParsed.token) return false;
 
@@ -101,32 +104,6 @@ async function joinExistingServer(
   } catch {
     return false;
   }
-}
-
-function httpGet(url: string): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const parsed = new URL(url);
-    const client = parsed.protocol === "https:" ? https : http;
-    const req = client.get(
-      {
-        hostname: parsed.hostname,
-        port: parsed.port,
-        path: parsed.pathname + parsed.search,
-        timeout: 3000,
-        ...(parsed.protocol === "https:" ? { rejectUnauthorized: false } : {}),
-      },
-      (res) => {
-        const chunks: Buffer[] = [];
-        res.on("data", (chunk: Buffer) => chunks.push(chunk));
-        res.on("end", () => resolve(Buffer.concat(chunks).toString("utf-8")));
-      },
-    );
-    req.on("error", reject);
-    req.on("timeout", () => {
-      req.destroy();
-      reject(new Error("timeout"));
-    });
-  });
 }
 
 function httpPost(url: string, body: string, headers?: Record<string, string>): Promise<string> {
@@ -304,9 +281,10 @@ export default function (pi: ExtensionAPI) {
     await syncWidget(_event, ctx);
 
     if (process.env.PI_REMOTE_URL && ctx.hasUI) {
+      const remoteUrl = process.env.PI_REMOTE_URL;
       const mode = process.env.PI_REMOTE_MODE ?? "lan";
       const pin = process.env.PI_REMOTE_PIN;
-      const parts = [`Remote (${mode}): ${process.env.PI_REMOTE_URL}`];
+      const parts = [`Remote (${mode}): ${remoteUrl}`];
       if (pin) parts.push(`PIN: ${pin}`);
       ctx.ui.notify(parts.join(" | "), "info");
     }
