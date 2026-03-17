@@ -75,10 +75,16 @@ export async function startRemote(options: RemoteOptions = {}): Promise<() => Pr
 
     removeLockfile();
     sessionManager.killAll();
-    await closeWebSocket?.();
-    await serverResult?.cleanup();
+
+    // Cleanup with timeout — don't block exit for slow WS/server close
+    const cleanupWithTimeout = async (fn: () => Promise<void>, ms = 3000): Promise<void> => {
+      await Promise.race([fn(), new Promise<void>((r) => setTimeout(r, ms))]);
+    };
+
+    await cleanupWithTimeout(() => closeWebSocket?.() ?? Promise.resolve());
+    await cleanupWithTimeout(() => serverResult?.cleanup() ?? Promise.resolve());
     if (funnelCleanupPort !== null) {
-      await stopFunnel(funnelCleanupPort);
+      await cleanupWithTimeout(() => stopFunnel(funnelCleanupPort!), 5000);
     }
     setPublicUrl(null);
   };

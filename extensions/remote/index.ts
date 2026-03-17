@@ -204,14 +204,11 @@ export default function (pi: ExtensionAPI) {
     if (!process.env.PI_REMOTE_URL) {
       const existing = discoverExistingServer();
       if (existing) {
-        ctx.ui.notify(`Found remote server at ${existing.url}. Joining...`, "info");
-        const joined = await joinExistingServer(existing, sessionFile, cwd);
+        // Register a new session on the existing server (current pi stays running locally)
+        const joined = await joinExistingServer(existing, undefined, cwd);
         if (joined) {
-          ctx.ui.notify(`Session joined at ${existing.url}. This pi will exit.`, "info");
-          // pendingLaunch stays null → session_shutdown won't start a launcher
-          // Current pi exits, session is now managed by the existing remote server
-          ctx.shutdown();
-          return;
+          ctx.ui.notify(`New session added to remote server at ${existing.url}`, "info");
+          return; // pi keeps running locally — no shutdown
         }
         ctx.ui.notify("Join failed. Starting new remote server...", "info");
       }
@@ -251,8 +248,12 @@ export default function (pi: ExtensionAPI) {
         ctx.ui.notify("Not in remote mode.", "error");
         return;
       }
-      ctx.ui.notify("Closing remote mode. Session will be preserved.", "info");
+      // Signal the launcher to shut down (fire and forget — don't wait)
+      // The launcher's PTY exit handler will clean up server/WS/lockfile
+      ctx.ui.notify("Exiting remote mode...", "info");
       ctx.shutdown();
+      // session_shutdown handler will NOT set pendingLaunch (it's null)
+      // so the launcher process will exit, and pi restarts normally via --session
     },
   });
 
