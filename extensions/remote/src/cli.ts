@@ -59,6 +59,7 @@ startRemote({
   args: forwardedArgs,
   funnel: parsed.funnel,
   forceLan: parsed.lan,
+  sessionFile: parsed.session,
 }).catch((error) => {
   const message = error instanceof Error ? error.stack ?? error.message : String(error);
   process.stderr.write(`pi-remote: ${message}\n`);
