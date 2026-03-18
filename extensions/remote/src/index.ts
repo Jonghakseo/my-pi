@@ -1,7 +1,10 @@
 import { execSync } from "node:child_process";
 import QRCode from "qrcode-terminal";
 import { initializeAuth, getCurrentPin, getLanToken } from "./auth.js";
-import { removeLockfile, writeLockfile } from "./lockfile.js";
+import { startClient } from "./client.js";
+import { consumeCloseRequest } from "./close-request.js";
+import { readLockfile, removeLockfile, removeLockfileIfMatches, writeLockfile } from "./lockfile.js";
+import { relaunchLocalPi } from "./local-pi.js";
 import { SessionManager } from "./session-manager.js";
 import { setPublicUrl, startServer, type ServerResult } from "./server.js";
 import { resolveMode, startFunnel, stopFunnel } from "./tailscale.js";
@@ -14,6 +17,7 @@ export interface RemoteOptions {
   env?: Record<string, string>;
   funnel?: boolean;
   forceLan?: boolean;
+  sessionFile?: string;
 }
 
 const GRACE_PERIOD_MS = 30_000;
@@ -35,8 +39,45 @@ function resolvePiPath(piPath?: string): string {
   throw new Error('Could not resolve the "pi" executable. Pass --pi-path explicitly.');
 }
 
+function isJoinServerUnavailableError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return ["ECONNREFUSED", "ECONNRESET", "socket hang up", "timeout", "EPIPE", "fetch failed"].some((token) =>
+    message.includes(token),
+  );
+}
+
 export async function startRemote(options: RemoteOptions = {}): Promise<() => Promise<void>> {
+  const launcherCwd = options.cwd ?? process.cwd();
   const piPath = resolvePiPath(options.piPath);
+  const piArgs = options.args ?? [];
+
+  // Try to join an existing server (client mode).
+  // Explicit transport requests only reuse a server of the same transport.
+  const existingServer = readLockfile();
+  const requestedMode = options.funnel ? "funnel" : options.forceLan ? "lan" : null;
+  const canJoinExisting = existingServer && (requestedMode === null || existingServer.mode === requestedMode);
+  if (canJoinExisting && existingServer) {
+    try {
+      return await startClient(existingServer, {
+        piPath,
+        args: piArgs,
+        cwd: launcherCwd,
+        env: options.env,
+        sessionFile: options.sessionFile,
+      });
+    } catch (error) {
+      if (!isJoinServerUnavailableError(error)) {
+        throw error;
+      }
+
+      // Only dead/unreachable existing servers should trigger fallback to server mode.
+      process.stderr.write(
+        `[pi-remote] Existing server unavailable: ${error instanceof Error ? error.message : String(error)}. Starting server mode.\n`,
+      );
+      removeLockfileIfMatches(existingServer);
+    }
+  }
+
   const modeResult = await resolveMode({ forceLan: options.forceLan, funnel: options.funnel });
 
   let activeMode = modeResult.mode;
@@ -68,11 +109,10 @@ export async function startRemote(options: RemoteOptions = {}): Promise<() => Pr
   const baseEnv: Record<string, string> = {
     ...(options.env ?? (process.env as Record<string, string>)),
   };
-  const launcherCwd = options.cwd ?? process.cwd();
 
   const sessionManager = new SessionManager({
     piPath,
-    args: options.args ?? [],
+    args: piArgs,
     cwd: launcherCwd,
     env: baseEnv,
     cols: process.stdout.columns || 120,
@@ -213,6 +253,22 @@ export async function startRemote(options: RemoteOptions = {}): Promise<() => Pr
     });
 
     initialSession.onExit(() => {
+      const closeRequest = consumeCloseRequest(initialSession.id);
+      if (closeRequest?.action === "shutdown-server") {
+        void (async () => {
+          await cleanup();
+          const nextCode = relaunchLocalPi({
+            piPath,
+            args: piArgs,
+            cwd: launcherCwd,
+            env: baseEnv,
+            sessionFile: options.sessionFile,
+          });
+          process.exit(nextCode);
+        })().catch(() => process.exit(1));
+        return;
+      }
+
       const remaining = sessionManager.runningCount();
       if (remaining > 0) {
         process.stdout.write(

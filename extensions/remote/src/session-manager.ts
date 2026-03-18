@@ -414,6 +414,7 @@ export class SessionManager {
         ...(this.options.env ?? (process.env as Record<string, string>)),
         ...(options.env ?? {}),
         PI_REMOTE_SESSION_ID: id,
+        PI_REMOTE_ATTACH_LOCAL: options.attachLocal ? "1" : "0",
       },
       cols: options.cols ?? this.options.cols ?? 80,
       rows: options.rows ?? this.options.rows ?? 24,

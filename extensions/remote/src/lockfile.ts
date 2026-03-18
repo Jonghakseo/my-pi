@@ -60,3 +60,18 @@ export function removeLockfile(): void {
     // ignore
   }
 }
+
+export function removeLockfileIfMatches(expected: Pick<LockfileData, "pid" | "port" | "url">): void {
+  try {
+    if (!existsSync(LOCKFILE_PATH)) {
+      return;
+    }
+    const content = readFileSync(LOCKFILE_PATH, "utf-8");
+    const parsed = JSON.parse(content) as Partial<LockfileData>;
+    if (parsed.pid === expected.pid && parsed.port === expected.port && parsed.url === expected.url) {
+      unlinkSync(LOCKFILE_PATH);
+    }
+  } catch {
+    // ignore
+  }
+}
