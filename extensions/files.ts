@@ -16,7 +16,7 @@ import { DynamicBorder } from "@mariozechner/pi-coding-agent";
 import {
 	Container,
 	fuzzyFilter,
-	getEditorKeybindings,
+	getKeybindings,
 	Input,
 	matchesKey,
 	type SelectItem,
@@ -940,7 +940,7 @@ const showFileSelector = async (
 					}
 				}
 
-				const kb = getEditorKeybindings();
+				const kb = getKeybindings();
 				if (
 					kb.matches(data, "selectUp") ||
 					kb.matches(data, "selectDown") ||
