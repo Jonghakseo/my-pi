@@ -227,24 +227,24 @@ export class MemorySelectorComponent extends Container implements Focusable {
 
 	handleInput(keyData: string): void {
 		const kb = getKeybindings();
-		if (kb.matches(keyData, "selectUp")) {
+		if (kb.matches(keyData, "tui.select.up")) {
 			if (!this.filteredEntries.length) return;
 			this.selectedIndex = this.selectedIndex === 0 ? this.filteredEntries.length - 1 : this.selectedIndex - 1;
 			this.updateList();
 			return;
 		}
-		if (kb.matches(keyData, "selectDown")) {
+		if (kb.matches(keyData, "tui.select.down")) {
 			if (!this.filteredEntries.length) return;
 			this.selectedIndex = this.selectedIndex === this.filteredEntries.length - 1 ? 0 : this.selectedIndex + 1;
 			this.updateList();
 			return;
 		}
-		if (kb.matches(keyData, "selectConfirm")) {
+		if (kb.matches(keyData, "tui.select.confirm")) {
 			const selected = this.filteredEntries[this.selectedIndex];
 			if (selected) this.onSelectCallback(selected);
 			return;
 		}
-		if (kb.matches(keyData, "selectCancel")) {
+		if (kb.matches(keyData, "tui.select.cancel")) {
 			this.onCancelCallback();
 			return;
 		}
@@ -339,23 +339,23 @@ export class MemoryDetailOverlayComponent {
 
 	handleInput(keyData: string): void {
 		const kb = getKeybindings();
-		if (kb.matches(keyData, "selectCancel")) {
+		if (kb.matches(keyData, "tui.select.cancel")) {
 			this.onClose();
 			return;
 		}
-		if (kb.matches(keyData, "selectUp")) {
+		if (kb.matches(keyData, "tui.select.up")) {
 			this.scroll(-1);
 			return;
 		}
-		if (kb.matches(keyData, "selectDown")) {
+		if (kb.matches(keyData, "tui.select.down")) {
 			this.scroll(1);
 			return;
 		}
-		if (kb.matches(keyData, "selectPageUp")) {
+		if (kb.matches(keyData, "tui.select.pageUp")) {
 			this.scroll(-this.viewHeight || -1);
 			return;
 		}
-		if (kb.matches(keyData, "selectPageDown")) {
+		if (kb.matches(keyData, "tui.select.pageDown")) {
 			this.scroll(this.viewHeight || 1);
 			return;
 		}
