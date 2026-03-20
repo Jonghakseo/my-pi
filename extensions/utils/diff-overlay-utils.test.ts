@@ -60,7 +60,8 @@ describe("parseNameStatusZ", () => {
 
 describe("parsePorcelainStatusZ", () => {
 	it("parses tracked + untracked + rename entries", () => {
-		const stdout = `${[" M src/a.ts", "?? src/new.ts", "R  src/old.ts", "src/new-name.ts"].join("\0")}\0`;
+		// porcelain -z format: rename is "XY <newPath>\0<oldPath>\0"
+		const stdout = `${[" M src/a.ts", "?? src/new.ts", "R  src/new-name.ts", "src/old.ts"].join("\0")}\0`;
 		const parsed = parsePorcelainStatusZ(stdout);
 		expect(parsed).toEqual([
 			{ path: "src/a.ts", status: "modified", rawStatus: "M" },

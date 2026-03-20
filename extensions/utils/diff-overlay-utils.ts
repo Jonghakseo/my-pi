@@ -96,7 +96,7 @@ export function parseNameStatusZ(stdout: string): ParsedDiffEntry[] {
  *
  * Format (NUL-separated):
  * - normal: "XY <path>"\0
- * - rename/copy: "R? <oldPath>"\0"<newPath>"\0
+ * - rename/copy: "XY <newPath>"\0"<oldPath>"\0
  */
 export function parsePorcelainStatusZ(stdout: string): ParsedDiffEntry[] {
 	if (!stdout) return [];
@@ -109,9 +109,9 @@ export function parsePorcelainStatusZ(stdout: string): ParsedDiffEntry[] {
 		if (entry.length < 4) continue;
 
 		const raw = entry.slice(0, 2);
-		let filePath = entry.slice(3);
+		const filePath = entry.slice(3);
 		if ((raw.startsWith("R") || raw.startsWith("C")) && statusParts[i + 1]) {
-			filePath = statusParts[i + 1] ?? filePath;
+			// entry.slice(3) already has the correct new/destination path; skip the old path entry
 			i += 1;
 		}
 		if (!filePath) continue;

@@ -171,7 +171,7 @@ function extractContent(entry: unknown): string {
 					const name = block.name;
 					const args = block.arguments;
 					const nameStr = typeof name === "string" ? name : "unknown";
-					return `Tool: ${nameStr}(${JSON.stringify(args).slice(0, 200)})`;
+					return `Tool: ${nameStr}(${(JSON.stringify(args) ?? "{}").slice(0, 200)})`;
 				}
 				return "";
 			})
