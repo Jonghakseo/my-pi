@@ -93,7 +93,7 @@ export default function (pi: ExtensionAPI) {
       }
 
       if (isInitial) {
-        ctx.ui.notify("⚠ Shutting down remote server and all sessions. Returning to local pi...", "warn");
+        ctx.ui.notify("⚠ Shutting down remote server and all sessions. Returning to local pi...", "warning");
       } else {
         ctx.ui.notify("Exiting remote session and returning to local pi...", "info");
       }
