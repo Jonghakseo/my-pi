@@ -8,7 +8,7 @@ import {
 	Container,
 	type Focusable,
 	fuzzyMatch,
-	getEditorKeybindings,
+	getKeybindings,
 	Input,
 	Key,
 	Markdown,
@@ -226,7 +226,7 @@ export class MemorySelectorComponent extends Container implements Focusable {
 	}
 
 	handleInput(keyData: string): void {
-		const kb = getEditorKeybindings();
+		const kb = getKeybindings();
 		if (kb.matches(keyData, "selectUp")) {
 			if (!this.filteredEntries.length) return;
 			this.selectedIndex = this.selectedIndex === 0 ? this.filteredEntries.length - 1 : this.selectedIndex - 1;
@@ -338,7 +338,7 @@ export class MemoryDetailOverlayComponent {
 	}
 
 	handleInput(keyData: string): void {
-		const kb = getEditorKeybindings();
+		const kb = getKeybindings();
 		if (kb.matches(keyData, "selectCancel")) {
 			this.onClose();
 			return;
