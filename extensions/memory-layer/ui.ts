@@ -411,7 +411,7 @@ export class MemoryDetailOverlayComponent {
 		// Frame
 		const bc = (t: string) => this.theme.fg("borderMuted", t);
 		const top = bc(`┌${"─".repeat(innerW)}┐`);
-		const bottom = bc(`└${"─".repeat(innerW)}┐`);
+		const bottom = bc(`└${"─".repeat(innerW)}┘`);
 		const framed = lines.map((l) => {
 			const tr = truncateToWidth(l, innerW);
 			const pad = Math.max(0, innerW - visibleWidth(tr));
