@@ -6,10 +6,9 @@
  */
 
 import * as fs from "node:fs";
-import * as os from "node:os";
 import * as path from "node:path";
 import { type ExtensionAPI, type ExtensionContext, isToolCallEventType, type ToolCallEventResult } from "@mariozechner/pi-coding-agent";
-import { isSubagentAsyncLaunchCommand, parseSubagentCommandVerb } from "../subagent/cli.ts";
+import { parseSubagentCommandVerb } from "../subagent/cli.ts";
 import { STATUS_LOG_FOOTER, SUBAGENT_STARTED_STATUS_FOOTER } from "../subagent/constants.ts";
 import { SYSTEM_MODE_STATUS_KEY } from "../utils/status-keys.ts";
 import { setAgentsModeEnabled } from "./state.ts";
@@ -19,62 +18,6 @@ type SystemMode = "default" | "agents" | "master";
 const STATUS_POLL_WINDOW_MS = 12_000;
 const STATUS_POLL_BLOCK_THRESHOLD = 3;
 const STATUS_POLL_NOTIFY_COOLDOWN_MS = 30_000;
-const FIRST_ASYNC_ABORT_MARKER_ENTRY_TYPE = "system-first-async-abort-triggered";
-const FIRST_ASYNC_ABORT_STATE_FILE = path.join(
-	os.homedir(),
-	".pi",
-	"agent",
-	"state",
-	"system-mode-first-async-abort.json",
-);
-
-function normalizeSessionKey(raw: unknown): string | null {
-	if (typeof raw !== "string") return null;
-	const cleaned = raw.replace(/[\r\n\t]+/g, "").trim();
-	return cleaned || null;
-}
-
-function getSessionKey(ctx: ExtensionContext): string | null {
-	try {
-		const byId = (ctx.sessionManager as { getSessionId?: () => unknown })?.getSessionId?.();
-		const normalizedId = normalizeSessionKey(byId);
-		if (normalizedId) return `id:${normalizedId}`;
-		const byFile = ctx.sessionManager?.getSessionFile?.();
-		const normalizedFile = normalizeSessionKey(byFile);
-		if (normalizedFile) return `file:${normalizedFile}`;
-	} catch {
-		/* ignore */
-	}
-	return null;
-}
-
-function loadPersistedFirstAbortSessions(): Set<string> {
-	try {
-		if (!fs.existsSync(FIRST_ASYNC_ABORT_STATE_FILE)) return new Set();
-		const raw = fs.readFileSync(FIRST_ASYNC_ABORT_STATE_FILE, "utf-8");
-		const parsed = JSON.parse(raw) as { sessionKeys?: unknown };
-		if (!Array.isArray(parsed?.sessionKeys)) return new Set();
-		const normalized = parsed.sessionKeys
-			.map((value) => normalizeSessionKey(value))
-			.filter((value): value is string => Boolean(value));
-		return new Set(normalized);
-	} catch {
-		return new Set();
-	}
-}
-
-function savePersistedFirstAbortSessions(sessionKeys: Set<string>): void {
-	try {
-		const parentDir = path.dirname(FIRST_ASYNC_ABORT_STATE_FILE);
-		if (!fs.existsSync(parentDir)) {
-			fs.mkdirSync(parentDir, { recursive: true });
-		}
-		const payload = JSON.stringify({ sessionKeys: Array.from(sessionKeys).sort() });
-		fs.writeFileSync(FIRST_ASYNC_ABORT_STATE_FILE, payload, "utf-8");
-	} catch {
-		/* ignore */
-	}
-}
 
 const PROMPTS_DIR = path.join(import.meta.dirname, "prompts");
 const TODO_COMPLETION_POLICY = [
@@ -122,23 +65,6 @@ export default function (pi: ExtensionAPI) {
 	let masterHardLockEnabled = false;
 	let recentStatusPollCalls: number[] = [];
 	let lastStatusPollNotifyAt = 0;
-	let firstAsyncLaunchAbortTriggeredInSession = false;
-	let suppressNextSystemAbortMessage = false;
-	let persistedFirstAbortSessionKeys = loadPersistedFirstAbortSessions();
-
-	const hasPersistedFirstAbortForSession = (ctx: ExtensionContext): boolean => {
-		const sessionKey = getSessionKey(ctx);
-		if (!sessionKey) return false;
-		return persistedFirstAbortSessionKeys.has(sessionKey);
-	};
-
-	const persistFirstAbortForSession = (ctx: ExtensionContext): void => {
-		const sessionKey = getSessionKey(ctx);
-		if (!sessionKey) return;
-		if (persistedFirstAbortSessionKeys.has(sessionKey)) return;
-		persistedFirstAbortSessionKeys.add(sessionKey);
-		savePersistedFirstAbortSessions(persistedFirstAbortSessionKeys);
-	};
 
 	const resetStatusPollTracker = () => {
 		recentStatusPollCalls = [];
@@ -164,10 +90,6 @@ export default function (pi: ExtensionAPI) {
 			"Master mode polling guard: repeated `subagent status/detail` calls detected in a short window. " +
 			"Stop polling, wait for automatic async completion/failure/cancellation updates, and end this turn now."
 		);
-	};
-
-	const isAsyncSubagentRunLaunch = (input: Record<string, unknown> | undefined): boolean => {
-		return isSubagentAsyncLaunchCommand(input?.command);
 	};
 
 	const applyToolPolicy = (previousMode: SystemMode, newMode: SystemMode, ctx?: ExtensionContext) => {
@@ -255,22 +177,15 @@ export default function (pi: ExtensionAPI) {
 
 	const restoreModeFromEntries = (ctx: Parameters<Parameters<typeof pi.on>[1]>[1]) => {
 		resetStatusPollTracker();
-		suppressNextSystemAbortMessage = false;
-		persistedFirstAbortSessionKeys = loadPersistedFirstAbortSessions();
 		const entries = ctx.sessionManager.getEntries();
 		let restoredMode: SystemMode = "default";
-		let abortGuardTriggered = false;
 		for (const entry of entries) {
 			if (entry.type !== "custom") continue;
 			const ce = entry as { customType?: unknown; data?: { mode?: unknown } };
 			if (ce.customType === "system-mode-change" && ce.data?.mode) {
 				restoredMode = ce.data.mode === "agents" || ce.data.mode === "master" ? ce.data.mode : "default";
 			}
-			if (ce.customType === FIRST_ASYNC_ABORT_MARKER_ENTRY_TYPE) {
-				abortGuardTriggered = true;
-			}
 		}
-		firstAsyncLaunchAbortTriggeredInSession = abortGuardTriggered || hasPersistedFirstAbortForSession(ctx);
 		applyMode(restoredMode, ctx);
 	};
 
@@ -283,7 +198,6 @@ export default function (pi: ExtensionAPI) {
 	});
 
 	pi.on("session_shutdown", async (_event, ctx) => {
-		suppressNextSystemAbortMessage = false;
 		if (!ctx.hasUI) return;
 		ctx.ui.setStatus(SYSTEM_MODE_STATUS_KEY, undefined);
 	});
@@ -327,43 +241,6 @@ export default function (pi: ExtensionAPI) {
 				"Master mode hard policy: only subagent, lightweight orchestration tools (list-agents/read/find/grep/ls/AskUserQuestion/todo_write), and memory tools (remember/recall/forget/memory_list) can be called by the main agent. " +
 				"Delegate execution through subagent.",
 		};
-	});
-
-	pi.on("tool_result", async (event, ctx) => {
-		if (mode !== "master" && mode !== "agents") return;
-		if (event.toolName !== "subagent") return;
-		if (event.isError) return;
-		const input = event.input as Record<string, unknown> | undefined;
-		if (!isAsyncSubagentRunLaunch(input)) return;
-		if (firstAsyncLaunchAbortTriggeredInSession) return;
-
-		firstAsyncLaunchAbortTriggeredInSession = true;
-		suppressNextSystemAbortMessage = true;
-		persistFirstAbortForSession(ctx);
-		pi.appendEntry(FIRST_ASYNC_ABORT_MARKER_ENTRY_TYPE, { triggeredAt: Date.now(), mode });
-		if (ctx.hasUI) {
-			ctx.ui.notify("환각 방지: 첫 subagent 호출 이후 메인 응답을 강제 abort합니다.", "info");
-		}
-		ctx.abort();
-	});
-
-	pi.on("message_end", async (event, _ctx) => {
-		if (!suppressNextSystemAbortMessage) return;
-		if (event.message.role !== "assistant") return;
-		if (event.message.stopReason !== "aborted") return;
-
-		const hasSubagentToolCall = event.message.content.some(
-			(content) => content.type === "toolCall" && content.name === "subagent",
-		);
-		if (hasSubagentToolCall) {
-			event.message.stopReason = "toolUse";
-			event.message.errorMessage = undefined;
-		}
-		suppressNextSystemAbortMessage = false;
-	});
-
-	pi.on("agent_end", async () => {
-		suppressNextSystemAbortMessage = false;
 	});
 
 	pi.on("before_agent_start", async (event, _ctx) => {
