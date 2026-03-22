@@ -24,6 +24,7 @@ disable-model-invocation: false
 | 코드 가독성만 개선하고 싶다 | **code-polishing** | 동작 변경 없이 simplifier가 다듬는다 |
 | 새 스킬을 만들거나 기존 스킬을 고치고 싶다 | **writing-skills** | 스킬 자체를 TDD로 작성한다 |
 | 문서를 예쁜 HTML로 만들고 싶다 | **to-html** | 활자본 스타일 단일 HTML 생성 |
+| 에이전트/스킬 사용 현황을 분석하고 싶다 | **usage-analytics** | 로그 기반 사용 통계 분석 및 인사이트 도출 |
 
 ### 의사결정 흐름
 
@@ -43,6 +44,8 @@ disable-model-invocation: false
 │   ├─ "진짜 되나?" 확인 ──────→ verification-gate
 │   ├─ 다각도 압박 검토 ───────→ stress-interview
 │   └─ 검토 + 자동 수정 ──────→ self-healing
+│
+├─ 사용 현황을 분석하려 한다 ──→ usage-analytics
 │
 └─ 문서화하려 한다 ────────────→ to-html
 ```
