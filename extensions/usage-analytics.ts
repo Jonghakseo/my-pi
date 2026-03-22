@@ -653,10 +653,14 @@ class AnalyticsOverlay {
 
 // ─── Extension entry point ───────────────────────────────────────────────────
 
+const SKILL_DEBOUNCE_MS = 10_000; // 같은 스킬의 10초 내 중복 read를 무시
+
 export default function (pi: ExtensionAPI) {
 	// Track the number of session entries already processed to avoid
 	// re-scanning historical completion events on session_start/session_switch.
 	let lastProcessedEntryCount = -1;
+	// Debounce: skill → last logged epoch
+	const skillLastLogged = new Map<string, number>();
 
 	// ── Subagent launch tracking ──
 	pi.on("tool_result", async (event, _ctx) => {
@@ -675,7 +679,7 @@ export default function (pi: ExtensionAPI) {
 			}
 		}
 
-		// Track skill reads
+		// Track skill reads (debounced: same skill within 10s is ignored)
 		if (event.toolName === "read" && !event.isError) {
 			const input = event.input as Record<string, unknown> | undefined;
 			const filePath = typeof input?.path === "string" ? input.path : null;
@@ -683,7 +687,11 @@ export default function (pi: ExtensionAPI) {
 				const skill = extractSkillName(filePath);
 				if (skill) {
 					const { ts, epoch } = now();
-					appendLog({ type: "skill_read", ts, epoch, skill, path: filePath });
+					const lastEpoch = skillLastLogged.get(skill) ?? 0;
+					if (epoch - lastEpoch >= SKILL_DEBOUNCE_MS) {
+						skillLastLogged.set(skill, epoch);
+						appendLog({ type: "skill_read", ts, epoch, skill, path: filePath });
+					}
 				}
 			}
 		}
