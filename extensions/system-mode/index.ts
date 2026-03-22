@@ -8,7 +8,7 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { type ExtensionAPI, type ExtensionContext, isToolCallEventType } from "@mariozechner/pi-coding-agent";
+import { type ExtensionAPI, type ExtensionContext, isToolCallEventType, type ToolCallEventResult } from "@mariozechner/pi-coding-agent";
 import { isSubagentAsyncLaunchCommand, parseSubagentCommandVerb } from "../subagent/cli.ts";
 import { STATUS_LOG_FOOTER, SUBAGENT_STARTED_STATUS_FOOTER } from "../subagent/constants.ts";
 import { SYSTEM_MODE_STATUS_KEY } from "../utils/status-keys.ts";
@@ -288,7 +288,7 @@ export default function (pi: ExtensionAPI) {
 		ctx.ui.setStatus(SYSTEM_MODE_STATUS_KEY, undefined);
 	});
 
-	pi.on("tool_call", async (event, ctx) => {
+	pi.on("tool_call", async (event, ctx): Promise<ToolCallEventResult | undefined> => {
 		if (mode !== "master" || !masterHardLockEnabled) return;
 
 		// --- Master mode: subagent is the dispatch tool (with polling guard) ---
