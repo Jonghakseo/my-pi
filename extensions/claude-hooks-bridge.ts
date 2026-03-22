@@ -2,7 +2,7 @@ import { spawn } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import type { ExtensionAPI, ExtensionContext, ToolCallEvent, ToolResultEvent } from "@mariozechner/pi-coding-agent";
+import type { ExtensionAPI, ExtensionContext, ToolCallEvent, ToolCallEventResult, ToolResultEvent } from "@mariozechner/pi-coding-agent";
 
 export type ClaudeHookEventName = "SessionStart" | "UserPromptSubmit" | "PreToolUse" | "PostToolUse" | "Stop";
 
@@ -630,7 +630,7 @@ export default function claudeHooksBridge(pi: ExtensionAPI) {
 		await runHooks(settings, "UserPromptSubmit", ctx, payload);
 	});
 
-	pi.on("tool_call", async (event, ctx) => {
+	pi.on("tool_call", async (event, ctx): Promise<ToolCallEventResult | undefined> => {
 		const loaded = loadSettings(ctx.cwd);
 		notifyOnceForParseError(ctx, loaded);
 		const settings = loaded.settings;

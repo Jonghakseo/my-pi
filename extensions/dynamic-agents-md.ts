@@ -16,9 +16,9 @@
  */
 
 import type { ImageContent, TextContent } from "@mariozechner/pi-ai";
-import { type ExtensionAPI, isToolCallEventType, type ToolResultEvent } from "@mariozechner/pi-coding-agent";
+import { type ExtensionAPI, isToolCallEventType, type ToolCallEventResult, type ToolResultEvent } from "@mariozechner/pi-coding-agent";
 
-/** Matches pi core's ToolResultEventResult shape. */
+/** Matches pi core's ToolResultEventResult shape (not exported from top-level package). */
 interface ToolResultEventResult {
 	content?: (TextContent | ImageContent)[];
 	details?: unknown;
@@ -181,7 +181,7 @@ export default function (pi: ExtensionAPI) {
 	});
 
 	// Enforce scope context before first edit/write in a new directory scope.
-	pi.on("tool_call", async (event, ctx) => {
+	pi.on("tool_call", async (event, ctx): Promise<ToolCallEventResult | undefined> => {
 		if (!(isToolCallEventType("edit", event) || isToolCallEventType("write", event))) return;
 
 		const rawPath = event.input.path;
