@@ -16,10 +16,11 @@ disable-model-invocation: false
 각 줄은 JSON 객체이며 3가지 타입이 있다:
 
 ```jsonc
-// 서브에이전트 시작
-{ "type": "subagent_start", "ts": "ISO8601", "epoch": 1234567890, "agent": "worker", "runId": 42, "mode": "run" }
+// 서브에이전트 시작 (run/batch/chain은 agent명 포함, continue는 "_continue" 플레이스홀더)
+// 집계: batch/chain의 start는 total에 포함 (개별 end 없으므로), run/continue의 start는 집계 제외
+{ "type": "subagent_start", "ts": "ISO8601", "epoch": 1234567890, "agent": "worker", "mode": "run" }
 
-// 서브에이전트 완료
+// 서브에이전트 완료 (집계의 단일 소스)
 { "type": "subagent_end", "ts": "ISO8601", "epoch": 1234567890, "agent": "worker", "runId": 42, "status": "done", "elapsedMs": 45000, "model": "claude-sonnet-4-20250514" }
 
 // 스킬 읽기
@@ -56,7 +57,7 @@ cat ~/.pi/agent/state/usage-analytics.jsonl
 
 | 지표 | 계산 방법 |
 |------|----------|
-| **호출 빈도** | `subagent_start` 이벤트 수를 agent별로 집계 |
+| **호출 빈도** | `subagent_end` 이벤트 수 + batch/chain의 `subagent_start` 이벤트 수를 agent별로 집계 |
 | **성공/실패 건수** | `subagent_end`의 `status` 필드로 집계 |
 | **에러율** | `error / (done + error) * 100` |
 | **평균 소요시간** | `subagent_end`의 `elapsedMs` 평균 |
