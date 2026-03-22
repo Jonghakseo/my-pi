@@ -9,7 +9,7 @@ import { visibleWidth } from "@mariozechner/pi-tui";
  * Dismissed by any keypress.
  */
 
-const IDLE_MS = 15 * 60 * 1000; // 15 minutes
+const IDLE_MS = 60 * 60 * 1000; // 60 minutes
 const PURPOSE_ENTRY_TYPE = "purpose:set" as const;
 
 let idleTimer: ReturnType<typeof setTimeout> | null = null;
