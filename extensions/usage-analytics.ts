@@ -8,15 +8,24 @@
  * Log file: ~/.pi/agent/state/usage-analytics.jsonl
  *
  * Tracked events:
- *   - subagent: logged on `tool_result` for the `subagent` tool (run/continue/batch/chain launches)
- *     and on `custom_message` session entries with completion status (done/error).
- *   - skill: logged on `tool_result` for the `read` tool when the path contains `SKILL.md`.
+ *   - subagent_start: logged on `tool_result` for the `subagent` tool (run/continue/batch/chain launches)
+ *   - subagent_end:   logged when session entries contain completion custom_messages
+ *   - skill_read:     logged on `tool_result` for the `read` tool when the path contains `SKILL.md`
+ *
+ * Counting strategy (hybrid):
+ *   - `subagent_end` is the **primary source** for total/done/error/duration
+ *     (single runs and continue).
+ *   - `subagent_start` with mode=batch/chain is a **secondary source** for runs
+ *     that lack individual end records. These count in totals but have no
+ *     done/error/duration breakdown.
+ *   - This avoids double-counting: single runs count from end only,
+ *     batch/chain members count from start only.
  */
 
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
+import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import { Container, Key, matchesKey, Spacer, Text, truncateToWidth } from "@mariozechner/pi-tui";
 import { parseSubagentCommandVerb } from "./subagent/cli.ts";
 
@@ -37,7 +46,6 @@ interface BaseLogEntry {
 interface SubagentStartEntry extends BaseLogEntry {
 	type: "subagent_start";
 	agent: string;
-	runId?: number;
 	mode: "run" | "continue" | "batch" | "chain" | "unknown";
 }
 
@@ -95,6 +103,41 @@ function readAllLogs(): LogEntry[] {
 	}
 }
 
+/**
+ * Rotate log file: remove entries older than MAX_LOG_AGE_DAYS.
+ * Called once on session_start to prevent unbounded growth.
+ */
+function rotateLog(): void {
+	if (!fs.existsSync(LOG_FILE)) return;
+	try {
+		const cutoff = Date.now() - MAX_LOG_AGE_DAYS * 86400_000;
+		const raw = fs.readFileSync(LOG_FILE, "utf-8");
+		const lines = raw.split("\n");
+		const kept: string[] = [];
+		let dropped = 0;
+		for (const line of lines) {
+			if (!line.trim()) continue;
+			try {
+				const entry = JSON.parse(line) as LogEntry;
+				if (entry.epoch >= cutoff) {
+					kept.push(line);
+				} else {
+					dropped++;
+				}
+			} catch {
+				/* drop malformed lines */
+				dropped++;
+			}
+		}
+		if (dropped > 0) {
+			ensureLogDir();
+			fs.writeFileSync(LOG_FILE, kept.length > 0 ? `${kept.join("\n")}\n` : "", "utf-8");
+		}
+	} catch {
+		/* ignore rotation errors */
+	}
+}
+
 function now(): Pick<BaseLogEntry, "ts" | "epoch"> {
 	const d = new Date();
 	return { ts: d.toISOString(), epoch: d.getTime() };
@@ -102,13 +145,9 @@ function now(): Pick<BaseLogEntry, "ts" | "epoch"> {
 
 /** Extract skill name from a SKILL.md path. */
 function extractSkillName(filePath: string): string | null {
-	// Patterns:
-	//   .../skills/<name>/SKILL.md
-	//   .../skills/<name>.md  (unlikely but handle)
 	const normalized = filePath.replace(/\\/g, "/");
 	const match = /\/skills\/([^/]+)\/SKILL\.md$/i.exec(normalized);
 	if (match) return match[1];
-	// Fallback: just the directory name before SKILL.md
 	const fallback = /([^/]+)\/SKILL\.md$/i.exec(normalized);
 	if (fallback) return fallback[1];
 	return null;
@@ -123,9 +162,66 @@ function verbToMode(verb: string | null): SubagentStartEntry["mode"] {
 	return "unknown";
 }
 
+/**
+ * Extract agent name(s) from a subagent CLI command string.
+ * Returns an array because batch/chain can launch multiple agents.
+ *
+ * For `continue`, returns `["_continue"]` as a placeholder — the actual
+ * agent name will come from `subagent_end`. This ensures the mode is logged.
+ */
+function extractAgentNames(command: string, verb: string | null): string[] {
+	if (verb === "run") {
+		// subagent run [--main|--isolated] <agent> [--main|--isolated] -- <task>
+		// Tokens after "run" before "--" may include --main/--isolated flags.
+		// Find the first non-flag token as the agent name.
+		const afterRun = command.replace(/^.*?\brun\b\s*/i, "");
+		const tokens = afterRun.split(/\s+/);
+		for (const token of tokens) {
+			if (token === "--") break;
+			if (token.startsWith("--")) continue; // skip flags
+			return [token];
+		}
+		return ["unknown"];
+	}
+	if (verb === "continue") {
+		// subagent continue <runId> [--agent <agent>] -- <task>
+		// We can't resolve agent from runId at this layer. Log start with
+		// placeholder so that mode="continue" is tracked. The subagent_end
+		// will carry the correct agent name.
+		const agentFlag = /--agent\s+(\S+)/i.exec(command);
+		return [agentFlag?.[1] ?? "_continue"];
+	}
+	if (verb === "batch" || verb === "chain") {
+		// subagent batch/chain [--main|--isolated] --agent <name> --task "..." ...
+		const agents: string[] = [];
+		const regex = /--agent\s+(\S+)/gi;
+		let m: RegExpExecArray | null;
+		while ((m = regex.exec(command)) !== null) {
+			agents.push(m[1]);
+		}
+		return agents.length > 0 ? agents : ["unknown"];
+	}
+	return ["unknown"];
+}
+
 // ─── Date grouping ───────────────────────────────────────────────────────────
 
 type Period = "day" | "week" | "month";
+
+/**
+ * ISO 8601 week number (Thursday-based).
+ * Returns { year, week } where year may differ from the calendar year
+ * for dates near year boundaries.
+ */
+function isoWeek(d: Date): { year: number; week: number } {
+	const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+	// Set to nearest Thursday: current date + 4 - current day (Mon=1, Sun=7)
+	const dayOfWeek = date.getUTCDay() || 7; // Convert Sun=0 to Sun=7
+	date.setUTCDate(date.getUTCDate() + 4 - dayOfWeek);
+	const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
+	const weekNum = Math.ceil(((date.getTime() - yearStart.getTime()) / 86400_000 + 1) / 7);
+	return { year: date.getUTCFullYear(), week: weekNum };
+}
 
 function periodLabel(epoch: number, period: Period): string {
 	const d = new Date(epoch);
@@ -136,11 +232,8 @@ function periodLabel(epoch: number, period: Period): string {
 	if (period === "day") return `${yyyy}-${mm}-${dd}`;
 	if (period === "month") return `${yyyy}-${mm}`;
 
-	// ISO week: Monday-based
-	const jan1 = new Date(yyyy, 0, 1);
-	const dayOfYear = Math.floor((d.getTime() - jan1.getTime()) / 86400000) + 1;
-	const weekNum = Math.ceil((dayOfYear + jan1.getDay()) / 7);
-	return `${yyyy}-W${String(weekNum).padStart(2, "0")}`;
+	const { year, week } = isoWeek(d);
+	return `${year}-W${String(week).padStart(2, "0")}`;
 }
 
 function periodStartEpoch(period: Period): number {
@@ -183,6 +276,17 @@ interface PeriodStats {
 	skills: Map<string, SkillStats>;
 }
 
+/**
+ * Compute per-period stats.
+ *
+ * Counting strategy (hybrid):
+ *   - `subagent_end` is the primary source: provides total, done/error, duration.
+ *   - `subagent_start` with mode=batch/chain is the secondary source for runs
+ *     that lack individual `subagent_end` records (batch/chain members).
+ *     These are counted in total but have no done/error/duration breakdown.
+ *   - `_continue` placeholder agents from start records are excluded
+ *     (the real agent name comes from end records).
+ */
 function computeStats(entries: LogEntry[], period: Period): PeriodStats[] {
 	const cutoff = periodStartEpoch(period);
 	const filtered = entries.filter((e) => e.epoch >= cutoff);
@@ -214,19 +318,21 @@ function computeStats(entries: LogEntry[], period: Period): PeriodStats[] {
 	for (const entry of filtered) {
 		const p = getPeriod(entry.epoch);
 
-		if (entry.type === "subagent_start") {
+		if (entry.type === "subagent_end") {
 			const agent = getAgent(p, entry.agent);
 			agent.total++;
-		} else if (entry.type === "subagent_end") {
-			const agent = getAgent(p, entry.agent);
-			// If we only have end without start (e.g. session restore), count it
-			if (!filtered.some((e) => e.type === "subagent_start" && e.epoch <= entry.epoch && (e as SubagentStartEntry).agent === entry.agent && (e as SubagentStartEntry).runId === entry.runId)) {
-				agent.total++;
-			}
 			if (entry.status === "done") agent.done++;
 			else agent.error++;
 			if (entry.elapsedMs != null && entry.elapsedMs > 0) {
 				agent.durations.push(entry.elapsedMs);
+			}
+		} else if (entry.type === "subagent_start") {
+			const start = entry as SubagentStartEntry;
+			// Count batch/chain starts as completed runs (no individual end records).
+			// Skip _continue placeholders — the real agent comes from end.
+			if ((start.mode === "batch" || start.mode === "chain") && start.agent !== "_continue") {
+				const agent = getAgent(p, start.agent);
+				agent.total++;
 			}
 		} else if (entry.type === "skill_read") {
 			const skill = getSkill(p, entry.skill);
@@ -243,7 +349,6 @@ function computeStats(entries: LogEntry[], period: Period): PeriodStats[] {
 		}
 	}
 
-	// Sort periods
 	const labels = Array.from(periodMap.keys()).sort();
 	return labels.map((label) => ({
 		label,
@@ -271,6 +376,10 @@ interface OverallSkillSummary {
 	lastUsed: number;
 }
 
+/**
+ * Compute overall stats.
+ * Hybrid counting: end is primary, batch/chain starts are secondary.
+ */
 function computeOverall(entries: LogEntry[]): {
 	agents: OverallAgentSummary[];
 	skills: OverallSkillSummary[];
@@ -281,21 +390,22 @@ function computeOverall(entries: LogEntry[]): {
 	const skillMap = new Map<string, { total: number; lastUsed: number }>();
 
 	for (const entry of entries) {
-		if (entry.type === "subagent_start") {
+		if (entry.type === "subagent_end") {
 			const a = agentMap.get(entry.agent) ?? { total: 0, done: 0, error: 0, durations: [], lastUsed: 0 };
 			a.total++;
-			if (entry.epoch > a.lastUsed) a.lastUsed = entry.epoch;
-			agentMap.set(entry.agent, a);
-		} else if (entry.type === "subagent_end") {
-			const a = agentMap.get(entry.agent) ?? { total: 0, done: 0, error: 0, durations: [], lastUsed: 0 };
-			if (!entries.some((e) => e.type === "subagent_start" && e.epoch <= entry.epoch && (e as SubagentStartEntry).agent === entry.agent && (e as SubagentStartEntry).runId === entry.runId)) {
-				a.total++;
-			}
 			if (entry.status === "done") a.done++;
 			else a.error++;
 			if (entry.elapsedMs != null && entry.elapsedMs > 0) a.durations.push(entry.elapsedMs);
 			if (entry.epoch > a.lastUsed) a.lastUsed = entry.epoch;
 			agentMap.set(entry.agent, a);
+		} else if (entry.type === "subagent_start") {
+			const start = entry as SubagentStartEntry;
+			if ((start.mode === "batch" || start.mode === "chain") && start.agent !== "_continue") {
+				const a = agentMap.get(start.agent) ?? { total: 0, done: 0, error: 0, durations: [], lastUsed: 0 };
+				a.total++;
+				if (start.epoch > a.lastUsed) a.lastUsed = start.epoch;
+				agentMap.set(start.agent, a);
+			}
 		} else if (entry.type === "skill_read") {
 			const s = skillMap.get(entry.skill) ?? { total: 0, lastUsed: 0 };
 			s.total++;
@@ -307,7 +417,8 @@ function computeOverall(entries: LogEntry[]): {
 	const agents: OverallAgentSummary[] = Array.from(agentMap.entries())
 		.map(([name, a]) => {
 			const avgMs = a.durations.length > 0 ? Math.round(a.durations.reduce((x, y) => x + y, 0) / a.durations.length) : 0;
-			const errorRate = a.total > 0 ? `${Math.round((a.error / (a.done + a.error || 1)) * 100)}%` : "0%";
+			const completedCount = a.done + a.error;
+			const errorRate = completedCount > 0 ? `${Math.round((a.error / completedCount) * 100)}%` : "0%";
 			return {
 				name,
 				total: a.total,
@@ -418,11 +529,11 @@ class AnalyticsOverlay {
 		const lines: string[] = [];
 
 		if (this.tab === "overview") {
-			this.renderOverview(lines, theme, innerWidth);
+			this.renderOverview(lines, theme);
 		} else if (this.tab === "agents") {
-			this.renderAgents(lines, theme, innerWidth);
+			this.renderAgents(lines, theme);
 		} else {
-			this.renderSkills(lines, theme, innerWidth);
+			this.renderSkills(lines, theme);
 		}
 
 		const viewport = this.getViewport();
@@ -449,7 +560,7 @@ class AnalyticsOverlay {
 		return container.render(width);
 	}
 
-	private renderOverview(lines: string[], theme: any, _width: number): void {
+	private renderOverview(lines: string[], theme: any): void {
 		const overall = computeOverall(this.entries);
 
 		lines.push(theme.bold(`Total: ${overall.totalSubagentRuns} subagent runs · ${overall.totalSkillReads} skill reads`));
@@ -489,7 +600,7 @@ class AnalyticsOverlay {
 		}
 	}
 
-	private renderAgents(lines: string[], theme: any, _width: number): void {
+	private renderAgents(lines: string[], theme: any): void {
 		const stats = computeStats(this.entries, this.period);
 
 		lines.push(theme.bold(`🤖 Subagent usage by ${this.period}`));
@@ -516,7 +627,7 @@ class AnalyticsOverlay {
 		}
 	}
 
-	private renderSkills(lines: string[], theme: any, _width: number): void {
+	private renderSkills(lines: string[], theme: any): void {
 		const stats = computeStats(this.entries, this.period);
 
 		lines.push(theme.bold(`📚 Skill usage by ${this.period}`));
@@ -543,26 +654,24 @@ class AnalyticsOverlay {
 // ─── Extension entry point ───────────────────────────────────────────────────
 
 export default function (pi: ExtensionAPI) {
-	// ── Subagent tracking: listen on custom_message events for start/end ──
-	// We listen on `tool_result` for the `subagent` tool to capture launches.
+	// Track the number of session entries already processed to avoid
+	// re-scanning historical completion events on session_start/session_switch.
+	let lastProcessedEntryCount = -1;
+
+	// ── Subagent launch tracking ──
 	pi.on("tool_result", async (event, _ctx) => {
 		// Track subagent launches
 		if (event.toolName === "subagent" && !event.isError) {
 			const input = event.input as Record<string, unknown> | undefined;
 			const verb = parseSubagentCommandVerb(input?.command);
 			if (verb === "run" || verb === "continue" || verb === "batch" || verb === "chain") {
-				// Extract agent name from the command if possible
 				const command = String(input?.command ?? "");
-				const agentMatch = /(?:run|continue)\s+(\S+)/i.exec(command);
-				const agent = agentMatch?.[1] ?? "unknown";
+				const agents = extractAgentNames(command, verb);
+				const mode = verbToMode(verb);
 				const { ts, epoch } = now();
-				appendLog({
-					type: "subagent_start",
-					ts,
-					epoch,
-					agent,
-					mode: verbToMode(verb),
-				});
+				for (const agent of agents) {
+					appendLog({ type: "subagent_start", ts, epoch, agent, mode });
+				}
 			}
 		}
 
@@ -580,23 +689,16 @@ export default function (pi: ExtensionAPI) {
 		}
 	});
 
-	// ── Subagent completion tracking via sendMessage custom_message entries ──
-	// The subagent extension sends followUp messages with customType "subagent-command" or
-	// "subagent-tool" containing details like status, agent, elapsedMs.
-	// We hook into session entries on session_start to retroactively log completions
-	// we might have missed (e.g., across session restarts).
-	// But primarily we listen for the message_end event or custom followUps.
-	//
-	// Better approach: listen directly on the session entry append.
-	// Pi doesn't have a direct "entry_appended" hook, so we use a periodic scan
-	// approach OR we hook into the custom_message on each turn.
-
-	// Track subagent completions by listening to session entries on each turn.
-	let lastProcessedEntryCount = 0;
-
+	// ── Subagent completion tracking ──
+	// Scan new session entries on each message_end to find completion custom_messages.
 	pi.on("message_end", async (_event, ctx) => {
 		try {
 			const entries = ctx.sessionManager.getEntries();
+			// Initialize on first call: skip all existing entries to avoid duplicates.
+			if (lastProcessedEntryCount < 0) {
+				lastProcessedEntryCount = entries.length;
+				return;
+			}
 			if (entries.length <= lastProcessedEntryCount) return;
 
 			const newEntries = entries.slice(lastProcessedEntryCount);
@@ -608,38 +710,60 @@ export default function (pi: ExtensionAPI) {
 				if (cm.customType !== "subagent-command" && cm.customType !== "subagent-tool") continue;
 
 				const d = cm.details;
-				if (!d || typeof d.runId !== "number") continue;
+				if (!d) continue;
 
 				const content = typeof cm.content === "string" ? cm.content : "";
-				const status = typeof d.status === "string" ? d.status.toLowerCase() : "";
-				const isCompleted = status === "done" || status === "completed" || content.includes("] completed");
-				const isError = status === "error" || status === "failed" || content.includes("] failed");
-
+				const statusRaw = typeof d.status === "string" ? d.status.toLowerCase() : "";
+				const isCompleted = statusRaw === "done" || statusRaw === "completed" || content.includes("] completed");
+				const isError = statusRaw === "error" || statusRaw === "failed" || content.includes("] failed");
 				if (!isCompleted && !isError) continue;
 
-				const { ts, epoch } = now();
-				appendLog({
-					type: "subagent_end",
-					ts,
-					epoch,
-					agent: d.agent ?? "unknown",
-					runId: d.runId,
-					status: isError ? "error" : "done",
-					elapsedMs: typeof d.elapsedMs === "number" ? d.elapsedMs : undefined,
-					model: typeof d.model === "string" ? d.model : undefined,
-				});
+				const status: "done" | "error" = isError ? "error" : "done";
+				const elapsedMs = typeof d.elapsedMs === "number" ? d.elapsedMs : undefined;
+				const model = typeof d.model === "string" ? d.model : undefined;
+
+				// Single run: d.runId is a number — log per-run completion.
+				// Batch/chain group summaries (d.runIds / d.stepRunIds) are skipped
+				// because they lack per-run agent/duration metadata. Individual runs
+				// within batch/chain are already tracked via subagent_start.
+				if (typeof d.runId === "number") {
+					const { ts, epoch } = now();
+					appendLog({
+						type: "subagent_end",
+						ts,
+						epoch,
+						agent: d.agent ?? "unknown",
+						runId: d.runId,
+						status,
+						elapsedMs,
+						model,
+					});
+				}
 			}
 		} catch {
 			/* ignore */
 		}
 	});
 
-	pi.on("session_start", async (_event, _ctx) => {
-		lastProcessedEntryCount = 0;
+	// ── Session lifecycle ──
+	pi.on("session_start", async (_event, ctx) => {
+		// Initialize entry count to current length to skip all historical entries.
+		try {
+			lastProcessedEntryCount = ctx.sessionManager.getEntries().length;
+		} catch {
+			lastProcessedEntryCount = 0;
+		}
+		// Rotate old log entries on startup
+		rotateLog();
 	});
 
-	pi.on("session_switch", async (_event, _ctx) => {
-		lastProcessedEntryCount = 0;
+	pi.on("session_switch", async (_event, ctx) => {
+		// Re-initialize to skip all entries in the new session.
+		try {
+			lastProcessedEntryCount = ctx.sessionManager.getEntries().length;
+		} catch {
+			lastProcessedEntryCount = 0;
+		}
 	});
 
 	// ── /analytics command ──
