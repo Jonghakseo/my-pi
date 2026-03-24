@@ -10,8 +10,6 @@ import { visibleWidth } from "@mariozechner/pi-tui";
  */
 
 const IDLE_MS = 60 * 60 * 1000; // 60 minutes
-const PURPOSE_ENTRY_TYPE = "purpose:set" as const;
-
 let idleTimer: ReturnType<typeof setTimeout> | null = null;
 let agentRunning = false;
 type ScreensaverTui = { terminal?: { rows?: number } };
@@ -20,35 +18,7 @@ type ScreensaverTheme = { fg: (color: ThemeColor, text: string) => string; bold:
 let overlayActive = false;
 let askUserQuestionActive = false;
 let latestCtx: ExtensionContext | null = null;
-
-// CustomEntry shape — matches the actual SDK structure used by purpose.ts
-type CustomEntry = {
-	type: "custom";
-	customType: string;
-	data: Record<string, unknown>;
-	[key: string]: unknown;
-};
-
-function isCustomEntry(entry: unknown): entry is CustomEntry {
-	if (typeof entry !== "object" || entry === null) return false;
-	const e = entry as Record<string, unknown>;
-	return e.type === "custom" && typeof e.customType === "string";
-}
-
-/** Read the most-recently-set purpose from the session branch (mirrors purpose.ts logic). */
-function readPurposeFromSession(ctx: NonNullable<typeof latestCtx>): string {
-	const branch = ctx.sessionManager.getBranch();
-	for (let i = branch.length - 1; i >= 0; i--) {
-		const entry = branch[i];
-		if (!isCustomEntry(entry)) continue;
-		if (entry.customType !== PURPOSE_ENTRY_TYPE) continue;
-		const purpose = entry.data.purpose;
-		if (typeof purpose === "string") {
-			return purpose.trim(); // 빈값이어도 즉시 반환 — 최신 엔트리가 authoritative
-		}
-	}
-	return "";
-}
+let piRef: ExtensionAPI | null = null;
 
 // ── Timer helpers ─────────────────────────────────────────────────────────────
 
@@ -75,15 +45,15 @@ async function showScreensaver(): Promise<void> {
 	overlayActive = true;
 	clearIdleTimer();
 
-	// Resolve title: prefer session purpose, fallback to folder/branch or session name
-	const purposeText = readPurposeFromSession(latestCtx);
+	// Resolve title: prefer session name, fallback to folder/branch
+	const sessionName = piRef?.getSessionName() ?? "";
 
 	let title: string;
-	if (purposeText) {
-		title = purposeText;
+	if (sessionName) {
+		title = sessionName;
 	} else {
 		const folder = latestCtx.sessionManager.getCwd();
-		const sessionName = latestCtx.sessionManager.getSessionName() ?? "Pi";
+		const fallbackName = latestCtx.sessionManager.getSessionName() ?? "Pi";
 		let branch = "";
 		try {
 			branch = execSync("git branch --show-current", {
@@ -92,7 +62,7 @@ async function showScreensaver(): Promise<void> {
 				stdio: ["pipe", "pipe", "pipe"],
 			}).trim();
 		} catch {}
-		title = branch ? `${folder.split("/").pop()}/${branch}` : sessionName;
+		title = branch ? `${folder.split("/").pop()}/${branch}` : fallbackName;
 	}
 
 	await latestCtx.ui.custom(
@@ -188,6 +158,7 @@ function renderScreensaver(width: number, height: number, title: string, theme: 
 // ── Extension entry point ─────────────────────────────────────────────────────
 
 export default function idleScreensaver(pi: ExtensionAPI): void {
+	piRef = pi;
 	pi.on("input", (event, ctx) => {
 		latestCtx = ctx;
 		if (event.source !== "extension") {

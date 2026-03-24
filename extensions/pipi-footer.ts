@@ -8,7 +8,7 @@
 
 import type { ExtensionAPI, ExtensionContext, Theme, ThemeColor } from "@mariozechner/pi-coding-agent";
 import { truncateToWidth, visibleWidth } from "@mariozechner/pi-tui";
-import { ELAPSED_STATUS_KEY, PURPOSE_STATUS_KEY } from "./utils/status-keys.ts";
+import { ELAPSED_STATUS_KEY, NAME_STATUS_KEY } from "./utils/status-keys.ts";
 
 const BAR_WIDTH = 10;
 const DIRTY_CHECK_INTERVAL_MS = 3000;
@@ -23,7 +23,7 @@ type FooterTheme = {
 type StatusStyler = (theme: FooterTheme, text: string) => string;
 
 const STATUS_STYLE_MAP: Record<string, StatusStyler> = {
-	[PURPOSE_STATUS_KEY]: (theme, text) => {
+	[NAME_STATUS_KEY]: (theme, text) => {
 		const chip = ` ${theme.fg("text", text)} `;
 		return theme.bg("selectedBg", chip);
 	},
