@@ -106,19 +106,23 @@ reviewer에게:
 [변경된 파일과 git diff 요약]
 
 ## 리뷰 기준
-1. Correctness: 로직 오류, 엣지 케이스
-2. Regressions: 기존 기능 영향
-3. Maintainability: 가독성, 일관성
-4. Security: 취약점 (해당 시)
+2-Pass 체크리스트를 적용해줘:
+- Pass 1 (Critical): SQL Safety, Auth, Race Conditions, Secret Exposure, LLM Trust Boundary
+- Pass 2 (Informational): Dead Code, Magic Numbers, Test Gaps, Performance, Consistency, Error Handling
 
-심각도별 분류: Critical / Important / Minor"
+각 finding에 fix_class(AUTO_FIX / ASK / INFO)를 분류해줘."
 ```
 
 ### Step 3: 리뷰 결과 처리
 
-- **Critical 이슈**: worker에게 수정 지시 → verifier → reviewer 재실행
-- **Important 이슈**: worker에게 수정 지시 → 빠른 검증
-- **Minor 이슈**: 기록만 하고 진행
+reviewer의 YAML 출력에서 `priority`와 `fix_class`를 기준으로 처리한다:
+
+- **P0/P1 + ASK**: worker에게 수정 지시 → verifier → reviewer 재실행
+- **P0/P1 + AUTO_FIX**: worker에게 즉시 수정 지시 → 빠른 검증
+- **P0/P1 + INFO**: 기존 코드의 심각한 문제 — 기록하고 사용자에게 에스컬레이션 (이번 태스크에서 수정하지 않음)
+- **P2/P3 + AUTO_FIX**: worker에게 즉시 수정 지시
+- **P2/P3 + ASK**: 기록하고 **다음 태스크로 진행** (이 분류는 "미해결 이슈"가 아닌 "후속 작업 후보"로 취급. 금지 규칙의 "미해결 이슈"는 P0/P1만 해당)
+- **P2/P3 + INFO**: 기록만 하고 진행
 - **최대 3회 재시도** — 3회 실패 시 에스컬레이션
 
 ### Step 4: 전체 완료
