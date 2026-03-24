@@ -1,3 +1,4 @@
+/** biome-ignore-all lint/suspicious/noExplicitAny: replay data is read from loosely typed session JSONL and TUI callbacks. */
 /**
  * Session replay viewer — reads session JSONL files and renders an
  * interactive TUI overlay for browsing past subagent conversations.

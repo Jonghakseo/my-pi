@@ -7,7 +7,12 @@
 
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { type ExtensionAPI, type ExtensionContext, isToolCallEventType, type ToolCallEventResult } from "@mariozechner/pi-coding-agent";
+import {
+	type ExtensionAPI,
+	type ExtensionContext,
+	isToolCallEventType,
+	type ToolCallEventResult,
+} from "@mariozechner/pi-coding-agent";
 import { parseSubagentCommandVerb } from "../subagent/cli.ts";
 import { STATUS_LOG_FOOTER, SUBAGENT_STARTED_STATUS_FOOTER } from "../subagent/constants.ts";
 import { SYSTEM_MODE_STATUS_KEY } from "../utils/status-keys.ts";
@@ -29,7 +34,6 @@ const TODO_COMPLETION_POLICY = [
 	"- Before giving any completion-style response, check whether `todo_write` still has remaining items.",
 	"- If remaining items exist, do not imply that the overall task is finished.",
 ].join("\n");
-
 
 function loadPrompt(name: string): string {
 	const filePath = path.join(PROMPTS_DIR, `${name}.md`);
@@ -250,7 +254,7 @@ export default function (pi: ExtensionAPI) {
 			if (modePrompt) promptBlocks.push(modePrompt);
 		}
 		return {
-			systemPrompt: `${promptBlocks.join("\n\n")}\n\n${event.systemPrompt}`,	
+			systemPrompt: `${promptBlocks.join("\n\n")}\n\n${event.systemPrompt}`,
 		};
 	});
 }

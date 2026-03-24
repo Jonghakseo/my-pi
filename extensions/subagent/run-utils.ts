@@ -9,10 +9,10 @@
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import type { SubagentStore } from "./store.js";
 import type { CommandRunState } from "./types.js";
-import { type WidgetRenderCtx, updateCommandRunsWidget } from "./widget.js";
+import { updateCommandRunsWidget, type WidgetRenderCtx } from "./widget.js";
 
 export interface RemoveRunOptions {
-	ctx?: WidgetRenderCtx;
+	ctx?: unknown;
 	pi?: ExtensionAPI;
 	abortIfRunning?: boolean;
 	reason?: string;
@@ -28,7 +28,7 @@ export interface RemoveRunResult {
 
 export interface TrimCommandRunHistoryOptions {
 	maxRuns?: number;
-	ctx?: WidgetRenderCtx;
+	ctx?: unknown;
 	pi?: ExtensionAPI;
 	updateWidget?: boolean;
 	removalReason?: string;
@@ -106,7 +106,7 @@ export function removeRun(store: SubagentStore, runId: number, options: RemoveRu
 	}
 
 	if (shouldUpdateWidget) {
-		updateCommandRunsWidget(store, options.ctx);
+		updateCommandRunsWidget(store, options.ctx as WidgetRenderCtx | undefined);
 	}
 
 	return { removed: true, aborted };
@@ -160,7 +160,10 @@ export function trimCommandRunHistory(
 	}
 
 	if (shouldUpdateWidget && removedRunIds.length > 0) {
-		updateCommandRunsWidget(store, typeof options === "number" ? undefined : options.ctx);
+		updateCommandRunsWidget(
+			store,
+			(typeof options === "number" ? undefined : options.ctx) as WidgetRenderCtx | undefined,
+		);
 	}
 
 	return removedRunIds;

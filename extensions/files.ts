@@ -392,7 +392,7 @@ const getGitStatusMap = async (pi: ExtensionAPI, cwd: string): Promise<Map<strin
 		if (!entry || entry.length < 4) continue;
 		const status = entry.slice(0, 2);
 		const statusLabel = status.replace(/\s/g, "") || status.trim();
-		let filePath = entry.slice(3);
+		const filePath = entry.slice(3);
 		if ((status.startsWith("R") || status.startsWith("C")) && entries[i + 1]) {
 			// porcelain -z format: "XY <newPath>\0<oldPath>\0" — skip the old path entry
 			i += 1;

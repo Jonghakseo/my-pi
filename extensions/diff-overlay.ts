@@ -13,25 +13,25 @@ import type { ExtensionAPI, ExtensionCommandContext, ThemeColor } from "@marioze
 import { DynamicBorder, getLanguageFromPath, highlightCode } from "@mariozechner/pi-coding-agent";
 import { Key, matchesKey, truncateToWidth, visibleWidth } from "@mariozechner/pi-tui";
 import {
+	applyHighlightToDiff,
 	type BranchCommitEntry,
-	type CommitState,
-	type FileTreeNode,
-	type VisibleRow,
 	buildFileTree,
+	type CommitState,
 	collapseFileTree,
 	collectAllDirPaths,
 	commitStateBadge,
 	type DiffFileStatus,
-	applyHighlightToDiff,
 	extractCodeBlock,
+	type FileTreeNode,
 	flattenVisibleTree,
 	mergeDiffEntries,
-	parseDiffLines,
 	type OverlayViewMode,
+	parseDiffLines,
 	parseGitLogOutput,
 	parseNameStatusZ,
 	parsePorcelainStatusZ,
 	toggleOverlayViewMode,
+	type VisibleRow,
 } from "./utils/diff-overlay-utils.ts";
 
 // ─── Types ─────────────────────────────────────────────────────────────────
@@ -418,9 +418,7 @@ function renderFiles(t: Theme, st: DiffState, w: number, h: number): string[] {
 		} else {
 			const file = fileByPath.get(row.fullPath);
 			const ic = file ? t.fg(statusColor(file.status), icon(file.status)) : " ";
-			const badge = file
-				? t.fg(commitStateColor(file.commitState), `[${commitStateBadge(file.commitState)}]`)
-				: "";
+			const badge = file ? t.fg(commitStateColor(file.commitState), `[${commitStateBadge(file.commitState)}]`) : "";
 			const prefix = `${cursor} ${indent}${ic} ${badge} `;
 			const nameW = Math.max(4, w - visibleWidth(prefix));
 
@@ -510,8 +508,8 @@ function renderDiff(t: Theme, st: DiffState, w: number, h: number): string[] {
 	if (!st.highlightedDiffCache.has(f.path)) {
 		st.highlightedDiffCache.set(f.path, buildHighlightedDiff(raw, f.path, t));
 	}
-	const all = st.highlightedDiffCache.get(f.path)!;
-	if (all.length === 0) return [t.fg("muted", "  (empty diff)")];
+	const all = st.highlightedDiffCache.get(f.path);
+	if (!all || all.length === 0) return [t.fg("muted", "  (empty diff)")];
 
 	const max = Math.max(1, h);
 	const maxOffset = Math.max(0, all.length - max);

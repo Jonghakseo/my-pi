@@ -1009,7 +1009,7 @@ class McpActionOverlay {
 	render(width: number): string[] {
 		const th = this.theme;
 		const iW = Math.max(1, width - 2);
-		const { state: st } = this;
+		const st = this.state;
 		const c = sColor(st.status);
 		const ico = sIcon(st.status);
 		const lines: string[] = [];

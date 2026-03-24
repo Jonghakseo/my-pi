@@ -1,3 +1,4 @@
+/** biome-ignore-all lint/suspicious/noExplicitAny: analytics reads heterogeneous session entries and custom TUI callback shapes. */
 /**
  * Usage Analytics Extension
  *
@@ -195,9 +196,10 @@ function extractAgentNames(command: string, verb: string | null): string[] {
 		// subagent batch/chain [--main|--isolated] --agent <name> --task "..." ...
 		const agents: string[] = [];
 		const regex = /--agent\s+(\S+)/gi;
-		let m: RegExpExecArray | null;
-		while ((m = regex.exec(command)) !== null) {
-			agents.push(m[1]);
+		let match = regex.exec(command);
+		while (match !== null) {
+			agents.push(match[1]);
+			match = regex.exec(command);
 		}
 		return agents.length > 0 ? agents : ["unknown"];
 	}
@@ -298,21 +300,27 @@ function computeStats(entries: LogEntry[], period: Period): PeriodStats[] {
 		if (!periodMap.has(label)) {
 			periodMap.set(label, { agents: new Map(), skills: new Map() });
 		}
-		return periodMap.get(label)!;
+		const periodEntry = periodMap.get(label);
+		if (!periodEntry) throw new Error(`Missing period for label: ${label}`);
+		return periodEntry;
 	}
 
 	function getAgent(p: ReturnType<typeof getPeriod>, name: string): AgentStats {
 		if (!p.agents.has(name)) {
 			p.agents.set(name, { name, total: 0, done: 0, error: 0, avgMs: 0, durations: [] });
 		}
-		return p.agents.get(name)!;
+		const agent = p.agents.get(name);
+		if (!agent) throw new Error(`Missing agent bucket: ${name}`);
+		return agent;
 	}
 
 	function getSkill(p: ReturnType<typeof getPeriod>, name: string): SkillStats {
 		if (!p.skills.has(name)) {
 			p.skills.set(name, { name, total: 0 });
 		}
-		return p.skills.get(name)!;
+		const skill = p.skills.get(name);
+		if (!skill) throw new Error(`Missing skill bucket: ${name}`);
+		return skill;
 	}
 
 	for (const entry of filtered) {
@@ -350,11 +358,15 @@ function computeStats(entries: LogEntry[], period: Period): PeriodStats[] {
 	}
 
 	const labels = Array.from(periodMap.keys()).sort();
-	return labels.map((label) => ({
-		label,
-		agents: periodMap.get(label)!.agents,
-		skills: periodMap.get(label)!.skills,
-	}));
+	return labels.map((label) => {
+		const period = periodMap.get(label);
+		if (!period) throw new Error(`Missing period bucket for label: ${label}`);
+		return {
+			label,
+			agents: period.agents,
+			skills: period.skills,
+		};
+	});
 }
 
 // ─── Overall summary (for overview tab) ──────────────────────────────────────
@@ -386,7 +398,10 @@ function computeOverall(entries: LogEntry[]): {
 	totalSubagentRuns: number;
 	totalSkillReads: number;
 } {
-	const agentMap = new Map<string, { total: number; done: number; error: number; durations: number[]; lastUsed: number }>();
+	const agentMap = new Map<
+		string,
+		{ total: number; done: number; error: number; durations: number[]; lastUsed: number }
+	>();
 	const skillMap = new Map<string, { total: number; lastUsed: number }>();
 
 	for (const entry of entries) {
@@ -416,7 +431,8 @@ function computeOverall(entries: LogEntry[]): {
 
 	const agents: OverallAgentSummary[] = Array.from(agentMap.entries())
 		.map(([name, a]) => {
-			const avgMs = a.durations.length > 0 ? Math.round(a.durations.reduce((x, y) => x + y, 0) / a.durations.length) : 0;
+			const avgMs =
+				a.durations.length > 0 ? Math.round(a.durations.reduce((x, y) => x + y, 0) / a.durations.length) : 0;
 			const completedCount = a.done + a.error;
 			const errorRate = completedCount > 0 ? `${Math.round((a.error / completedCount) * 100)}%` : "0%";
 			return {
@@ -547,14 +563,15 @@ class AnalyticsOverlay {
 		}
 
 		if (lines.length > viewport) {
-			const scrollInfo = theme.fg("dim", `[${this.scrollOffset + 1}-${Math.min(this.scrollOffset + viewport, lines.length)}/${lines.length}]`);
+			const scrollInfo = theme.fg(
+				"dim",
+				`[${this.scrollOffset + 1}-${Math.min(this.scrollOffset + viewport, lines.length)}/${lines.length}]`,
+			);
 			container.addChild(new Text(pad + scrollInfo, 0, 0));
 		}
 
 		container.addChild(new Text(pad + theme.fg("muted", "─".repeat(Math.max(10, innerWidth))), 0, 0));
-		container.addChild(
-			new Text(pad + theme.fg("dim", "1/2/3 tab · d/w/m period · ↑↓ scroll · q close"), 0, 0),
-		);
+		container.addChild(new Text(pad + theme.fg("dim", "1/2/3 tab · d/w/m period · ↑↓ scroll · q close"), 0, 0));
 		container.addChild(new Spacer(1));
 
 		return container.render(width);
@@ -563,7 +580,9 @@ class AnalyticsOverlay {
 	private renderOverview(lines: string[], theme: any): void {
 		const overall = computeOverall(this.entries);
 
-		lines.push(theme.bold(`Total: ${overall.totalSubagentRuns} subagent runs · ${overall.totalSkillReads} skill reads`));
+		lines.push(
+			theme.bold(`Total: ${overall.totalSubagentRuns} subagent runs · ${overall.totalSkillReads} skill reads`),
+		);
 		lines.push("");
 
 		// Top agents
@@ -573,7 +592,10 @@ class AnalyticsOverlay {
 		} else {
 			const maxNameLen = Math.max(...overall.agents.map((a) => a.name.length), 6);
 			lines.push(
-				theme.fg("dim", `  ${"Agent".padEnd(maxNameLen)}  ${"Runs".padStart(5)}  ${"Done".padStart(5)}  ${"Err".padStart(4)}  ${"Err%".padStart(5)}  ${"Avg".padStart(8)}  Last used`),
+				theme.fg(
+					"dim",
+					`  ${"Agent".padEnd(maxNameLen)}  ${"Runs".padStart(5)}  ${"Done".padStart(5)}  ${"Err".padStart(4)}  ${"Err%".padStart(5)}  ${"Avg".padStart(8)}  Last used`,
+				),
 			);
 			for (const a of overall.agents) {
 				const errColor = a.error > 0 ? "error" : "dim";

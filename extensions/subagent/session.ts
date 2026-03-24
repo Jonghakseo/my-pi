@@ -1,3 +1,4 @@
+/** biome-ignore-all lint/suspicious/noExplicitAny: session JSONL entries and mixed multimodal content are dynamically shaped at runtime. */
 /**
  * Session file management and context helpers for the Subagent tool.
  */

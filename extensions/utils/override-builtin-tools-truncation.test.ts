@@ -71,19 +71,25 @@ function getTool(name: string): RegisteredTool {
 	return tool;
 }
 
-function isWidthAware(obj: RenderResult): obj is WidthAwareComponent {
-	return typeof (obj as WidthAwareComponent).render === "function";
+function isWidthAware(obj: RenderResult | undefined): obj is WidthAwareComponent {
+	return typeof (obj as WidthAwareComponent | undefined)?.render === "function";
+}
+
+function requireComponent(component: RenderResult | undefined): RenderResult {
+	if (!component) throw new Error("expected tool renderer to return a component");
+	return component;
 }
 
 /** Render a component at the given width and return lines. */
-function renderAt(component: RenderResult, width: number): string[] {
-	if (isWidthAware(component)) return component.render(width);
-	const text = (component as TextComponent).text ?? "";
+function renderAt(component: RenderResult | undefined, width: number): string[] {
+	const resolved = requireComponent(component);
+	if (isWidthAware(resolved)) return resolved.render(width);
+	const text = (resolved as TextComponent).text ?? "";
 	return text.split("\n");
 }
 
 /** Assert every rendered line fits within the given width. */
-function assertAllLinesFit(component: RenderResult, width: number, label = "") {
+function assertAllLinesFit(component: RenderResult | undefined, width: number, label = "") {
 	const lines = renderAt(component, width);
 	for (let i = 0; i < lines.length; i++) {
 		const vw = visibleWidth(lines[i]);
@@ -101,6 +107,9 @@ const LONG_ASCII = "x".repeat(300);
 const LONG_PATH =
 	"/Users/creatrip/product/.worktrees/temp/frontend/apps/web/domain/travel/subdomain/spot/detail/subdomain/generalSpot/generalSpotDetailOption/SpotDetailSelectedOptionItemDesktopBottomSheet.tsx";
 
+const FRAGMENT_NAMING_PLACEHOLDER = "${" + "Component/function 이름}" + "_" + "${" + "props/argument 이름}";
+const FRAGMENT_NAMING_RULE = `fragment 네이밍 규칙은 \`${FRAGMENT_NAMING_PLACEHOLDER}\`입니다  @creatrip/fragment-name`;
+
 /** Multi-line bash output with some very long lines (like the crash). */
 const LINT_OUTPUT = [
 	`${LONG_PATH}`,
@@ -111,7 +120,7 @@ const LINT_OUTPUT = [
 	`${LONG_PATH.replace("Desktop", "MobileAndTablet")}`,
 	"  55:9  warning  [크리에이트립 ESLint 규칙]",
 	`작성된 fragment 인자의 올바른 이름은 spot 입니다.`,
-	`fragment 네이밍 규칙은 \`\${Component/function 이름}_\${props/argument 이름}\`입니다  @creatrip/fragment-name`,
+	FRAGMENT_NAMING_RULE,
 	"",
 	"✖ 8 problems (0 errors, 8 warnings)",
 ].join("\n");
@@ -140,7 +149,7 @@ describe("TruncatedText via tool renderResult", () => {
 		const bash = getTool("bash");
 
 		it("expanded renderResult returns a width-aware component", () => {
-			const result = bash.renderResult!(
+			const result = bash.renderResult?.(
 				{ content: [{ type: "text", text: "hello world" }] },
 				{ expanded: true },
 				plainTheme(),
@@ -149,7 +158,7 @@ describe("TruncatedText via tool renderResult", () => {
 		});
 
 		it("collapsed renderResult returns a width-aware component", () => {
-			const result = bash.renderResult!(
+			const result = bash.renderResult?.(
 				{ content: [{ type: "text", text: "hello world" }] },
 				{ expanded: false },
 				plainTheme(),
@@ -159,7 +168,7 @@ describe("TruncatedText via tool renderResult", () => {
 
 		for (const width of WIDTHS) {
 			it(`expanded: all lines fit within width=${width} (long ASCII)`, () => {
-				const result = bash.renderResult!(
+				const result = bash.renderResult?.(
 					{ content: [{ type: "text", text: LONG_ASCII }] },
 					{ expanded: true },
 					plainTheme(),
@@ -168,7 +177,7 @@ describe("TruncatedText via tool renderResult", () => {
 			});
 
 			it(`expanded: all lines fit within width=${width} (lint output)`, () => {
-				const result = bash.renderResult!(
+				const result = bash.renderResult?.(
 					{ content: [{ type: "text", text: LINT_OUTPUT }] },
 					{ expanded: true },
 					plainTheme(),
@@ -177,7 +186,7 @@ describe("TruncatedText via tool renderResult", () => {
 			});
 
 			it(`collapsed: all lines fit within width=${width} (lint output)`, () => {
-				const result = bash.renderResult!(
+				const result = bash.renderResult?.(
 					{ content: [{ type: "text", text: LINT_OUTPUT }] },
 					{ expanded: false },
 					plainTheme(),
@@ -187,7 +196,7 @@ describe("TruncatedText via tool renderResult", () => {
 		}
 
 		it("expanded: truncates CJK lines correctly", () => {
-			const result = bash.renderResult!(
+			const result = bash.renderResult?.(
 				{ content: [{ type: "text", text: CJK_LONG }] },
 				{ expanded: true },
 				plainTheme(),
@@ -196,7 +205,7 @@ describe("TruncatedText via tool renderResult", () => {
 		});
 
 		it("expanded: handles ANSI-colored long lines", () => {
-			const result = bash.renderResult!(
+			const result = bash.renderResult?.(
 				{ content: [{ type: "text", text: LINT_OUTPUT }] },
 				{ expanded: true },
 				ansiTheme(),
@@ -205,7 +214,7 @@ describe("TruncatedText via tool renderResult", () => {
 		});
 
 		it("collapsed: handles ANSI-colored long lines", () => {
-			const result = bash.renderResult!(
+			const result = bash.renderResult?.(
 				{ content: [{ type: "text", text: LINT_OUTPUT }] },
 				{ expanded: false },
 				ansiTheme(),
@@ -214,7 +223,7 @@ describe("TruncatedText via tool renderResult", () => {
 		});
 
 		it("expanded: reproduces the narrow split-panel git pull crash shape safely at width=75", () => {
-			const result = bash.renderResult!(
+			const result = bash.renderResult?.(
 				{ content: [{ type: "text", text: GIT_PULL_OUTPUT }] },
 				{ expanded: true },
 				ansiTheme(),
@@ -224,7 +233,7 @@ describe("TruncatedText via tool renderResult", () => {
 		});
 
 		it("expanded: preserves content (does not lose text)", () => {
-			const result = bash.renderResult!(
+			const result = bash.renderResult?.(
 				{ content: [{ type: "text", text: "line1\nline2\nline3" }] },
 				{ expanded: true },
 				plainTheme(),
@@ -238,7 +247,7 @@ describe("TruncatedText via tool renderResult", () => {
 
 		it("collapsed: shows preview with remaining count", () => {
 			const manyLines = Array.from({ length: 20 }, (_, i) => `line-${i}`).join("\n");
-			const result = bash.renderResult!(
+			const result = bash.renderResult?.(
 				{ content: [{ type: "text", text: manyLines }] },
 				{ expanded: false },
 				plainTheme(),
@@ -250,17 +259,13 @@ describe("TruncatedText via tool renderResult", () => {
 		});
 
 		it("empty content returns empty", () => {
-			const result = bash.renderResult!(
-				{ content: [{ type: "text", text: "" }] },
-				{ expanded: true },
-				plainTheme(),
-			);
+			const result = bash.renderResult?.({ content: [{ type: "text", text: "" }] }, { expanded: true }, plainTheme());
 			const lines = renderAt(result, 80);
 			expect(lines.every((l) => l.trim() === "")).toBe(true);
 		});
 
 		it("no text content renders to empty", () => {
-			const result = bash.renderResult!({ content: [] }, { expanded: true }, plainTheme());
+			const result = bash.renderResult?.({ content: [] }, { expanded: true }, plainTheme());
 			const lines = renderAt(result, 200);
 			expect(lines.every((l) => l === "")).toBe(true);
 		});
@@ -270,7 +275,7 @@ describe("TruncatedText via tool renderResult", () => {
 		const read = getTool("read");
 
 		it("expanded renderResult returns a width-aware component", () => {
-			const result = read.renderResult!(
+			const result = read.renderResult?.(
 				{ content: [{ type: "text", text: "file contents" }] },
 				{ expanded: true },
 				plainTheme(),
@@ -279,7 +284,7 @@ describe("TruncatedText via tool renderResult", () => {
 		});
 
 		it("collapsed renderResult returns a width-aware component", () => {
-			const result = read.renderResult!(
+			const result = read.renderResult?.(
 				{ content: [{ type: "text", text: "file contents" }] },
 				{ expanded: false },
 				plainTheme(),
@@ -290,7 +295,7 @@ describe("TruncatedText via tool renderResult", () => {
 		for (const width of WIDTHS) {
 			it(`expanded: all lines fit within width=${width} (long path content)`, () => {
 				const content = `${LONG_PATH}\n${"=".repeat(300)}\nsome content`;
-				const result = read.renderResult!(
+				const result = read.renderResult?.(
 					{ content: [{ type: "text", text: content }] },
 					{ expanded: true },
 					plainTheme(),
@@ -300,7 +305,7 @@ describe("TruncatedText via tool renderResult", () => {
 
 			it(`collapsed: all lines fit within width=${width}`, () => {
 				const content = `${LONG_PATH}\n${"=".repeat(300)}\nsome content`;
-				const result = read.renderResult!(
+				const result = read.renderResult?.(
 					{ content: [{ type: "text", text: content }] },
 					{ expanded: false },
 					plainTheme(),
@@ -310,7 +315,7 @@ describe("TruncatedText via tool renderResult", () => {
 		}
 
 		it("expanded: handles mixed ASCII + CJK", () => {
-			const result = read.renderResult!(
+			const result = read.renderResult?.(
 				{ content: [{ type: "text", text: MIXED_CONTENT }] },
 				{ expanded: true },
 				plainTheme(),
@@ -323,7 +328,7 @@ describe("TruncatedText via tool renderResult", () => {
 		const write = getTool("write");
 
 		it("collapsed renderResult returns a width-aware component", () => {
-			const result = write.renderResult!(
+			const result = write.renderResult?.(
 				{
 					content: [{ type: "text", text: "OK" }],
 					details: { path: "test.ts", lineCount: 1, byteCount: 4, preview: "test" },
@@ -335,7 +340,7 @@ describe("TruncatedText via tool renderResult", () => {
 		});
 
 		it("expanded renderResult returns a width-aware component", () => {
-			const result = write.renderResult!(
+			const result = write.renderResult?.(
 				{
 					content: [{ type: "text", text: "Successfully wrote file." }],
 					details: { path: "test.ts", lineCount: 3, byteCount: 100, preview: "a\nb\nc" },
@@ -349,7 +354,7 @@ describe("TruncatedText via tool renderResult", () => {
 		for (const width of WIDTHS) {
 			it(`expanded: all lines fit within width=${width} (long content)`, () => {
 				const preview = `const x = "${LONG_ASCII}";\n${CJK_LONG}`;
-				const result = write.renderResult!(
+				const result = write.renderResult?.(
 					{
 						content: [{ type: "text", text: "Successfully wrote file." }],
 						details: { path: "test.ts", lineCount: 2, byteCount: preview.length, preview },
@@ -362,7 +367,7 @@ describe("TruncatedText via tool renderResult", () => {
 		}
 
 		it("expanded: includes preview and summary", () => {
-			const result = write.renderResult!(
+			const result = write.renderResult?.(
 				{
 					content: [{ type: "text", text: "Successfully wrote file." }],
 					details: { path: "test.ts", lineCount: 3, byteCount: 15, preview: "first\nsecond\nthird" },
@@ -379,7 +384,7 @@ describe("TruncatedText via tool renderResult", () => {
 		});
 
 		it("collapsed: summary only, no preview content", () => {
-			const result = write.renderResult!(
+			const result = write.renderResult?.(
 				{
 					content: [],
 					details: { path: "test.ts", lineCount: 3, byteCount: 15, preview: "first\nsecond\nthird" },
@@ -394,7 +399,7 @@ describe("TruncatedText via tool renderResult", () => {
 
 		it("expanded with ANSI theme: all lines fit", () => {
 			const preview = `${LONG_PATH}\n${"=".repeat(300)}`;
-			const result = write.renderResult!(
+			const result = write.renderResult?.(
 				{
 					content: [{ type: "text", text: "OK" }],
 					details: { path: "test.ts", lineCount: 2, byteCount: preview.length, preview },
@@ -410,7 +415,7 @@ describe("TruncatedText via tool renderResult", () => {
 		const find = getTool("find");
 
 		it("expanded renderResult returns a width-aware component", () => {
-			const result = find.renderResult!(
+			const result = find.renderResult?.(
 				{ content: [{ type: "text", text: "a.ts\nb.ts" }] },
 				{ expanded: true },
 				plainTheme(),
@@ -419,7 +424,7 @@ describe("TruncatedText via tool renderResult", () => {
 		});
 
 		it("collapsed renderResult returns Text (short summary)", () => {
-			const result = find.renderResult!(
+			const result = find.renderResult?.(
 				{ content: [{ type: "text", text: "a.ts\nb.ts" }] },
 				{ expanded: false },
 				plainTheme(),
@@ -435,7 +440,7 @@ describe("TruncatedText via tool renderResult", () => {
 		for (const width of WIDTHS) {
 			it(`expanded: all lines fit within width=${width} (long paths)`, () => {
 				const paths = Array.from({ length: 10 }, (_, i) => `${LONG_PATH.replace(".tsx", `${i}.tsx`)}`).join("\n");
-				const result = find.renderResult!(
+				const result = find.renderResult?.(
 					{ content: [{ type: "text", text: paths }] },
 					{ expanded: true },
 					plainTheme(),
@@ -449,7 +454,7 @@ describe("TruncatedText via tool renderResult", () => {
 		const grep = getTool("grep");
 
 		it("expanded renderResult returns a width-aware component", () => {
-			const result = grep.renderResult!(
+			const result = grep.renderResult?.(
 				{ content: [{ type: "text", text: "file.ts:10:match" }] },
 				{ expanded: true },
 				plainTheme(),
@@ -460,7 +465,7 @@ describe("TruncatedText via tool renderResult", () => {
 		for (const width of WIDTHS) {
 			it(`expanded: all lines fit within width=${width}`, () => {
 				const lines = Array.from({ length: 5 }, (_, i) => `${LONG_PATH}:${i}:${LONG_ASCII}`).join("\n");
-				const result = grep.renderResult!(
+				const result = grep.renderResult?.(
 					{ content: [{ type: "text", text: lines }] },
 					{ expanded: true },
 					plainTheme(),
@@ -474,7 +479,7 @@ describe("TruncatedText via tool renderResult", () => {
 		const ls = getTool("ls");
 
 		it("expanded renderResult returns a width-aware component", () => {
-			const result = ls.renderResult!(
+			const result = ls.renderResult?.(
 				{ content: [{ type: "text", text: "file1.ts  4KB\nfile2.ts  8KB" }] },
 				{ expanded: true },
 				plainTheme(),
@@ -484,10 +489,8 @@ describe("TruncatedText via tool renderResult", () => {
 
 		for (const width of WIDTHS) {
 			it(`expanded: all lines fit within width=${width}`, () => {
-				const entries = Array.from({ length: 10 }, (_, i) => `${"deep/nested/".repeat(20)}file${i}.ts  4KB`).join(
-					"\n",
-				);
-				const result = ls.renderResult!(
+				const entries = Array.from({ length: 10 }, (_, i) => `${"deep/nested/".repeat(20)}file${i}.ts  4KB`).join("\n");
+				const result = ls.renderResult?.(
 					{ content: [{ type: "text", text: entries }] },
 					{ expanded: true },
 					plainTheme(),
@@ -504,7 +507,7 @@ describe("TruncatedText caching behavior", () => {
 	const bash = getTool("bash");
 
 	it("render() at same width returns identical array reference (cached)", () => {
-		const result = bash.renderResult!(
+		const result = bash.renderResult?.(
 			{ content: [{ type: "text", text: LINT_OUTPUT }] },
 			{ expanded: true },
 			plainTheme(),
@@ -517,7 +520,7 @@ describe("TruncatedText caching behavior", () => {
 	});
 
 	it("render() at different width returns different result", () => {
-		const result = bash.renderResult!(
+		const result = bash.renderResult?.(
 			{ content: [{ type: "text", text: LONG_ASCII }] },
 			{ expanded: true },
 			plainTheme(),
@@ -538,7 +541,7 @@ describe("TruncatedText caching behavior", () => {
 	});
 
 	it("invalidate() clears cache so next render recomputes", () => {
-		const result = bash.renderResult!(
+		const result = bash.renderResult?.(
 			{ content: [{ type: "text", text: "short" }] },
 			{ expanded: true },
 			plainTheme(),
@@ -546,7 +549,7 @@ describe("TruncatedText caching behavior", () => {
 		if (!isWidthAware(result)) throw new Error("expected width-aware");
 
 		const first = result.render(100);
-		result.invalidate!();
+		result.invalidate?.();
 		const second = result.render(100);
 		expect(first).not.toBe(second); // different reference after invalidation
 		expect(first).toEqual(second); // but same content
@@ -568,19 +571,19 @@ describe("crash scenario: pnpm lint output at terminal width 127", () => {
 		"/Users/creatrip/product/.worktrees/temp-20260308-085007/frontend/apps/web/domain/travel/subdomain/spot/detail/subdomain/generalSpot/generalSpotDetailOption/SpotDetailSelectedOptionItemDesktopBottomSheet.tsx",
 		"  55:9  warning  [크리에이트립 Eslint 규칙]",
 		"작성된 fragment 인자의 올바른 이름은 spot 입니다.",
-		"fragment 네이밍 규칙은 `${Component/function 이름}_${props/argument 이름}`입니다  @creatrip/fragment-name",
+		FRAGMENT_NAMING_RULE,
 		"",
 		"/Users/creatrip/product/.worktrees/temp-20260308-085007/frontend/apps/web/domain/travel/subdomain/spot/detail/subdomain/generalSpot/generalSpotDetailOption/SpotDetailSelectedOptionItemMobileAndTabletBottomSheet.tsx",
 		"  92:9  warning  [크리에이트립 Eslint 규칙]",
 		"작성된 fragment 인자의 올바른 이름은 spot 입니다.",
-		"fragment 네이밍 규칙은 `${Component/function 이름}_${props/argument 이름}`입니다  @creatrip/fragment-name",
+		FRAGMENT_NAMING_RULE,
 		"",
 		"✖ 8 problems (0 errors, 8 warnings)",
 	].join("\n");
 
 	it("bash expanded: no line exceeds terminal width 127 (plain theme)", () => {
 		const bash = getTool("bash");
-		const result = bash.renderResult!(
+		const result = bash.renderResult?.(
 			{ content: [{ type: "text", text: CRASH_OUTPUT }] },
 			{ expanded: true },
 			plainTheme(),
@@ -590,7 +593,7 @@ describe("crash scenario: pnpm lint output at terminal width 127", () => {
 
 	it("bash expanded: no line exceeds terminal width 127 (ANSI theme)", () => {
 		const bash = getTool("bash");
-		const result = bash.renderResult!(
+		const result = bash.renderResult?.(
 			{ content: [{ type: "text", text: CRASH_OUTPUT }] },
 			{ expanded: true },
 			ansiTheme(),
@@ -600,7 +603,7 @@ describe("crash scenario: pnpm lint output at terminal width 127", () => {
 
 	it("bash collapsed: no line exceeds terminal width 127 (ANSI theme)", () => {
 		const bash = getTool("bash");
-		const result = bash.renderResult!(
+		const result = bash.renderResult?.(
 			{ content: [{ type: "text", text: CRASH_OUTPUT }] },
 			{ expanded: false },
 			ansiTheme(),
@@ -610,7 +613,7 @@ describe("crash scenario: pnpm lint output at terminal width 127", () => {
 
 	it("lines are actually truncated (not just short to begin with)", () => {
 		const bash = getTool("bash");
-		const result = bash.renderResult!(
+		const result = bash.renderResult?.(
 			{ content: [{ type: "text", text: CRASH_OUTPUT }] },
 			{ expanded: true },
 			plainTheme(),
@@ -635,7 +638,7 @@ describe("edge cases", () => {
 	const bash = getTool("bash");
 
 	it("width=1: does not crash, all lines fit", () => {
-		const result = bash.renderResult!(
+		const result = bash.renderResult?.(
 			{ content: [{ type: "text", text: "hello\nworld" }] },
 			{ expanded: true },
 			plainTheme(),
@@ -644,7 +647,7 @@ describe("edge cases", () => {
 	});
 
 	it("single very long line (no newlines)", () => {
-		const result = bash.renderResult!(
+		const result = bash.renderResult?.(
 			{ content: [{ type: "text", text: "A".repeat(1000) }] },
 			{ expanded: true },
 			plainTheme(),
@@ -653,7 +656,7 @@ describe("edge cases", () => {
 	});
 
 	it("empty lines are preserved as blank visual rows", () => {
-		const result = bash.renderResult!(
+		const result = bash.renderResult?.(
 			{ content: [{ type: "text", text: "a\n\nb\n\nc" }] },
 			{ expanded: true },
 			plainTheme(),
@@ -665,31 +668,19 @@ describe("edge cases", () => {
 
 	it("mixed CJK + ASCII + ANSI within same line", () => {
 		const text = `파일: ${"path/to/deep/nested/".repeat(10)}component.tsx 에서 에러 발생`;
-		const result = bash.renderResult!(
-			{ content: [{ type: "text", text }] },
-			{ expanded: true },
-			ansiTheme(),
-		);
+		const result = bash.renderResult?.({ content: [{ type: "text", text }] }, { expanded: true }, ansiTheme());
 		assertAllLinesFit(result, 80, "mixed CJK+ASCII+ANSI ");
 	});
 
 	it("trailing whitespace in long lines is truncated", () => {
 		const text = `short text${"  ".repeat(200)}`;
-		const result = bash.renderResult!(
-			{ content: [{ type: "text", text }] },
-			{ expanded: true },
-			plainTheme(),
-		);
+		const result = bash.renderResult?.({ content: [{ type: "text", text }] }, { expanded: true }, plainTheme());
 		assertAllLinesFit(result, 80, "trailing spaces ");
 	});
 
 	it("tab characters are handled without overflow", () => {
 		const text = `${"	".repeat(50)}value`;
-		const result = bash.renderResult!(
-			{ content: [{ type: "text", text }] },
-			{ expanded: true },
-			plainTheme(),
-		);
+		const result = bash.renderResult?.({ content: [{ type: "text", text }] }, { expanded: true }, plainTheme());
 		assertAllLinesFit(result, 80, "tabs ");
 	});
 });
@@ -703,11 +694,9 @@ describe("all overridden tools return width-aware renderResult", () => {
 		it(`${name}: expanded renderResult for long content is width-aware`, () => {
 			const tool = getTool(name);
 			const details =
-				name === "write"
-					? { path: "test.ts", lineCount: 1, byteCount: 300, preview: LONG_ASCII }
-					: undefined;
+				name === "write" ? { path: "test.ts", lineCount: 1, byteCount: 300, preview: LONG_ASCII } : undefined;
 
-			const result = tool.renderResult!(
+			const result = tool.renderResult?.(
 				{ content: [{ type: "text", text: LONG_ASCII }], details },
 				{ expanded: true },
 				plainTheme(),

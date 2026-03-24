@@ -357,14 +357,7 @@ describe("parseDiffLines", () => {
 	});
 
 	it("treats --- and +++ inside hunk as removed/added (not meta)", () => {
-		const diff = [
-			"diff --git a/x b/x",
-			"--- a/x",
-			"+++ b/x",
-			"@@ -1,2 +1,2 @@",
-			"----",
-			"++++",
-		].join("\n");
+		const diff = ["diff --git a/x b/x", "--- a/x", "+++ b/x", "@@ -1,2 +1,2 @@", "----", "++++"].join("\n");
 		const parsed = parseDiffLines(diff);
 
 		// Inside hunk: "----" starts with "-" → removed, code is "---"
@@ -477,9 +470,7 @@ describe("extractCodeBlock", () => {
 	});
 
 	it("preserves order matching parseDiffLines iteration order", () => {
-		const diff = ["diff --git a/x b/x", "--- a/x", "+++ b/x", "@@ -1,2 +1,2 @@", "-old", "+new", " ctx"].join(
-			"\n",
-		);
+		const diff = ["diff --git a/x b/x", "--- a/x", "+++ b/x", "@@ -1,2 +1,2 @@", "-old", "+new", " ctx"].join("\n");
 		const parsed = parseDiffLines(diff);
 		const { code, indices } = extractCodeBlock(parsed);
 
