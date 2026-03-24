@@ -1,3 +1,4 @@
+/** biome-ignore-all lint/suspicious/noExplicitAny: subprocess event stream and provider payloads are dynamic runtime data. */
 /**
  * Subagent process execution and result processing.
  */

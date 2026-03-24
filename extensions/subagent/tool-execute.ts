@@ -1,3 +1,4 @@
+/** biome-ignore-all lint/suspicious/noExplicitAny: subagent tool execution bridges untyped session state, UI hooks, and tool payloads. */
 /**
  * Subagent tool execute handler — extracted from commands.ts for modularity.
  *

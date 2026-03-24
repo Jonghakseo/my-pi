@@ -1,32 +1,34 @@
 {
-  "name": "pi-remote-external",
-  "version": "0.1.0",
-  "description": "Remote terminal access for pi via WebSocket with Tailscale support",
-  "private": true,
-  "type": "module",
-  "pi": {
-    "extensions": ["./index.ts"]
-  },
-  "main": "./dist/index.js",
-  "scripts": {
-    "build": "tsc -p tsconfig.build.json",
-    "build:web": "cd web && npm run build",
-    "build:all": "npm run build && npm run build:web",
-    "dev": "tsc -p tsconfig.build.json --watch --preserveWatchOutput"
-  },
-  "dependencies": {
-    "jose": "^6.0.11",
-    "node-pty": "^1.1.0",
-    "qrcode-terminal": "^0.12.0",
-    "ws": "^8.18.0"
-  },
-  "devDependencies": {
-    "@mariozechner/pi-coding-agent": "latest",
-    "@types/node": "^22.0.0",
-    "@types/ws": "^8.5.13",
-    "typescript": "^5.7.3"
-  },
-  "engines": {
-    "node": ">=20.0.0"
-  }
+	"name": "pi-remote-external",
+	"version": "0.1.0",
+	"description": "Remote terminal access for pi via WebSocket with Tailscale support",
+	"private": true,
+	"type": "module",
+	"pi": {
+		"extensions": [
+			"./index.ts"
+		]
+	},
+	"main": "./dist/index.js",
+	"scripts": {
+		"build": "tsc -p tsconfig.build.json",
+		"build:web": "cd web && npm run build",
+		"build:all": "npm run build && npm run build:web",
+		"dev": "tsc -p tsconfig.build.json --watch --preserveWatchOutput"
+	},
+	"dependencies": {
+		"jose": "^6.0.11",
+		"node-pty": "^1.1.0",
+		"qrcode-terminal": "^0.12.0",
+		"ws": "^8.18.0"
+	},
+	"devDependencies": {
+		"@mariozechner/pi-coding-agent": "latest",
+		"@types/node": "^22.0.0",
+		"@types/ws": "^8.5.13",
+		"typescript": "^5.7.3"
+	},
+	"engines": {
+		"node": ">=20.0.0"
+	}
 }

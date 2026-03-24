@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
 import type { ExtensionContext } from "@mariozechner/pi-coding-agent";
+import { describe, expect, it } from "vitest";
 import {
 	applyTodoWriteOps,
 	buildPostCompactionTodoReminder,
@@ -84,21 +84,39 @@ describe("todo-write ops", () => {
 	});
 
 	it("accumulates update error when task does not exist", () => {
-		const start = { tasks: [] as any[] };
+		const start = {
+			tasks: [] as Array<{
+				id: string;
+				content: string;
+				status: "pending" | "in_progress" | "completed" | "abandoned";
+			}>,
+		};
 		const result = applyTodoWriteOps(start, [{ op: "update", id: "task-404", status: "completed" }]);
 
 		expect(result.errors).toContain('Task "task-404" not found');
 	});
 
 	it("accumulates remove_task error when task does not exist", () => {
-		const start = { tasks: [] as any[] };
+		const start = {
+			tasks: [] as Array<{
+				id: string;
+				content: string;
+				status: "pending" | "in_progress" | "completed" | "abandoned";
+			}>,
+		};
 		const result = applyTodoWriteOps(start, [{ op: "remove_task", id: "task-404" }]);
 
 		expect(result.errors).toContain('Task "task-404" not found');
 	});
 
 	it("renders empty summary when no tasks remain", () => {
-		const state = { tasks: [] as any[] };
+		const state = {
+			tasks: [] as Array<{
+				id: string;
+				content: string;
+				status: "pending" | "in_progress" | "completed" | "abandoned";
+			}>,
+		};
 		expect(renderTodoWriteSummary(state)).toBe("Todo list cleared.");
 	});
 
@@ -156,7 +174,11 @@ describe("todo-write persistence", () => {
 			sessionManager: {
 				getSessionFile: () => "session.jsonl",
 				getBranch: () => [
-					{ type: "custom", customType: "todo-write-state", data: { tasks: [{ id: "task-1", content: "Old", status: "completed" }], updatedAt: 1 } },
+					{
+						type: "custom",
+						customType: "todo-write-state",
+						data: { tasks: [{ id: "task-1", content: "Old", status: "completed" }], updatedAt: 1 },
+					},
 					{
 						type: "custom",
 						customType: "todo-write-state",

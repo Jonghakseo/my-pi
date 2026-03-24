@@ -256,7 +256,9 @@ export function buildFileTree(paths: string[]): FileTreeNode[] {
 			if (!current.children.has(dirName)) {
 				current.children.set(dirName, { children: new Map(), files: [] });
 			}
-			current = current.children.get(dirName)!;
+			const next = current.children.get(dirName);
+			if (!next) throw new Error(`Missing tree node for directory: ${dirName}`);
+			current = next;
 		}
 		current.files.push(filePath);
 	}
@@ -310,11 +312,7 @@ export function collapseFileTree(nodes: FileTreeNode[]): FileTreeNode[] {
 /**
  * Flatten the file tree into visible rows based on which directories are expanded.
  */
-export function flattenVisibleTree(
-	nodes: FileTreeNode[],
-	expandedDirs: Set<string>,
-	depth = 0,
-): VisibleRow[] {
+export function flattenVisibleTree(nodes: FileTreeNode[], expandedDirs: Set<string>, depth = 0): VisibleRow[] {
 	const rows: VisibleRow[] = [];
 	for (const node of nodes) {
 		if (node.type === "file") {

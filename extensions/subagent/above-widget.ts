@@ -5,11 +5,9 @@
  */
 
 import type { SubagentStore } from "./store.js";
+import type { WidgetRenderCtx } from "./widget.js";
 
-export function updatePixelWidget(
-	store: SubagentStore,
-	ctx?: { hasUI?: boolean; ui?: { setWidget: (id: string, widget: unknown) => void } } | null,
-): void {
+export function updatePixelWidget(store: SubagentStore, ctx?: Pick<WidgetRenderCtx, "hasUI" | "ui"> | null): void {
 	const activeCtx = ctx ?? store.pixelWidgetCtx;
 	if (!activeCtx?.hasUI) return;
 	store.pixelWidgetCtx = activeCtx;

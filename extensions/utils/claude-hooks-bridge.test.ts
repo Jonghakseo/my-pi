@@ -20,9 +20,7 @@ import {
 	getCommandHooks,
 	getHookGroups,
 	getMatcherCandidates,
-	type HookDecision,
 	type HookExecResult,
-	type JsonRecord,
 	matcherMatches,
 	normalizeToolInput,
 	parseJsonFromStdout,
@@ -458,8 +456,9 @@ describe("fallbackReason", () => {
 		const long = "x".repeat(3000);
 		const result = fallbackReason(long, "");
 		expect(result).toBeDefined();
-		expect(result!.length).toBeLessThanOrEqual(2003); // 2000 + "..."
-		expect(result!.endsWith("...")).toBe(true);
+		if (!result) throw new Error("expected fallback reason");
+		expect(result.length).toBeLessThanOrEqual(2003); // 2000 + "..."
+		expect(result.endsWith("...")).toBe(true);
 	});
 });
 

@@ -1,3 +1,4 @@
+/** biome-ignore-all lint/suspicious/noExplicitAny: integrates with dynamic session entries, TUI callbacks, and unexported pi runtime shapes. */
 /**
  * Tool handler, slash-command handlers, and event handlers for the Subagent extension.
  *
@@ -476,7 +477,7 @@ function restoreRunsFromSession(store: SubagentStore, ctx: any, pi?: ExtensionAP
 	store.currentSessionFile = currentSessionFile;
 
 	store.commandRuns.clear();
-	store.commandWidgetCtx = ctx as WidgetRenderCtx;
+	store.commandWidgetCtx = ctx as unknown as WidgetRenderCtx;
 	let sawSubagentMarkers = false;
 
 	try {
@@ -780,7 +781,7 @@ function restoreRunsFromSession(store: SubagentStore, ctx: any, pi?: ExtensionAP
 		}
 	}
 
-	updateCommandRunsWidget(store, ctx as WidgetRenderCtx);
+	updateCommandRunsWidget(store, ctx as unknown as WidgetRenderCtx);
 }
 
 export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
@@ -1116,8 +1117,8 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 				originSessionFile,
 			});
 
-			store.commandWidgetCtx = ctx as WidgetRenderCtx;
-			updateCommandRunsWidget(store, ctx as WidgetRenderCtx);
+			store.commandWidgetCtx = ctx as unknown as WidgetRenderCtx;
+			updateCommandRunsWidget(store, ctx as unknown as WidgetRenderCtx);
 
 			const makeDetails = (results: SingleResult[]): SubagentDetails => ({
 				mode: "single",
@@ -1631,7 +1632,7 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 				removed++;
 				if (result.aborted) aborted++;
 			}
-			updateCommandRunsWidget(store, ctx as WidgetRenderCtx);
+			updateCommandRunsWidget(store, ctx as unknown as WidgetRenderCtx);
 			ctx.ui.notify(
 				aborted > 0
 					? `Cleared ${removed} subagent job(s), aborting ${aborted} running job(s).`
@@ -1653,7 +1654,7 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 			});
 			if (result.removed) removed++;
 		}
-		updateCommandRunsWidget(store, ctx as WidgetRenderCtx);
+		updateCommandRunsWidget(store, ctx as unknown as WidgetRenderCtx);
 		ctx.ui.notify(`Cleared ${removed} finished subagent job(s).`, "info");
 	};
 
@@ -1692,7 +1693,7 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 				ctx.ui.notify(`Subagent #${target.id} is not abortable right now.`, "warning");
 				return;
 			}
-			updateCommandRunsWidget(store, ctx as WidgetRenderCtx);
+			updateCommandRunsWidget(store, ctx as unknown as WidgetRenderCtx);
 			ctx.ui.notify(`Aborting subagent #${target.id} (${target.agent})...`, "warning");
 			return;
 		}
@@ -1702,7 +1703,7 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 			for (const run of running) {
 				if (abortRun(run)) count++;
 			}
-			updateCommandRunsWidget(store, ctx as WidgetRenderCtx);
+			updateCommandRunsWidget(store, ctx as unknown as WidgetRenderCtx);
 			ctx.ui.notify(
 				count > 0 ? `Aborting ${count} running subagent job(s)...` : "No abortable subagent jobs.",
 				count > 0 ? "warning" : "info",
@@ -1725,7 +1726,7 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 				ctx.ui.notify(`Subagent #${id} is not abortable right now.`, "warning");
 				return;
 			}
-			updateCommandRunsWidget(store, ctx as WidgetRenderCtx);
+			updateCommandRunsWidget(store, ctx as unknown as WidgetRenderCtx);
 			ctx.ui.notify(`Aborting subagent #${id} (${run.agent})...`, "warning");
 			return;
 		}
@@ -2022,7 +2023,7 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 				if (result.removed) cleared++;
 			}
 		}
-		updateCommandRunsWidget(store, ctx as WidgetRenderCtx);
+		updateCommandRunsWidget(store, ctx as unknown as WidgetRenderCtx);
 
 		const parts: string[] = [];
 		if (aborted) parts.push(`${aborted} aborted`);

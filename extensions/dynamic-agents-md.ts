@@ -16,7 +16,12 @@
  */
 
 import type { ImageContent, TextContent } from "@mariozechner/pi-ai";
-import { type ExtensionAPI, isToolCallEventType, type ToolCallEventResult, type ToolResultEvent } from "@mariozechner/pi-coding-agent";
+import {
+	type ExtensionAPI,
+	isToolCallEventType,
+	type ToolCallEventResult,
+	type ToolResultEvent,
+} from "@mariozechner/pi-coding-agent";
 
 /** Matches pi core's ToolResultEventResult shape (not exported from top-level package). */
 interface ToolResultEventResult {

@@ -262,13 +262,7 @@ export function renderTodoWriteSummary(state: TodoState, errors: string[] = []):
 
 	for (const task of state.tasks) {
 		const marker =
-			task.status === "completed"
-				? "✓"
-				: task.status === "in_progress"
-					? "→"
-					: task.status === "abandoned"
-						? "✗"
-						: "○";
+			task.status === "completed" ? "✓" : task.status === "in_progress" ? "→" : task.status === "abandoned" ? "✗" : "○";
 		lines.push(`  ${marker} ${task.id} ${task.content}`);
 	}
 
@@ -318,9 +312,12 @@ function isTodoTask(value: unknown): value is TodoTask {
 function isTodoStateEntryData(value: unknown): value is TodoStateEntryData {
 	if (!value || typeof value !== "object") return false;
 	const candidate = value as Partial<TodoStateEntryData>;
-	return typeof candidate.updatedAt === "number" && Array.isArray(candidate.tasks) && candidate.tasks.every((task) => isTodoTask(task));
+	return (
+		typeof candidate.updatedAt === "number" &&
+		Array.isArray(candidate.tasks) &&
+		candidate.tasks.every((task) => isTodoTask(task))
+	);
 }
-
 
 export function restoreTodoWriteState(ctx: Pick<ExtensionContext, "cwd" | "sessionManager">): TodoState {
 	const branch = ctx.sessionManager.getBranch();
@@ -348,7 +345,6 @@ export function buildPostCompactionTodoReminder(state: TodoState): string | null
 		renderTodoWriteSummary(state),
 	].join("\n");
 }
-
 
 function readTodoWriteState(ctx: Pick<ExtensionContext, "cwd" | "sessionManager">): TodoState {
 	const key = getTodoStateKey(ctx);

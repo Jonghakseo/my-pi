@@ -27,6 +27,15 @@
 		}
 	},
 	"files": {
-		"includes": ["**", "!**/node_modules", "!utils/coverage", "!pi-session-*.html"]
+		"includes": [
+			"**",
+			"!**/node_modules",
+			"!**/dist",
+			"!**/dist",
+			"!**/web-dist",
+			"!**/web-dist",
+			"!utils/coverage",
+			"!pi-session-*.html"
+		]
 	}
 }

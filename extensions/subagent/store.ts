@@ -6,6 +6,7 @@ import type { Message } from "@mariozechner/pi-ai";
 import { visibleWidth } from "@mariozechner/pi-tui";
 import { getDisplayItems, getFinalOutput, getLastNonEmptyLine, getLatestActivityPreview } from "./runner.js";
 import type { BatchGroupState, CommandRunState, GlobalRunEntry, PipelineState, SingleResult } from "./types.js";
+import type { WidgetRenderCtx } from "./widget.js";
 
 export const COLLAPSED_ITEM_COUNT = 10;
 
@@ -19,14 +20,9 @@ export interface SubagentStore {
 	globalLiveRuns: Map<number, GlobalRunEntry>;
 	renderedRunWidgetIds: Set<number>;
 	nextCommandRunId: number;
-	commandWidgetCtx: {
-		hasUI?: boolean;
-		ui?: { setWidget: (...args: any[]) => void };
-		model?: { contextWindow?: number };
-		modelRegistry?: { getAll: () => Array<{ provider: string; id: string; contextWindow?: number }> };
-	} | null;
+	commandWidgetCtx: WidgetRenderCtx | null;
 	/** Context reference for the above-editor run status widget (tool-invoked runs). */
-	pixelWidgetCtx: { hasUI?: boolean; ui?: { setWidget: (...args: any[]) => void } } | null;
+	pixelWidgetCtx: Pick<WidgetRenderCtx, "hasUI" | "ui"> | null;
 	/** @deprecated Kept for backward compat; persistent parent link now used instead. */
 	sessionStack: string[];
 	/** Captured switchSession from ExtensionCommandContext (for use in input handlers). */
