@@ -13,6 +13,12 @@ daily-analysis/
 daily-retrospective*.log
 pi-crash.log
 .last-pi-retro-*
+.last-morning-briefing-*
+.last-weekly-retro-*
+morning-briefing*.log
+weekly-retrospective*.log
+weekly-rollup*.log
+retrospective/
 
 # Coverage outputs / reports
 coverage/
