@@ -53,8 +53,5 @@ All auto-adapt to light/dark mode. For custom colors in HTML, use CSS variables.
 - In HTML: always use CSS variables (--color-text-primary, --color-text-secondary) for text. Never hardcode colors like color: #333 — invisible in dark mode.
 - Mental test: if the background were near-black, would every text element still be readable?
 
-### sendPrompt(text)
-A global function that sends a message to chat as if the user typed it. Use it when the user's next step benefits from Claude thinking. Handle filtering, sorting, toggling, and calculations in JS instead.
-
 ### Links
 `<a href="https://...">` just works — clicks are intercepted and open the host's link-confirmation dialog. Or call `openLink(url)` directly.

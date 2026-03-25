@@ -10,7 +10,7 @@ Call read_me again with the modules parameter to load detailed guidance:
 Pick the closest fit. The module includes all relevant design guidance.
 
 **Complexity budget — hard limits:**
-- Box subtitles: ≤5 words. Detail goes in click-through (`sendPrompt`) or the prose below — not the box.
+- Box subtitles: ≤5 words. Detail goes in the prose below — not the box.
 - Colors: ≤2 ramps per diagram. If colors encode meaning (states, tiers), add a 1-line legend. Otherwise use one neutral ramp.
 - Horizontal tier: ≤4 boxes at full width (~140px each). 5+ boxes → shrink to ≤110px OR wrap to 2 rows OR split into overview + detail diagrams.
 
@@ -73,9 +73,6 @@ All auto-adapt to light/dark mode. For custom colors in HTML, use CSS variables.
 - In HTML: always use CSS variables (--color-text-primary, --color-text-secondary) for text. Never hardcode colors like color: #333 — invisible in dark mode.
 - Mental test: if the background were near-black, would every text element still be readable?
 
-### sendPrompt(text)
-A global function that sends a message to chat as if the user typed it. Use it when the user's next step benefits from Claude thinking. Handle filtering, sorting, toggling, and calculations in JS instead.
-
 ### Links
 `<a href="https://...">` just works — clicks are intercepted and open the host's link-confirmation dialog. Or call `openLink(url)` directly.
 
@@ -84,7 +81,6 @@ Pick the closest use case below and adapt. When nothing fits cleanly:
 - Default to editorial layout if the content is explanatory
 - Default to card layout if the content is a bounded object
 - All core design system rules still apply
-- Use `sendPrompt()` for any action that benefits from Claude thinking
 
 
 ## Color palette
@@ -277,7 +273,7 @@ Keep all nodes the same height when they have the same content type (e.g. all si
 
 *Single-line node* (44px tall): title only. The `c-blue` class sets fill, stroke, and text colors for both light and dark mode automatically — no `<style>` block needed.
 ```svg
-<g class="node c-blue" onclick="sendPrompt('Tell me more about T-cells')">
+<g class="node c-blue">
   <rect x="100" y="20" width="180" height="44" rx="8" stroke-width="0.5"/>
   <text class="th" x="190" y="42" text-anchor="middle" dominant-baseline="central">T-cells</text>
 </g>
@@ -285,7 +281,7 @@ Keep all nodes the same height when they have the same content type (e.g. all si
 
 *Two-line node* (56px tall): bold title + muted subtitle.
 ```svg
-<g class="node c-blue" onclick="sendPrompt('Tell me more about dendritic cells')">
+<g class="node c-blue">
   <rect x="100" y="20" width="200" height="56" rx="8" stroke-width="0.5"/>
   <text class="th" x="200" y="38" text-anchor="middle" dominant-baseline="central">Dendritic cells</text>
   <text class="ts" x="200" y="56" text-anchor="middle" dominant-baseline="central">Detect foreign antigens</text>
@@ -299,7 +295,7 @@ Keep all nodes the same height when they have the same content type (e.g. all si
 
 *Neutral node* (gray, for start/end/generic steps): use `class="box"` for auto-themed fill/stroke, and default text classes.
 
-Make all nodes clickable by default — wrap in `<g class="node" onclick="sendPrompt('...')">`. The hover effect is built in.
+Make all nodes clickable by default — wrap in `<g class="node">`. The hover effect is built in.
 
 #### Structural diagram
 
@@ -543,22 +539,22 @@ All core rules still apply (viewBox 680px, dark mode mandatory, 14/12px text, pr
     <path d="M398,454Q404,434 408,440Q412,428 416,454Z" fill="url(#fg1)"/>
   </g>
   <!-- Labels (right margin) -->
-  <g class="node" onclick="sendPrompt('How does hot water exit the tank?')">
+  <g class="node">
     <line class="leader" x1="386" y1="34" x2="468" y2="70"/><circle cx="386" cy="34" r="2" fill="var(--t)"/>
     <text class="ts" x="474" y="74">Hot water outlet</text></g>
-  <g class="node" onclick="sendPrompt('How does the cold water inlet work?')">
+  <g class="node">
     <line class="leader" x1="250" y1="34" x2="468" y2="140"/><circle cx="250" cy="34" r="2" fill="var(--t)"/>
     <text class="ts" x="474" y="144">Cold water inlet</text></g>
-  <g class="node" onclick="sendPrompt('What does the dip tube do?')">
+  <g class="node">
     <line class="leader" x1="250" y1="260" x2="468" y2="220"/><circle cx="250" cy="260" r="2" fill="var(--t)"/>
     <text class="ts" x="474" y="224">Dip tube</text></g>
-  <g class="node" onclick="sendPrompt('What does the thermostat control?')">
+  <g class="node">
     <line class="leader" x1="440" y1="250" x2="468" y2="300"/><circle cx="440" cy="250" r="2" fill="var(--t)"/>
     <text class="ts" x="474" y="304">Thermostat</text></g>
-  <g class="node" onclick="sendPrompt('What material is the tank made of?')">
+  <g class="node">
     <line class="leader" x1="440" y1="380" x2="468" y2="380"/><circle cx="440" cy="380" r="2" fill="var(--t)"/>
     <text class="ts" x="474" y="384">Tank wall</text></g>
-  <g class="node" onclick="sendPrompt('How does the gas burner heat water?')">
+  <g class="node">
     <line class="leader" x1="432" y1="454" x2="468" y2="454"/><circle cx="432" cy="454" r="2" fill="var(--t)"/>
     <text class="ts" x="474" y="458">Heating element</text></g>
 </svg>
@@ -603,7 +599,7 @@ function toggleHeat(on) {
 <line stroke="#EF9F27" stroke-linecap="round" x1="340" y1="230" x2="452" y2="146" stroke-width="2.5" opacity="0.7"/>
 <line stroke="#EF9F27" stroke-linecap="round" x1="340" y1="230" x2="564" y2="146" stroke-width="1"   opacity="0.2"/>
 
-<g class="node" onclick="sendPrompt('What do the attention weights mean?')">
+<g class="node">
   <rect class="c-gray"  x="80"  y="230" width="72" height="36" rx="6" stroke-width="0.5"/>
   <rect class="c-gray"  x="192" y="230" width="72" height="36" rx="6" stroke-width="0.5"/>
   <rect class="c-amber" x="304" y="230" width="72" height="36" rx="6" stroke-width="1"/>
