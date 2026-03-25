@@ -117,7 +117,7 @@ Over 25 custom TypeScript extensions organized by domain:
 |---|---|
 | **todo-write.ts** | Task management — todo_write tool, persistent storage, TUI rendering |
 | **session-replay.ts** | `/replay` — browse and replay past sessions |
-| **purpose.ts** | Pin a session purpose that persists across compactions |
+| **auto-name.ts** | Auto-detect session name from first user message |
 | **upload-image-url.ts** | Upload images to GitHub CDN for embedding |
 | **ask-user-question.ts** | Interactive question tool with predefined options |
 | **delayed-action.ts** | Schedule deferred actions |
@@ -168,14 +168,13 @@ retest    = browser("verify fixes with screenshots")
 final     = reviewer("review all changes")
 ```
 
-### `/purpose` — Session Purpose
+### `/name` — Session Name
 
-Set or inspect the session purpose manually. It persists across compactions.
+Set or inspect the session name manually. Auto-detected from the first user message; can also be changed manually.
 
 ```
-/purpose <session purpose text>   # set purpose
-/purpose                          # show current purpose
-/purpose clear                    # clear purpose
+/name <session name>   # set name
+/name                  # show current name
 ```
 
 ---

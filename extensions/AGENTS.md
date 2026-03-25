@@ -56,7 +56,7 @@ Custom extensions for the pi coding agent. All extensions are written in TypeScr
 ├── override-builtin-tools.ts # Compact tool output rendering (collapsed/expanded toggle)
 ├── pipi-footer.ts         # Custom footer UI (model, branch, context bar)
 ├── working-text.ts              # Spinner working message (funny text + elapsed time)
-├── purpose.ts             # Session purpose top-overlay + purpose guard/tool/command
+├── auto-name.ts           # Auto session name detection from first user message
 ├── session-replay.ts      # Session replay overlay UI
 ├── status-overlay.ts      # /status — skills, tools & extensions list overlay
 ├── theme-cycler.ts        # Ctrl+X to cycle through themes

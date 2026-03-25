@@ -117,7 +117,7 @@
 |---|---|
 | **todo-write.ts** | 할 일 관리 — todo_write 도구, 영속 저장소, TUI 렌더링 |
 | **session-replay.ts** | `/replay` — 과거 세션 탐색·재생 |
-| **purpose.ts** | 컴팩션을 거쳐도 유지되는 세션 목적 고정 |
+| **auto-name.ts** | 첫 사용자 메시지로 세션 이름 자동 감지 |
 | **upload-image-url.ts** | GitHub CDN으로 이미지 업로드 후 임베딩 |
 | **clipboard.ts** | OSC52 이스케이프 시퀀스로 클립보드에 텍스트 복사 |
 | **ask-user-question.ts** | 사전 정의 옵션을 갖춘 인터랙티브 질문 도구 |
@@ -168,14 +168,13 @@ retest    = browser("수정 사항을 스크린샷으로 검증")
 final     = reviewer("전체 변경사항 리뷰")
 ```
 
-### `/purpose` — 세션 목적 설정
+### `/name` — 세션 이름 설정
 
-세션 목적을 수동으로 설정하거나 확인한다. 컴팩션을 거쳐도 목적이 유지된다.
+세션 이름을 수동으로 설정하거나 확인한다. 첫 메시지 시 자동 감지되며, 수동으로도 변경 가능하다.
 
 ```
-/purpose <세션 목적 텍스트>   # 목적 설정
-/purpose                      # 현재 목적 확인
-/purpose clear                # 목적 초기화
+/name <세션 이름>   # 이름 설정
+/name               # 현재 이름 확인
 ```
 
 ---
