@@ -3,6 +3,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import {
 	ALLOWED_EXTENSIONS,
+	extractPathsFromInput,
 	formatDisplayPath,
 	getFolderName,
 	inferExtension,
@@ -174,6 +175,52 @@ describe("toAbsolute", () => {
 
 	it("resolves . against cwd", () => {
 		expect(toAbsolute(".", "/home/user/project")).toBe(path.resolve("/home/user/project"));
+	});
+});
+
+// ─── extractPathsFromInput ────────────────────────────────────────────────────
+
+describe("extractPathsFromInput", () => {
+	it("returns single-element array for a non-empty string", () => {
+		expect(extractPathsFromInput("src/file.ts")).toEqual(["src/file.ts"]);
+	});
+
+	it("returns empty array for an empty string", () => {
+		expect(extractPathsFromInput("")).toEqual([]);
+	});
+
+	it("returns empty array for undefined/null", () => {
+		expect(extractPathsFromInput(undefined)).toEqual([]);
+		expect(extractPathsFromInput(null)).toEqual([]);
+	});
+
+	it("returns empty array for non-string/non-array values", () => {
+		expect(extractPathsFromInput(42)).toEqual([]);
+		expect(extractPathsFromInput(true)).toEqual([]);
+		expect(extractPathsFromInput({})).toEqual([]);
+	});
+
+	it("handles array of strings (parallel read)", () => {
+		expect(extractPathsFromInput(["backend/AGENTS.md", "backend/apps/trip/AGENTS.md"])).toEqual([
+			"backend/AGENTS.md",
+			"backend/apps/trip/AGENTS.md",
+		]);
+	});
+
+	it("filters out non-string elements from array", () => {
+		expect(extractPathsFromInput(["a.ts", 42, null, "b.ts", undefined, true])).toEqual(["a.ts", "b.ts"]);
+	});
+
+	it("filters out empty strings from array", () => {
+		expect(extractPathsFromInput(["a.ts", "", "b.ts", ""])).toEqual(["a.ts", "b.ts"]);
+	});
+
+	it("returns empty array for empty array", () => {
+		expect(extractPathsFromInput([])).toEqual([]);
+	});
+
+	it("handles single-element array", () => {
+		expect(extractPathsFromInput(["only.ts"])).toEqual(["only.ts"]);
 	});
 });
 
