@@ -8,7 +8,7 @@ Flat, clean, white surfaces. Minimal 0.5px borders. Generous whitespace. No grad
 - Corner radius: `var(--border-radius-md)` for most elements, `var(--border-radius-lg)` for cards
 - Cards: white bg (`var(--color-background-primary)`), 0.5px border, radius-lg, padding 1rem 1.25rem
 - Form elements (input, select, textarea, button, range slider) are pre-styled — write bare tags. Text inputs are 36px with hover/focus built in; range sliders have 4px track + 18px thumb; buttons have outline style with hover/active. Only add inline styles to override (e.g., different width).
-- Buttons: pre-styled with transparent bg, 0.5px border-secondary, hover bg-secondary, active scale(0.98). If it triggers sendPrompt, append a ↗ arrow.
+- Buttons: pre-styled with transparent bg, 0.5px border-secondary, hover bg-secondary, active scale(0.98).
 - **Round every displayed number.** JS float math leaks artifacts — `0.1 + 0.2` gives `0.30000000000000004`, `7 * 1.1` gives `7.700000000000001`. Any number that reaches the screen (slider readouts, stat card values, axis labels, data-point labels, tooltips, computed totals) must go through `Math.round()`, `.toFixed(n)`, or `Intl.NumberFormat`. Pick the precision that makes sense for the context — integers for counts, 1–2 decimals for percentages, `toLocaleString()` for currency. For range sliders, also set `step="1"` (or step="0.1" etc.) so the input itself emits round values.
 - Spacing: use rem for vertical rhythm (1rem, 1.5rem, 2rem), px for component-internal gaps (8px, 12px, 16px)
 - Box-shadows: none, except `box-shadow: 0 0 0 Npx` focus rings on inputs
@@ -50,7 +50,6 @@ Use `imagine_html` for the interactive controls — sliders, buttons, live state
 </div>
 ```
 
-Use `sendPrompt()` to let users ask follow-ups: `sendPrompt('What if I increase the rate to 10%?')`
 
 ### 2. Compare options — decision making
 *"Compare pricing and features of these products" / "Help me choose between React and Vue"*
@@ -59,7 +58,6 @@ Use `imagine_html`. Side-by-side card grid for options. Highlight differences wi
 
 - Use `repeat(auto-fit, minmax(160px, 1fr))` for responsive columns
 - Each option in a card. Use badges for key differentiators.
-- Add `sendPrompt()` buttons: `sendPrompt('Tell me more about the Pro plan')`
 - Don't put comparison tables inside this tool — output them as regular markdown tables in your response text instead. The tool is for the visual card grid only.
 - When one option is recommended or "most popular", accent its card with `border: 2px solid var(--color-border-info)` only (2px is deliberate — the only exception to the 0.5px rule, used to accent featured items) — keep the same background and border as the other cards. Add a small badge (e.g. "Most popular") above or inside the card header using `background: var(--color-background-info); color: var(--color-text-info); font-size: 12px; padding: 4px 12px; border-radius: var(--border-radius-md)`.
 
