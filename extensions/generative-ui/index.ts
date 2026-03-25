@@ -361,6 +361,40 @@ export default function (pi: ExtensionAPI) {
 			let text = theme.fg("toolTitle", theme.bold("show_widget "));
 			text += theme.fg("accent", title);
 			if (size) text += theme.fg("dim", size);
+
+			const code = typeof args.widget_code === "string" ? args.widget_code : "";
+			if (code.length > 0) {
+				const lines = code.split("\n");
+				const lineCount = lines.length;
+				const bytes = Buffer.byteLength(code, "utf8");
+				const isSVG = code.trimStart().startsWith("<svg");
+				const tag = isSVG ? "SVG" : "HTML";
+				text += theme.fg("muted", ` (${tag} ${lineCount} lines • ${bytes} bytes)`);
+
+				// Show last 4 lines as preview (sanitized + truncated)
+				const MAX_LINE_WIDTH = 100;
+				const previewLines = lines.slice(-4);
+				const hidden = lines.length - previewLines.length;
+				if (hidden > 0) {
+					text += `\n${theme.fg("muted", `… (${hidden} earlier lines)`)}`;
+				}
+				for (const line of previewLines) {
+					// Strip control chars / ANSI sequences, replace tabs, truncate
+					let safe = line
+						.replace(/\t/g, "    ")
+						// biome-ignore lint/suspicious/noControlCharactersInRegex: intentional sanitization
+						.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, "")
+						// biome-ignore lint/suspicious/noControlCharactersInRegex: strip ANSI CSI sequences
+						.replace(/\x1b\[[0-9;]*[A-Za-z]/g, "")
+						// biome-ignore lint/suspicious/noControlCharactersInRegex: strip OSC sequences
+						.replace(/\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)/g, "");
+					if (safe.length > MAX_LINE_WIDTH) {
+						safe = `${safe.slice(0, MAX_LINE_WIDTH)}…`;
+					}
+					text += `\n${theme.fg("dim", safe)}`;
+				}
+			}
+
 			return new Text(text, 0, 0);
 		},
 
