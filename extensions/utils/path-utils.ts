@@ -122,6 +122,20 @@ export function toAbsolute(filePath: string, cwd: string): string {
 	return path.resolve(cwd, filePath);
 }
 
+// ─── Tool Input Path Extraction (from dynamic-agents-md.ts) ─────────────────
+
+/**
+ * Extract file path(s) from a tool input's `path` value.
+ *
+ * The Read tool accepts `path` as either a single string or an array of strings
+ * (parallel read). This normalises both forms into a flat string array.
+ */
+export function extractPathsFromInput(pathValue: unknown): string[] {
+	if (typeof pathValue === "string" && pathValue.length > 0) return [pathValue];
+	if (Array.isArray(pathValue)) return pathValue.filter((x): x is string => typeof x === "string" && x.length > 0);
+	return [];
+}
+
 // ─── Filename Sanitization (from upload-image-url.ts) ────────────────────────
 
 /**

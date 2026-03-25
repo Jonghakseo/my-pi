@@ -33,6 +33,7 @@ interface ToolResultEventResult {
 import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, isAbsolute, join, resolve } from "node:path";
+import { extractPathsFromInput } from "./utils/path-utils.js";
 
 // --- Configuration ---
 const CANDIDATES = ["AGENTS.md", "CLAUDE.md"] as const;
@@ -120,12 +121,10 @@ function toAbsolute(filePath: string, cwd: string): string {
 	return resolve(cwd, filePath);
 }
 
-/** Extract file path from a tool_result event's input. */
-function extractPath(event: ToolResultEvent): string | null {
+/** Extract file path(s) from a tool_result event's input. Handles both single string and array paths (parallel read). */
+function extractPaths(event: ToolResultEvent): string[] {
 	const input = event.input as Record<string, unknown> | undefined;
-	if (!input) return null;
-	const p = input.path;
-	return typeof p === "string" && p.length > 0 ? p : null;
+	return extractPathsFromInput(input?.path);
 }
 
 /** Format dynamic context blocks for LLM consumption. */
@@ -207,19 +206,29 @@ export default function (pi: ExtensionAPI) {
 		if (event.toolName !== "read") return;
 		if (event.isError) return;
 
-		const rawPath = extractPath(event);
-		if (!rawPath) return;
+		const rawPaths = extractPaths(event);
+		if (rawPaths.length === 0) return;
 
-		const absPath = toAbsolute(rawPath, ctx.cwd);
-		const newFiles = discoverNewAgentsMd(dirname(absPath), injectedPaths, staticDirs);
-		if (newFiles.length === 0) return;
+		// Collect all new AGENTS.md files across all read paths (handles parallel reads).
+		const allNewFiles: ContextFile[] = [];
+		const readAbsPaths = new Set<string>();
 
-		for (const f of newFiles) {
-			injectedPaths.add(f.path);
+		for (const rawPath of rawPaths) {
+			const absPath = toAbsolute(rawPath, ctx.cwd);
+			readAbsPaths.add(resolve(absPath));
+			const newFiles = discoverNewAgentsMd(dirname(absPath), injectedPaths, staticDirs);
+			for (const f of newFiles) {
+				if (!injectedPaths.has(f.path)) {
+					injectedPaths.add(f.path);
+					allNewFiles.push(f);
+				}
+			}
 		}
 
+		if (allNewFiles.length === 0) return;
+
 		// If user explicitly read AGENTS/CLAUDE itself, don't duplicate same content.
-		const toInject = newFiles.filter((f) => resolve(f.path) !== absPath);
+		const toInject = allNewFiles.filter((f) => !readAbsPaths.has(resolve(f.path)));
 		if (toInject.length === 0) return;
 
 		const suffix = formatInjection(toInject);
