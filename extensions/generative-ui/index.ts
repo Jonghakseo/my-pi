@@ -257,18 +257,6 @@ export default function (pi: ExtensionAPI) {
 				activeWindows = activeWindows.filter((w) => w !== win);
 			});
 
-			if (signal) {
-				signal.addEventListener(
-					"abort",
-					() => {
-						try {
-							win.close();
-						} catch {}
-					},
-					{ once: true },
-				);
-			}
-
 			return {
 				content: [
 					{
