@@ -46,10 +46,34 @@ const COMMON_SUBAGENT_NO_RECURSION_RULE = [
 	"- If delegation is requested, explain that recursive subagent invocation is disabled and continue with available tools.",
 ].join("\n");
 
+const COMMON_SUBAGENT_ESCALATION_GUIDELINE = [
+	"Escalation Guideline:",
+	"- The `escalate` tool is available to signal the master when you need a decision before continuing.",
+	"- ESCALATE when:",
+	"  - You encounter ambiguity that cannot be resolved from the task context or codebase",
+	"  - A decision has significant impact (deletion, architecture change, deployment) and you are unsure of the correct choice",
+	"  - You discover unexpected issues that fundamentally change the scope of the task",
+	"  - Task instructions conflict with each other and you need clarification",
+	"- DO NOT escalate for:",
+	"  - Routine decisions within your domain expertise",
+	"  - Issues you can resolve with available tools and context",
+	"  - Minor style, formatting, or naming choices",
+	"  - Pre-existing problems unrelated to the current task",
+	"- When escalating, always include:",
+	"  - Clear description of the blocker or decision needed",
+	"  - Options you have considered with pros/cons",
+	"  - Your recommendation, if you have one",
+].join("\n");
+
 function attachCommonSubagentRule(systemPrompt: string): string {
-	const trimmed = systemPrompt.trimEnd();
-	if (trimmed.includes("Global Runtime Rule (subagent):")) return trimmed;
-	return trimmed ? `${trimmed}\n\n${COMMON_SUBAGENT_NO_RECURSION_RULE}` : COMMON_SUBAGENT_NO_RECURSION_RULE;
+	let prompt = systemPrompt.trimEnd();
+	if (!prompt.includes("Global Runtime Rule (subagent):")) {
+		prompt = prompt ? `${prompt}\n\n${COMMON_SUBAGENT_NO_RECURSION_RULE}` : COMMON_SUBAGENT_NO_RECURSION_RULE;
+	}
+	if (!prompt.includes("Escalation Guideline:")) {
+		prompt = prompt ? `${prompt}\n\n${COMMON_SUBAGENT_ESCALATION_GUIDELINE}` : COMMON_SUBAGENT_ESCALATION_GUIDELINE;
+	}
+	return prompt;
 }
 
 function listMarkdownFiles(dir: string, recursive: boolean): string[] {
