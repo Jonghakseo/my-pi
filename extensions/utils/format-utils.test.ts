@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
 	AGENT_NAME_PALETTE,
-	AGENT_SYMBOL_MAP,
 	agentBgIndex,
 	estimateTokens,
 	extractCostTotal,
@@ -11,7 +10,6 @@ import {
 	formatPriority,
 	formatPurposeStatus,
 	formatStateLabel,
-	formatSymbolHints,
 	formatTodoHeading,
 	formatTodoId,
 	formatTodoList,
@@ -402,22 +400,6 @@ describe("formatCommandRunSummary", () => {
 			toolCalls: 5,
 		});
 		expect(result).toContain("turn:1");
-	});
-});
-
-// ─── formatSymbolHints ───────────────────────────────────────────────────────
-
-describe("formatSymbolHints", () => {
-	it("includes all symbols from AGENT_SYMBOL_MAP", () => {
-		const result = formatSymbolHints();
-		for (const [sym, agent] of Object.entries(AGENT_SYMBOL_MAP)) {
-			expect(result).toContain(`>>${sym} ${agent}`);
-		}
-	});
-
-	it("uses custom prefix", () => {
-		const result = formatSymbolHints("$$");
-		expect(result).toContain("$$/ finder");
 	});
 });
 

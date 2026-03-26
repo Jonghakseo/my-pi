@@ -5,7 +5,27 @@
  * stay focused on behavior.
  */
 
-export { AGENT_SYMBOL_MAP, formatSymbolHints } from "../utils/format-utils.js";
+/**
+ * Special-character shortcuts for the >> prefix input.
+ * `>>/ task` → finder, `>>? task` → searcher, etc.
+ */
+export const AGENT_SYMBOL_MAP: Record<string, string> = {
+	"/": "finder",
+	"?": "searcher",
+	"#": "planner",
+	"*": "reviewer",
+	"+": "verifier",
+	"!": "challenger",
+	"@": "browser",
+	$: "simplifier",
+};
+
+/** Format symbol hints for display, e.g. ">>/ finder  >>? searcher  >># planner ..." */
+export function formatSymbolHints(prefix = ">>"): string {
+	return Object.entries(AGENT_SYMBOL_MAP)
+		.map(([sym, agent]) => `${prefix}${sym} ${agent}`)
+		.join("  ");
+}
 
 // ─── Shared ────────────────────────────────────────────────────────────────
 
