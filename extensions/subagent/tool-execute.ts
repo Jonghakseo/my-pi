@@ -620,6 +620,37 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 			};
 		}
 
+		// Early validation: check that all requested agent names exist before launching
+		if (hasSingle || hasBatch || hasChain) {
+			const requestedNames: string[] = [];
+			if (hasSingle) {
+				const name = (params.agent as string | undefined) ?? (params.continueFromRunId ? undefined : "worker");
+				if (name) requestedNames.push(name);
+			}
+			if (hasBatch && Array.isArray(params.runs)) {
+				for (const item of params.runs as BatchOrChainItem[]) requestedNames.push(item.agent);
+			}
+			if (hasChain && Array.isArray(params.steps)) {
+				for (const step of params.steps as BatchOrChainItem[]) requestedNames.push(step.agent);
+			}
+			const unknownNames = [...new Set(requestedNames)].filter(
+				(name) => !agents.some((a) => a.name === name),
+			);
+			if (unknownNames.length > 0) {
+				const available = agents.map((a) => `"${a.name}"`).join(", ") || "none";
+				return {
+					content: [
+						{
+							type: "text",
+							text: `❌ Unknown agent${unknownNames.length > 1 ? "s" : ""}: ${unknownNames.map((n) => `"${n}"`).join(", ")}.\n\nAvailable agents: ${available}`,
+						},
+					],
+					details: makeDetails(),
+					isError: true,
+				};
+			}
+		}
+
 		if (asyncAction === "list") {
 			// Anti-polling guard: block list while any run is within launch cooldown
 			const now = Date.now();
