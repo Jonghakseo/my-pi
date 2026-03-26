@@ -8,6 +8,7 @@
 
 import type { ExtensionAPI, ExtensionContext, Theme, ThemeColor } from "@mariozechner/pi-coding-agent";
 import { truncateToWidth, visibleWidth } from "@mariozechner/pi-tui";
+import { formatNameStatus } from "./utils/auto-name-utils.ts";
 import { ELAPSED_STATUS_KEY, NAME_STATUS_KEY } from "./utils/status-keys.ts";
 
 const BAR_WIDTH = 10;
@@ -141,9 +142,14 @@ function installFooter(pi: ExtensionAPI, ctx: ExtensionContext) {
 				const filled = Math.round((pct / 100) * BAR_WIDTH);
 				const bar = "#".repeat(filled) + "-".repeat(BAR_WIDTH - filled);
 
+				const sessionName = ctx.sessionManager.getSessionName();
 				const statusEntries = Array.from(footerData.getExtensionStatuses().entries())
+					.filter(([key]) => key !== NAME_STATUS_KEY)
 					.map(([key, text]) => [key, sanitizeStatusText(text)] as const)
 					.filter(([, text]) => Boolean(text));
+				if (sessionName) {
+					statusEntries.unshift([NAME_STATUS_KEY, formatNameStatus(sessionName)]);
+				}
 				const statusTexts = statusEntries.map(([, text]) => text);
 
 				const active = statusTexts.filter((s) => /research(ing)?/i.test(s)).length;
