@@ -42,11 +42,21 @@ export interface BatchOrChainItem {
 	task: string;
 }
 
+export interface SubagentLaunchSummary {
+	agent: string;
+	mode: "run" | "continue" | "batch" | "chain";
+	runId?: number;
+	batchId?: string;
+	pipelineId?: string;
+	stepIndex?: number;
+}
+
 export interface SubagentDetails {
 	mode: "single" | "batch" | "chain";
 	inheritMainContext: boolean;
 	projectAgentsDir: string | null;
 	results: SingleResult[];
+	launches?: SubagentLaunchSummary[];
 }
 
 export interface CommandRunState {

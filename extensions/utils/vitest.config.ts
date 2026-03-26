@@ -19,6 +19,7 @@ const coverageCanaryInclude = [
 	"time-utils.ts",
 	"todo-utils.ts",
 	"type-guards.ts",
+	"usage-analytics.ts",
 ];
 
 export default defineConfig({

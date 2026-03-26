@@ -69,7 +69,7 @@ export const AGENT_SYMBOL_MAP: Record<string, string> = {
 	"*": "reviewer",
 	"+": "verifier",
 	"%": "challenger",
-	"!": "decider",
+	"!": "challenger",
 	"@": "browser",
 	$: "simplifier",
 };

@@ -264,10 +264,10 @@ Critical → Major 순서로 수정한다. Minor는 보고만.
 각 Critical/Major 이슈에 대해:
 
 1. **원인 분석**: 코드베이스에서 관련 파일 탐색 (`grep`, `read`)
-2. **수정**: `worker-fast`(단일 파일) 또는 `worker`(멀티 파일)에게 위임
+2. **수정**: `worker`에게 위임
 3. **테스트 실행**: 기존 테스트가 깨지지 않는지 확인
 
-**위임 프롬프트 (worker-fast/worker):**
+**위임 프롬프트 (worker):**
 > QA에서 발견된 이슈를 수정해줘:
 >
 > **이슈:** {이슈 설명}
@@ -344,7 +344,7 @@ Files Changed:
   ├─ Step 4: 이슈 수집 + Health Score
   │    └─ Report Only → 여기서 종료
   │
-  ├─ Step 5: 이슈 수정 ← worker/worker-fast 에이전트
+  ├─ Step 5: 이슈 수정 ← worker 에이전트
   │
   ├─ Step 6: 재검증 ← browser 에이전트
   │

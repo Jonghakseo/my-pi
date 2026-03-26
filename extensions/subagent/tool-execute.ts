@@ -50,6 +50,7 @@ import type {
 	PipelineStepResult,
 	SingleResult,
 	SubagentDetails,
+	SubagentLaunchSummary,
 } from "./types.js";
 import { updateCommandRunsWidget, type WidgetRenderCtx } from "./widget.js";
 
@@ -315,12 +316,14 @@ function createEmptyDetails(
 	mode: LaunchMode,
 	inheritMainContext: boolean,
 	projectAgentsDir: string | null,
+	launches: SubagentLaunchSummary[] = [],
 ): SubagentDetails {
 	return {
 		mode,
 		inheritMainContext,
 		projectAgentsDir,
 		results: [],
+		launches,
 	};
 }
 
@@ -476,6 +479,38 @@ function formatPipelineSummary(
 	return `[subagent-chain#${pipelineId}] ${terminalStatus}\n\n${steps}`;
 }
 
+function toLaunchSummary(
+	runState: Pick<CommandRunState, "agent" | "id" | "batchId" | "pipelineId" | "pipelineStepIndex">,
+	mode: SubagentLaunchSummary["mode"],
+): SubagentLaunchSummary {
+	return {
+		agent: runState.agent,
+		mode,
+		runId: runState.id,
+		batchId: runState.batchId,
+		pipelineId: runState.pipelineId,
+		stepIndex: runState.pipelineStepIndex,
+	};
+}
+
+function buildRunAnalyticsSummary(
+	runState: Pick<
+		CommandRunState,
+		"id" | "agent" | "status" | "elapsedMs" | "model" | "batchId" | "pipelineId" | "pipelineStepIndex"
+	>,
+): Record<string, unknown> {
+	return {
+		runId: runState.id,
+		agent: runState.agent,
+		status: runState.status,
+		elapsedMs: runState.elapsedMs,
+		model: runState.model,
+		batchId: runState.batchId,
+		pipelineId: runState.pipelineId,
+		stepIndex: runState.pipelineStepIndex,
+	};
+}
+
 function makePendingCompletion(message: PendingCompletion["message"], triggerTurn = true): PendingCompletion {
 	return {
 		message,
@@ -560,11 +595,16 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 		const hasChain = asyncAction === "chain";
 		const hasSingle = asyncAction === "run" || asyncAction === "continue";
 		const mode: LaunchMode = hasBatch ? "batch" : hasChain ? "chain" : "single";
-		const makeDetails = (modeOverride: LaunchMode = mode, results: SingleResult[] = []): SubagentDetails => ({
+		const makeDetails = (
+			modeOverride: LaunchMode = mode,
+			results: SingleResult[] = [],
+			launches: SubagentLaunchSummary[] = [],
+		): SubagentDetails => ({
 			mode: modeOverride,
 			inheritMainContext,
 			projectAgentsDir: discovery.projectAgentsDir,
 			results,
+			launches,
 		});
 
 		if ((hasSingle || hasBatch || hasChain) && inheritMainContext && !mainSessionFile) {
@@ -1074,7 +1114,7 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 						),
 					},
 				],
-				details: makeDetails("single"),
+				details: makeDetails("single", [], [toLaunchSummary(runState, continueFromRun ? "continue" : "run")]),
 			};
 		}
 
@@ -1151,6 +1191,7 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 									batchId,
 									runIds: batch.runIds,
 									status: batch.failedRunIds.size > 0 ? "error" : "done",
+									runSummaries: orderedRuns.map((run) => buildRunAnalyticsSummary(run)),
 								},
 							};
 							if (isInOriginSession(ctx, batch.originSessionFile)) {
@@ -1200,7 +1241,12 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 								customType: "subagent-tool" as const,
 								content: formatBatchSummary(batchId, orderedRuns, "error"),
 								display: true,
-								details: { batchId, runIds: batch.runIds, status: "error" },
+								details: {
+									batchId,
+									runIds: batch.runIds,
+									status: "error",
+									runSummaries: orderedRuns.map((run) => buildRunAnalyticsSummary(run)),
+								},
 							};
 							if (isInOriginSession(ctx, batch.originSessionFile)) {
 								pi.sendMessage(message, { deliverAs: "followUp", triggerTurn: true });
@@ -1232,7 +1278,11 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 						),
 					},
 				],
-				details: makeDetails("batch"),
+				details: makeDetails(
+					"batch",
+					[],
+					runStates.map(({ runState }) => toLaunchSummary(runState, "batch")),
+				),
 			};
 		}
 
@@ -1254,6 +1304,7 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 			}
 
 			const pipelineId = `p_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+			const chainLaunches: SubagentLaunchSummary[] = [];
 			store.pipelines.set(pipelineId, {
 				pipelineId,
 				currentIndex: 0,
@@ -1312,6 +1363,7 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 							pipelineStepIndex: index,
 						});
 						pipeline.stepRunIds.push(runState.id);
+						chainLaunches.push(toLaunchSummary(runState, "chain"));
 
 						const finalized = await launchRunInBackground(runState, taskForAgent);
 						if (runState.removed) {
@@ -1361,6 +1413,9 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 						if (terminalStatus === "completed" && hasError) {
 							terminalStatus = "error";
 						}
+						const orderedRuns = pipeline.stepRunIds
+							.map((runId) => store.commandRuns.get(runId))
+							.filter((run): run is CommandRunState => Boolean(run));
 						const message = {
 							customType: "subagent-tool" as const,
 							content: formatPipelineSummary(pipelineId, pipeline.stepResults, terminalStatus),
@@ -1369,6 +1424,7 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 								pipelineId,
 								stepRunIds: pipeline.stepRunIds,
 								status: terminalStatus === "completed" ? "done" : terminalStatus,
+								runSummaries: orderedRuns.map((run) => buildRunAnalyticsSummary(run)),
 							},
 						};
 						if (isInOriginSession(ctx, pipeline.originSessionFile)) {
@@ -1407,7 +1463,7 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 						),
 					},
 				],
-				details: makeDetails("chain"),
+				details: makeDetails("chain", [], [...chainLaunches]),
 			};
 		}
 
