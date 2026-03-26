@@ -1,5 +1,5 @@
 /**
- * Escalate Tool — Subagent-only escalation to master
+ * ask_master Tool — Subagent-only: ask the master for a decision
  *
  * Dynamically registered only in subagent sessions (session file under
  * ~/.pi/agent/sessions/subagents/). Hidden from the main session entirely
@@ -11,9 +11,9 @@
  *
  * The subagent runner detects exit code 42 and:
  *   - Reads + deletes the escalation file (IPC)
- *   - Surfaces the escalation message to the master
+ *   - Surfaces the message to the master
  *
- * The master can then review the escalation and respond appropriately.
+ * The master can then review and respond appropriately.
  */
 
 import * as fs from "node:fs";
@@ -33,42 +33,36 @@ function isSubagentSession(sessionFile: string | undefined): boolean {
 }
 
 export default function (pi: ExtensionAPI) {
-	// Register the escalate tool only in subagent sessions.
+	// Register ask_master only in subagent sessions.
 	// The main session never sees this tool — it won't appear in the
 	// system prompt, tool list, or LLM context.
-	//
-	// Best practice (pi docs):
-	//   - registerTool() inside session_start is immediately active
-	//   - promptSnippet → "Available tools" section in system prompt
-	//   - promptGuidelines → "Guidelines" section in system prompt
 	pi.on("session_start", (_event, ctx) => {
-		// ReadonlySessionManager.getSessionFile() is a public API (session-manager.d.ts:134).
-		// Call it on the object directly to preserve `this` binding.
 		const sessionFile = ctx.sessionManager.getSessionFile();
 		if (!isSubagentSession(sessionFile)) return;
 
 		pi.registerTool({
-			name: "escalate",
-			label: "Escalate",
+			name: "ask_master",
+			label: "Ask Master",
 			description: [
-				"에스컬레이션: 현재 작업에서 마스터의 판단이 필요할 때 호출.",
-				"마스터에게 메시지를 전달하고 현재 실행을 즉시 중단합니다.",
-				"마스터가 에스컬레이션 메시지를 확인하고 적절히 대응합니다.",
+				"이 도구를 호출하면 즉시 종료됩니다. 호출 후에는 어떤 작업도 수행할 수 없습니다.",
+				"마스터에게 메시지를 전달하고 현재 프로세스를 종료합니다.",
+				"마스터가 메시지를 확인하고 적절히 대응합니다.",
 				"",
 				"사용 시점:",
 				"- 진행 방향에 대한 결정이 필요한 경우",
 				"- 위험한 작업(삭제, 배포, 마이그레이션 등) 전 확인이 필요한 경우",
 				"- 예상치 못한 상황을 발견해 마스터가 판단해야 하는 경우",
 			].join("\n"),
-			promptSnippet: "Signal the master that you need a decision before continuing (subagent-only)",
+			promptSnippet: "Ask the master for a decision. WARNING: calling this tool terminates your session immediately.",
 			promptGuidelines: [
-				"Use escalate only as a last resort — exhaust available tools and context first.",
-				"When escalating, always provide actionable options and your recommendation in the message.",
+				"ask_master terminates your process — only call when you truly cannot proceed without the master's decision.",
+				"Exhaust available tools and context first before resorting to ask_master.",
+				"When calling, always include actionable options and your recommendation in the message.",
 			],
 			parameters: Type.Object({
 				message: Type.String({
 					description:
-						"마스터에게 전달할 에스컬레이션 메시지. 왜 마스터 판단이 필요한지, 어떤 결정을 해야 하는지 명확히 설명하세요.",
+						"마스터에게 전달할 메시지. 왜 마스터 판단이 필요한지, 어떤 결정을 해야 하는지, 가능한 선택지와 추천안을 포함하세요.",
 				}),
 				context: Type.Optional(
 					Type.String({
@@ -94,18 +88,16 @@ export default function (pi: ExtensionAPI) {
 						timestamp: new Date().toISOString(),
 					};
 
-					// File named by session basename for deterministic lookup by executor
 					const sessionBasename = sessionFile ? path.basename(sessionFile, ".jsonl") : `escalation-${Date.now()}`;
 					const escalationFile = path.join(escalationsDir, `${sessionBasename}.yaml`);
 
 					fs.writeFileSync(escalationFile, stringifyYaml(record), "utf-8");
 				} catch (err) {
-					process.stderr.write(`[escalate] Failed to write escalation file: ${err}\n`);
+					process.stderr.write(`[ask_master] Failed to write escalation file: ${err}\n`);
 				}
 
-				// Exit immediately with escalation code 42.
-				// This terminates the subagent process before it can continue work.
-				// The parent executor.ts detects exit code 42 and reads the escalation file.
+				// Exit immediately with code 42.
+				// The parent runner detects this code and reads the escalation file.
 				process.exit(42);
 			},
 		});

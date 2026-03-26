@@ -47,19 +47,19 @@ const COMMON_SUBAGENT_NO_RECURSION_RULE = [
 ].join("\n");
 
 const COMMON_SUBAGENT_ESCALATION_GUIDELINE = [
-	"Escalation Guideline:",
-	"- The `escalate` tool is available to signal the master when you need a decision before continuing.",
-	"- ESCALATE when:",
+	"ask_master Guideline:",
+	"- The `ask_master` tool asks the master for a decision. WARNING: calling it terminates your session immediately.",
+	"- Use `ask_master` when:",
 	"  - You encounter ambiguity that cannot be resolved from the task context or codebase",
 	"  - A decision has significant impact (deletion, architecture change, deployment) and you are unsure of the correct choice",
 	"  - You discover unexpected issues that fundamentally change the scope of the task",
 	"  - Task instructions conflict with each other and you need clarification",
-	"- DO NOT escalate for:",
+	"- DO NOT use `ask_master` for:",
 	"  - Routine decisions within your domain expertise",
 	"  - Issues you can resolve with available tools and context",
 	"  - Minor style, formatting, or naming choices",
 	"  - Pre-existing problems unrelated to the current task",
-	"- When escalating, always include:",
+	"- When calling, always include:",
 	"  - Clear description of the blocker or decision needed",
 	"  - Options you have considered with pros/cons",
 	"  - Your recommendation, if you have one",
@@ -70,7 +70,7 @@ function attachCommonSubagentRule(systemPrompt: string): string {
 	if (!prompt.includes("Global Runtime Rule (subagent):")) {
 		prompt = prompt ? `${prompt}\n\n${COMMON_SUBAGENT_NO_RECURSION_RULE}` : COMMON_SUBAGENT_NO_RECURSION_RULE;
 	}
-	if (!prompt.includes("Escalation Guideline:")) {
+	if (!prompt.includes("ask_master Guideline:")) {
 		prompt = prompt ? `${prompt}\n\n${COMMON_SUBAGENT_ESCALATION_GUIDELINE}` : COMMON_SUBAGENT_ESCALATION_GUIDELINE;
 	}
 	return prompt;
