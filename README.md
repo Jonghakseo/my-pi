@@ -6,11 +6,11 @@
 
 **[pi](https://github.com/mariozechner/pi-coding-agent) 기반 개인 AI 오퍼레이팅 시스템**
 
-*11개의 전문 에이전트 · 25개 이상의 확장 기능 · 한 개발자의 주관적인 셋업*
+*13개의 전문 에이전트 · 25개 이상의 확장 기능 · 한 개발자의 주관적인 셋업*
 
 <br/>
 
-`🤖 11 에이전트` &nbsp; `🧩 25+ 확장 기능` &nbsp; `🎨 5 테마`
+`🤖 13 에이전트` &nbsp; `🧩 25+ 확장 기능` &nbsp; `🎨 7 테마`
 
 <br/>
 
@@ -39,7 +39,7 @@
 |---|---|
 | **사용자 / pi TUI** | 터미널 기반 인터랙티브 인터페이스 |
 | **확장 기능** | 25개 이상의 TypeScript 플러그인 — 서브에이전트, 음성 I/O, MCP 브릿지, UI 오버레이, 안전 장치 |
-| **에이전트 오케스트라** | 역할과 모델이 다른 11개의 전문 에이전트 |
+| **에이전트 오케스트라** | 역할과 모델이 다른 13개의 전문 에이전트 정의 |
 | **인프라** | [claude-mcp-bridge](./extensions/claude-mcp-bridge/)를 통한 MCP 도구 연동 — 기존 Claude Code MCP 설정을 그대로 재사용 (Jira, Slack, Gmail, Calendar, GA4, Figma, DB 등) |
 
 ---
@@ -50,7 +50,7 @@
   <img src="./tmp/agents.ko.svg" alt="에이전트 오케스트라" width="800"/>
 </p>
 
-11개의 에이전트, 3개의 모델, 하나의 오케스트레이터. 각 에이전트는 고유한 역할, 전용 시스템 프롬프트, 그리고 강점에 맞는 모델을 갖는다:
+현재 기준 13개의 에이전트 정의, 3개의 모델, 하나의 오케스트레이터로 구성된다:
 
 | 에이전트 | 모델 | 역할 | 사용 시점 |
 |---|---|---|---|
@@ -59,9 +59,11 @@
 | 🏃 **worker-fast** | `openai-codex/gpt-5.4` | 경량 단순 작업 실행기 | 단일 파일 수정, 간단한 변경 |
 | 📐 **planner** | `anthropic/claude-opus-4-6` | 구현 설계자 | 복잡한 작업 분할 |
 | ✨ **simplifier** | `anthropic/claude-sonnet-4-6` | 코드 단순화 전문가 | 최근 수정 코드 정리, 가독성 개선, 동작 보존 리팩터링 |
+| 🧹 **code-cleaner** | `openai-codex/gpt-5.4` | 코드 정리 분석가 | 중복 제거 후보, 품질 문제 탐색 |
 | 🔎 **reviewer** | `openai-codex/gpt-5.4` | 코드 리뷰 (P0–P3 심각도) | PR 리뷰, 품질 점검 |
 | 🥊 **challenger** | `openai-codex/gpt-5.4` | 스트레스 테스터 | 실행 전 계획 검증 |
 | ✅ **verifier** | `anthropic/claude-opus-4-6` | 3단계 근거 검증 | 주장 확인, 정확성 점검 |
+| 🔐 **security-auditor** | `openai-codex/gpt-5.4` | 보안 검토자 | 취약점 중심 리뷰 |
 | ⚖️ **decider** | `openai-codex/gpt-5.4` | 기술 의사 결정 | 아키텍처 선택, 트레이드오프 분석 |
 | 🌐 **searcher** | `anthropic/claude-sonnet-4-6` | 리서치·웹 검색 | 문서 탐색, 조사 |
 | 🖥️ **browser** | `openai-codex/gpt-5.4` | 브라우저 자동화·UI 테스트 | E2E 테스트, 시각 검증 |
@@ -81,13 +83,13 @@
 
 ## 🧩 확장 기능
 
-25개 이상의 커스텀 TypeScript 확장을 도메인별로 정리했다:
+25개 이상의 커스텀 TypeScript 확장 중 대표 항목들을 도메인별로 정리했다:
 
 ### 코어 시스템
 
 | 확장 | 설명 |
 |---|---|
-| **subagent/** | 멀티 에이전트 위임 엔진 — 서브 pi 프로세스 생성, 픽셀아트 상태 위젯으로 동시 실행 관리, 행 감지, 자동 정리 |
+| **subagent/** | 멀티 에이전트 위임 엔진 — 서브 `pi` 프로세스 생성, below-editor 상태 위젯으로 실행 관리, 자동 follow-up/정리 |
 | **system-mode/** | "마스터 모드" (위임 전용 오케스트레이터) ↔ 일반 모드 전환 |
 | **claude-mcp-bridge/** | Claude Code의 MCP 서버 설정을 그대로 재사용 — 중복 설정 제로 |
 | **cross-agent.ts** | `.claude/`, `.gemini/`, `.codex/` 디렉터리에서 에이전트 정의 로드 |
@@ -109,19 +111,23 @@
 | **github-overlay.ts** | 터미널에서 바로 GitHub PR 확인 |
 | **status-overlay.ts** | `/status` — 확장 기능·스킬 상태 대시보드 |
 | **files.ts** | `/files` — git 트리 파일 브라우저 + 열기/편집/diff 빠른 액션 |
+| **fork-panel.ts** | `/fork-panel` — 현재 세션을 새 Ghostty split panel로 포크 |
+| **generative-ui/** | `visualize_read_me`, `show_widget` — 네이티브 시각화/위젯 렌더링 |
 | **override-builtin-tools.ts** | 도구 출력 접기/펼치기로 세션 깔끔하게 유지 |
 
 ### 개발 도구
 
 | 확장 | 설명 |
 |---|---|
-| **todo-write.ts** | 할 일 관리 — todo_write 도구, 영속 저장소, TUI 렌더링 |
+| **todo-write.ts** | 할 일 관리 — `todo_write` 도구, 영속 저장소, TUI 렌더링 |
 | **session-replay.ts** | `/replay` — 과거 세션 탐색·재생 |
 | **auto-name.ts** | 첫 사용자 메시지로 세션 이름 자동 감지 |
 | **upload-image-url.ts** | GitHub CDN으로 이미지 업로드 후 임베딩 |
 | **clipboard.ts** | OSC52 이스케이프 시퀀스로 클립보드에 텍스트 복사 |
 | **ask-user-question.ts** | 사전 정의 옵션을 갖춘 인터랙티브 질문 도구 |
 | **delayed-action.ts** | 지연 실행 예약 |
+| **until.ts** | `/until`, `until_report` — 조건 충족까지 반복 실행 |
+| **usage-analytics.ts** | `/analytics` — 서브에이전트·스킬 사용 통계 오버레이 |
 | **archive-to-html.ts** | to-html 스킬로 생성된 HTML 파일을 `~/Documents`에 자동 아카이브 |
 
 ### 안전 장치
@@ -168,9 +174,11 @@ retest    = browser("수정 사항을 스크린샷으로 검증")
 final     = reviewer("전체 변경사항 리뷰")
 ```
 
-### `/name` — 세션 이름 설정
+---
 
-세션 이름을 수동으로 설정하거나 확인한다. 첫 메시지 시 자동 감지되며, 수동으로도 변경 가능하다.
+## 🏷️ 세션 이름
+
+`/name`은 프롬프트 템플릿이 아니라 **내장 명령**이다.
 
 ```
 /name <세션 이름>   # 이름 설정
@@ -181,12 +189,14 @@ final     = reviewer("전체 변경사항 리뷰")
 
 ## 🎨 테마
 
-엄선한 5개 테마, `Ctrl+X`로 실시간 전환:
+현재 7개 테마를 제공하며, `Ctrl+X`로 실시간 전환할 수 있다:
 
 | 테마 | 스타일 |
 |---|---|
 | **nord** *(기본)* | 북극풍, 깔끔한 블루와 서리 톤 |
 | **catppuccin-mocha** | 다크 초콜릿 위의 따뜻한 파스텔 |
+| **darcula** | JetBrains 스타일의 진한 다크 톤 |
+| **dracula** | 대비가 선명한 퍼플 계열 다크 테마 |
 | **gruvbox** | 레트로 따뜻한 톤, 눈이 편한 |
 | **midnight-ocean** | 깊은 바다 블루와 틸 |
 | **rose-pine** | 차분하고 우아한 로즈 톤 |
@@ -201,6 +211,8 @@ final     = reviewer("전체 변경사항 리뷰")
 | `Ctrl+X` | 테마 순환 |
 | `Ctrl+Q` | 테마 역순 순환 |
 | `Ctrl+Shift+O` | 파일 브라우저 열기 |
+| `Ctrl+Shift+F` | 최근 파일 참조를 Finder에서 표시 |
+| `Ctrl+Shift+R` | 최근 파일 참조 Quick Look |
 | `Ctrl+O` | 도구 출력 접기/펼치기 |
 | `Option+V` | 음성 입력 (받아쓰기 + TTS) |
 
@@ -241,8 +253,8 @@ pi install npm:pi-web-access
 | 지표 | 값 |
 |---|---|
 | 활성 확장 기능 | 25+ |
-| 에이전트 정의 | 11개 |
-| 테마 | 5개 |
+| 에이전트 정의 | 13개 |
+| 테마 | 7개 |
 
 ---
 
