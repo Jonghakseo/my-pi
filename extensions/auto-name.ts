@@ -32,6 +32,9 @@ async function detectNameFromMessage(userMessage: string, ctx: ExtensionContext)
 	const model = ctx.model;
 	if (!model) return "";
 
+	const apiKey = await ctx.modelRegistry.getApiKey(model);
+	if (!apiKey) return "";
+
 	const controller = new AbortController();
 	const timer = setTimeout(() => controller.abort(), 10000);
 
@@ -48,7 +51,7 @@ async function detectNameFromMessage(userMessage: string, ctx: ExtensionContext)
 					},
 				],
 			},
-			{ signal: controller.signal, reasoning: "minimal", maxTokens: 60 },
+			{ apiKey, signal: controller.signal, reasoning: "minimal", maxTokens: 60 },
 		);
 
 		if (!isSuccessfulResult(result.stopReason)) return "";
