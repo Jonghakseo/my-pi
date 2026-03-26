@@ -1,7 +1,7 @@
 import type { ExtensionContext } from "@mariozechner/pi-coding-agent";
 import { describe, expect, it } from "vitest";
 import {
-	applyTodoWriteOps,
+	applyTodoWrite,
 	buildPostCompactionTodoReminder,
 	getTodoWidgetVisibility,
 	renderTodoWidgetLines,
@@ -9,118 +9,66 @@ import {
 	restoreTodoWriteState,
 } from "../todo-write.js";
 
-describe("todo-write ops", () => {
-	it("replaces full state and assigns deterministic ids", () => {
-		const result = applyTodoWriteOps({ tasks: [] }, [
-			{
-				op: "replace",
-				tasks: [
-					{ content: "Read source", status: "completed" },
-					{ content: "Map callsites", status: "in_progress" },
-				],
-			},
+describe("todo-write", () => {
+	it("creates state from todos array with deterministic ids", () => {
+		const result = applyTodoWrite([
+			{ content: "Read source", status: "completed" },
+			{ content: "Map callsites", status: "in_progress" },
 		]);
 
-		expect(result.errors).toEqual([]);
 		expect(result.state.tasks[0]?.id).toBe("task-1");
+		expect(result.state.tasks[0]?.status).toBe("completed");
 		expect(result.state.tasks[1]?.id).toBe("task-2");
+		expect(result.state.tasks[1]?.status).toBe("in_progress");
 	});
 
-	it("adds task with incrementing ids", () => {
-		const start = {
-			tasks: [{ id: "task-1", content: "A", status: "pending" as const, notes: "" }],
-		};
-		const result = applyTodoWriteOps(start, [
-			{ op: "add_task", content: "B" },
-			{ op: "add_task", content: "C" },
+	it("normalizes multiple in_progress — keeps only the first", () => {
+		const result = applyTodoWrite([
+			{ content: "A", status: "in_progress" },
+			{ content: "B", status: "in_progress" },
 		]);
 
-		expect(result.errors).toEqual([]);
-		expect(result.state.tasks[1]?.id).toBe("task-2");
-		expect(result.state.tasks[2]?.id).toBe("task-3");
-	});
-
-	it("normalizes multiple in_progress tasks instead of erroring", () => {
-		const start = {
-			tasks: [
-				{ id: "task-1", content: "A", status: "in_progress" as const, notes: "" },
-				{ id: "task-2", content: "B", status: "pending" as const, notes: "" },
-			],
-		};
-		const result = applyTodoWriteOps(start, [{ op: "update", id: "task-2", status: "in_progress" }]);
-
-		expect(result.errors).toEqual([]);
 		expect(result.state.tasks[0]?.status).toBe("in_progress");
 		expect(result.state.tasks[1]?.status).toBe("pending");
 	});
 
-	it("promotes first pending task to in_progress when none exists", () => {
-		const start = {
-			tasks: [
-				{ id: "task-1", content: "A", status: "pending" as const, notes: "" },
-				{ id: "task-2", content: "B", status: "pending" as const, notes: "" },
-			],
-		};
-		const result = applyTodoWriteOps(start, []);
+	it("promotes first pending to in_progress when none exists", () => {
+		const result = applyTodoWrite([
+			{ content: "A", status: "pending" },
+			{ content: "B", status: "pending" },
+		]);
 
-		expect(result.errors).toEqual([]);
 		expect(result.state.tasks[0]?.status).toBe("in_progress");
 		expect(result.state.tasks[1]?.status).toBe("pending");
 	});
 
-	it("removes task and renders summary", () => {
-		const start = {
-			tasks: [
-				{ id: "task-1", content: "A", status: "completed" as const, notes: "" },
-				{ id: "task-2", content: "B", status: "pending" as const, notes: "" },
-			],
-		};
-		const result = applyTodoWriteOps(start, [{ op: "remove_task", id: "task-1" }]);
-		const summary = renderTodoWriteSummary(result.state, result.errors);
+	it("preserves activeForm and notes", () => {
+		const result = applyTodoWrite([
+			{ content: "Run tests", status: "in_progress", activeForm: "Running tests", notes: "unit + e2e" },
+		]);
 
-		expect(result.errors).toEqual([]);
-		expect(summary).toContain("Remaining items (1):");
-		expect(summary).toContain("task-2 B [in_progress]");
-	});
-
-	it("accumulates update error when task does not exist", () => {
-		const start = {
-			tasks: [] as Array<{
-				id: string;
-				content: string;
-				status: "pending" | "in_progress" | "completed" | "abandoned";
-			}>,
-		};
-		const result = applyTodoWriteOps(start, [{ op: "update", id: "task-404", status: "completed" }]);
-
-		expect(result.errors).toContain('Task "task-404" not found');
-	});
-
-	it("accumulates remove_task error when task does not exist", () => {
-		const start = {
-			tasks: [] as Array<{
-				id: string;
-				content: string;
-				status: "pending" | "in_progress" | "completed" | "abandoned";
-			}>,
-		};
-		const result = applyTodoWriteOps(start, [{ op: "remove_task", id: "task-404" }]);
-
-		expect(result.errors).toContain('Task "task-404" not found');
+		expect(result.state.tasks[0]?.activeForm).toBe("Running tests");
+		expect(result.state.tasks[0]?.notes).toBe("unit + e2e");
 	});
 
 	it("renders empty summary when no tasks remain", () => {
-		const state = {
-			tasks: [] as Array<{
-				id: string;
-				content: string;
-				status: "pending" | "in_progress" | "completed" | "abandoned";
-			}>,
-		};
-		expect(renderTodoWriteSummary(state)).toBe("Todo list cleared.");
+		expect(renderTodoWriteSummary({ tasks: [] })).toBe("Todo list cleared.");
 	});
 
-	it("renders widget lines when todos exist", () => {
+	it("renders summary with remaining and progress", () => {
+		const state = {
+			tasks: [
+				{ id: "task-1", content: "Done", status: "completed" as const },
+				{ id: "task-2", content: "Working", status: "in_progress" as const },
+			],
+		};
+		const summary = renderTodoWriteSummary(state);
+		expect(summary).toContain("Remaining items (1):");
+		expect(summary).toContain("task-2 Working [in_progress]");
+		expect(summary).toContain("Progress: 1/2 tasks complete");
+	});
+
+	it("renders widget lines with markers", () => {
 		const state = {
 			tasks: [
 				{ id: "task-1", content: "Read source", status: "completed" as const },
@@ -131,6 +79,31 @@ describe("todo-write ops", () => {
 
 		const lines = renderTodoWidgetLines(state);
 		expect(lines).toEqual(["~~● Read source", "→ Map callsites", "○ Write patch"]);
+	});
+
+	it("renders widget lines using activeForm for in_progress tasks", () => {
+		const state = {
+			tasks: [
+				{ id: "task-1", content: "Run tests", status: "in_progress" as const, activeForm: "Running tests" },
+				{ id: "task-2", content: "Deploy", status: "pending" as const },
+			],
+		};
+
+		const lines = renderTodoWidgetLines(state);
+		expect(lines).toEqual(["→ Running tests", "○ Deploy"]);
+	});
+
+	it("renders widget lines with content when activeForm is missing", () => {
+		const state = {
+			tasks: [{ id: "task-1", content: "Run tests", status: "in_progress" as const }],
+		};
+
+		const lines = renderTodoWidgetLines(state);
+		expect(lines).toEqual(["→ Run tests"]);
+	});
+
+	it("returns empty widget lines for empty state", () => {
+		expect(renderTodoWidgetLines({ tasks: [] })).toEqual([]);
 	});
 
 	it("keeps completed widget visible during grace period", () => {
@@ -163,7 +136,8 @@ describe("todo-write ops", () => {
 	});
 
 	it("hides widget when todo state is empty", () => {
-		expect(renderTodoWidgetLines({ tasks: [] })).toEqual([]);
+		const visibility = getTodoWidgetVisibility({ tasks: [] }, undefined, 0, 0);
+		expect(visibility.hidden).toBe(true);
 	});
 });
 
@@ -196,6 +170,63 @@ describe("todo-write persistence", () => {
 		expect(restored).toEqual({
 			tasks: [{ id: "task-1", content: "Finish patch", status: "in_progress" }],
 		});
+	});
+
+	it("migrates legacy abandoned status to completed on restore", () => {
+		const ctx = {
+			cwd: "/tmp/project",
+			sessionManager: {
+				getSessionFile: () => "session.jsonl",
+				getBranch: () => [
+					{
+						type: "custom",
+						customType: "todo-write-state",
+						data: {
+							tasks: [
+								{ id: "task-1", content: "Old task", status: "abandoned" },
+								{ id: "task-2", content: "Active task", status: "in_progress" },
+							],
+							updatedAt: 1,
+						},
+					},
+				],
+			},
+		} as unknown as Pick<ExtensionContext, "cwd" | "sessionManager">;
+
+		const restored = restoreTodoWriteState(ctx);
+
+		expect(restored.tasks).toHaveLength(2);
+		expect(restored.tasks[0]?.status).toBe("completed");
+		expect(restored.tasks[0]?.content).toBe("Old task");
+		expect(restored.tasks[1]?.status).toBe("in_progress");
+	});
+
+	it("normalizes in_progress after legacy migration (all abandoned + pending)", () => {
+		const ctx = {
+			cwd: "/tmp/project",
+			sessionManager: {
+				getSessionFile: () => "session.jsonl",
+				getBranch: () => [
+					{
+						type: "custom",
+						customType: "todo-write-state",
+						data: {
+							tasks: [
+								{ id: "task-1", content: "Dropped", status: "abandoned" },
+								{ id: "task-2", content: "Waiting", status: "pending" },
+							],
+							updatedAt: 1,
+						},
+					},
+				],
+			},
+		} as unknown as Pick<ExtensionContext, "cwd" | "sessionManager">;
+
+		const restored = restoreTodoWriteState(ctx);
+
+		expect(restored.tasks[0]?.status).toBe("completed");
+		// pending should be promoted to in_progress since no in_progress exists after migration
+		expect(restored.tasks[1]?.status).toBe("in_progress");
 	});
 
 	it("returns null compaction reminder when no remaining tasks exist", () => {

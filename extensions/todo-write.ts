@@ -3,12 +3,13 @@ import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-age
 import { Text, truncateToWidth } from "@mariozechner/pi-tui";
 import { type Static, Type } from "@sinclair/typebox";
 
-type TodoStatus = "pending" | "in_progress" | "completed" | "abandoned";
+type TodoStatus = "pending" | "in_progress" | "completed";
 
 type TodoTask = {
 	id: string;
 	content: string;
 	status: TodoStatus;
+	activeForm?: string;
 	notes?: string;
 };
 
@@ -16,49 +17,29 @@ type TodoState = {
 	tasks: TodoTask[];
 };
 
-const StatusEnum = StringEnum(["pending", "in_progress", "completed", "abandoned"] as const, {
+const StatusEnum = StringEnum(["pending", "in_progress", "completed"] as const, {
 	description: "Task status",
 });
 
 const InputTask = Type.Object({
 	content: Type.String({ description: "Task description" }),
-	status: Type.Optional(StatusEnum),
+	status: StatusEnum,
+	activeForm: Type.Optional(
+		Type.String({
+			description: "Present continuous form for display during execution (e.g., 'Running tests', '테스트 실행 중')",
+		}),
+	),
 	notes: Type.Optional(Type.String({ description: "Additional context or notes" })),
 });
 
 const TodoWriteParams = Type.Object(
 	{
-		ops: Type.Array(
-			Type.Union([
-				Type.Object({
-					op: Type.Literal("replace"),
-					tasks: Type.Array(InputTask),
-				}),
-				Type.Object({
-					op: Type.Literal("add_task"),
-					content: Type.String({ description: "Task description" }),
-					notes: Type.Optional(Type.String({ description: "Additional context or notes" })),
-				}),
-				Type.Object({
-					op: Type.Literal("update"),
-					id: Type.String({ description: "Task ID, e.g. task-3" }),
-					status: Type.Optional(StatusEnum),
-					content: Type.Optional(Type.String({ description: "Updated task description" })),
-					notes: Type.Optional(Type.String({ description: "Additional context or notes" })),
-				}),
-				Type.Object({
-					op: Type.Literal("remove_task"),
-					id: Type.String({ description: "Task ID, e.g. task-3" }),
-				}),
-			]),
-			{ description: "Todo write operations" },
-		),
+		todos: Type.Array(InputTask, { description: "The updated todo list" }),
 	},
 	{ additionalProperties: true },
 );
 
 type TodoWriteParamsType = Static<typeof TodoWriteParams>;
-type TodoWriteOp = TodoWriteParamsType["ops"][number];
 
 const todoStateStore = new Map<string, TodoState>();
 const TODO_WIDGET_KEY = "todo-write";
@@ -84,22 +65,7 @@ function getTodoStateKey(ctx: Pick<ExtensionContext, "cwd" | "sessionManager">):
 }
 
 function _isStatus(value: unknown): value is TodoStatus {
-	return value === "pending" || value === "in_progress" || value === "completed" || value === "abandoned";
-}
-
-function findTask(tasks: TodoTask[], id: string): TodoTask | undefined {
-	return tasks.find((entry) => entry.id === id);
-}
-
-function getNextTaskId(tasks: TodoTask[]): number {
-	let maxId = 0;
-	for (const task of tasks) {
-		const match = /^task-(\d+)$/.exec(task.id);
-		if (!match) continue;
-		const value = Number.parseInt(match[1], 10);
-		if (Number.isFinite(value) && value > maxId) maxId = value;
-	}
-	return maxId + 1;
+	return value === "pending" || value === "in_progress" || value === "completed";
 }
 
 function cloneTasks(tasks: TodoTask[]): TodoTask[] {
@@ -159,71 +125,18 @@ export function getTodoWidgetVisibility(
 	};
 }
 
-export function applyTodoWriteOps(
-	state: TodoState,
-	ops: TodoWriteOp[],
-): {
+export function applyTodoWrite(todos: TodoWriteParamsType["todos"]): {
 	state: TodoState;
-	errors: string[];
 } {
-	const errors: string[] = [];
-	let next: TodoState = { tasks: cloneTasks(state.tasks) };
-	let nextTaskId = getNextTaskId(next.tasks);
-
-	for (const op of ops) {
-		switch (op.op) {
-			case "replace": {
-				const replaced: TodoState = { tasks: [] };
-				let replaceTaskId = 1;
-				for (const inputTask of op.tasks) {
-					replaced.tasks.push({
-						id: `task-${replaceTaskId++}`,
-						content: inputTask.content,
-						status: inputTask.status ?? "pending",
-						notes: inputTask.notes,
-					});
-				}
-				next = replaced;
-				nextTaskId = getNextTaskId(next.tasks);
-				break;
-			}
-
-			case "add_task": {
-				next.tasks.push({
-					id: `task-${nextTaskId++}`,
-					content: op.content,
-					status: "pending",
-					notes: op.notes,
-				});
-				break;
-			}
-
-			case "update": {
-				const task = findTask(next.tasks, op.id);
-				if (!task) {
-					errors.push(`Task "${op.id}" not found`);
-					break;
-				}
-				if (op.status !== undefined) task.status = op.status;
-				if (op.content !== undefined) task.content = op.content;
-				if (op.notes !== undefined) task.notes = op.notes;
-				break;
-			}
-
-			case "remove_task": {
-				const index = next.tasks.findIndex((task) => task.id === op.id);
-				if (index === -1) {
-					errors.push(`Task "${op.id}" not found`);
-					break;
-				}
-				next.tasks.splice(index, 1);
-				break;
-			}
-		}
-	}
-
-	normalizeInProgressTask(next.tasks);
-	return { state: next, errors };
+	const tasks: TodoTask[] = todos.map((todo, index) => ({
+		id: `task-${index + 1}`,
+		content: todo.content,
+		status: todo.status,
+		activeForm: todo.activeForm,
+		notes: todo.notes,
+	}));
+	normalizeInProgressTask(tasks);
+	return { state: { tasks } };
 }
 
 export function renderTodoWidgetLines(state: TodoState): string[] {
@@ -232,23 +145,23 @@ export function renderTodoWidgetLines(state: TodoState): string[] {
 	const lines: string[] = [];
 
 	for (const task of state.tasks) {
-		const isDone = task.status === "completed" || task.status === "abandoned";
+		const isDone = task.status === "completed";
 		const marker = task.status === "in_progress" ? "→" : isDone ? "●" : "○";
+		const displayText = task.status === "in_progress" && task.activeForm ? task.activeForm : task.content;
 		// Prefix with ~~ for strikethrough styling (applied in widget render)
-		lines.push(isDone ? `~~${marker} ${task.content}` : `${marker} ${task.content}`);
+		lines.push(isDone ? `~~${marker} ${displayText}` : `${marker} ${displayText}`);
 	}
 
 	return lines;
 }
 
-export function renderTodoWriteSummary(state: TodoState, errors: string[] = []): string {
-	if (state.tasks.length === 0) return errors.length > 0 ? `Errors: ${errors.join("; ")}` : "Todo list cleared.";
+export function renderTodoWriteSummary(state: TodoState): string {
+	if (state.tasks.length === 0) return "Todo list cleared.";
 
 	const remainingTasks = state.tasks.filter((task) => task.status === "pending" || task.status === "in_progress");
-	const doneCount = state.tasks.filter((task) => task.status === "completed" || task.status === "abandoned").length;
+	const doneCount = state.tasks.filter((task) => task.status === "completed").length;
 
 	const lines: string[] = [];
-	if (errors.length > 0) lines.push(`Errors: ${errors.join("; ")}`);
 	if (remainingTasks.length === 0) {
 		lines.push("Remaining items: none.");
 	} else {
@@ -261,8 +174,7 @@ export function renderTodoWriteSummary(state: TodoState, errors: string[] = []):
 	lines.push(`Progress: ${doneCount}/${state.tasks.length} tasks complete`);
 
 	for (const task of state.tasks) {
-		const marker =
-			task.status === "completed" ? "✓" : task.status === "in_progress" ? "→" : task.status === "abandoned" ? "✗" : "○";
+		const marker = task.status === "completed" ? "✓" : task.status === "in_progress" ? "→" : "○";
 		lines.push(`  ${marker} ${task.id} ${task.content}`);
 	}
 
@@ -298,24 +210,54 @@ type TodoStateEntryData = {
 	updatedAt: number;
 };
 
-function isTodoTask(value: unknown): value is TodoTask {
+// ── Legacy persistence migration ────────────────────────────────────────────
+
+type PersistedTodoStatus = TodoStatus | "abandoned";
+
+type PersistedTodoTask = {
+	id: string;
+	content: string;
+	status: PersistedTodoStatus;
+	activeForm?: string;
+	notes?: string;
+};
+
+type PersistedTodoStateEntryData = {
+	tasks: PersistedTodoTask[];
+	updatedAt: number;
+};
+
+function _isPersistedStatus(value: unknown): value is PersistedTodoStatus {
+	return value === "pending" || value === "in_progress" || value === "completed" || value === "abandoned";
+}
+
+function isPersistedTodoTask(value: unknown): value is PersistedTodoTask {
 	if (!value || typeof value !== "object") return false;
-	const candidate = value as Partial<TodoTask>;
+	const candidate = value as Record<string, unknown>;
 	return (
 		typeof candidate.id === "string" &&
 		typeof candidate.content === "string" &&
-		_isStatus(candidate.status) &&
+		_isPersistedStatus(candidate.status) &&
+		(candidate.activeForm === undefined || typeof candidate.activeForm === "string") &&
 		(candidate.notes === undefined || typeof candidate.notes === "string")
 	);
 }
 
-function isTodoStateEntryData(value: unknown): value is TodoStateEntryData {
+/** Migrate legacy persisted tasks: map `abandoned` → `completed`. */
+function migrateLegacyTasks(tasks: PersistedTodoTask[]): TodoTask[] {
+	return tasks.map((task) => ({
+		...task,
+		status: task.status === "abandoned" ? "completed" : task.status,
+	}));
+}
+
+function isPersistedTodoStateEntryData(value: unknown): value is PersistedTodoStateEntryData {
 	if (!value || typeof value !== "object") return false;
-	const candidate = value as Partial<TodoStateEntryData>;
+	const candidate = value as Partial<PersistedTodoStateEntryData>;
 	return (
 		typeof candidate.updatedAt === "number" &&
 		Array.isArray(candidate.tasks) &&
-		candidate.tasks.every((task) => isTodoTask(task))
+		candidate.tasks.every((task) => isPersistedTodoTask(task))
 	);
 }
 
@@ -324,8 +266,10 @@ export function restoreTodoWriteState(ctx: Pick<ExtensionContext, "cwd" | "sessi
 	for (let index = branch.length - 1; index >= 0; index -= 1) {
 		const entry = branch[index];
 		if (entry.type !== "custom" || entry.customType !== TODO_STATE_ENTRY_TYPE) continue;
-		if (isTodoStateEntryData(entry.data)) {
-			const restored = { tasks: cloneTasks(entry.data.tasks) };
+		if (isPersistedTodoStateEntryData(entry.data)) {
+			const tasks = migrateLegacyTasks(entry.data.tasks);
+			normalizeInProgressTask(tasks);
+			const restored = { tasks };
 			writeTodoWriteState(ctx, restored);
 			return restored;
 		}
@@ -466,13 +410,37 @@ export default function todoWriteExtension(pi: ExtensionAPI): void {
 	pi.registerTool({
 		name: "todo_write",
 		label: "Todo Write",
-		description:
-			"Manage todos via ops. Only use for tasks with 3+ clearly distinct phases (e.g. research → implement → verify). When practical, write todo content in Korean. Do NOT create separate todos for multiple simple edits within a single theme — just do them. Record todo status changes immediately when they happen. If a phase finishes, your very next action must be todo_write. Do not batch-complete multiple tasks at the end. Prefer at most one newly completed task per todo_write call; starting the next task as in_progress in the same call is allowed. Use replace/add_task/update/remove_task. replace requires { tasks }; tasks require { content, status?, notes? }. Status values: pending, in_progress, completed, abandoned. If requirements change mid-task, revise the todo list with todo_write to reflect the new plan before continuing.",
+		description: `Use this tool to create and manage a structured task list for your current coding session. This helps you track progress, organize complex tasks, and show the user your overall progress.
+
+## When to Use
+- Complex multi-step tasks requiring 3+ distinct steps
+- User provides multiple tasks to be done
+- Non-trivial tasks requiring careful planning
+
+## When NOT to Use
+- Single, straightforward task — just do it directly
+- Trivial tasks completable in less than 3 steps
+- Purely conversational or informational requests
+
+## Rules
+- Write todo content in Korean when practical
+- Update task status in real-time as you work
+- Mark tasks complete IMMEDIATELY after finishing — don't batch completions
+- Exactly ONE task should be in_progress at any time
+- Complete current tasks before starting new ones
+- Remove tasks that are no longer relevant
+- ONLY mark completed when FULLY accomplished — if blocked, keep as in_progress
+- If requirements change mid-task, update the todo list before continuing
+
+## Task Fields
+- content: Imperative form (e.g., "테스트 실행", "Run tests")
+- status: pending | in_progress | completed
+- activeForm: (optional) Present continuous form for display (e.g., "테스트 실행 중", "Running tests")
+- notes: (optional) Additional context`,
 		parameters: TodoWriteParams,
 		async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
-			const current = readTodoWriteState(ctx);
-			const applied = applyTodoWriteOps(current, params.ops);
-			const summary = renderTodoWriteSummary(applied.state, applied.errors);
+			const applied = applyTodoWrite(params.todos);
+			const summary = renderTodoWriteSummary(applied.state);
 			writeTodoWriteState(ctx, applied.state);
 			pi.appendEntry<TodoStateEntryData>(TODO_STATE_ENTRY_TYPE, {
 				tasks: cloneTasks(applied.state.tasks),
