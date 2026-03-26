@@ -6,11 +6,11 @@
 
 **A personal AI operating system built on [pi](https://github.com/mariozechner/pi-coding-agent)**
 
-*13 specialized agents · 25+ extensions · one developer's opinionated setup*
+*11 specialized agents · 25+ extensions · one developer's opinionated setup*
 
 <br/>
 
-`🤖 13 Agents` &nbsp; `🧩 25+ Extensions` &nbsp; `🎨 7 Themes`
+`🤖 11 Agents` &nbsp; `🧩 25+ Extensions` &nbsp; `🎨 7 Themes`
 
 <br/>
 
@@ -39,7 +39,7 @@ The system is organized in **four layers**:
 |---|---|
 | **User / pi TUI** | Interactive terminal interface |
 | **Extensions** | 25+ TypeScript plugins — subagent management, voice I/O, MCP bridge, UI overlays, safety guards |
-| **Agent Orchestra** | 13 specialized agent definitions with distinct roles and models |
+| **Agent Orchestra** | 11 specialized agent definitions with distinct roles and models |
 | **Infrastructure** | MCP tool integrations via [claude-mcp-bridge](./extensions/claude-mcp-bridge/) — reuses your existing Claude Code MCP setup (Jira, Slack, Gmail, Calendar, GA4, Figma, DB, etc.) |
 
 ---
@@ -50,13 +50,12 @@ The system is organized in **four layers**:
   <img src="./tmp/agents.en.svg" alt="Agent Orchestra" width="800"/>
 </p>
 
-The current setup has 13 agent definitions, three models, and one orchestrator:
+The current setup has 11 agent definitions, three models, and one orchestrator:
 
 | Agent | Model | Role | When to Use |
 |---|---|---|---|
 | 🔍 **finder** | `anthropic/claude-sonnet-4-6` | Fast file & code locator | Quick lookups, grep-like tasks |
 | ⚡ **worker** | `openai-codex/gpt-5.4` | General-purpose executor | Implementation, writing, fixes (complex multi-file) |
-| 🏃 **worker-fast** | `openai-codex/gpt-5.4` | Lightweight simple executor | Single-file edits, quick changes |
 | 📐 **planner** | `anthropic/claude-opus-4-6` | Implementation architect | Breaking down complex tasks |
 | ✨ **simplifier** | `anthropic/claude-sonnet-4-6` | Code simplification specialist | Clean up recently modified code, improve readability, preserve behavior |
 | 🧹 **code-cleaner** | `openai-codex/gpt-5.4` | Code cleanup analyst | Find cleanup opportunities and quality issues |
@@ -64,14 +63,13 @@ The current setup has 13 agent definitions, three models, and one orchestrator:
 | 🥊 **challenger** | `openai-codex/gpt-5.4` | Pressure tester | Stress-test plans before execution |
 | ✅ **verifier** | `anthropic/claude-opus-4-6` | 3-tier evidence validation | Verify claims, check correctness |
 | 🔐 **security-auditor** | `openai-codex/gpt-5.4` | Security reviewer | Focused vulnerability reviews |
-| ⚖️ **decider** | `openai-codex/gpt-5.4` | Technical decision maker | Architecture choices, trade-offs |
 | 🌐 **searcher** | `anthropic/claude-sonnet-4-6` | Research & web search | Documentation lookup, exploration |
 | 🖥️ **browser** | `openai-codex/gpt-5.4` | Browser automation & UI testing | E2E testing, visual verification |
 
 <details>
 <summary><strong>Model Selection Philosophy</strong></summary>
 
-- **openai-codex/gpt-5.4** — General-purpose execution & review (implementation, testing, reviewing, decision-making, browser automation)
+- **openai-codex/gpt-5.4** — General-purpose execution & review (implementation, testing, reviewing, security review, browser automation)
 - **anthropic/claude-sonnet-4-6** — Fast exploration & research (file search, web research, code simplification)
 - **anthropic/claude-opus-4-6** — Deep reasoning tasks (strategic planning, verification)
 
@@ -253,7 +251,7 @@ This is not a demo project. It's a **living configuration** used daily for produ
 | Metric | Value |
 |---|---|
 | Active extensions | 25+ |
-| Agent definitions | 13 |
+| Agent definitions | 11 |
 | Themes | 7 |
 
 ---
