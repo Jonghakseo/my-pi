@@ -11,16 +11,15 @@
  * Tracked events:
  *   - subagent_start: logged on `tool_result` for the `subagent` tool (run/continue/batch/chain launches)
  *   - subagent_end:   logged when session entries contain completion custom_messages
+ *     (single runs or grouped batch/chain completion summaries)
  *   - skill_read:     logged on `tool_result` for the `read` tool when the path contains `SKILL.md`
  *
- * Counting strategy (hybrid):
- *   - `subagent_end` is the **primary source** for total/done/error/duration
- *     (single runs and continue).
- *   - `subagent_start` with mode=batch/chain is a **secondary source** for runs
- *     that lack individual end records. These count in totals but have no
- *     done/error/duration breakdown.
- *   - This avoids double-counting: single runs count from end only,
- *     batch/chain members count from start only.
+ * Counting strategy (deduped hybrid):
+ *   - `subagent_end` is the **primary source** for total/done/error/duration.
+ *   - `subagent_start` is retained for mode distribution and as a fallback for
+ *     legacy/incomplete batch/chain runs that do not have matching end entries.
+ *   - When a start/end pair can be matched by runId (or grouped step metadata),
+ *     totals are counted from end only to avoid double-counting.
  */
 
 import * as fs from "node:fs";
@@ -48,12 +47,19 @@ interface SubagentStartEntry extends BaseLogEntry {
 	type: "subagent_start";
 	agent: string;
 	mode: "run" | "continue" | "batch" | "chain" | "unknown";
+	runId?: number;
+	batchId?: string;
+	pipelineId?: string;
+	stepIndex?: number;
 }
 
 interface SubagentEndEntry extends BaseLogEntry {
 	type: "subagent_end";
 	agent: string;
 	runId?: number;
+	batchId?: string;
+	pipelineId?: string;
+	stepIndex?: number;
 	status: "done" | "error";
 	elapsedMs?: number;
 	model?: string;
@@ -206,6 +212,72 @@ function extractAgentNames(command: string, verb: string | null): string[] {
 	return ["unknown"];
 }
 
+function getRunAnalyticsKeys(entry: {
+	runId?: number;
+	batchId?: string;
+	pipelineId?: string;
+	stepIndex?: number;
+}): string[] {
+	const keys: string[] = [];
+	if (typeof entry.runId === "number") keys.push(`run:${entry.runId}`);
+	if (entry.batchId && typeof entry.stepIndex === "number") keys.push(`batch:${entry.batchId}:${entry.stepIndex}`);
+	if (entry.pipelineId && typeof entry.stepIndex === "number")
+		keys.push(`chain:${entry.pipelineId}:${entry.stepIndex}`);
+	return keys;
+}
+
+function extractSubagentEndEntriesFromCustomMessage(customMessage: {
+	content?: unknown;
+	details?: Record<string, unknown>;
+}): Array<Omit<SubagentEndEntry, "type" | "ts" | "epoch">> {
+	const d = customMessage.details;
+	if (!d) return [];
+
+	const content = typeof customMessage.content === "string" ? customMessage.content : "";
+	const statusRaw = typeof d.status === "string" ? d.status.toLowerCase() : "";
+	const isCompleted = statusRaw === "done" || statusRaw === "completed" || content.includes("] completed");
+	const isError = statusRaw === "error" || statusRaw === "failed" || content.includes("] failed");
+	if (!isCompleted && !isError) return [];
+
+	const status: "done" | "error" = isError ? "error" : "done";
+	const elapsedMs = typeof d.elapsedMs === "number" ? d.elapsedMs : undefined;
+	const model = typeof d.model === "string" ? d.model : undefined;
+
+	if (typeof d.runId === "number") {
+		return [
+			{
+				agent: typeof d.agent === "string" ? d.agent : "unknown",
+				runId: d.runId,
+				batchId: typeof d.batchId === "string" ? d.batchId : undefined,
+				pipelineId: typeof d.pipelineId === "string" ? d.pipelineId : undefined,
+				stepIndex: typeof d.pipelineStepIndex === "number" ? d.pipelineStepIndex : undefined,
+				status,
+				elapsedMs,
+				model,
+			},
+		];
+	}
+
+	const runSummaries = Array.isArray(d.runSummaries) ? d.runSummaries : [];
+	if (runSummaries.length === 0) return [];
+
+	return runSummaries.flatMap((summary) => {
+		if (!summary || typeof summary !== "object") return [];
+		return [
+			{
+				agent: typeof summary.agent === "string" ? summary.agent : "unknown",
+				runId: typeof summary.runId === "number" ? summary.runId : undefined,
+				batchId: typeof summary.batchId === "string" ? summary.batchId : undefined,
+				pipelineId: typeof summary.pipelineId === "string" ? summary.pipelineId : undefined,
+				stepIndex: typeof summary.stepIndex === "number" ? summary.stepIndex : undefined,
+				status: typeof summary.status === "string" && summary.status.toLowerCase() === "error" ? "error" : "done",
+				elapsedMs: typeof summary.elapsedMs === "number" ? summary.elapsedMs : undefined,
+				model: typeof summary.model === "string" ? summary.model : undefined,
+			},
+		];
+	});
+}
+
 // ─── Date grouping ───────────────────────────────────────────────────────────
 
 type Period = "day" | "week" | "month";
@@ -281,17 +353,20 @@ interface PeriodStats {
 /**
  * Compute per-period stats.
  *
- * Counting strategy (hybrid):
+ * Counting strategy (deduped hybrid):
  *   - `subagent_end` is the primary source: provides total, done/error, duration.
- *   - `subagent_start` with mode=batch/chain is the secondary source for runs
- *     that lack individual `subagent_end` records (batch/chain members).
- *     These are counted in total but have no done/error/duration breakdown.
- *   - `_continue` placeholder agents from start records are excluded
- *     (the real agent name comes from end records).
+ *   - `subagent_start` with mode=batch/chain is only used as a fallback when
+ *     no matching end entry exists for the same run/group step.
+ *   - `_continue` placeholder agents from legacy start records are excluded.
  */
 function computeStats(entries: LogEntry[], period: Period): PeriodStats[] {
 	const cutoff = periodStartEpoch(period);
 	const filtered = entries.filter((e) => e.epoch >= cutoff);
+	const completedKeys = new Set(
+		filtered
+			.filter((entry): entry is SubagentEndEntry => entry.type === "subagent_end")
+			.flatMap((entry) => getRunAnalyticsKeys(entry)),
+	);
 
 	const periodMap = new Map<string, { agents: Map<string, AgentStats>; skills: Map<string, SkillStats> }>();
 
@@ -336,9 +411,9 @@ function computeStats(entries: LogEntry[], period: Period): PeriodStats[] {
 			}
 		} else if (entry.type === "subagent_start") {
 			const start = entry as SubagentStartEntry;
-			// Count batch/chain starts as completed runs (no individual end records).
-			// Skip _continue placeholders — the real agent comes from end.
 			if ((start.mode === "batch" || start.mode === "chain") && start.agent !== "_continue") {
+				const keys = getRunAnalyticsKeys(start);
+				if (keys.some((key) => completedKeys.has(key))) continue;
 				const agent = getAgent(p, start.agent);
 				agent.total++;
 			}
@@ -348,7 +423,6 @@ function computeStats(entries: LogEntry[], period: Period): PeriodStats[] {
 		}
 	}
 
-	// Compute avgMs
 	for (const [, p] of periodMap) {
 		for (const [, agent] of p.agents) {
 			if (agent.durations.length > 0) {
@@ -390,7 +464,7 @@ interface OverallSkillSummary {
 
 /**
  * Compute overall stats.
- * Hybrid counting: end is primary, batch/chain starts are secondary.
+ * Deduped hybrid counting: end is primary, batch/chain starts are fallback.
  */
 function computeOverall(entries: LogEntry[]): {
 	agents: OverallAgentSummary[];
@@ -403,6 +477,11 @@ function computeOverall(entries: LogEntry[]): {
 		{ total: number; done: number; error: number; durations: number[]; lastUsed: number }
 	>();
 	const skillMap = new Map<string, { total: number; lastUsed: number }>();
+	const completedKeys = new Set(
+		entries
+			.filter((entry): entry is SubagentEndEntry => entry.type === "subagent_end")
+			.flatMap((entry) => getRunAnalyticsKeys(entry)),
+	);
 
 	for (const entry of entries) {
 		if (entry.type === "subagent_end") {
@@ -416,6 +495,8 @@ function computeOverall(entries: LogEntry[]): {
 		} else if (entry.type === "subagent_start") {
 			const start = entry as SubagentStartEntry;
 			if ((start.mode === "batch" || start.mode === "chain") && start.agent !== "_continue") {
+				const keys = getRunAnalyticsKeys(start);
+				if (keys.some((key) => completedKeys.has(key))) continue;
 				const a = agentMap.get(start.agent) ?? { total: 0, done: 0, error: 0, durations: [], lastUsed: 0 };
 				a.total++;
 				if (start.epoch > a.lastUsed) a.lastUsed = start.epoch;
@@ -675,6 +756,13 @@ class AnalyticsOverlay {
 
 // ─── Extension entry point ───────────────────────────────────────────────────
 
+export const __test__ = {
+	computeStats,
+	computeOverall,
+	getRunAnalyticsKeys,
+	extractSubagentEndEntriesFromCustomMessage,
+};
+
 const SKILL_DEBOUNCE_MS = 10_000; // 같은 스킬의 10초 내 중복 read를 무시
 
 export default function (pi: ExtensionAPI) {
@@ -689,14 +777,28 @@ export default function (pi: ExtensionAPI) {
 		// Track subagent launches
 		if (event.toolName === "subagent" && !event.isError) {
 			const input = event.input as Record<string, unknown> | undefined;
+			const details = event.details as Record<string, unknown> | undefined;
 			const verb = parseSubagentCommandVerb(input?.command);
 			if (verb === "run" || verb === "continue" || verb === "batch" || verb === "chain") {
-				const command = String(input?.command ?? "");
-				const agents = extractAgentNames(command, verb);
 				const mode = verbToMode(verb);
 				const { ts, epoch } = now();
-				for (const agent of agents) {
-					appendLog({ type: "subagent_start", ts, epoch, agent, mode });
+				const launches = Array.isArray(details?.launches) ? details.launches : [];
+				if (launches.length > 0) {
+					for (const launch of launches) {
+						if (!launch || typeof launch !== "object") continue;
+						const agent = typeof launch.agent === "string" ? launch.agent : "unknown";
+						const runId = typeof launch.runId === "number" ? launch.runId : undefined;
+						const batchId = typeof launch.batchId === "string" ? launch.batchId : undefined;
+						const pipelineId = typeof launch.pipelineId === "string" ? launch.pipelineId : undefined;
+						const stepIndex = typeof launch.stepIndex === "number" ? launch.stepIndex : undefined;
+						appendLog({ type: "subagent_start", ts, epoch, agent, mode, runId, batchId, pipelineId, stepIndex });
+					}
+				} else {
+					const command = String(input?.command ?? "");
+					const agents = extractAgentNames(command, verb);
+					for (const agent of agents) {
+						appendLog({ type: "subagent_start", ts, epoch, agent, mode });
+					}
 				}
 			}
 		}
@@ -739,35 +841,10 @@ export default function (pi: ExtensionAPI) {
 				const cm = entry as any;
 				if (cm.customType !== "subagent-command" && cm.customType !== "subagent-tool") continue;
 
-				const d = cm.details;
-				if (!d) continue;
-
-				const content = typeof cm.content === "string" ? cm.content : "";
-				const statusRaw = typeof d.status === "string" ? d.status.toLowerCase() : "";
-				const isCompleted = statusRaw === "done" || statusRaw === "completed" || content.includes("] completed");
-				const isError = statusRaw === "error" || statusRaw === "failed" || content.includes("] failed");
-				if (!isCompleted && !isError) continue;
-
-				const status: "done" | "error" = isError ? "error" : "done";
-				const elapsedMs = typeof d.elapsedMs === "number" ? d.elapsedMs : undefined;
-				const model = typeof d.model === "string" ? d.model : undefined;
-
-				// Single run: d.runId is a number — log per-run completion.
-				// Batch/chain group summaries (d.runIds / d.stepRunIds) are skipped
-				// because they lack per-run agent/duration metadata. Individual runs
-				// within batch/chain are already tracked via subagent_start.
-				if (typeof d.runId === "number") {
+				const endEntries = extractSubagentEndEntriesFromCustomMessage(cm);
+				for (const endEntry of endEntries) {
 					const { ts, epoch } = now();
-					appendLog({
-						type: "subagent_end",
-						ts,
-						epoch,
-						agent: d.agent ?? "unknown",
-						runId: d.runId,
-						status,
-						elapsedMs,
-						model,
-					});
+					appendLog({ type: "subagent_end", ts, epoch, ...endEntry });
 				}
 			}
 		} catch {

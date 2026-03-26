@@ -4,7 +4,7 @@ import { isSubagentAsyncLaunchCommand, parseSubagentToolCommand } from "../subag
 describe("subagent CLI batch/chain parsing", () => {
 	it("parses batch with repeated --agent/--task blocks", () => {
 		const parsed = parseSubagentToolCommand(
-			'subagent batch --main --agent worker-fast --task "A 작업" --agent reviewer --task "B 작업"',
+			'subagent batch --main --agent worker --task "A 작업" --agent reviewer --task "B 작업"',
 		);
 
 		expect(parsed).toEqual({
@@ -13,7 +13,7 @@ describe("subagent CLI batch/chain parsing", () => {
 				asyncAction: "batch",
 				contextMode: "main",
 				runs: [
-					{ agent: "worker-fast", task: "A 작업" },
+					{ agent: "worker", task: "A 작업" },
 					{ agent: "reviewer", task: "B 작업" },
 				],
 			},
@@ -22,7 +22,7 @@ describe("subagent CLI batch/chain parsing", () => {
 
 	it("parses chain into steps", () => {
 		const parsed = parseSubagentToolCommand(
-			'subagent chain --isolated --agent worker-fast --task "1단계" --agent reviewer --task "2단계"',
+			'subagent chain --isolated --agent worker --task "1단계" --agent reviewer --task "2단계"',
 		);
 
 		expect(parsed).toEqual({
@@ -31,7 +31,7 @@ describe("subagent CLI batch/chain parsing", () => {
 				asyncAction: "chain",
 				contextMode: "isolated",
 				steps: [
-					{ agent: "worker-fast", task: "1단계" },
+					{ agent: "worker", task: "1단계" },
 					{ agent: "reviewer", task: "2단계" },
 				],
 			},
@@ -40,7 +40,7 @@ describe("subagent CLI batch/chain parsing", () => {
 
 	it("rejects free text outside batch/chain task blocks", () => {
 		const parsed = parseSubagentToolCommand(
-			'subagent batch --agent worker-fast --task "A" stray --agent reviewer --task "B"',
+			'subagent batch --agent worker --task "A" stray --agent reviewer --task "B"',
 		);
 
 		expect(parsed.type).toBe("error");
@@ -50,12 +50,8 @@ describe("subagent CLI batch/chain parsing", () => {
 	});
 
 	it("treats batch and chain as async launch commands", () => {
-		expect(isSubagentAsyncLaunchCommand("subagent batch --agent worker-fast --task A --agent reviewer --task B")).toBe(
-			true,
-		);
-		expect(isSubagentAsyncLaunchCommand("subagent chain --agent worker-fast --task A --agent reviewer --task B")).toBe(
-			true,
-		);
+		expect(isSubagentAsyncLaunchCommand("subagent batch --agent worker --task A --agent reviewer --task B")).toBe(true);
+		expect(isSubagentAsyncLaunchCommand("subagent chain --agent worker --task A --agent reviewer --task B")).toBe(true);
 		expect(isSubagentAsyncLaunchCommand("subagent status 12")).toBe(false);
 	});
 });

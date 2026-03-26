@@ -17,7 +17,7 @@ disable-model-invocation: false
 
 ```jsonc
 // 서브에이전트 시작 (run/batch/chain은 agent명 포함, continue는 "_continue" 플레이스홀더)
-// 집계: batch/chain의 start는 total에 포함 (개별 end 없으므로), run/continue의 start는 집계 제외
+// 집계: subagent_end가 우선이며, end가 없는 legacy/incomplete batch/chain start만 total fallback으로 사용
 { "type": "subagent_start", "ts": "ISO8601", "epoch": 1234567890, "agent": "worker", "mode": "run" }
 
 // 서브에이전트 완료 (집계의 단일 소스)
@@ -57,7 +57,7 @@ cat ~/.pi/agent/state/usage-analytics.jsonl
 
 | 지표 | 계산 방법 |
 |------|----------|
-| **호출 빈도** | `subagent_end` 이벤트 수 + batch/chain의 `subagent_start` 이벤트 수를 agent별로 집계 |
+| **호출 빈도** | `subagent_end` 이벤트 수를 우선 집계하고, 매칭되는 end가 없는 legacy/incomplete batch/chain의 `subagent_start` 이벤트 수만 fallback으로 더함 |
 | **성공/실패 건수** | `subagent_end`의 `status` 필드로 집계 |
 | **에러율** | `error / (done + error) * 100` |
 | **평균 소요시간** | `subagent_end`의 `elapsedMs` 평균 |

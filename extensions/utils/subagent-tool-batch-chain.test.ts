@@ -51,7 +51,7 @@ type ToolCtx = {
 	};
 };
 
-function makeResult(agent: string, task: string, text: string): SingleResult {
+function makeResult(agent: string, task: string, text: string, overrides: Partial<SingleResult> = {}): SingleResult {
 	return {
 		agent,
 		agentSource: "user",
@@ -60,6 +60,7 @@ function makeResult(agent: string, task: string, text: string): SingleResult {
 		messages: [{ role: "assistant", content: [{ type: "text", text }] } as never],
 		stderr: "",
 		usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0, contextTokens: 0, turns: 1 },
+		...overrides,
 	};
 }
 
@@ -109,7 +110,7 @@ describe("createSubagentToolExecute batch/chain grouped behavior", () => {
 		mockUpdateCommandRunsWidget.mockReset();
 		mockDiscoverAgents.mockReturnValue({
 			agents: [
-				{ name: "worker-fast", source: "user", systemPrompt: "" },
+				{ name: "worker", source: "user", systemPrompt: "" },
 				{ name: "reviewer", source: "user", systemPrompt: "" },
 			],
 			projectAgentsDir: null,
@@ -123,7 +124,7 @@ describe("createSubagentToolExecute batch/chain grouped behavior", () => {
 
 	it("emits only grouped batch follow-up and no per-member follow-ups", async () => {
 		mockRunSingleAgent.mockImplementation(async (_cwd: unknown, _agents: unknown, agentName: string, task: string) => {
-			return makeResult(agentName, task, agentName === "worker-fast" ? "NB_A" : "NB_B");
+			return makeResult(agentName, task, agentName === "worker" ? "NB_A" : "NB_B");
 		});
 		const { createSubagentToolExecute } = await loadToolExecute();
 		const store = createStore();
@@ -135,7 +136,7 @@ describe("createSubagentToolExecute batch/chain grouped behavior", () => {
 		const result = await execute(
 			"call-1",
 			{
-				command: 'subagent batch --main --agent worker-fast --task "batch a" --agent reviewer --task "batch b"',
+				command: 'subagent batch --main --agent worker --task "batch a" --agent reviewer --task "batch b"',
 			},
 			undefined,
 			undefined,
@@ -143,21 +144,34 @@ describe("createSubagentToolExecute batch/chain grouped behavior", () => {
 		);
 
 		expect(result.content[0]?.text).toContain("Started async subagent batch");
+		const batchLaunches = result.details.launches ?? [];
+		expect(batchLaunches).toHaveLength(2);
+		expect(batchLaunches[0]).toMatchObject({ agent: "worker", mode: "batch", runId: 1, stepIndex: 0 });
+		expect(batchLaunches[1]).toMatchObject({ agent: "reviewer", mode: "batch", runId: 2, stepIndex: 1 });
+		expect(batchLaunches[0]?.batchId).toBe(batchLaunches[1]?.batchId);
 		await waitForAssertion(() => {
 			expect(sent).toHaveLength(1);
 		});
 		expect(sent[0]?.message.content).toContain("[subagent-batch#");
 		expect(sent[0]?.message.content).toContain("NB_A");
 		expect(sent[0]?.message.content).toContain("NB_B");
-		expect(sent[0]?.message.content).not.toContain("[subagent:worker-fast#");
+		expect(sent[0]?.message.content).not.toContain("[subagent:worker#");
 		expect(sent[0]?.message.content).not.toContain("[subagent:reviewer#");
+		expect(sent[0]?.message.details).toMatchObject({
+			status: "done",
+			runIds: [1, 2],
+			runSummaries: [
+				{ agent: "worker", runId: 1, status: "done", stepIndex: 0 },
+				{ agent: "reviewer", runId: 2, status: "done", stepIndex: 1 },
+			],
+		});
 	});
 
 	it("passes previous-step reference to later chain steps while emitting only grouped follow-up", async () => {
 		const seenTasks: string[] = [];
 		mockRunSingleAgent.mockImplementation(async (_cwd: unknown, _agents: unknown, agentName: string, task: string) => {
 			seenTasks.push(task);
-			return makeResult(agentName, task, agentName === "worker-fast" ? "CHAIN_TOKEN_TEST" : "CHAIN_SEEN_OK");
+			return makeResult(agentName, task, agentName === "worker" ? "CHAIN_TOKEN_TEST" : "CHAIN_SEEN_OK");
 		});
 		const { createSubagentToolExecute } = await loadToolExecute();
 		const store = createStore();
@@ -169,7 +183,7 @@ describe("createSubagentToolExecute batch/chain grouped behavior", () => {
 		const result = await execute(
 			"call-2",
 			{
-				command: 'subagent chain --main --agent worker-fast --task "step one" --agent reviewer --task "step two"',
+				command: 'subagent chain --main --agent worker --task "step one" --agent reviewer --task "step two"',
 			},
 			undefined,
 			undefined,
@@ -177,6 +191,9 @@ describe("createSubagentToolExecute batch/chain grouped behavior", () => {
 		);
 
 		expect(result.content[0]?.text).toContain("Started async subagent chain");
+		const chainLaunches = result.details.launches ?? [];
+		expect(chainLaunches).toHaveLength(1);
+		expect(chainLaunches[0]).toMatchObject({ agent: "worker", mode: "chain", runId: 1, stepIndex: 0 });
 		await waitForAssertion(() => {
 			expect(seenTasks).toHaveLength(2);
 			expect(sent).toHaveLength(1);
@@ -186,7 +203,58 @@ describe("createSubagentToolExecute batch/chain grouped behavior", () => {
 		expect(seenTasks[1]).toContain("[REQUEST — AUTHORITATIVE]\nstep two");
 		expect(sent[0]?.message.content).toContain("[subagent-chain#");
 		expect(sent[0]?.message.content).toContain("CHAIN_SEEN_OK");
-		expect(sent[0]?.message.content).not.toContain("[subagent:worker-fast#");
+		expect(sent[0]?.message.content).not.toContain("[subagent:worker#");
 		expect(sent[0]?.message.content).not.toContain("[subagent:reviewer#");
+		expect(sent[0]?.message.details).toMatchObject({
+			status: "done",
+			stepRunIds: [1, 2],
+			runSummaries: [
+				{ agent: "worker", runId: 1, status: "done", stepIndex: 0 },
+				{ agent: "reviewer", runId: 2, status: "done", stepIndex: 1 },
+			],
+		});
+	});
+
+	it("reports only actually launched chain steps when the first step fails early", async () => {
+		mockRunSingleAgent.mockImplementation(async (_cwd: unknown, _agents: unknown, agentName: string, task: string) => {
+			if (agentName === "worker") {
+				return makeResult(agentName, task, "FIRST_STEP_FAILED", {
+					exitCode: 1,
+					stderr: "boom",
+					messages: [],
+				});
+			}
+			return makeResult(agentName, task, "UNREACHABLE_SECOND_STEP");
+		});
+		const { createSubagentToolExecute } = await loadToolExecute();
+		const store = createStore();
+		const sent: SentCall[] = [];
+		const pi = createPi(sent);
+		const execute = createSubagentToolExecute(pi as never, store);
+		const ctx = createCtx();
+
+		const result = await execute(
+			"call-3",
+			{
+				command: 'subagent chain --main --agent worker --task "step one" --agent reviewer --task "step two"',
+			},
+			undefined,
+			undefined,
+			ctx,
+		);
+
+		const chainLaunches = result.details.launches ?? [];
+		expect(chainLaunches).toHaveLength(1);
+		expect(chainLaunches[0]).toMatchObject({ agent: "worker", mode: "chain", runId: 1, stepIndex: 0 });
+		await waitForAssertion(() => {
+			expect(sent).toHaveLength(1);
+		});
+		expect(sent[0]?.message.content).toContain("[subagent-chain#");
+		expect(sent[0]?.message.content).toContain("Subagent process exited with code 1.");
+		expect(sent[0]?.message.details).toMatchObject({
+			status: "error",
+			stepRunIds: [1],
+			runSummaries: [{ agent: "worker", runId: 1, status: "error", stepIndex: 0 }],
+		});
 	});
 });

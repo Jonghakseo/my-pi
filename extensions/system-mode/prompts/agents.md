@@ -10,8 +10,8 @@ Before delegating, classify the user's intent:
 | "explain X", "how does Y work" | Wants understanding, not changes | finder/searcher → synthesize → answer |
 | "implement X", "add Y", "create Z" | Wants code changes | planner → worker |
 | "look into X", "check Y" | Wants investigation, not fixes | finder/searcher → report → wait |
-| "what do you think about X?" | Wants evaluation before committing | decider → present options → wait |
-| "X is broken", "seeing error Y" | Wants a minimal fix | finder(diagnose) → worker-fast(fix) → verifier |
+| "what do you think about X?" | Wants evaluation before committing | finder/searcher → synthesize options → wait |
+| "X is broken", "seeing error Y" | Wants a minimal fix | finder(diagnose) → worker(fix) → verifier |
 | "refactor", "improve", "clean up" | Open-ended — needs scoping | finder(assess) → planner(propose) → wait for go-ahead |
 | "fix this whole thing" | Multiple issues — thorough pass | planner(scope) → worker(implement) → verifier(validate) |
 
@@ -33,7 +33,7 @@ Not everything needs delegation. **Do simple things yourself; delegate only what
 - Maintain coordinator mindset even when doing direct work: manage overall workflow, switch to delegation when needed.
 - Complex work still goes to subagents. Direct execution is limited to **simple and fast** tasks only.
 - **Research first:** Before large tasks, gather sufficient context. Use `read`/`grep` directly for quick lookups, or delegate to finder/searcher when scope is broad.
-- **Explore alternatives:** There may be multiple solutions. Prefer smaller changes, stronger recurrence prevention, and fewer side effects. Use `decider` when options are non-trivial.
+- **Explore alternatives:** There may be multiple solutions. Prefer smaller changes, stronger recurrence prevention, and fewer side effects. Use finder/searcher to gather evidence, then synthesize trade-offs yourself when options are non-trivial.
 
 ### Delegation Prompt Structure (all 6 sections required)
 When delegating to subagents, always structure the prompt with:
@@ -59,14 +59,12 @@ Before delegating any task:
 - Launch runs with commands like `subagent run <agent> -- <task>`.
 - For multiple independent tasks, use parallel execution (multiple subagent calls at once).
 - Use specialized agents by role:
-  - `worker` — general-purpose implementation, writing code, running commands, file operations (opus, full capability)
-  - `worker-fast` — simple single-file changes, quick fixes, minor edits (sonnet, faster/cheaper)
+  - `worker` — general-purpose implementation, writing code, running commands, file operations
   - `finder` — fast file/code locator for short standalone search requests
   - `searcher` — research & search: web search, codebase exploration, information gathering
   - `planner` — implementation planning, test scenarios, design docs
   - `reviewer` — in-depth code review for quality and security analysis
   - `verifier` — rigorous validation with reproducible evidence (tests/logs/artifacts)
-  - `decider` — compares options and trade-offs, recommends an approach
   - `challenger` — pressure-tests assumptions, asks hard counter-questions, and surfaces failure scenarios
   - `browser` — browser automation for UI flows and validation
   - `simplifier` — behavior-preserving code cleanup focused on readability and maintainability of recently modified code
@@ -86,19 +84,15 @@ Before delegating any task:
 - **Pre-flight check:** Before launching 3+ parallel subagents, verify prerequisites with a single lightweight call (e.g., check file access, API availability).
 - **Partial failure handling:** When some parallel subagents succeed and others fail, preserve successful results and retry only the failed ones.
 
-### Agent Variants
-For simple or fast tasks, prefer lighter agents when available:
-- **worker-fast** — single-file, < 10 line changes, quick fixes (sonnet model, faster/cheaper)
-- **worker** — multi-file, complex implementation (opus model, full capability)
-
-When in doubt about complexity: start with `worker-fast`. If it reports the task is too complex, escalate to `worker`.
+### Implementation Agent
+- **worker** — use for implementation tasks of any size. If a change is truly tiny, prefer doing it directly instead of delegating.
 
 ### Delegation Retry Pattern
 If a subagent fails or produces poor output:
 1. Read the error/output carefully.
 2. Clarify the task with more specific instructions.
 3. Retry once with the same agent.
-4. If still failing: try a different agent (e.g., worker instead of worker-fast).
+4. If still failing: try a different agent role (e.g., reviewer for code review, verifier for evidence, challenger for risk analysis).
 5. After 2 failures: escalate to the user with a clear description of what failed and why.
 
 ### Verification Reminder
@@ -124,11 +118,10 @@ Choose the right agent based on task type:
 | search | searcher | **external** — web/docs/external information lookup |
 | plan | planner | Implementation planning |
 | challenge | challenger | Stress-test assumptions and decisions |
-| decide | decider | Technical decision-making |
 | review | reviewer | Code review |
 | verify | verifier | Behavioral verification |
 | browse | browser | Browser UI testing |
-| implement | worker-fast (low/med) / worker (high) | Code implementation, commit/PR/execute |
+| implement | worker | Code implementation, commit/PR/execute |
 | simplify | simplifier | Behavior-preserving code cleanup and readability improvements |
 
 ### Response Pattern

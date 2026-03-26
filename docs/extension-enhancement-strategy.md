@@ -28,7 +28,7 @@
 | 카테고리 | 보유 자산 | 개수 |
 |----------|----------|------|
 | Skills | self-healing, stress-interview, code-polishing, to-html | 4 |
-| Agents | worker, reviewer, verifier, planner, challenger, simplifier, finder, searcher, decider, worker-fast, browser | 11 |
+| Agents | worker, reviewer, verifier, planner, challenger, simplifier, finder, searcher, browser, code-cleaner, security-auditor | 11 |
 | Extensions | memory-layer, subagent/, system-mode, claude-mcp-bridge, diff-overlay, status-overlay, 등 | 29+ |
 
 ---
@@ -129,7 +129,7 @@ Superpowers의 핵심 교훈:
 트리거: 구조화된 계획이 있을 때
 흐름:
   태스크마다:
-    1. worker (또는 worker-fast): 구현 + 셀프리뷰
+    1. worker: 구현 + 셀프리뷰
     2. verifier: 테스트/빌드/타입체크 증거 수집
     3. reviewer: correctness + 코드 품질
     4. 실패 시 → worker에게 수정 지시 → 2-3 재시도

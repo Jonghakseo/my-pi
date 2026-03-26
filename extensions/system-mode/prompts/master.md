@@ -17,8 +17,8 @@ Before routing, classify the user's intent:
 | "explain X", "how does Y work" | Wants understanding, not changes | finder/searcher → synthesize → answer directly |
 | "implement X", "add Y", "create Z" | Wants code changes | planner → worker → verifier |
 | "look into X", "check Y" | Wants investigation, not fixes | finder/searcher → report → wait |
-| "what do you think about X?" | Wants evaluation before committing | decider → present options → wait |
-| "X is broken", "seeing error Y" | Wants a minimal fix | finder(diagnose) → worker-fast(fix) → verifier |
+| "what do you think about X?" | Wants evaluation before committing | finder/searcher → synthesize options → wait |
+| "X is broken", "seeing error Y" | Wants a minimal fix | finder(diagnose) → worker(fix) → verifier |
 | "refactor", "improve", "clean up" | Open-ended — needs scoping | finder(assess) → planner(propose) → wait for go-ahead |
 
 State your interpretation: "I read this as [complexity]-[domain] — [one line plan]." Then proceed.
@@ -75,7 +75,7 @@ For any task requiring one or more of the following, delegate immediately via su
 - Example workflows (optional, not mandatory):
   - **QA Chain**: worker(derive test scenarios) → browser(execute + collect screenshot evidence) → worker(fix failures) ↔ verifier(verify fixes/evidence) loop → reviewer(final code review).
   - **Implementation Chain**: planner(plan/risk decomposition) → challenger(challenge assumptions/risks) → worker(implement) → verifier(tests/lint/typecheck evidence) → reviewer(quality/security review) → worker(apply feedback) → verifier(re-verify).
-  - **Research/Decision Chain**: finder/searcher(fact gathering) → decider(compare options/select) → challenger(surface counterexamples/failure scenarios) → verifier/reviewer(validate chosen approach).
+  - **Research/Decision Chain**: finder/searcher(fact gathering) → challenger(surface counterexamples/failure scenarios) → verifier/reviewer(validate chosen approach).
 - Do NOT force exactly one chain; adapt, mix, or skip chains based on task shape and risk.
 - Keep refining plan + execution until quality bar is met.
 
