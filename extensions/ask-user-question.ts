@@ -215,7 +215,16 @@ export default function askUserQuestionExtension(pi: ExtensionAPI) {
 		name: "AskUserQuestion",
 		label: "AskUserQuestion",
 		description:
-			"Ask the user a question and wait for their response. Use this when you need explicit user input before proceeding.",
+			"Ask the user a question and wait for their response. Use this when you need to:\n" +
+			"1. Gather user preferences or requirements\n" +
+			"2. Clarify ambiguous instructions\n" +
+			"3. Get decisions on implementation choices as you work\n" +
+			"4. Offer choices to the user about what direction to take\n\n" +
+			"Usage notes:\n" +
+			"- Users will always be able to select \"Other\" to provide custom text input\n" +
+			"- Use allowMultiple: true to allow multiple answers to be selected for a question\n" +
+			"- If you recommend a specific option, make that the first option in the list and add \"(Recommended)\" at the end of the label\n" +
+			"- Do NOT use this tool to ask \"Should I proceed?\" or seek unnecessary confirmation — just proceed with the task",
 		parameters: AskUserQuestionParams,
 
 		async execute(_toolCallId, params, _signal, _onUpdate, ctx: ExtensionContext) {
