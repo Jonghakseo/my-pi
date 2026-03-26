@@ -93,7 +93,67 @@ const WriteParams = Type.Object(
 	{ additionalProperties: true },
 );
 
-const EditParams = getBuiltInTools(process.cwd()).edit.parameters;
+// NOTE: Each schema MUST be a new Type.Object() — not a reference to the built-in's.
+// pi's tool-execution.js uses `definition.parameters === builtInToolDefinition.parameters`
+// (reference equality) to detect "is this the built-in?". If true, the custom renderers
+// defined here are silently skipped and the built-in renderers are used instead.
+
+const EditParams = Type.Object(
+	{
+		path: Type.String({ description: "Path to the file to edit (relative or absolute)" }),
+		oldText: Type.String({ description: "Exact text to find and replace (must match exactly)" }),
+		newText: Type.String({ description: "New text to replace the old text with" }),
+	},
+	{ additionalProperties: true },
+);
+
+const BashParams = Type.Object(
+	{
+		command: Type.String({ description: "Bash command to execute" }),
+		timeout: Type.Optional(Type.Number({ description: "Timeout in seconds (optional, no default timeout)" })),
+	},
+	{ additionalProperties: true },
+);
+
+const FindParams = Type.Object(
+	{
+		pattern: Type.String({
+			description: "Glob pattern to match files, e.g. '*.ts', '**/*.json', or 'src/**/*.spec.ts'",
+		}),
+		path: Type.Optional(Type.String({ description: "Directory to search in (default: current directory)" })),
+		limit: Type.Optional(Type.Number({ description: "Maximum number of results (default: 1000)" })),
+	},
+	{ additionalProperties: true },
+);
+
+const GrepParams = Type.Object(
+	{
+		pattern: Type.String({ description: "Search pattern (regex or literal string)" }),
+		path: Type.Optional(
+			Type.String({ description: "Directory or file to search (default: current directory)" }),
+		),
+		glob: Type.Optional(
+			Type.String({ description: "Filter files by glob pattern, e.g. '*.ts' or '**/*.spec.ts'" }),
+		),
+		ignoreCase: Type.Optional(Type.Boolean({ description: "Case-insensitive search (default: false)" })),
+		literal: Type.Optional(
+			Type.Boolean({ description: "Treat pattern as literal string instead of regex (default: false)" }),
+		),
+		context: Type.Optional(
+			Type.Number({ description: "Number of lines to show before and after each match (default: 0)" }),
+		),
+		limit: Type.Optional(Type.Number({ description: "Maximum number of matches to return (default: 100)" })),
+	},
+	{ additionalProperties: true },
+);
+
+const LsParams = Type.Object(
+	{
+		path: Type.Optional(Type.String({ description: "Directory to list (default: current directory)" })),
+		limit: Type.Optional(Type.Number({ description: "Maximum number of entries to return (default: 500)" })),
+	},
+	{ additionalProperties: true },
+);
 
 type ReadRenderDetails = {
 	mode: "single-read" | "multi-read";
@@ -552,7 +612,7 @@ export default function (pi: ExtensionAPI) {
 		label: "bash",
 		description:
 			"Execute a bash command in the current working directory. Returns stdout and stderr. Output is truncated to last 2000 lines or 50KB (whichever is hit first). If truncated, full output is saved to a temp file. Optionally provide a timeout in seconds.",
-		parameters: getBuiltInTools(process.cwd()).bash.parameters,
+		parameters: BashParams,
 
 		async execute(toolCallId, params, signal, onUpdate, ctx) {
 			return getBuiltInTools(ctx.cwd).bash.execute(toolCallId, params, signal, onUpdate);
@@ -722,7 +782,7 @@ export default function (pi: ExtensionAPI) {
 		label: "find",
 		description:
 			"Find files by name pattern (glob). Searches recursively from the specified path. Output limited to 200 results.",
-		parameters: getBuiltInTools(process.cwd()).find.parameters,
+		parameters: FindParams,
 
 		async execute(toolCallId, params, signal, onUpdate, ctx) {
 			return getBuiltInTools(ctx.cwd).find.execute(toolCallId, params, signal, onUpdate);
@@ -757,7 +817,7 @@ export default function (pi: ExtensionAPI) {
 		label: "grep",
 		description:
 			"Search file contents by regex pattern. Uses ripgrep for fast searching. Output limited to 200 matches.",
-		parameters: getBuiltInTools(process.cwd()).grep.parameters,
+		parameters: GrepParams,
 
 		async execute(toolCallId, params, signal, onUpdate, ctx) {
 			return getBuiltInTools(ctx.cwd).grep.execute(toolCallId, params, signal, onUpdate);
@@ -793,7 +853,7 @@ export default function (pi: ExtensionAPI) {
 		label: "ls",
 		description:
 			"List directory contents with file sizes. Shows files and directories with their sizes. Output limited to 500 entries.",
-		parameters: getBuiltInTools(process.cwd()).ls.parameters,
+		parameters: LsParams,
 
 		async execute(toolCallId, params, signal, onUpdate, ctx) {
 			return getBuiltInTools(ctx.cwd).ls.execute(toolCallId, params, signal, onUpdate);
