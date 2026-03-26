@@ -6,11 +6,11 @@
 
 **A personal AI operating system built on [pi](https://github.com/mariozechner/pi-coding-agent)**
 
-*11 specialized agents · 25+ extensions · one developer's opinionated setup*
+*13 specialized agents · 25+ extensions · one developer's opinionated setup*
 
 <br/>
 
-`🤖 11 Agents` &nbsp; `🧩 25+ Extensions` &nbsp; `🎨 5 Themes`
+`🤖 13 Agents` &nbsp; `🧩 25+ Extensions` &nbsp; `🎨 7 Themes`
 
 <br/>
 
@@ -39,7 +39,7 @@ The system is organized in **four layers**:
 |---|---|
 | **User / pi TUI** | Interactive terminal interface |
 | **Extensions** | 25+ TypeScript plugins — subagent management, voice I/O, MCP bridge, UI overlays, safety guards |
-| **Agent Orchestra** | 11 purpose-built agents with distinct models and roles |
+| **Agent Orchestra** | 13 specialized agent definitions with distinct roles and models |
 | **Infrastructure** | MCP tool integrations via [claude-mcp-bridge](./extensions/claude-mcp-bridge/) — reuses your existing Claude Code MCP setup (Jira, Slack, Gmail, Calendar, GA4, Figma, DB, etc.) |
 
 ---
@@ -50,7 +50,7 @@ The system is organized in **four layers**:
   <img src="./tmp/agents.en.svg" alt="Agent Orchestra" width="800"/>
 </p>
 
-Eleven agents, three models, one orchestrator. Each agent has a specific mandate, its own system prompt, and a model chosen for its strengths:
+The current setup has 13 agent definitions, three models, and one orchestrator:
 
 | Agent | Model | Role | When to Use |
 |---|---|---|---|
@@ -59,9 +59,11 @@ Eleven agents, three models, one orchestrator. Each agent has a specific mandate
 | 🏃 **worker-fast** | `openai-codex/gpt-5.4` | Lightweight simple executor | Single-file edits, quick changes |
 | 📐 **planner** | `anthropic/claude-opus-4-6` | Implementation architect | Breaking down complex tasks |
 | ✨ **simplifier** | `anthropic/claude-sonnet-4-6` | Code simplification specialist | Clean up recently modified code, improve readability, preserve behavior |
+| 🧹 **code-cleaner** | `openai-codex/gpt-5.4` | Code cleanup analyst | Find cleanup opportunities and quality issues |
 | 🔎 **reviewer** | `openai-codex/gpt-5.4` | Code review (P0–P3 severity) | PR reviews, quality checks |
 | 🥊 **challenger** | `openai-codex/gpt-5.4` | Pressure tester | Stress-test plans before execution |
 | ✅ **verifier** | `anthropic/claude-opus-4-6` | 3-tier evidence validation | Verify claims, check correctness |
+| 🔐 **security-auditor** | `openai-codex/gpt-5.4` | Security reviewer | Focused vulnerability reviews |
 | ⚖️ **decider** | `openai-codex/gpt-5.4` | Technical decision maker | Architecture choices, trade-offs |
 | 🌐 **searcher** | `anthropic/claude-sonnet-4-6` | Research & web search | Documentation lookup, exploration |
 | 🖥️ **browser** | `openai-codex/gpt-5.4` | Browser automation & UI testing | E2E testing, visual verification |
@@ -81,20 +83,20 @@ The orchestrator (main agent) runs on `anthropic/claude-opus-4-6`, ensuring stro
 
 ## 🧩 Extensions
 
-Over 25 custom TypeScript extensions organized by domain:
+Here are representative items from the 25+ custom TypeScript extensions, grouped by domain:
 
 ### Core System
 
 | Extension | Description |
 |---|---|
-| **subagent/** | Multi-agent delegation engine — spawns sub-pi processes, manages concurrent runs with pixel-art status widget, hang detection, and automatic cleanup |
+| **subagent/** | Multi-agent delegation engine — spawns sub-`pi` processes, manages runs with a below-editor status widget, and handles follow-up/cleanup |
 | **system-mode/** | Toggle "Master mode" (delegation-only orchestrator) vs normal hands-on mode |
 | **claude-mcp-bridge/** | Reuses Claude Code's MCP server configurations — zero-duplication setup |
 | **cross-agent.ts** | Load agent definitions from `.claude/`, `.gemini/`, `.codex/` directories |
-| **memory-layer/** | Persistent memory system across sessions |
 | **dynamic-agents-md.ts** | Dynamically loads AGENTS.md at runtime to enforce edit/write scope restrictions |
 | **escalate-tool.ts** | Escalation tool for subagents to signal the master when judgment is needed |
 | **claude-hooks-bridge.ts** | Bridge connecting Claude Code hook events to Pi sessions |
+| **memory-layer/** | Persistent memory system across sessions |
 
 ### UI / UX
 
@@ -108,21 +110,25 @@ Over 25 custom TypeScript extensions organized by domain:
 | **diff-overlay.ts** | `/diff` — split-pane git diff viewer overlay |
 | **github-overlay.ts** | GitHub PR view directly in the terminal |
 | **status-overlay.ts** | `/status` — extension and skill status dashboard |
-| **override-builtin-tools.ts** | Collapse/expand verbose tool output for cleaner sessions |
 | **files.ts** | `/files` — git tree file browser with open/edit/diff quick actions |
+| **fork-panel.ts** | `/fork-panel` — fork the current session into a new Ghostty split panel |
+| **generative-ui/** | `visualize_read_me`, `show_widget` — native visual widgets and renderers |
+| **override-builtin-tools.ts** | Collapse/expand verbose tool output for cleaner sessions |
 
 ### Developer Tools
 
 | Extension | Description |
 |---|---|
-| **todo-write.ts** | Task management — todo_write tool, persistent storage, TUI rendering |
+| **todo-write.ts** | Task management — `todo_write` tool, persistent storage, TUI rendering |
 | **session-replay.ts** | `/replay` — browse and replay past sessions |
 | **auto-name.ts** | Auto-detect session name from first user message |
 | **upload-image-url.ts** | Upload images to GitHub CDN for embedding |
+| **clipboard.ts** | Copy text to clipboard via OSC52 escape sequences |
 | **ask-user-question.ts** | Interactive question tool with predefined options |
 | **delayed-action.ts** | Schedule deferred actions |
+| **until.ts** | `/until`, `until_report` — repeat work until a condition is met |
+| **usage-analytics.ts** | `/analytics` — subagent and skill usage analytics overlay |
 | **archive-to-html.ts** | Auto-archive HTML files generated by the to-html skill to `~/Documents` |
-| **clipboard.ts** | Copy text to clipboard via OSC52 escape sequences |
 
 ### Safety
 
@@ -168,9 +174,11 @@ retest    = browser("verify fixes with screenshots")
 final     = reviewer("review all changes")
 ```
 
-### `/name` — Session Name
+---
 
-Set or inspect the session name manually. Auto-detected from the first user message; can also be changed manually.
+## 🏷️ Session Name
+
+`/name` is a built-in command, not a prompt template.
 
 ```
 /name <session name>   # set name
@@ -181,12 +189,14 @@ Set or inspect the session name manually. Auto-detected from the first user mess
 
 ## 🎨 Themes
 
-Five hand-picked themes, hot-swappable with `Ctrl+X`:
+The setup currently ships with 7 themes, hot-swappable with `Ctrl+X`:
 
 | Theme | Style |
 |---|---|
-| **nord** *(active)* | Arctic, clean blues and frost tones |
+| **nord** *(default)* | Arctic, clean blues and frost tones |
 | **catppuccin-mocha** | Warm pastels on dark chocolate |
+| **darcula** | Deep JetBrains-style dark tones |
+| **dracula** | Higher-contrast purple-toned dark theme |
 | **gruvbox** | Retro warm tones, easy on the eyes |
 | **midnight-ocean** | Deep sea blues and teals |
 | **rose-pine** | Muted, elegant rose tones |
@@ -201,6 +211,8 @@ Five hand-picked themes, hot-swappable with `Ctrl+X`:
 | `Ctrl+X` | Cycle themes |
 | `Ctrl+Q` | Cycle themes backward |
 | `Ctrl+Shift+O` | Open file browser |
+| `Ctrl+Shift+F` | Reveal the latest file reference in Finder |
+| `Ctrl+Shift+R` | Quick Look the latest file reference |
 | `Ctrl+O` | Toggle tool output collapse/expand |
 | `Option+V` | Voice input (dictation + TTS) |
 
@@ -241,8 +253,8 @@ This is not a demo project. It's a **living configuration** used daily for produ
 | Metric | Value |
 |---|---|
 | Active extensions | 25+ |
-| Agent definitions | 11 |
-| Themes | 5 |
+| Agent definitions | 13 |
+| Themes | 7 |
 
 ---
 
