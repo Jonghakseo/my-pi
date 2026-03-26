@@ -58,22 +58,6 @@ const TODO_PRIORITY_LABEL: Record<TodoPriority, string> = {
 	low: "하",
 };
 
-/**
- * Special-character shortcuts for the >> prefix input.
- * `>>/ task` → finder, `>>? task` → searcher, etc.
- */
-export const AGENT_SYMBOL_MAP: Record<string, string> = {
-	"/": "finder",
-	"?": "searcher",
-	"#": "planner",
-	"*": "reviewer",
-	"+": "verifier",
-	"%": "challenger",
-	"!": "challenger",
-	"@": "browser",
-	$: "simplifier",
-};
-
 /** Vibrant ANSI-256 foreground colors for per-agent name coloring. */
 export const AGENT_NAME_PALETTE = [39, 208, 114, 204, 220, 141, 81, 209, 156, 177];
 
@@ -245,13 +229,6 @@ export function formatCommandRunSummary(run: CommandRunSummaryInput): string {
 	const elapsedSec = Math.max(0, Math.round(run.elapsedMs / 1000));
 	const contextLabel = run.contextMode === "main" ? "main" : "isolated";
 	return `#${run.id} [${run.status}] ${run.agent} ctx:${contextLabel} turn:${run.turnCount ?? 1} ${elapsedSec}s tools:${run.toolCalls}`;
-}
-
-/** Format symbol hints for display, e.g. ">>/ finder  >>? searcher  >># planner ..." */
-export function formatSymbolHints(prefix = ">>"): string {
-	return Object.entries(AGENT_SYMBOL_MAP)
-		.map(([sym, agent]) => `${prefix}${sym} ${agent}`)
-		.join("  ");
 }
 
 /** Format a list of agents for display. */

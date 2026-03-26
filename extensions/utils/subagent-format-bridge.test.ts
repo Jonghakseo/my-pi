@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
-	AGENT_SYMBOL_MAP as SUBAGENT_SYMBOL_MAP,
+	AGENT_SYMBOL_MAP,
+	formatSymbolHints,
 	formatSymbolHints as subagentFormatSymbolHints,
 } from "../subagent/constants.js";
 import {
@@ -19,10 +20,8 @@ import {
 } from "../subagent/format.js";
 import {
 	AGENT_NAME_PALETTE,
-	AGENT_SYMBOL_MAP,
 	agentBgIndex,
 	formatContextUsageBar,
-	formatSymbolHints,
 	formatTokens,
 	formatUsageStats,
 	getContextBarColorByRemaining,
@@ -57,9 +56,23 @@ describe("subagent format bridges", () => {
 	});
 });
 
-describe("subagent constants bridges", () => {
-	it("reuses symbol map and formatter from format-utils", () => {
-		expect(SUBAGENT_SYMBOL_MAP).toEqual(AGENT_SYMBOL_MAP);
+describe("subagent constants", () => {
+	it("AGENT_SYMBOL_MAP contains expected agents", () => {
+		expect(AGENT_SYMBOL_MAP["/"]).toBe("finder");
+		expect(AGENT_SYMBOL_MAP["!"]).toBe("challenger");
+		expect(AGENT_SYMBOL_MAP["%"]).toBeUndefined();
+	});
+
+	it("formatSymbolHints uses default and custom prefix", () => {
+		const result = formatSymbolHints();
+		expect(result).toContain(">>/ finder");
+		expect(result).toContain(">>! challenger");
+
+		const custom = formatSymbolHints(">>>");
+		expect(custom).toContain(">>>/ finder");
+	});
+
+	it("subagentFormatSymbolHints is the same function", () => {
 		expect(subagentFormatSymbolHints()).toBe(formatSymbolHints());
 		expect(subagentFormatSymbolHints(">>>")).toBe(formatSymbolHints(">>>"));
 	});
