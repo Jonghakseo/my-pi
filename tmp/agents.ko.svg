@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 700" width="1200" height="700">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 760" width="1200" height="760">
   <defs>
     <filter id="aglow">
       <feGaussianBlur stdDeviation="3" result="blur"/>
@@ -14,132 +14,129 @@
     </radialGradient>
   </defs>
 
-  <rect width="1200" height="700" fill="url(#abgGrad)" rx="12"/>
-  <circle cx="600" cy="350" r="250" fill="url(#centerGlow)"/>
-
-  <text x="600" y="35" text-anchor="middle" fill="#e6edf3" font-family="monospace, 'Noto Sans KR', sans-serif" font-size="18" font-weight="bold">🤖 에이전트 오케스트라 (11개)</text>
+  <rect width="1200" height="760" fill="url(#abgGrad)" rx="12"/>
+  <circle cx="600" cy="380" r="275" fill="url(#centerGlow)"/>
+  <text x="600" y="36" text-anchor="middle" fill="#e6edf3" font-family="monospace, 'Noto Sans KR', sans-serif" font-size="18" font-weight="bold">🤖 에이전트 오케스트라 (11개)</text>
 
   <g stroke="#21262d" stroke-width="1.5" stroke-dasharray="4,4" opacity="0.5">
-    <line x1="600" y1="350" x2="150" y2="140"/>
-    <line x1="600" y1="350" x2="380" y2="140"/>
-    <line x1="600" y1="350" x2="600" y2="140"/>
-    <line x1="600" y1="350" x2="820" y2="140"/>
-    <line x1="600" y1="350" x2="1050" y2="140"/>
-    <line x1="600" y1="350" x2="100" y2="350"/>
-    <line x1="600" y1="350" x2="1100" y2="350"/>
-    <line x1="600" y1="350" x2="200" y2="560"/>
-    <line x1="600" y1="350" x2="480" y2="560"/>
-    <line x1="600" y1="350" x2="720" y2="560"/>
-    <line x1="600" y1="350" x2="1000" y2="560"/>
+    <line x1="600" y1="350" x2="130" y2="126"/>
+    <line x1="600" y1="350" x2="375" y2="126"/>
+    <line x1="600" y1="350" x2="620" y2="126"/>
+    <line x1="600" y1="350" x2="865" y2="126"/>
+    <line x1="600" y1="350" x2="140" y2="351"/>
+    <line x1="600" y1="350" x2="1060" y2="351"/>
+    <line x1="600" y1="350" x2="120" y2="581"/>
+    <line x1="600" y1="350" x2="350" y2="581"/>
+    <line x1="600" y1="350" x2="580" y2="581"/>
+    <line x1="600" y1="350" x2="810" y2="581"/>
+    <line x1="600" y1="350" x2="1040" y2="581"/>
   </g>
 
-  <rect x="495" y="310" width="210" height="80" rx="12" fill="rgba(230,237,243,0.08)" stroke="#e6edf3" stroke-width="2" filter="url(#aglow)"/>
-  <text x="600" y="340" text-anchor="middle" fill="#e6edf3" font-family="monospace, 'Noto Sans KR', sans-serif" font-size="14" font-weight="bold">메인 오케스트레이터</text>
-  <text x="600" y="360" text-anchor="middle" fill="#8b949e" font-family="monospace, 'Noto Sans KR', sans-serif" font-size="9">openai-codex/gpt-5.4</text>
+  <rect x="470" y="304" width="260" height="92" rx="12" fill="rgba(210,168,255,0.12)" stroke="#d2a8ff" stroke-width="2" filter="url(#aglow)"/>
+  <text x="600" y="338" text-anchor="middle" fill="#e6edf3" font-family="monospace, 'Noto Sans KR', sans-serif" font-size="15" font-weight="bold">메인 오케스트레이터</text>
+  <text x="600" y="360" text-anchor="middle" fill="#8b949e" font-family="monospace, 'Noto Sans KR', sans-serif" font-size="9">anthropic/claude-opus-4-6</text>
+  <text x="600" y="381" text-anchor="middle" fill="#e6edf3" font-family="monospace, 'Noto Sans KR', sans-serif" font-size="10">위임 · 라우팅 · 검증</text>
 
-  <!-- Top row -->
-  <g transform="translate(50, 80)">
-    <rect width="200" height="80" rx="10" fill="rgba(240,136,62,0.08)" stroke="#f0883e" stroke-width="1.5"/>
-    <text x="100" y="22" text-anchor="middle" fill="#f0883e" font-family="monospace, 'Noto Sans KR', sans-serif" font-size="13" font-weight="bold">🔍 finder</text>
-    <text x="100" y="40" text-anchor="middle" fill="#8b949e" font-family="monospace, 'Noto Sans KR', sans-serif" font-size="7">openai-codex/gpt-5.4</text>
-    <text x="100" y="56" text-anchor="middle" fill="#e6edf3" font-family="monospace, 'Noto Sans KR', sans-serif" font-size="9">빠른 파일·코드</text>
-    <text x="100" y="70" text-anchor="middle" fill="#e6edf3" font-family="monospace, 'Noto Sans KR', sans-serif" font-size="9">탐색</text>
-    <circle cx="185" cy="14" r="5" fill="#f0883e" opacity="0.8"/>
+  <g transform="translate(30, 80)">
+    <rect width="200" height="92" rx="10" fill="rgba(88,166,255,0.08)" stroke="#58a6ff" stroke-width="1.5"/>
+    <text x="100" y="23" text-anchor="middle" fill="#58a6ff" font-family="monospace, 'Noto Sans KR', sans-serif" font-size="12.5" font-weight="bold">🔍 finder</text>
+    <text x="100" y="42" text-anchor="middle" fill="#8b949e" font-family="monospace, 'Noto Sans KR', sans-serif" font-size="7">anthropic/claude-sonnet-4-6</text>
+    <text x="100" y="62" text-anchor="middle" fill="#e6edf3" font-family="monospace, 'Noto Sans KR', sans-serif" font-size="9">빠른 파일·코드</text>
+    <text x="100" y="77" text-anchor="middle" fill="#e6edf3" font-family="monospace, 'Noto Sans KR', sans-serif" font-size="9">탐색</text>
+    <circle cx="185" cy="15" r="5" fill="#58a6ff" opacity="0.85"/>
   </g>
 
-  <g transform="translate(280, 80)">
-    <rect width="200" height="80" rx="10" fill="rgba(240,136,62,0.08)" stroke="#f0883e" stroke-width="1.5"/>
-    <text x="100" y="22" text-anchor="middle" fill="#f0883e" font-family="monospace, 'Noto Sans KR', sans-serif" font-size="13" font-weight="bold">🏃 worker-fast</text>
-    <text x="100" y="40" text-anchor="middle" fill="#8b949e" font-family="monospace, 'Noto Sans KR', sans-serif" font-size="7">openai-codex/gpt-5.4</text>
-    <text x="100" y="56" text-anchor="middle" fill="#e6edf3" font-family="monospace, 'Noto Sans KR', sans-serif" font-size="9">경량 단순</text>
-    <text x="100" y="70" text-anchor="middle" fill="#e6edf3" font-family="monospace, 'Noto Sans KR', sans-serif" font-size="9">작업</text>
-    <circle cx="185" cy="14" r="5" fill="#f0883e" opacity="0.8"/>
+  <g transform="translate(275, 80)">
+    <rect width="200" height="92" rx="10" fill="rgba(240,136,62,0.08)" stroke="#f0883e" stroke-width="1.5"/>
+    <text x="100" y="23" text-anchor="middle" fill="#f0883e" font-family="monospace, 'Noto Sans KR', sans-serif" font-size="12.5" font-weight="bold">⚡ worker</text>
+    <text x="100" y="42" text-anchor="middle" fill="#8b949e" font-family="monospace, 'Noto Sans KR', sans-serif" font-size="7">openai-codex/gpt-5.4</text>
+    <text x="100" y="62" text-anchor="middle" fill="#e6edf3" font-family="monospace, 'Noto Sans KR', sans-serif" font-size="9">범용 작업</text>
+    <text x="100" y="77" text-anchor="middle" fill="#e6edf3" font-family="monospace, 'Noto Sans KR', sans-serif" font-size="9">실행기</text>
+    <circle cx="185" cy="15" r="5" fill="#f0883e" opacity="0.85"/>
   </g>
 
-  <g transform="translate(500, 80)">
-    <rect width="200" height="80" rx="10" fill="rgba(210,168,255,0.10)" stroke="#d2a8ff" stroke-width="1.5"/>
-    <text x="100" y="22" text-anchor="middle" fill="#d2a8ff" font-family="monospace, 'Noto Sans KR', sans-serif" font-size="13" font-weight="bold">⚡ worker</text>
-    <text x="100" y="40" text-anchor="middle" fill="#8b949e" font-family="monospace, 'Noto Sans KR', sans-serif" font-size="7">anthropic/claude-opus-4-6</text>
-    <text x="100" y="56" text-anchor="middle" fill="#e6edf3" font-family="monospace, 'Noto Sans KR', sans-serif" font-size="9">범용 작업</text>
-    <text x="100" y="70" text-anchor="middle" fill="#e6edf3" font-family="monospace, 'Noto Sans KR', sans-serif" font-size="9">실행기</text>
-    <circle cx="185" cy="14" r="5" fill="#d2a8ff" opacity="0.85"/>
+  <g transform="translate(520, 80)">
+    <rect width="200" height="92" rx="10" fill="rgba(210,168,255,0.10)" stroke="#d2a8ff" stroke-width="1.5"/>
+    <text x="100" y="23" text-anchor="middle" fill="#d2a8ff" font-family="monospace, 'Noto Sans KR', sans-serif" font-size="12.5" font-weight="bold">📐 planner</text>
+    <text x="100" y="42" text-anchor="middle" fill="#8b949e" font-family="monospace, 'Noto Sans KR', sans-serif" font-size="7">anthropic/claude-opus-4-6</text>
+    <text x="100" y="62" text-anchor="middle" fill="#e6edf3" font-family="monospace, 'Noto Sans KR', sans-serif" font-size="9">구현</text>
+    <text x="100" y="77" text-anchor="middle" fill="#e6edf3" font-family="monospace, 'Noto Sans KR', sans-serif" font-size="9">설계자</text>
+    <circle cx="185" cy="15" r="5" fill="#d2a8ff" opacity="0.85"/>
   </g>
 
-  <g transform="translate(720, 80)">
-    <rect width="200" height="80" rx="10" fill="rgba(210,168,255,0.10)" stroke="#d2a8ff" stroke-width="1.5"/>
-    <text x="100" y="22" text-anchor="middle" fill="#d2a8ff" font-family="monospace, 'Noto Sans KR', sans-serif" font-size="13" font-weight="bold">📐 planner</text>
-    <text x="100" y="40" text-anchor="middle" fill="#8b949e" font-family="monospace, 'Noto Sans KR', sans-serif" font-size="7">anthropic/claude-opus-4-6</text>
-    <text x="100" y="56" text-anchor="middle" fill="#e6edf3" font-family="monospace, 'Noto Sans KR', sans-serif" font-size="9">구현</text>
-    <text x="100" y="70" text-anchor="middle" fill="#e6edf3" font-family="monospace, 'Noto Sans KR', sans-serif" font-size="9">설계자</text>
-    <circle cx="185" cy="14" r="5" fill="#d2a8ff" opacity="0.85"/>
+  <g transform="translate(765, 80)">
+    <rect width="200" height="92" rx="10" fill="rgba(240,136,62,0.08)" stroke="#f0883e" stroke-width="1.5"/>
+    <text x="100" y="23" text-anchor="middle" fill="#f0883e" font-family="monospace, 'Noto Sans KR', sans-serif" font-size="12.5" font-weight="bold">🖥️ browser</text>
+    <text x="100" y="42" text-anchor="middle" fill="#8b949e" font-family="monospace, 'Noto Sans KR', sans-serif" font-size="7">openai-codex/gpt-5.4</text>
+    <text x="100" y="62" text-anchor="middle" fill="#e6edf3" font-family="monospace, 'Noto Sans KR', sans-serif" font-size="9">브라우저 자동화</text>
+    <text x="100" y="77" text-anchor="middle" fill="#e6edf3" font-family="monospace, 'Noto Sans KR', sans-serif" font-size="9">UI 테스트</text>
+    <circle cx="185" cy="15" r="5" fill="#f0883e" opacity="0.85"/>
   </g>
 
-  <g transform="translate(950, 80)">
-    <rect width="200" height="80" rx="10" fill="rgba(240,136,62,0.08)" stroke="#f0883e" stroke-width="1.5"/>
-    <text x="100" y="22" text-anchor="middle" fill="#f0883e" font-family="monospace, 'Noto Sans KR', sans-serif" font-size="13" font-weight="bold">🖥️ browser</text>
-    <text x="100" y="40" text-anchor="middle" fill="#8b949e" font-family="monospace, 'Noto Sans KR', sans-serif" font-size="7">openai-codex/gpt-5.4</text>
-    <text x="100" y="56" text-anchor="middle" fill="#e6edf3" font-family="monospace, 'Noto Sans KR', sans-serif" font-size="9">브라우저</text>
-    <text x="100" y="70" text-anchor="middle" fill="#e6edf3" font-family="monospace, 'Noto Sans KR', sans-serif" font-size="9">자동화</text>
-    <circle cx="185" cy="14" r="5" fill="#f0883e" opacity="0.8"/>
+  <g transform="translate(40, 305)">
+    <rect width="200" height="92" rx="10" fill="rgba(88,166,255,0.08)" stroke="#58a6ff" stroke-width="1.5"/>
+    <text x="100" y="23" text-anchor="middle" fill="#58a6ff" font-family="monospace, 'Noto Sans KR', sans-serif" font-size="12.5" font-weight="bold">🌐 searcher</text>
+    <text x="100" y="42" text-anchor="middle" fill="#8b949e" font-family="monospace, 'Noto Sans KR', sans-serif" font-size="7">anthropic/claude-sonnet-4-6</text>
+    <text x="100" y="62" text-anchor="middle" fill="#e6edf3" font-family="monospace, 'Noto Sans KR', sans-serif" font-size="9">리서치·웹</text>
+    <text x="100" y="77" text-anchor="middle" fill="#e6edf3" font-family="monospace, 'Noto Sans KR', sans-serif" font-size="9">검색</text>
+    <circle cx="185" cy="15" r="5" fill="#58a6ff" opacity="0.85"/>
   </g>
 
-  <!-- Middle row -->
-  <g transform="translate(0, 305)">
-    <rect width="200" height="80" rx="10" fill="rgba(88,166,255,0.08)" stroke="#58a6ff" stroke-width="1.5"/>
-    <text x="100" y="22" text-anchor="middle" fill="#58a6ff" font-family="monospace, 'Noto Sans KR', sans-serif" font-size="13" font-weight="bold">🌐 searcher</text>
-    <text x="100" y="40" text-anchor="middle" fill="#8b949e" font-family="monospace, 'Noto Sans KR', sans-serif" font-size="7">anthropic/claude-sonnet-4-6</text>
-    <text x="100" y="56" text-anchor="middle" fill="#e6edf3" font-family="monospace, 'Noto Sans KR', sans-serif" font-size="9">웹 리서치</text>
-    <text x="100" y="70" text-anchor="middle" fill="#e6edf3" font-family="monospace, 'Noto Sans KR', sans-serif" font-size="9">· 조사</text>
-    <circle cx="185" cy="14" r="5" fill="#58a6ff" opacity="0.8"/>
+  <g transform="translate(960, 305)">
+    <rect width="200" height="92" rx="10" fill="rgba(240,136,62,0.08)" stroke="#f0883e" stroke-width="1.5"/>
+    <text x="100" y="23" text-anchor="middle" fill="#f0883e" font-family="monospace, 'Noto Sans KR', sans-serif" font-size="12.5" font-weight="bold">🔎 reviewer</text>
+    <text x="100" y="42" text-anchor="middle" fill="#8b949e" font-family="monospace, 'Noto Sans KR', sans-serif" font-size="7">openai-codex/gpt-5.4</text>
+    <text x="100" y="62" text-anchor="middle" fill="#e6edf3" font-family="monospace, 'Noto Sans KR', sans-serif" font-size="9">코드 리뷰</text>
+    <text x="100" y="77" text-anchor="middle" fill="#e6edf3" font-family="monospace, 'Noto Sans KR', sans-serif" font-size="9">P0–P3</text>
+    <circle cx="185" cy="15" r="5" fill="#f0883e" opacity="0.85"/>
   </g>
 
-  <g transform="translate(1000, 305)">
-    <rect width="200" height="80" rx="10" fill="rgba(240,136,62,0.08)" stroke="#f0883e" stroke-width="1.5"/>
-    <text x="100" y="22" text-anchor="middle" fill="#f0883e" font-family="monospace, 'Noto Sans KR', sans-serif" font-size="13" font-weight="bold">🔎 reviewer</text>
-    <text x="100" y="40" text-anchor="middle" fill="#8b949e" font-family="monospace, 'Noto Sans KR', sans-serif" font-size="7">openai-codex/gpt-5.4</text>
-    <text x="100" y="56" text-anchor="middle" fill="#e6edf3" font-family="monospace, 'Noto Sans KR', sans-serif" font-size="9">코드</text>
-    <text x="100" y="70" text-anchor="middle" fill="#e6edf3" font-family="monospace, 'Noto Sans KR', sans-serif" font-size="9">리뷰</text>
-    <circle cx="185" cy="14" r="5" fill="#f0883e" opacity="0.8"/>
+  <g transform="translate(20, 535)">
+    <rect width="200" height="92" rx="10" fill="rgba(240,136,62,0.08)" stroke="#f0883e" stroke-width="1.5"/>
+    <text x="100" y="23" text-anchor="middle" fill="#f0883e" font-family="monospace, 'Noto Sans KR', sans-serif" font-size="11.2" font-weight="bold">🧹 code-cleaner</text>
+    <text x="100" y="42" text-anchor="middle" fill="#8b949e" font-family="monospace, 'Noto Sans KR', sans-serif" font-size="7">openai-codex/gpt-5.4</text>
+    <text x="100" y="62" text-anchor="middle" fill="#e6edf3" font-family="monospace, 'Noto Sans KR', sans-serif" font-size="9">코드 정리</text>
+    <text x="100" y="77" text-anchor="middle" fill="#e6edf3" font-family="monospace, 'Noto Sans KR', sans-serif" font-size="9">분석</text>
+    <circle cx="185" cy="15" r="5" fill="#f0883e" opacity="0.85"/>
   </g>
 
-  <!-- Bottom row -->
-  <g transform="translate(100, 505)">
-    <rect width="200" height="80" rx="10" fill="rgba(240,136,62,0.08)" stroke="#f0883e" stroke-width="1.5"/>
-    <text x="100" y="22" text-anchor="middle" fill="#f0883e" font-family="monospace, 'Noto Sans KR', sans-serif" font-size="13" font-weight="bold">🥊 challenger</text>
-    <text x="100" y="40" text-anchor="middle" fill="#8b949e" font-family="monospace, 'Noto Sans KR', sans-serif" font-size="7">openai-codex/gpt-5.4</text>
-    <text x="100" y="56" text-anchor="middle" fill="#e6edf3" font-family="monospace, 'Noto Sans KR', sans-serif" font-size="9">스트레스</text>
-    <text x="100" y="70" text-anchor="middle" fill="#e6edf3" font-family="monospace, 'Noto Sans KR', sans-serif" font-size="9">테스터</text>
-    <circle cx="185" cy="14" r="5" fill="#f0883e" opacity="0.8"/>
+  <g transform="translate(250, 535)">
+    <rect width="200" height="92" rx="10" fill="rgba(240,136,62,0.08)" stroke="#f0883e" stroke-width="1.5"/>
+    <text x="100" y="23" text-anchor="middle" fill="#f0883e" font-family="monospace, 'Noto Sans KR', sans-serif" font-size="11.6" font-weight="bold">🥊 challenger</text>
+    <text x="100" y="42" text-anchor="middle" fill="#8b949e" font-family="monospace, 'Noto Sans KR', sans-serif" font-size="7">openai-codex/gpt-5.4</text>
+    <text x="100" y="62" text-anchor="middle" fill="#e6edf3" font-family="monospace, 'Noto Sans KR', sans-serif" font-size="9">스트레스</text>
+    <text x="100" y="77" text-anchor="middle" fill="#e6edf3" font-family="monospace, 'Noto Sans KR', sans-serif" font-size="9">테스터</text>
+    <circle cx="185" cy="15" r="5" fill="#f0883e" opacity="0.85"/>
   </g>
 
-  <g transform="translate(380, 505)">
-    <rect width="200" height="80" rx="10" fill="rgba(210,168,255,0.10)" stroke="#d2a8ff" stroke-width="1.5"/>
-    <text x="100" y="22" text-anchor="middle" fill="#d2a8ff" font-family="monospace, 'Noto Sans KR', sans-serif" font-size="13" font-weight="bold">✅ verifier</text>
-    <text x="100" y="40" text-anchor="middle" fill="#8b949e" font-family="monospace, 'Noto Sans KR', sans-serif" font-size="7">anthropic/claude-opus-4-6</text>
-    <text x="100" y="56" text-anchor="middle" fill="#e6edf3" font-family="monospace, 'Noto Sans KR', sans-serif" font-size="9">3단계</text>
-    <text x="100" y="70" text-anchor="middle" fill="#e6edf3" font-family="monospace, 'Noto Sans KR', sans-serif" font-size="9">검증</text>
-    <circle cx="185" cy="14" r="5" fill="#d2a8ff" opacity="0.85"/>
+  <g transform="translate(480, 535)">
+    <rect width="200" height="92" rx="10" fill="rgba(210,168,255,0.10)" stroke="#d2a8ff" stroke-width="1.5"/>
+    <text x="100" y="23" text-anchor="middle" fill="#d2a8ff" font-family="monospace, 'Noto Sans KR', sans-serif" font-size="12.5" font-weight="bold">✅ verifier</text>
+    <text x="100" y="42" text-anchor="middle" fill="#8b949e" font-family="monospace, 'Noto Sans KR', sans-serif" font-size="7">anthropic/claude-opus-4-6</text>
+    <text x="100" y="62" text-anchor="middle" fill="#e6edf3" font-family="monospace, 'Noto Sans KR', sans-serif" font-size="9">3단계 근거</text>
+    <text x="100" y="77" text-anchor="middle" fill="#e6edf3" font-family="monospace, 'Noto Sans KR', sans-serif" font-size="9">검증</text>
+    <circle cx="185" cy="15" r="5" fill="#d2a8ff" opacity="0.85"/>
   </g>
 
-  <g transform="translate(620, 505)">
-    <rect width="200" height="80" rx="10" fill="rgba(240,136,62,0.08)" stroke="#f0883e" stroke-width="1.5"/>
-    <text x="100" y="22" text-anchor="middle" fill="#f0883e" font-family="monospace, 'Noto Sans KR', sans-serif" font-size="13" font-weight="bold">⚖️ decider</text>
-    <text x="100" y="40" text-anchor="middle" fill="#8b949e" font-family="monospace, 'Noto Sans KR', sans-serif" font-size="7">openai-codex/gpt-5.4</text>
-    <text x="100" y="56" text-anchor="middle" fill="#e6edf3" font-family="monospace, 'Noto Sans KR', sans-serif" font-size="9">기술</text>
-    <text x="100" y="70" text-anchor="middle" fill="#e6edf3" font-family="monospace, 'Noto Sans KR', sans-serif" font-size="9">의사결정</text>
-    <circle cx="185" cy="14" r="5" fill="#f0883e" opacity="0.8"/>
+  <g transform="translate(710, 535)">
+    <rect width="200" height="92" rx="10" fill="rgba(240,136,62,0.08)" stroke="#f0883e" stroke-width="1.5"/>
+    <text x="100" y="23" text-anchor="middle" fill="#f0883e" font-family="monospace, 'Noto Sans KR', sans-serif" font-size="10.4" font-weight="bold">🔐 security-auditor</text>
+    <text x="100" y="42" text-anchor="middle" fill="#8b949e" font-family="monospace, 'Noto Sans KR', sans-serif" font-size="7">openai-codex/gpt-5.4</text>
+    <text x="100" y="62" text-anchor="middle" fill="#e6edf3" font-family="monospace, 'Noto Sans KR', sans-serif" font-size="9">보안 취약점</text>
+    <text x="100" y="77" text-anchor="middle" fill="#e6edf3" font-family="monospace, 'Noto Sans KR', sans-serif" font-size="9">리뷰</text>
+    <circle cx="185" cy="15" r="5" fill="#f0883e" opacity="0.85"/>
   </g>
 
-  <g transform="translate(900, 505)">
-    <rect width="200" height="80" rx="10" fill="rgba(88,166,255,0.08)" stroke="#58a6ff" stroke-width="1.5"/>
-    <text x="100" y="22" text-anchor="middle" fill="#58a6ff" font-family="monospace, 'Noto Sans KR', sans-serif" font-size="13" font-weight="bold">✨ simplifier</text>
-    <text x="100" y="40" text-anchor="middle" fill="#8b949e" font-family="monospace, 'Noto Sans KR', sans-serif" font-size="7">anthropic/claude-sonnet-4-6</text>
-    <text x="100" y="56" text-anchor="middle" fill="#e6edf3" font-family="monospace, 'Noto Sans KR', sans-serif" font-size="9">코드 정리</text>
-    <text x="100" y="70" text-anchor="middle" fill="#e6edf3" font-family="monospace, 'Noto Sans KR', sans-serif" font-size="9">· 다듬기</text>
-    <circle cx="185" cy="14" r="5" fill="#58a6ff" opacity="0.8"/>
+  <g transform="translate(940, 535)">
+    <rect width="200" height="92" rx="10" fill="rgba(88,166,255,0.08)" stroke="#58a6ff" stroke-width="1.5"/>
+    <text x="100" y="23" text-anchor="middle" fill="#58a6ff" font-family="monospace, 'Noto Sans KR', sans-serif" font-size="11.6" font-weight="bold">✨ simplifier</text>
+    <text x="100" y="42" text-anchor="middle" fill="#8b949e" font-family="monospace, 'Noto Sans KR', sans-serif" font-size="7">anthropic/claude-sonnet-4-6</text>
+    <text x="100" y="62" text-anchor="middle" fill="#e6edf3" font-family="monospace, 'Noto Sans KR', sans-serif" font-size="9">코드 단순화</text>
+    <text x="100" y="77" text-anchor="middle" fill="#e6edf3" font-family="monospace, 'Noto Sans KR', sans-serif" font-size="9">전문가</text>
+    <circle cx="185" cy="15" r="5" fill="#58a6ff" opacity="0.85"/>
   </g>
 
-  <g transform="translate(30, 664)" font-family="monospace, 'Noto Sans KR', sans-serif" font-size="10">
+  <g transform="translate(28, 724)" font-family="monospace, 'Noto Sans KR', sans-serif" font-size="10">
     <circle cx="8" cy="6" r="5" fill="#f0883e" opacity="0.9"/>
     <text x="20" y="10" fill="#8b949e">openai-codex/gpt-5.4</text>
     <circle cx="245" cy="6" r="5" fill="#58a6ff" opacity="0.9"/>

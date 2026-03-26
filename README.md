@@ -6,11 +6,11 @@
 
 **[pi](https://github.com/mariozechner/pi-coding-agent) 기반 개인 AI 오퍼레이팅 시스템**
 
-*13개의 전문 에이전트 · 25개 이상의 확장 기능 · 한 개발자의 주관적인 셋업*
+*11개의 전문 에이전트 · 25개 이상의 확장 기능 · 한 개발자의 주관적인 셋업*
 
 <br/>
 
-`🤖 13 에이전트` &nbsp; `🧩 25+ 확장 기능` &nbsp; `🎨 7 테마`
+`🤖 11 에이전트` &nbsp; `🧩 25+ 확장 기능` &nbsp; `🎨 7 테마`
 
 <br/>
 
@@ -39,7 +39,7 @@
 |---|---|
 | **사용자 / pi TUI** | 터미널 기반 인터랙티브 인터페이스 |
 | **확장 기능** | 25개 이상의 TypeScript 플러그인 — 서브에이전트, 음성 I/O, MCP 브릿지, UI 오버레이, 안전 장치 |
-| **에이전트 오케스트라** | 역할과 모델이 다른 13개의 전문 에이전트 정의 |
+| **에이전트 오케스트라** | 역할과 모델이 다른 11개의 전문 에이전트 정의 |
 | **인프라** | [claude-mcp-bridge](./extensions/claude-mcp-bridge/)를 통한 MCP 도구 연동 — 기존 Claude Code MCP 설정을 그대로 재사용 (Jira, Slack, Gmail, Calendar, GA4, Figma, DB 등) |
 
 ---
@@ -50,13 +50,12 @@
   <img src="./tmp/agents.ko.svg" alt="에이전트 오케스트라" width="800"/>
 </p>
 
-현재 기준 13개의 에이전트 정의, 3개의 모델, 하나의 오케스트레이터로 구성된다:
+현재 기준 11개의 에이전트 정의, 3개의 모델, 하나의 오케스트레이터로 구성된다:
 
 | 에이전트 | 모델 | 역할 | 사용 시점 |
 |---|---|---|---|
 | 🔍 **finder** | `anthropic/claude-sonnet-4-6` | 빠른 파일·코드 탐색 | 빠른 조회, grep 스타일 탐색 |
 | ⚡ **worker** | `openai-codex/gpt-5.4` | 범용 작업 실행기 | 구현, 작성, 수정 (복잡한 다중 파일) |
-| 🏃 **worker-fast** | `openai-codex/gpt-5.4` | 경량 단순 작업 실행기 | 단일 파일 수정, 간단한 변경 |
 | 📐 **planner** | `anthropic/claude-opus-4-6` | 구현 설계자 | 복잡한 작업 분할 |
 | ✨ **simplifier** | `anthropic/claude-sonnet-4-6` | 코드 단순화 전문가 | 최근 수정 코드 정리, 가독성 개선, 동작 보존 리팩터링 |
 | 🧹 **code-cleaner** | `openai-codex/gpt-5.4` | 코드 정리 분석가 | 중복 제거 후보, 품질 문제 탐색 |
@@ -64,14 +63,13 @@
 | 🥊 **challenger** | `openai-codex/gpt-5.4` | 스트레스 테스터 | 실행 전 계획 검증 |
 | ✅ **verifier** | `anthropic/claude-opus-4-6` | 3단계 근거 검증 | 주장 확인, 정확성 점검 |
 | 🔐 **security-auditor** | `openai-codex/gpt-5.4` | 보안 검토자 | 취약점 중심 리뷰 |
-| ⚖️ **decider** | `openai-codex/gpt-5.4` | 기술 의사 결정 | 아키텍처 선택, 트레이드오프 분석 |
 | 🌐 **searcher** | `anthropic/claude-sonnet-4-6` | 리서치·웹 검색 | 문서 탐색, 조사 |
 | 🖥️ **browser** | `openai-codex/gpt-5.4` | 브라우저 자동화·UI 테스트 | E2E 테스트, 시각 검증 |
 
 <details>
 <summary><strong>모델 선택 기준</strong></summary>
 
-- **openai-codex/gpt-5.4** — 범용 실행·리뷰 (구현, 테스트, 리뷰, 의사결정, 브라우저 자동화)
+- **openai-codex/gpt-5.4** — 범용 실행·리뷰 (구현, 테스트, 리뷰, 보안 검토, 브라우저 자동화)
 - **anthropic/claude-sonnet-4-6** — 빠른 탐색·리서치 (파일 검색, 웹 리서치, 코드 단순화)
 - **anthropic/claude-opus-4-6** — 깊은 추론 작업 (전략 설계, 검증)
 
@@ -253,7 +251,7 @@ pi install npm:pi-web-access
 | 지표 | 값 |
 |---|---|
 | 활성 확장 기능 | 25+ |
-| 에이전트 정의 | 13개 |
+| 에이전트 정의 | 11개 |
 | 테마 | 7개 |
 
 ---
