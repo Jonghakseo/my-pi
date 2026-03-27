@@ -10,6 +10,7 @@
 
 import { completeSimple } from "@mariozechner/pi-ai";
 import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
+import * as path from "node:path";
 import {
 	buildNameContext,
 	extractNameFromResult,
@@ -32,8 +33,8 @@ async function detectNameFromMessage(userMessage: string, ctx: ExtensionContext)
 	const model = ctx.model;
 	if (!model) return "";
 
-	const apiKey = await ctx.modelRegistry.getApiKey(model);
-	if (!apiKey) return "";
+	const auth = await ctx.modelRegistry.getApiKeyAndHeaders(model);
+	if (!auth.ok) return "";
 
 	const controller = new AbortController();
 	const timer = setTimeout(() => controller.abort(), 10000);
@@ -51,7 +52,7 @@ async function detectNameFromMessage(userMessage: string, ctx: ExtensionContext)
 					},
 				],
 			},
-			{ apiKey, signal: controller.signal, reasoning: "minimal", maxTokens: 60 },
+			{ apiKey: auth.apiKey, headers: auth.headers, signal: controller.signal, reasoning: "minimal", maxTokens: 60 },
 		);
 
 		if (!isSuccessfulResult(result.stopReason)) return "";
@@ -66,6 +67,17 @@ async function detectNameFromMessage(userMessage: string, ctx: ExtensionContext)
 // ── Extension ────────────────────────────────────────────────────────────────
 
 export default function autoSessionName(pi: ExtensionAPI) {
+	const updateTerminalTitle = (ctx: ExtensionContext) => {
+		if (!ctx.hasUI) return;
+		const cwdBasename = path.basename(process.cwd());
+		const name = pi.getSessionName();
+		if (name) {
+			ctx.ui.setTitle(`π - ${name} - ${cwdBasename}`);
+		} else {
+			ctx.ui.setTitle(`π - ${cwdBasename}`);
+		}
+	};
+
 	const updateStatus = (ctx: ExtensionContext) => {
 		if (!ctx.hasUI) return;
 
@@ -76,6 +88,7 @@ export default function autoSessionName(pi: ExtensionAPI) {
 		}
 
 		ctx.ui.setStatus(NAME_STATUS_KEY, formatNameStatus(name));
+		updateTerminalTitle(ctx);
 	};
 
 	// ── Auto Name (async) ──────────────────────────────────────
