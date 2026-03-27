@@ -8,9 +8,9 @@
  * - Skips auto-detection for subagent sessions
  */
 
+import * as path from "node:path";
 import { completeSimple } from "@mariozechner/pi-ai";
 import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
-import * as path from "node:path";
 import {
 	buildNameContext,
 	extractNameFromResult,
