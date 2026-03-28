@@ -633,9 +633,7 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 			if (hasChain && Array.isArray(params.steps)) {
 				for (const step of params.steps as BatchOrChainItem[]) requestedNames.push(step.agent);
 			}
-			const unknownNames = [...new Set(requestedNames)].filter(
-				(name) => !agents.some((a) => a.name === name),
-			);
+			const unknownNames = [...new Set(requestedNames)].filter((name) => !agents.some((a) => a.name === name));
 			if (unknownNames.length > 0) {
 				const available = agents.map((a) => `"${a.name}"`).join(", ") || "none";
 				return {
