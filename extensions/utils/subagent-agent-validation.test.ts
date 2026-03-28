@@ -325,13 +325,7 @@ describe("early agent name validation", () => {
 		const execute = createSubagentToolExecute(pi as never, store);
 		const ctx = createCtx();
 
-		const result = await execute(
-			"call-9",
-			{ command: "subagent run unknown -- test" },
-			undefined,
-			undefined,
-			ctx,
-		);
+		const result = await execute("call-9", { command: "subagent run unknown -- test" }, undefined, undefined, ctx);
 
 		expect(result.isError).toBe(true);
 		const errorText = result.content[0]?.text ?? "";

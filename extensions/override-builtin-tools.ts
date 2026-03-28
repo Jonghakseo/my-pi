@@ -118,12 +118,8 @@ const FindParams = Type.Object(
 const GrepParams = Type.Object(
 	{
 		pattern: Type.String({ description: "Search pattern (regex or literal string)" }),
-		path: Type.Optional(
-			Type.String({ description: "Directory or file to search (default: current directory)" }),
-		),
-		glob: Type.Optional(
-			Type.String({ description: "Filter files by glob pattern, e.g. '*.ts' or '**/*.spec.ts'" }),
-		),
+		path: Type.Optional(Type.String({ description: "Directory or file to search (default: current directory)" })),
+		glob: Type.Optional(Type.String({ description: "Filter files by glob pattern, e.g. '*.ts' or '**/*.spec.ts'" })),
 		ignoreCase: Type.Optional(Type.Boolean({ description: "Case-insensitive search (default: false)" })),
 		literal: Type.Optional(
 			Type.Boolean({ description: "Treat pattern as literal string instead of regex (default: false)" }),

@@ -330,5 +330,4 @@ export default function (pi: ExtensionAPI) {
 			return new Text(text, 0, 0);
 		},
 	});
-
 }
