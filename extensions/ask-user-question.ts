@@ -34,6 +34,38 @@ const AskUserQuestionParams = Type.Object({
 const OTHER_OPTION_LABEL = "Other (type your own)";
 const DONE_OPTION_LABEL = "Done selecting";
 
+function stripMarkdownForDisplay(text: string): string {
+	return text
+		.replace(/\r\n/g, "\n")
+		.replace(/^\s{0,3}#{1,6}\s+/gm, "")
+		.replace(/^\s{0,3}>\s?/gm, "")
+		.replace(/^\s*[-*+]\s+/gm, "• ")
+		.replace(/^\s*\d+\.\s+/gm, "• ")
+		.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, "$1")
+		.replace(/\[([^\]]+)\]\(([^)]+)\)/g, "$1 ($2)")
+		.replace(/`([^`]+)`/g, "$1")
+		.replace(/\*\*([^*]+)\*\*/g, "$1")
+		.replace(/__([^_]+)__/g, "$1")
+		.replace(/~~([^~]+)~~/g, "$1")
+		.replace(/(^|[^*])\*([^*\n]+)\*(?=[^*]|$)/g, "$1$2")
+		.replace(/(^|[^_])_([^_\n]+)_(?=[^_]|$)/g, "$1$2")
+		.replace(/^\s*([-*_]\s*){3,}$/gm, "")
+		.replace(/\n{3,}/g, "\n\n")
+		.trim();
+}
+
+function toDisplayText(text: string): string {
+	const stripped = stripMarkdownForDisplay(text).trim();
+	return stripped || text.trim() || "(empty)";
+}
+
+function buildDisplayOptions(options: string[]): string[] {
+	const base = options.map((option) => toDisplayText(option));
+	const counts = new Map<string, number>();
+	for (const label of base) counts.set(label, (counts.get(label) ?? 0) + 1);
+	return base.map((label, index) => ((counts.get(label) ?? 0) > 1 ? `${index + 1}. ${label}` : label));
+}
+
 function normalizeOptions(raw: unknown): string[] {
 	if (!Array.isArray(raw)) return [];
 	const dedup = new Set<string>();
@@ -47,9 +79,10 @@ function normalizeOptions(raw: unknown): string[] {
 }
 
 function buildPrompt(question: string, context?: string): string {
-	const ctx = typeof context === "string" ? context.trim() : "";
-	if (!ctx) return question;
-	return `${question}\n\n${ctx}`;
+	const normalizedQuestion = toDisplayText(question);
+	const ctx = typeof context === "string" ? toDisplayText(context) : "";
+	if (!ctx) return normalizedQuestion;
+	return `${normalizedQuestion}\n\n${ctx}`;
 }
 
 function clampLines(text: string, maxLines: number): string {
@@ -125,6 +158,7 @@ async function askMultipleOptions(
 ): Promise<MultiSelectResult> {
 	const selectedOptionIndices = new Set<number>();
 	const customAnswers: string[] = [];
+	const displayOptions = options.map((option) => toDisplayText(option));
 
 	while (true) {
 		type Entry =
@@ -136,7 +170,7 @@ async function askMultipleOptions(
 		const entries: Entry[] = [];
 		for (let i = 0; i < options.length; i++) {
 			const checked = selectedOptionIndices.has(i) ? "☑" : "☐";
-			entries.push({ kind: "option", optionIndex: i, label: `${checked} ${i + 1}. ${options[i]}` });
+			entries.push({ kind: "option", optionIndex: i, label: `${checked} ${i + 1}. ${displayOptions[i]}` });
 		}
 
 		if (allowCustomAnswer) {
@@ -149,7 +183,7 @@ async function askMultipleOptions(
 		const selectedSummary = [
 			...Array.from(selectedOptionIndices)
 				.sort((a, b) => a - b)
-				.map((index) => options[index]),
+				.map((index) => displayOptions[index]),
 			...customAnswers,
 		];
 		entries.push({ kind: "done", label: `${DONE_OPTION_LABEL} (${selectedSummary.length} selected)` });
@@ -221,10 +255,10 @@ export default function askUserQuestionExtension(pi: ExtensionAPI) {
 			"3. Get decisions on implementation choices as you work\n" +
 			"4. Offer choices to the user about what direction to take\n\n" +
 			"Usage notes:\n" +
-			"- Users will always be able to select \"Other\" to provide custom text input\n" +
+			'- Users will always be able to select "Other" to provide custom text input\n' +
 			"- Use allowMultiple: true to allow multiple answers to be selected for a question\n" +
-			"- If you recommend a specific option, make that the first option in the list and add \"(Recommended)\" at the end of the label\n" +
-			"- Do NOT use this tool to ask \"Should I proceed?\" or seek unnecessary confirmation — just proceed with the task",
+			'- If you recommend a specific option, make that the first option in the list and add "(Recommended)" at the end of the label\n' +
+			'- Do NOT use this tool to ask "Should I proceed?" or seek unnecessary confirmation — just proceed with the task',
 		parameters: AskUserQuestionParams,
 
 		async execute(_toolCallId, params, _signal, _onUpdate, ctx: ExtensionContext) {
@@ -305,7 +339,8 @@ export default function askUserQuestionExtension(pi: ExtensionAPI) {
 			let customInput: string | undefined;
 
 			if (options.length > 0) {
-				const selectable = allowCustomAnswer ? [...options, OTHER_OPTION_LABEL] : [...options];
+				const displayOptions = buildDisplayOptions(options);
+				const selectable = allowCustomAnswer ? [...displayOptions, OTHER_OPTION_LABEL] : [...displayOptions];
 				const selected = await ctx.ui.select(buildPrompt(question, context), selectable);
 
 				if (selected === undefined) {
@@ -320,9 +355,10 @@ export default function askUserQuestionExtension(pi: ExtensionAPI) {
 					}
 					answer = customInput;
 				} else {
-					selectedOption = selected;
-					selectedIndex = options.indexOf(selected) + 1;
-					answer = selected;
+					const optionIndex = displayOptions.indexOf(selected);
+					selectedOption = optionIndex >= 0 ? options[optionIndex] : selected;
+					selectedIndex = optionIndex >= 0 ? optionIndex + 1 : undefined;
+					answer = selectedOption;
 				}
 			} else {
 				answer = await ctx.ui.input(buildPrompt(question, context), placeholder);
@@ -358,9 +394,9 @@ export default function askUserQuestionExtension(pi: ExtensionAPI) {
 		},
 
 		renderCall(args, theme) {
-			const question = typeof args.question === "string" ? args.question : "(no question)";
-			const context = typeof args.context === "string" && args.context.trim() ? args.context.trim() : "";
-			const options = normalizeOptions(args.options);
+			const question = typeof args.question === "string" ? toDisplayText(args.question) : "(no question)";
+			const context = typeof args.context === "string" && args.context.trim() ? toDisplayText(args.context) : "";
+			const options = buildDisplayOptions(normalizeOptions(args.options));
 			const allowCustomAnswer = args.allowCustomAnswer ?? true;
 			const allowMultiple = args.allowMultiple ?? false;
 
