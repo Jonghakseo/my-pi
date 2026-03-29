@@ -1,16 +1,27 @@
 import { createRequire } from "node:module";
 import { pathToFileURL } from "node:url";
 import { StringEnum } from "@mariozechner/pi-ai";
-import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
-import { Text } from "@mariozechner/pi-tui";
+import type { ExtensionAPI, ThemeColor } from "@mariozechner/pi-coding-agent";
+import { DynamicBorder } from "@mariozechner/pi-coding-agent";
+import { Key, matchesKey, Text, truncateToWidth } from "@mariozechner/pi-tui";
 import { Type } from "@sinclair/typebox";
 import { AVAILABLE_MODULES, getGuidelines } from "./guidelines.js";
 import { escapeJS, shellHTML, wrapHTML } from "./html-utils.js";
+
+interface WidgetHistoryEntry {
+	title: string;
+	code: string;
+	width: number;
+	height: number;
+	isSVG: boolean;
+	timestamp: number;
+}
 
 export default function (pi: ExtensionAPI) {
 	let hasSeenReadMe = false;
 	let activeWindows: any[] = [];
 	let glimpseModule: any = null;
+	const widgetHistory: WidgetHistoryEntry[] = [];
 	const require = createRequire(import.meta.url);
 	const glimpsePath = pathToFileURL(require.resolve("glimpseui")).href;
 
@@ -252,6 +263,9 @@ export default function (pi: ExtensionAPI) {
 				activeWindows.push(win);
 			}
 
+			// Save to history for /widgets gallery
+			widgetHistory.push({ title, code, width, height, isSVG, timestamp: Date.now() });
+
 			// Clean up activeWindows when the window is closed
 			win.on("closed", () => {
 				activeWindows = activeWindows.filter((w) => w !== win);
@@ -330,4 +344,152 @@ export default function (pi: ExtensionAPI) {
 			return new Text(text, 0, 0);
 		},
 	});
+
+	// ── /widgets command — gallery of past widgets ──────────────────────────
+
+	pi.registerCommand("widgets", {
+		description: "Browse and reopen past widgets",
+		handler: async (_args, ctx) => {
+			if (!ctx.hasUI) return;
+
+			if (widgetHistory.length === 0) {
+				ctx.ui.notify("No widgets yet — use show_widget first", "info");
+				return;
+			}
+
+			await ctx.ui.custom(
+				(tui, theme, _kb, done) => {
+					const ui = new WidgetGalleryUI(widgetHistory, async (entry) => {
+						const { open } = await getGlimpse();
+						const win = open(wrapHTML(entry.code, entry.isSVG), {
+							width: entry.width,
+							height: entry.height,
+							title: entry.title,
+						});
+						activeWindows.push(win);
+						win.on("closed", () => {
+							activeWindows = activeWindows.filter((w) => w !== win);
+						});
+						if (ctx.hasUI) ctx.ui.notify(`Reopened "${entry.title}"`, "info");
+						tui.requestRender();
+					}, () => done(undefined));
+
+					return {
+						render: (w) => ui.render(w, tui.terminal.rows ?? 40, theme),
+						handleInput: (data) => ui.handleInput(data, tui),
+						invalidate: () => {},
+					};
+				},
+				{
+					overlay: true,
+					overlayOptions: { width: "70%", maxHeight: "70%", anchor: "center" },
+				},
+			);
+		},
+	});
+}
+
+// ── Widget Gallery Overlay ──────────────────────────────────────────────────
+
+type OverlayTui = { requestRender: () => void };
+type OverlayTheme = { fg: (color: ThemeColor, text: string) => string; bold: (text: string) => string };
+
+class WidgetGalleryUI {
+	private selectedIndex = 0;
+	private reopenedSet = new Set<number>();
+
+	constructor(
+		private history: WidgetHistoryEntry[],
+		private onReopen: (entry: WidgetHistoryEntry) => void,
+		private onDone: () => void,
+	) {
+		// Start at newest
+		this.selectedIndex = history.length - 1;
+	}
+
+	handleInput(data: string, tui: OverlayTui): void {
+		if (matchesKey(data, Key.up) || data === "k") {
+			this.selectedIndex = Math.max(0, this.selectedIndex - 1);
+		} else if (matchesKey(data, Key.down) || data === "j") {
+			this.selectedIndex = Math.min(this.history.length - 1, this.selectedIndex + 1);
+		} else if (matchesKey(data, Key.enter)) {
+			const entry = this.history[this.selectedIndex];
+			if (entry) {
+				this.reopenedSet.add(this.selectedIndex);
+				this.onReopen(entry);
+			}
+		} else if (data === "a") {
+			for (let i = 0; i < this.history.length; i++) {
+				this.reopenedSet.add(i);
+				this.onReopen(this.history[i]);
+			}
+		} else if (matchesKey(data, Key.escape) || data === "q") {
+			this.onDone();
+			return;
+		}
+		tui.requestRender();
+	}
+
+	render(width: number, height: number, theme: OverlayTheme): string[] {
+		const lines: string[] = [];
+
+		// Header
+		lines.push(...new DynamicBorder((s: string) => theme.fg("accent", s)).render(width));
+		lines.push(
+			`${theme.fg("accent", theme.bold("  WIDGETS"))} ${theme.fg("dim", "|")} ${theme.fg("muted", `${this.history.length} widget(s) this session`)}`,
+		);
+		lines.push("");
+
+		// List area
+		const listHeight = height - 7; // header(3) + footer(4)
+		const total = this.history.length;
+
+		// Compute visible window (scroll so selected is always visible)
+		let scrollTop = 0;
+		if (total > listHeight) {
+			scrollTop = Math.min(
+				Math.max(0, this.selectedIndex - Math.floor(listHeight / 2)),
+				total - listHeight,
+			);
+		}
+
+		for (let vi = 0; vi < listHeight; vi++) {
+			const idx = scrollTop + vi;
+			if (idx >= total) {
+				lines.push("");
+				continue;
+			}
+
+			const entry = this.history[idx];
+			const isSelected = idx === this.selectedIndex;
+			const wasReopened = this.reopenedSet.has(idx);
+
+			const cursor = isSelected ? theme.fg("accent", " ❯ ") : "   ";
+			const num = theme.fg("dim", `${String(idx + 1).padStart(2)}.`);
+			const tag = entry.isSVG ? theme.fg("warning", "SVG") : theme.fg("accent", "HTM");
+			const title = isSelected ? theme.fg("accent", theme.bold(entry.title)) : theme.fg("muted", entry.title);
+			const size = theme.fg("dim", `${entry.width}×${entry.height}`);
+			const time = theme.fg("dim", formatTime(entry.timestamp));
+			const reopenBadge = wasReopened ? theme.fg("success", " ✓") : "";
+
+			const line = `${cursor}${num} ${tag} ${title} ${size} ${time}${reopenBadge}`;
+			lines.push(truncateToWidth(line, width - 2));
+		}
+
+		// Footer
+		lines.push("");
+		lines.push(
+			theme.fg("dim", "  ↑/↓ Select  •  Enter Reopen  •  a All  •  Esc Close"),
+		);
+		lines.push(...new DynamicBorder((s: string) => theme.fg("accent", s)).render(width));
+
+		return lines;
+	}
+}
+
+function formatTime(ts: number): string {
+	const d = new Date(ts);
+	const h = String(d.getHours()).padStart(2, "0");
+	const m = String(d.getMinutes()).padStart(2, "0");
+	return `${h}:${m}`;
 }
