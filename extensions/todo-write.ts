@@ -351,6 +351,12 @@ async function syncTodoWidget(ctx: ExtensionContext): Promise<void> {
 
 	const lines = visibility.hidden ? [] : renderTodoWidgetLines(state);
 	if (lines.length === 0) {
+		// When hide conditions are met, clear state entirely
+		// so that todo-reminder context is no longer injected into LLM turns.
+		if (visibility.hidden && state.tasks.length > 0) {
+			writeTodoWriteState(ctx, createEmptyState());
+			todoWidgetMetaStore.delete(key);
+		}
 		clearTodoWidgetTimer();
 		clearTodoWidgetHideTimer(key);
 		ctx.ui.setWidget(TODO_WIDGET_KEY, undefined);
@@ -462,6 +468,17 @@ export default function todoWriteExtension(pi: ExtensionAPI): void {
 
 	pi.on("before_agent_start", async (_event, ctx) => {
 		const state = readTodoWriteState(ctx);
+		if (state.tasks.length === 0) return;
+
+		// If hide conditions are met, clear state so no reminder is injected
+		const key = getTodoStateKey(ctx);
+		const visibility = getTodoWidgetVisibility(state, todoWidgetMetaStore.get(key), getTodoTurn(key), Date.now());
+		if (visibility.hidden) {
+			writeTodoWriteState(ctx, createEmptyState());
+			todoWidgetMetaStore.delete(key);
+			return;
+		}
+
 		const content = buildTodoTurnContext(state);
 		if (!content) return;
 		return {
