@@ -1,5 +1,5 @@
 /**
- * Pi Pi style footer (first-line focused)
+ * Custom footer (first-line focused)
  *
  * - Replaces the built-in footer via ctx.ui.setFooter()
  * - First line follows the style you requested

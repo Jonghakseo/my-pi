@@ -101,7 +101,7 @@
 | 확장 | 설명 |
 |---|---|
 | **voice-input.ts** | `Option+V` 음성 받아쓰기 + TTS 응답 — 에이전트와 대화하기 |
-| **pipi-footer.ts** | 모델, git 브랜치, 컨텍스트 사용량을 보여주는 커스텀 푸터 |
+| **footer.ts** | 모델, git 브랜치, 컨텍스트 사용량을 보여주는 커스텀 푸터 |
 | **working-text.ts** | 처리 중 경과 시간과 함께 재미있는 스피너 텍스트 |
 | **idle-screensaver.ts** | 유휴 시 터미널 스크린세이버 |
 | **theme-cycler.ts** | `Ctrl+X`로 테마 실시간 순환 |

@@ -241,7 +241,7 @@ export function normalizeWhitespace(raw: unknown): string {
 /**
  * Sanitize status text: replace newlines/tabs with spaces, collapse, trim.
  *
- * Source: pipi-footer.ts
+ * Source: footer.ts
  */
 export function sanitizeStatusText(text: string): string {
 	return text

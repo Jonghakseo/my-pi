@@ -99,7 +99,7 @@ export function shortenPath(p: string, cwd: string): string {
 	return rp;
 }
 
-// ─── Folder Name (from pipi-footer.ts) ──────────────────────────────────────
+// ─── Folder Name (from footer.ts) ───────────────────────────────────────────
 
 /** Extract the last folder name from a path (e.g. "/a/b/c" → "c"). */
 export function getFolderName(cwd: string): string {

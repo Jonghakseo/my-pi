@@ -29,7 +29,7 @@
 | [`github-overlay.ts`](./github-overlay.ts) | GitHub PR 뷰 (gh CLI 연동) |
 | [`idle-screensaver.ts`](./idle-screensaver.ts) | 유휴 시 세션 컨텍스트 스크린세이버 |
 | [`override-builtin-tools.ts`](./override-builtin-tools.ts) | 도구 출력 접기/펼치기 |
-| [`pipi-footer.ts`](./pipi-footer.ts) | 커스텀 푸터 UI (모델, 브랜치, 컨텍스트 바) |
+| [`footer.ts`](./footer.ts) | 커스텀 푸터 UI (모델, 브랜치, 컨텍스트 바) |
 | [`session-replay.ts`](./session-replay.ts) | 세션 리플레이 뷰어 |
 | [`status-overlay.ts`](./status-overlay.ts) | 스킬, 도구 & 확장 목록 오버레이 |
 | [`theme-cycler.ts`](./theme-cycler.ts) | `Ctrl+X`로 테마 순환 |

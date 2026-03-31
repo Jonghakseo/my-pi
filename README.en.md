@@ -101,7 +101,7 @@ Here are representative items from the 25+ custom TypeScript extensions, grouped
 | Extension | Description |
 |---|---|
 | **voice-input.ts** | `Option+V` voice dictation with TTS response — talk to your agent |
-| **pipi-footer.ts** | Custom footer showing model, git branch, context usage |
+| **footer.ts** | Custom footer showing model, git branch, context usage |
 | **working-text.ts** | Humorous spinner text with elapsed time during processing |
 | **idle-screensaver.ts** | Terminal screensaver when idle |
 | **theme-cycler.ts** | `Ctrl+X` to cycle through all themes on-the-fly |
