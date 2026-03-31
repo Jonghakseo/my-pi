@@ -14,6 +14,11 @@ document.addEventListener('keydown',function(e){
       e.preventDefault();
       document.execCommand(e.key==='c'?'copy':e.key==='x'?'cut':'selectAll');
       break;
+    case'w':
+      e.preventDefault();
+      if(window.glimpse&&typeof window.glimpse.close==='function')window.glimpse.close();
+      else if(typeof window.close==='function')window.close();
+      break;
   }
 });
 </script>`;

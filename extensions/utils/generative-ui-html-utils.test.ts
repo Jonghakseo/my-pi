@@ -134,6 +134,13 @@ describe("shellHTML", () => {
 		expect(html).not.toContain("window._runScripts");
 		expect(html).not.toContain("window._pendingRunScripts");
 	});
+
+	it("includes close shortcut bridging for Cmd+W", () => {
+		const html = shellHTML();
+		expect(html).toContain("case'w':");
+		expect(html).toContain("window.glimpse.close");
+		expect(html).toContain("window.close");
+	});
 });
 
 // ─── wrapHTML ────────────────────────────────────────────────────────────────
@@ -152,6 +159,7 @@ describe("wrapHTML", () => {
 			const result = wrapHTML(code);
 			expect(result).toContain(`<body>${code}`);
 			expect(result).toContain("document.execCommand");
+			expect(result).toContain("window.glimpse.close");
 		});
 
 		it("includes charset meta", () => {
