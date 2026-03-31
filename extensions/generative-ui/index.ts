@@ -17,6 +17,10 @@ interface WidgetHistoryEntry {
 	timestamp: number;
 }
 
+export function shouldApplyFinalStreamingHTML(finalHTML: string | null, finalHTMLApplied: boolean): boolean {
+	return Boolean(finalHTML) && !finalHTMLApplied;
+}
+
 export default function (pi: ExtensionAPI) {
 	let hasSeenReadMe = false;
 	let activeWindows: any[] = [];
@@ -43,7 +47,8 @@ export default function (pi: ExtensionAPI) {
 		updateTimer: any;
 		ready: boolean;
 		finalHTML: string | null;
-		runScriptsOnReady: boolean;
+		finalIsSVG: boolean;
+		finalHTMLApplied: boolean;
 	}
 
 	let streaming: StreamingWidget | null = null;
@@ -66,7 +71,8 @@ export default function (pi: ExtensionAPI) {
 					updateTimer: null,
 					ready: false,
 					finalHTML: null,
-					runScriptsOnReady: false,
+					finalIsSVG: false,
+					finalHTMLApplied: false,
 				};
 			}
 			return;
@@ -101,16 +107,20 @@ export default function (pi: ExtensionAPI) {
 
 						currentStreaming.window.on("ready", () => {
 							currentStreaming.ready = true;
-							const html = currentStreaming.finalHTML ?? currentStreaming.lastHTML;
-							if (!html) return;
 
-							const escaped = escapeJS(html);
-							let command = `window._setContent('${escaped}')`;
-							if (currentStreaming.runScriptsOnReady) {
-								command += "; window._runScripts();";
-								currentStreaming.runScriptsOnReady = false;
+							const finalHTML = currentStreaming.finalHTML;
+							if (
+								finalHTML &&
+								shouldApplyFinalStreamingHTML(finalHTML, currentStreaming.finalHTMLApplied)
+							) {
+								currentStreaming.finalHTMLApplied = true;
+								currentStreaming.window?.setHTML(wrapHTML(finalHTML, currentStreaming.finalIsSVG));
+								return;
 							}
-							currentStreaming.window?.send(command);
+
+							if (currentStreaming.finalHTMLApplied || !currentStreaming.lastHTML) return;
+							const escaped = escapeJS(currentStreaming.lastHTML);
+							currentStreaming.window?.send(`window._setContent('${escaped}')`);
 						});
 					} else if (currentStreaming.ready) {
 						// Update content via JS — no full page replace
@@ -122,7 +132,7 @@ export default function (pi: ExtensionAPI) {
 			return;
 		}
 
-		// Tool call complete — final update with complete HTML + execute scripts
+		// Tool call complete — keep the final HTML so execute() can replace the shell document.
 		if (raw.type === "toolcall_end" && streaming && raw.contentIndex === streaming.contentIndex) {
 			if (streaming.updateTimer) {
 				clearTimeout(streaming.updateTimer);
@@ -132,12 +142,7 @@ export default function (pi: ExtensionAPI) {
 			const toolCall = raw.toolCall;
 			if (toolCall?.arguments?.widget_code) {
 				streaming.finalHTML = toolCall.arguments.widget_code;
-				if (streaming.window && streaming.ready) {
-					const escaped = escapeJS(toolCall.arguments.widget_code);
-					streaming.window.send(`window._setContent('${escaped}'); window._runScripts();`);
-				} else {
-					streaming.runScriptsOnReady = true;
-				}
+				streaming.finalIsSVG = toolCall.arguments.widget_code.trimStart().startsWith("<svg");
 			}
 			// Don't clear streaming — execute() will pick up the window
 			return;
@@ -243,12 +248,11 @@ export default function (pi: ExtensionAPI) {
 				const currentStreaming = streaming;
 				win = currentStreaming.window;
 				currentStreaming.finalHTML = code;
-				// Send final complete HTML + run scripts via JS eval (no full page replace)
-				if (currentStreaming.ready) {
-					const escaped = escapeJS(code);
-					win.send(`window._setContent('${escaped}'); window._runScripts();`);
-				} else {
-					currentStreaming.runScriptsOnReady = true;
+				currentStreaming.finalIsSVG = isSVG;
+				// Replace the streaming shell with the final document so browser-native script execution runs.
+				if (shouldApplyFinalStreamingHTML(currentStreaming.finalHTML, currentStreaming.finalHTMLApplied)) {
+					currentStreaming.finalHTMLApplied = true;
+					win.setHTML(wrapHTML(code, isSVG));
 				}
 				streaming = null;
 			} else {

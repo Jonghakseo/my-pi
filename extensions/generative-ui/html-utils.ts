@@ -34,16 +34,11 @@ ${KEYBOARD_SCRIPT}
 <script>
   window._morphReady = false;
   window._pending = null;
-  window._pendingRunScripts = false;
   window._applyPending = function() {
     if (!window._morphReady || !window._pending) return;
     var html = window._pending;
     window._pending = null;
     window._setContent(html);
-    if (window._pendingRunScripts) {
-      window._pendingRunScripts = false;
-      window._runScripts();
-    }
   };
   window._setContent = function(html) {
     if (!window._morphReady) { window._pending = html; return; }
@@ -62,14 +57,6 @@ ${KEYBOARD_SCRIPT}
         }
         return node;
       }
-    });
-  };
-  window._runScripts = function() {
-    if (!window._morphReady) { window._pendingRunScripts = true; return; }
-    document.querySelectorAll('#root script').forEach(function(old) {
-      var s = document.createElement('script');
-      if (old.src) { s.src = old.src; } else { s.textContent = old.textContent; }
-      old.parentNode.replaceChild(s, old);
     });
   };
 </script>

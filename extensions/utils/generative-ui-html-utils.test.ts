@@ -96,10 +96,6 @@ describe("shellHTML", () => {
 		expect(shellHTML()).toContain("window._setContent");
 	});
 
-	it("includes _runScripts function", () => {
-		expect(shellHTML()).toContain("window._runScripts");
-	});
-
 	it("includes _morphReady flag", () => {
 		expect(shellHTML()).toContain("window._morphReady = false");
 	});
@@ -108,11 +104,10 @@ describe("shellHTML", () => {
 		expect(shellHTML()).toContain("window._pending = null");
 	});
 
-	it("tracks deferred script execution until morphdom is ready", () => {
+	it("defers content application until morphdom is ready", () => {
 		const html = shellHTML();
-		expect(html).toContain("window._pendingRunScripts = false");
 		expect(html).toContain("window._applyPending = function()");
-		expect(html).toContain("if (!window._morphReady) { window._pendingRunScripts = true; return; }");
+		expect(html).toContain("if (!window._morphReady || !window._pending) return;");
 		expect(html).toContain('onload="window._morphReady=true;window._applyPending();"');
 	});
 
@@ -132,6 +127,12 @@ describe("shellHTML", () => {
 
 	it("returns consistent output across calls", () => {
 		expect(shellHTML()).toBe(shellHTML());
+	});
+
+	it("does not include legacy script re-execution helpers", () => {
+		const html = shellHTML();
+		expect(html).not.toContain("window._runScripts");
+		expect(html).not.toContain("window._pendingRunScripts");
 	});
 });
 
