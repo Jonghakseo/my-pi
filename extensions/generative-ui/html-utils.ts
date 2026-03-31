@@ -34,6 +34,17 @@ ${KEYBOARD_SCRIPT}
 <script>
   window._morphReady = false;
   window._pending = null;
+  window._pendingRunScripts = false;
+  window._applyPending = function() {
+    if (!window._morphReady || !window._pending) return;
+    var html = window._pending;
+    window._pending = null;
+    window._setContent(html);
+    if (window._pendingRunScripts) {
+      window._pendingRunScripts = false;
+      window._runScripts();
+    }
+  };
   window._setContent = function(html) {
     if (!window._morphReady) { window._pending = html; return; }
     var root = document.getElementById('root');
@@ -54,6 +65,7 @@ ${KEYBOARD_SCRIPT}
     });
   };
   window._runScripts = function() {
+    if (!window._morphReady) { window._pendingRunScripts = true; return; }
     document.querySelectorAll('#root script').forEach(function(old) {
       var s = document.createElement('script');
       if (old.src) { s.src = old.src; } else { s.textContent = old.textContent; }
@@ -62,7 +74,7 @@ ${KEYBOARD_SCRIPT}
   };
 </script>
 <script src="https://cdn.jsdelivr.net/npm/morphdom@2.7.4/dist/morphdom-umd.min.js"
-  onload="window._morphReady=true;if(window._pending){window._setContent(window._pending);window._pending=null;}"></script>
+  onload="window._morphReady=true;window._applyPending();"></script>
 </body></html>`;
 }
 
