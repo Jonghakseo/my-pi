@@ -108,6 +108,14 @@ describe("shellHTML", () => {
 		expect(shellHTML()).toContain("window._pending = null");
 	});
 
+	it("tracks deferred script execution until morphdom is ready", () => {
+		const html = shellHTML();
+		expect(html).toContain("window._pendingRunScripts = false");
+		expect(html).toContain("window._applyPending = function()");
+		expect(html).toContain("if (!window._morphReady) { window._pendingRunScripts = true; return; }");
+		expect(html).toContain('onload="window._morphReady=true;window._applyPending();"');
+	});
+
 	it("includes _fadeIn animation keyframes", () => {
 		expect(shellHTML()).toContain("@keyframes _fadeIn");
 	});
@@ -138,10 +146,11 @@ describe("wrapHTML", () => {
 			expect(result).toContain("</html>");
 		});
 
-		it("includes the code in body", () => {
+		it("includes the code in body before keyboard helpers", () => {
 			const code = '<div class="test">content</div>';
 			const result = wrapHTML(code);
-			expect(result).toContain(`<body>${code}</body>`);
+			expect(result).toContain(`<body>${code}`);
+			expect(result).toContain("document.execCommand");
 		});
 
 		it("includes charset meta", () => {
@@ -205,7 +214,8 @@ describe("wrapHTML", () => {
 	describe("edge cases", () => {
 		it("handles empty string code", () => {
 			const result = wrapHTML("");
-			expect(result).toContain("<body></body>");
+			expect(result).toContain("<body><script>");
+			expect(result).toContain("document.execCommand");
 		});
 
 		it("handles code with special characters", () => {
