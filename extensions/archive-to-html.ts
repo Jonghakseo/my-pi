@@ -1,7 +1,7 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
+import type { ExtensionAPI, ExtensionContext, ToolResultEvent } from "@mariozechner/pi-coding-agent";
 import { wrapHTML } from "./generative-ui/html-utils.js";
 
 const ARCHIVE_DIR = path.join(os.homedir(), "Documents", "agent-history", "분류 전");
@@ -25,7 +25,7 @@ export default function (pi: ExtensionAPI) {
 	});
 }
 
-function archiveToHtmlSkill(event: any, ctx: any) {
+function archiveToHtmlSkill(event: ToolResultEvent, ctx: ExtensionContext) {
 	const filePath = typeof event.input?.path === "string" ? event.input.path : undefined;
 	if (!filePath) return;
 
@@ -49,7 +49,7 @@ function archiveToHtmlSkill(event: any, ctx: any) {
 	}
 }
 
-function archiveWidget(event: any, ctx: any) {
+function archiveWidget(event: ToolResultEvent, ctx: ExtensionContext) {
 	const code = event.input?.widget_code;
 	const title = event.input?.title;
 	if (typeof code !== "string" || !code) return;

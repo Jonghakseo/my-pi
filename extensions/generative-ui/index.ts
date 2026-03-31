@@ -17,22 +17,31 @@ interface WidgetHistoryEntry {
 	timestamp: number;
 }
 
+interface GlimpseWindow {
+	on(event: "ready" | "closed", handler: () => void): void;
+	send(script: string): void;
+	setHTML(html: string): void;
+}
+
+interface GlimpseModule {
+	open(html: string, options: { width: number; height: number; title: string; floating?: boolean }): GlimpseWindow;
+}
+
 export function shouldApplyFinalStreamingHTML(finalHTML: string | null, finalHTMLApplied: boolean): boolean {
 	return Boolean(finalHTML) && !finalHTMLApplied;
 }
 
 export default function (pi: ExtensionAPI) {
-	let hasSeenReadMe = false;
-	let activeWindows: any[] = [];
-	let glimpseModule: any = null;
+	let activeWindows: GlimpseWindow[] = [];
+	let glimpseModule: GlimpseModule | null = null;
 	const widgetHistory: WidgetHistoryEntry[] = [];
 	const require = createRequire(import.meta.url);
 	const glimpsePath = pathToFileURL(require.resolve("glimpseui")).href;
 
 	// Lazy-load glimpse module using package resolution
-	async function getGlimpse() {
+	async function getGlimpse(): Promise<GlimpseModule> {
 		if (!glimpseModule) {
-			glimpseModule = await import(glimpsePath);
+			glimpseModule = (await import(glimpsePath)) as unknown as GlimpseModule;
 		}
 		return glimpseModule;
 	}
@@ -42,9 +51,9 @@ export default function (pi: ExtensionAPI) {
 	// Tracks in-flight show_widget tool calls being streamed
 	interface StreamingWidget {
 		contentIndex: number;
-		window: any | null;
+		window: GlimpseWindow | null;
 		lastHTML: string;
-		updateTimer: any;
+		updateTimer: ReturnType<typeof setTimeout> | null;
 		ready: boolean;
 		finalHTML: string | null;
 		finalIsSVG: boolean;
@@ -56,13 +65,11 @@ export default function (pi: ExtensionAPI) {
 	// ── message_update: intercept streaming tool calls ────────────────────
 
 	pi.on("message_update", async (event) => {
-		const raw: any = event.assistantMessageEvent;
-		if (!raw) return;
+		const raw = event.assistantMessageEvent;
 
 		// Tool call starts streaming
 		if (raw.type === "toolcall_start") {
-			const partial: any = raw.partial;
-			const block = partial?.content?.[raw.contentIndex];
+			const block = raw.partial.content[raw.contentIndex];
 			if (block?.type === "toolCall" && block?.name === "show_widget") {
 				streaming = {
 					contentIndex: raw.contentIndex,
@@ -80,9 +87,8 @@ export default function (pi: ExtensionAPI) {
 
 		// Tool call input JSON delta — arguments already parsed by pi-ai
 		if (raw.type === "toolcall_delta" && streaming && raw.contentIndex === streaming.contentIndex) {
-			const partial: any = raw.partial;
-			const block = partial?.content?.[raw.contentIndex];
-			const html = block?.arguments?.widget_code;
+			const block = raw.partial.content[raw.contentIndex];
+			const html = block?.type === "toolCall" ? block.arguments?.widget_code : undefined;
 			if (!html || html.length < 20 || html === streaming.lastHTML) return;
 
 			streaming.lastHTML = html;
@@ -96,7 +102,7 @@ export default function (pi: ExtensionAPI) {
 				try {
 					if (!currentStreaming.window) {
 						// Open window with empty shell — content will be injected via JS eval
-						const args = block?.arguments ?? {};
+						const args = block?.type === "toolCall" ? block.arguments : {};
 						const title = (args.title ?? "Widget").replace(/_/g, " ");
 						const width = args.width ?? 800;
 						const height = args.height ?? 600;
@@ -109,10 +115,7 @@ export default function (pi: ExtensionAPI) {
 							currentStreaming.ready = true;
 
 							const finalHTML = currentStreaming.finalHTML;
-							if (
-								finalHTML &&
-								shouldApplyFinalStreamingHTML(finalHTML, currentStreaming.finalHTMLApplied)
-							) {
+							if (finalHTML && shouldApplyFinalStreamingHTML(finalHTML, currentStreaming.finalHTMLApplied)) {
 								currentStreaming.finalHTMLApplied = true;
 								currentStreaming.window?.setHTML(wrapHTML(finalHTML, currentStreaming.finalIsSVG));
 								return;
@@ -170,7 +173,6 @@ export default function (pi: ExtensionAPI) {
 		}),
 
 		async execute(_toolCallId, params) {
-			hasSeenReadMe = true;
 			const content = getGuidelines(params.modules);
 			return {
 				content: [{ type: "text" as const, text: content }],
@@ -178,12 +180,12 @@ export default function (pi: ExtensionAPI) {
 			};
 		},
 
-		renderCall(args: any, theme: any) {
+		renderCall(args, theme) {
 			const mods = (args.modules ?? []).join(", ");
 			return new Text(theme.fg("toolTitle", theme.bold("read_me ")) + theme.fg("muted", mods), 0, 0);
 		},
 
-		renderResult(_result: any, { isPartial }: any, theme: any) {
+		renderResult(_result, { isPartial }, theme) {
 			if (isPartial) return new Text(theme.fg("warning", "Loading guidelines..."), 0, 0);
 			return new Text(theme.fg("dim", "Guidelines loaded"), 0, 0);
 		},
@@ -228,7 +230,7 @@ export default function (pi: ExtensionAPI) {
 			floating: Type.Optional(Type.Boolean({ description: "Keep window always on top. Default: false." })),
 		}),
 
-		async execute(_toolCallId, params, signal) {
+		async execute(_toolCallId, params, _signal) {
 			if (!params.i_have_seen_read_me) {
 				throw new Error(
 					"You must call visualize_read_me before show_widget. Set i_have_seen_read_me: true after doing so.",
@@ -242,11 +244,15 @@ export default function (pi: ExtensionAPI) {
 			const height = params.height ?? 600;
 
 			// Check if we already have a streaming window from message_update
-			let win: any = null;
+			let win: GlimpseWindow;
+			const existingWindow = streaming?.window;
 
-			if (streaming?.window) {
+			if (existingWindow) {
 				const currentStreaming = streaming;
-				win = currentStreaming.window;
+				if (!currentStreaming) {
+					throw new Error("Missing streaming state for existing widget window.");
+				}
+				win = existingWindow;
 				currentStreaming.finalHTML = code;
 				currentStreaming.finalIsSVG = isSVG;
 				// Replace the streaming shell with the final document so browser-native script execution runs.
@@ -291,7 +297,7 @@ export default function (pi: ExtensionAPI) {
 			};
 		},
 
-		renderCall(args: any, theme: any) {
+		renderCall(args, theme) {
 			const title = (args.title ?? "widget").replace(/_/g, " ");
 			const size = args.width && args.height ? ` ${args.width}×${args.height}` : "";
 			let text = theme.fg("toolTitle", theme.bold("show_widget "));
@@ -334,7 +340,7 @@ export default function (pi: ExtensionAPI) {
 			return new Text(text, 0, 0);
 		},
 
-		renderResult(result: any, { isPartial }: any, theme: any) {
+		renderResult(result, { isPartial }, theme) {
 			if (isPartial) {
 				return new Text(theme.fg("warning", "⟳ Widget rendering..."), 0, 0);
 			}
@@ -363,20 +369,24 @@ export default function (pi: ExtensionAPI) {
 
 			await ctx.ui.custom(
 				(tui, theme, _kb, done) => {
-					const ui = new WidgetGalleryUI(widgetHistory, async (entry) => {
-						const { open } = await getGlimpse();
-						const win = open(wrapHTML(entry.code, entry.isSVG), {
-							width: entry.width,
-							height: entry.height,
-							title: entry.title,
-						});
-						activeWindows.push(win);
-						win.on("closed", () => {
-							activeWindows = activeWindows.filter((w) => w !== win);
-						});
-						if (ctx.hasUI) ctx.ui.notify(`Reopened "${entry.title}"`, "info");
-						tui.requestRender();
-					}, () => done(undefined));
+					const ui = new WidgetGalleryUI(
+						widgetHistory,
+						async (entry) => {
+							const { open } = await getGlimpse();
+							const win = open(wrapHTML(entry.code, entry.isSVG), {
+								width: entry.width,
+								height: entry.height,
+								title: entry.title,
+							});
+							activeWindows.push(win);
+							win.on("closed", () => {
+								activeWindows = activeWindows.filter((w) => w !== win);
+							});
+							if (ctx.hasUI) ctx.ui.notify(`Reopened "${entry.title}"`, "info");
+							tui.requestRender();
+						},
+						() => done(undefined),
+					);
 
 					return {
 						render: (w) => ui.render(w, tui.terminal.rows ?? 40, theme),
@@ -451,10 +461,7 @@ class WidgetGalleryUI {
 		// Compute visible window (scroll so selected is always visible)
 		let scrollTop = 0;
 		if (total > listHeight) {
-			scrollTop = Math.min(
-				Math.max(0, this.selectedIndex - Math.floor(listHeight / 2)),
-				total - listHeight,
-			);
+			scrollTop = Math.min(Math.max(0, this.selectedIndex - Math.floor(listHeight / 2)), total - listHeight);
 		}
 
 		for (let vi = 0; vi < listHeight; vi++) {
@@ -482,9 +489,7 @@ class WidgetGalleryUI {
 
 		// Footer
 		lines.push("");
-		lines.push(
-			theme.fg("dim", "  ↑/↓ Select  •  Enter Reopen  •  a All  •  Esc Close"),
-		);
+		lines.push(theme.fg("dim", "  ↑/↓ Select  •  Enter Reopen  •  a All  •  Esc Close"));
 		lines.push(...new DynamicBorder((s: string) => theme.fg("accent", s)).render(width));
 
 		return lines;

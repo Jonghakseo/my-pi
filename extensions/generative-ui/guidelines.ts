@@ -784,11 +784,11 @@ export function getGuidelines(modules: string[]): string {
 		for (const section of sections) {
 			if (!seen.has(section)) {
 				seen.add(section);
-				content += "\n\n\n" + section;
+				content += `\n\n\n${section}`;
 			}
 		}
 	}
-	return content + "\n";
+	return `${content}\n`;
 }
 
 export const AVAILABLE_MODULES = Object.keys(MODULE_SECTIONS);
