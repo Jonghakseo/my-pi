@@ -8,6 +8,7 @@
 
 import type { ExtensionAPI, ExtensionContext, Theme, ThemeColor } from "@mariozechner/pi-coding-agent";
 import { truncateToWidth, visibleWidth } from "@mariozechner/pi-tui";
+import { shouldUseCodexFastBadge } from "./codex-fast-mode.ts";
 import { formatNameStatus } from "./utils/auto-name-utils.ts";
 import { ELAPSED_STATUS_KEY, NAME_STATUS_KEY } from "./utils/status-keys.ts";
 
@@ -137,6 +138,7 @@ function installFooter(pi: ExtensionAPI, ctx: ExtensionContext) {
 			invalidate() {},
 			render(width: number): string[] {
 				const model = ctx.model?.id || "no-model";
+				const modelLabel = shouldUseCodexFastBadge(ctx.model?.provider, ctx.model?.id) ? `${model} ⚡` : model;
 				const usage = ctx.getContextUsage();
 				const pct = clamp(Math.round(usage?.percent ?? 0), 0, 100);
 				const filled = Math.round((pct / 100) * BAR_WIDTH);
@@ -162,7 +164,7 @@ function installFooter(pi: ExtensionAPI, ctx: ExtensionContext) {
 				const dirtyMark = branch && hasDirtyChanges ? theme.fg("warning", "*") : "";
 
 				const left =
-					theme.fg("dim", ` ${model}`) +
+					theme.fg("dim", ` ${modelLabel}`) +
 					theme.fg("muted", " · ") +
 					theme.fg("accent", `${displayName} - `) +
 					dirtyMark +
