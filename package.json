@@ -1,6 +1,6 @@
 {
   "name": "@jonghakseo/my-pi",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "A personal AI operating system built on pi — 11 agents, 20+ extensions, 5 themes, automated daily retrospectives",
   "keywords": [
     "pi-package"
@@ -25,6 +25,9 @@
     ],
     "themes": [
       "./themes"
+    ],
+    "scripts": [
+      "./scripts"
     ]
   },
   "dependencies": {
