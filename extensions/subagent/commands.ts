@@ -27,7 +27,7 @@ import {
 	SUBVIEW_OVERLAY_MAX_HEIGHT,
 	SUBVIEW_OVERLAY_WIDTH,
 } from "./constants.js";
-import { formatUsageStats, truncateLines } from "./format.js";
+import { AGENT_NAME_PALETTE, agentBgIndex, formatUsageStats, truncateLines } from "./format.js";
 import {
 	clearPendingGroupCompletion,
 	consumePendingGroupCompletionsForSession,
@@ -1404,8 +1404,10 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 				const model = a.model ?? "(inherit current model)";
 				const thinking = a.thinking ?? "(inherit current thinking)";
 				const description = a.description ? ` · ${a.description}` : "";
+				const colorCode = AGENT_NAME_PALETTE[agentBgIndex(a.name)];
+				const coloredName = `\x1b[38;5;${colorCode}m${a.name}\x1b[39m`;
 				return truncateText(
-					`${a.name} [${a.source}] · model: ${model} · thinking: ${thinking} · tools: ${tools}${description}`,
+					`${coloredName} [${a.source}] · model: ${model} · thinking: ${thinking} · tools: ${tools}${description}`,
 					220,
 				);
 			});
