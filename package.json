@@ -13,21 +13,20 @@
   },
   "scripts": {
     "sync-agents": "node scripts/sync-agents.mjs",
-    "sync-skills": "node scripts/sync-skills.mjs",
     "postinstall": "node scripts/sync-agents.mjs"
   },
   "pi": {
     "extensions": [
       "./extensions"
     ],
+    "skills": [
+      "./skills"
+    ],
     "prompts": [
       "./prompts"
     ],
     "themes": [
       "./themes"
-    ],
-    "scripts": [
-      "./scripts"
     ]
   },
   "dependencies": {
