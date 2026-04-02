@@ -204,7 +204,7 @@ export function updateCommandRunsWidget(store: SubagentStore, ctx?: WidgetRender
 							lines.push(truncateToWidthWithEllipsis(statusLeft, innerWidth));
 						}
 
-						if (run.thoughtText) {
+						if (run.thoughtText && run.status !== "done") {
 							const thoughtLine = truncateText(run.thoughtText, Math.max(1, innerWidth - 4));
 							lines.push(theme.fg("accent", `  💭 ${thoughtLine}`));
 						}
