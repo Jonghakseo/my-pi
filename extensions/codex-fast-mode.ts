@@ -80,6 +80,11 @@ export default function codexFastMode(pi: ExtensionAPI) {
 
 	pi.registerCommand("codex-fast", {
 		description: "Toggle Codex Fast Mode injection for openai-codex/gpt-5.4",
+		getArgumentCompletions: (prefix) => {
+			const options = ["on", "off", "status"];
+			const filtered = options.filter((o) => o.startsWith(prefix.trim().toLowerCase()));
+			return filtered.length > 0 ? filtered.map((o) => ({ value: o, label: o })) : null;
+		},
 		handler: async (args, ctx) => {
 			const action = parseCommandArg(args);
 
