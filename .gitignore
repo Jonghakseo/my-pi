@@ -52,6 +52,9 @@ extensions/.gw/
 extensions/pi-session-*.html
 extensions/pnpm-lock.yaml
 
+# until presets (personal)
+extensions/until-presets/
+
 # claude-mcp-bridge local runtime settings
 claude-mcp-bridge-tools.json
 extensions/remote/dist/

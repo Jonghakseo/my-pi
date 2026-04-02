@@ -14,6 +14,10 @@
 
 import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
 import { Type } from "@sinclair/typebox";
+import { readdir, readFile } from "node:fs/promises";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { formatClock, formatKoreanDuration } from "./utils/time-utils.ts";
 
 // ─── Constants ───────────────────────────────────────────────────────────────
@@ -68,6 +72,102 @@ function parseInterval(raw: string): { ms: number; label: string } | null {
 	}
 
 	return { ms, label };
+}
+
+// ─── Presets ─────────────────────────────────────────────────────────────────
+
+interface UntilPreset {
+	defaultInterval: { ms: number; label: string };
+	prompt: string;
+	description: string;
+}
+
+const PRESETS_DIR = join(dirname(fileURLToPath(import.meta.url)), "until-presets");
+
+function parseFrontmatter(content: string): { meta: Record<string, string>; body: string } {
+	// UTF-8 BOM 제거
+	const cleaned = content.replace(/^\uFEFF/, "");
+	// body가 없는 frontmatter-only 파일도 정상 파싱 (닫는 --- 후 EOF 허용)
+	const match = cleaned.match(/^---\r?\n([\s\S]*?)\r?\n---\s*(?:\r?\n([\s\S]*))?$/);
+	if (!match) return { meta: {}, body: cleaned.trim() };
+
+	const meta: Record<string, string> = {};
+	for (const line of match[1].split("\n")) {
+		const idx = line.indexOf(":");
+		if (idx === -1) continue;
+		const key = line.slice(0, idx).trim();
+		const value = line.slice(idx + 1).trim();
+		if (key && value) meta[key] = value;
+	}
+	return { meta, body: (match[2] ?? "").trim() };
+}
+
+async function loadPresets(): Promise<Record<string, UntilPreset>> {
+	const presets: Record<string, UntilPreset> = {};
+
+	let files: string[];
+	try {
+		files = await readdir(PRESETS_DIR);
+	} catch {
+		return presets;
+	}
+
+	for (const file of files) {
+		if (!file.endsWith(".md")) continue;
+		const key = file.slice(0, -3).toUpperCase();
+
+		try {
+			const raw = await readFile(join(PRESETS_DIR, file), "utf-8");
+			const { meta, body } = parseFrontmatter(raw);
+			if (!body) continue;
+
+			const interval = parseInterval(meta.interval ?? "5m");
+			if (!interval) continue;
+
+			presets[key] = {
+				defaultInterval: { ms: interval.ms, label: interval.label },
+				description: meta.description ?? key,
+				prompt: body,
+			};
+		} catch {
+			// skip unreadable files
+		}
+	}
+
+	return presets;
+}
+
+function getPresetCompletions(prefix: string): { value: string; label: string }[] | null {
+	let files: string[];
+	try {
+		files = readdirSync(PRESETS_DIR);
+	} catch {
+		return null;
+	}
+
+	const upper = prefix.toUpperCase();
+	const items: { value: string; label: string }[] = [];
+
+	for (const f of files) {
+		if (!f.endsWith(".md")) continue;
+		const key = f.slice(0, -3).toUpperCase();
+		if (!key.startsWith(upper)) continue;
+
+		// 핸들러와 동일한 검증: body + interval 유효성 확인
+		try {
+			const raw = readFileSync(join(PRESETS_DIR, f), "utf-8");
+			const { meta, body } = parseFrontmatter(raw);
+			if (!body) continue;
+			const interval = parseInterval(meta.interval ?? "5m");
+			if (!interval) continue;
+			const desc = meta.description ?? key;
+			items.push({ value: key, label: `${key} — ${desc} (${interval.label})` });
+		} catch {
+			continue;
+		}
+	}
+
+	return items.length > 0 ? items : null;
 }
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -340,41 +440,98 @@ export default function (pi: ExtensionAPI) {
 	// ── Commands ──────────────────────────────────────────────────────────
 
 	pi.registerCommand("until", {
-		description: "조건 충족까지 주기적 실행. 사용법: /until <간격> <프롬프트>  예: /until 5m PR 코멘트 확인해",
+		description: "조건 충족까지 주기적 실행. 사용법: /until <간격> <프롬프트> 또는 /until <프리셋>  예: /until PR",
+		getArgumentCompletions: (prefix) => {
+			const trimmed = prefix.trimStart();
+			// 두 번째 토큰 이후는 프리셋 자동완성 안 함 (커스텀 프롬프트 작성 중)
+			if (trimmed.includes(" ")) {
+				// "인터벌 프리셋" 패턴: "/until 5m P" → 프리셋 자동완성
+				const spaceIdx = trimmed.indexOf(" ");
+				const firstToken = trimmed.slice(0, spaceIdx);
+				const rest = trimmed.slice(spaceIdx + 1).trimStart();
+				if (!parseInterval(firstToken) || rest.includes(" ")) return null;
+				return getPresetCompletions(rest);
+			}
+			// 첫 토큰: 프리셋 이름 또는 인터벌
+			return getPresetCompletions(trimmed);
+		},
 		handler: async (args, ctx) => {
 			latestCtx = ctx;
 			const raw = (args ?? "").trim();
 
+			// 프리셋 로드 (매 호출마다 파일에서 읽어 편집 즉시 반영)
+			const presets = await loadPresets();
+
 			if (!raw) {
-				ctx.ui.notify("사용법: /until <간격> <프롬프트>\n예: /until 5m PR 코멘트 확인해줘", "warning");
+				const presetList = Object.entries(presets)
+					.map(([key, p]) => `  ${key} — ${p.description} (기본 ${p.defaultInterval.label})`)
+					.join("\n");
+				const presetHelp = presetList
+					? `\n\n프리셋:\n${presetList}\n예: /until PR  또는  /until 10m PR`
+					: "";
+				ctx.ui.notify(`사용법: /until <간격> <프롬프트>\n예: /until 5m PR 코멘트 확인해줘${presetHelp}`, "warning");
 				return;
 			}
 
-			// 첫 토큰을 interval로 시도
-			const spaceIdx = raw.indexOf(" ");
-			if (spaceIdx === -1) {
-				ctx.ui.notify("프롬프트가 필요해. 예: /until 5m PR 코멘트 확인해줘", "error");
+			// 프리셋 직접 매칭: "/until PR"
+			const rawUpper = raw.toUpperCase();
+			const directPreset = presets[rawUpper];
+			if (directPreset) {
+				registerTask(directPreset.defaultInterval.ms, directPreset.defaultInterval.label, directPreset.prompt, ctx);
 				return;
 			}
 
-			const intervalToken = raw.slice(0, spaceIdx);
-			const prompt = raw.slice(spaceIdx + 1).trim();
-
-			const parsed = parseInterval(intervalToken);
-			if (!parsed) {
+			// 프리셋 파일은 있지만 로드 실패한 경우 구체적 에러 표시
+			if (!rawUpper.includes(" ") && existsSync(join(PRESETS_DIR, `${rawUpper}.md`))) {
 				ctx.ui.notify(
-					`인터벌 "${intervalToken}"을 파싱할 수 없어.\n지원 형식: 5m, 1h, 5분, 1시간, 5분마다, 1시간마다`,
+					`프리셋 "${rawUpper}" 파일은 있지만 로드에 실패했어.\nfrontmatter(interval/description)와 본문을 확인해줘.`,
 					"error",
 				);
 				return;
 			}
 
-			if (!prompt) {
+			// 첫 토큰 분리
+			const spaceIdx = raw.indexOf(" ");
+			if (spaceIdx === -1) {
+				ctx.ui.notify("프롬프트가 필요해. 예: /until 5m PR 코멘트 확인해줘\n프리셋: /until PR", "error");
+				return;
+			}
+
+			const firstToken = raw.slice(0, spaceIdx);
+			const rest = raw.slice(spaceIdx + 1).trim();
+
+			const parsed = parseInterval(firstToken);
+			if (!parsed) {
+				ctx.ui.notify(
+					`인터벌 "${firstToken}"을 파싱할 수 없어.\n지원 형식: 5m, 1h, 5분, 1시간, 5분마다, 1시간마다`,
+					"error",
+				);
+				return;
+			}
+
+			// 인터벌 + 프리셋: "/until 10m PR"
+			const restUpper = rest.toUpperCase();
+			const restPreset = presets[restUpper];
+			if (restPreset) {
+				registerTask(parsed.ms, parsed.label, restPreset.prompt, ctx);
+				return;
+			}
+
+			// 프리셋 파일은 있지만 로드 실패한 경우 (interval+preset 경로도 동일하게 처리)
+			if (!restUpper.includes(" ") && existsSync(join(PRESETS_DIR, `${restUpper}.md`))) {
+				ctx.ui.notify(
+					`프리셋 "${restUpper}" 파일은 있지만 로드에 실패했어.\nfrontmatter(interval/description)와 본문을 확인해줘.`,
+					"error",
+				);
+				return;
+			}
+
+			if (!rest) {
 				ctx.ui.notify("프롬프트가 필요해. 예: /until 5m PR 코멘트 확인해줘", "error");
 				return;
 			}
 
-			registerTask(parsed.ms, parsed.label, prompt, ctx);
+			registerTask(parsed.ms, parsed.label, rest, ctx);
 		},
 	});
 
