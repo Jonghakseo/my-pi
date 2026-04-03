@@ -88,7 +88,6 @@ Here are representative items from the 25+ custom TypeScript extensions, grouped
 | Extension | Description |
 |---|---|
 | **subagent/** | Multi-agent delegation engine — spawns sub-`pi` processes, manages runs with a below-editor status widget, and handles follow-up/cleanup |
-| **system-mode/** | Toggle "Master mode" (delegation-only orchestrator) vs normal hands-on mode |
 | **claude-mcp-bridge/** | Reuses Claude Code's MCP server configurations — zero-duplication setup |
 | **cross-agent.ts** | Load agent definitions from `.claude/`, `.gemini/`, `.codex/` directories |
 | **dynamic-agents-md.ts** | Dynamically loads AGENTS.md at runtime to enforce edit/write scope restrictions |

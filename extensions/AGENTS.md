@@ -31,12 +31,6 @@ Custom extensions for the pi coding agent. All extensions are written in TypeScr
 ├── claude-hooks-bridge.ts  # Bridge to run Claude Code hooks in pi
 ├── claude-mcp-bridge/     # Bridge to reuse Claude Code MCP config in pi
 │   └── index.ts           #   Merge-load MCP settings & register servers
-├── system-mode/           # System mode toggle (agent mode on/off)
-│   ├── index.ts           #   Mode switching logic
-│   ├── state.ts           #   Global state management
-│   └── prompts/           #   System mode prompt templates
-│       ├── master.md      #     Master system prompt
-│       └── agents.md      #     Agent definitions prompt
 ├── utils/                 # Shared utility functions
 │   ├── time-utils.ts      #   Time/duration formatting helpers
 │   └── status-keys.ts     #   Shared footer status key constants
@@ -67,7 +61,6 @@ Custom extensions for the pi coding agent. All extensions are written in TypeScr
 - **Extension entry point**: Each `.ts` file or `directory/index.ts` is auto-loaded by pi.
 - **Dependencies**: `@mariozechner/pi-coding-agent`, `@mariozechner/pi-ai`, `@mariozechner/pi-tui`.
 - **Themes**: `themeMap.ts` maps default themes per extension; `theme-cycler.ts` for runtime switching.
-- **Shared state**: `system-mode/state.ts` exposes an agent-mode flag referenced by multiple extensions.
 
 ## Tooling Standards
 - **Package manager**: pnpm

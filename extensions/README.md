@@ -9,7 +9,6 @@
 | [`subagent/`](./subagent/index.ts) | 서브에이전트 위임 시스템 (프로세스 실행, 세션 관리, 상태 위젯) |
 | [`claude-mcp-bridge/`](./claude-mcp-bridge/index.ts) | Claude Code MCP 설정을 pi에서 재활용 |
 | [`memory-layer/`](./memory-layer/index.ts) | 장기 기억 관리 (remember/recall/forget 도구 & UI) |
-| [`system-mode/`](./system-mode/index.ts) | 에이전트 모드 온/오프 토글 |
 | [`generative-ui/`](./generative-ui/index.ts) | `visualize_read_me`, `show_widget` 기반 네이티브 위젯 렌더링 |
 | [`archive-to-html.ts`](./archive-to-html.ts) | to-html 스킬 출력 HTML 자동 아카이브 |
 | [`ask-user-question.ts`](./ask-user-question.ts) | 옵션 선택 + 자유 입력 질문 도구 |
