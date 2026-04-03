@@ -18,7 +18,6 @@
 
 import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
 import { truncateToWidth } from "@mariozechner/pi-tui";
-import { applyExtensionDefaults } from "./themeMap.ts";
 
 export default function (pi: ExtensionAPI) {
 	let _currentCtx: ExtensionContext | undefined;
@@ -158,7 +157,6 @@ export default function (pi: ExtensionAPI) {
 
 	pi.on("session_start", async (_event, ctx) => {
 		_currentCtx = ctx;
-		applyExtensionDefaults(import.meta.url, ctx);
 	});
 
 	pi.on("session_shutdown", async () => {
