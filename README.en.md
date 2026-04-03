@@ -132,41 +132,6 @@ Here are representative items from the 25+ custom TypeScript extensions, grouped
 
 ---
 
-## 📋 Prompt Templates
-
-Reusable workflow templates invoked with `/template-name`:
-
-### `/one-shot` — Full Research & Solve Pipeline
-
-A heavyweight problem-solving template that enforces:
-
-1. **Research first** — understand context before acting
-2. **Explore alternatives** — consider trade-offs broadly
-3. **Unlimited subagent use** — delegate freely across agents
-4. **Mandatory challenger gates** — pressure-test before and after execution
-5. **3-tier validation** — automated tests → browser verification → source analysis
-6. **HTML deliverables** — final report, alternatives explored, retrospective
-
-```
-/one-shot Fix the race condition in the payment processing pipeline
-```
-
-### `/qa-chain` — QA Pipeline
-
-Chains multiple agents for end-to-end quality assurance:
-
-```
-worker → browser → verifier → reviewer
-```
-
-```pseudo
-scenarios = worker("analyze changes, derive test scenarios")
-results   = browser(scenarios, "test each in real browser")
-fixes     = worker(failures, "fix issues")  →  verifier(fixes)
-retest    = browser("verify fixes with screenshots")
-final     = reviewer("review all changes")
-```
-
 ---
 
 ## 🏷️ Session Name
