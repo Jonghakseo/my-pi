@@ -228,10 +228,10 @@ export function extensionName(fileUrl: string): string {
  * Normalize whitespace in a string: collapse consecutive spaces/tabs/newlines
  * into a single space and trim.
  *
- * Unifies normalizeLine (idle-screensaver.ts), normalizePurpose (auto-name.ts),
- * and normalizeTranscript (voice-input.ts) — they all share the same logic.
+ * Unifies normalizeLine (idle-screensaver.ts) and normalizePurpose (auto-name.ts)
+ * under the same whitespace-normalization logic.
  *
- * Source: idle-screensaver.ts / auto-name.ts / voice-input.ts
+ * Source: idle-screensaver.ts / auto-name.ts
  */
 export function normalizeWhitespace(raw: unknown): string {
 	if (typeof raw !== "string") return "";

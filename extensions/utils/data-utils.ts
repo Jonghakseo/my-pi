@@ -50,7 +50,7 @@ export function normalizeOptions(raw: unknown): string[] {
  * Parse a comma-separated candidate list from an optional string,
  * falling back to a provided default list. Deduplicates values.
  *
- * Source: voice-input.ts
+ * Source: former voice input extension
  */
 export function parseCandidateList(raw: string | undefined, fallback: string[]): string[] {
 	const fromEnv = (raw ?? "")

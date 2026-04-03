@@ -1,7 +1,7 @@
 /**
  * Pure utility functions for extracting and processing message content.
  * Extracted from subagent/session.ts, subagent/runner.ts, subagent/store.ts,
- * subagent/tool-execute.ts, voice-input.ts, and claude-hooks-bridge.ts.
+ * subagent/tool-execute.ts, and claude-hooks-bridge.ts.
  */
 
 // ── Types ────────────────────────────────────────────────────────────────────

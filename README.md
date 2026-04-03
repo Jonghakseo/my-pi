@@ -100,7 +100,6 @@
 
 | 확장 | 설명 |
 |---|---|
-| **voice-input.ts** | `Option+V` 음성 받아쓰기 + TTS 응답 — 에이전트와 대화하기 |
 | **footer.ts** | 모델, git 브랜치, 컨텍스트 사용량을 보여주는 커스텀 푸터 |
 | **working-text.ts** | 처리 중 경과 시간과 함께 재미있는 스피너 텍스트 |
 | **idle-screensaver.ts** | 유휴 시 터미널 스크린세이버 |
@@ -211,7 +210,6 @@ final     = reviewer("전체 변경사항 리뷰")
 | `Ctrl+Shift+F` | 최근 파일 참조를 Finder에서 표시 |
 | `Ctrl+Shift+R` | 최근 파일 참조 Quick Look |
 | `Ctrl+O` | 도구 출력 접기/펼치기 |
-| `Option+V` | 음성 입력 (받아쓰기 + TTS) |
 
 
 ## 🌐 웹 리서치 확장
