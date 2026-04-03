@@ -51,14 +51,13 @@ Custom extensions for the pi coding agent. All extensions are written in TypeScr
 ├── working-text.ts              # Spinner working message (tip text + elapsed time)
 ├── auto-name.ts           # Auto session name detection from first user message
 ├── theme-cycler.ts        # Ctrl+X to cycle through themes
-├── themeMap.ts            # Default theme mapping per extension
 └── upload-image-url.ts    # Upload images to GitHub storage and return URLs
 ```
 
 ## Key Patterns
 - **Extension entry point**: Each `.ts` file or `directory/index.ts` is auto-loaded by pi.
 - **Dependencies**: `@mariozechner/pi-coding-agent`, `@mariozechner/pi-ai`, `@mariozechner/pi-tui`.
-- **Themes**: `themeMap.ts` maps default themes per extension; `theme-cycler.ts` for runtime switching.
+- **Themes**: `theme-cycler.ts` provides runtime theme switching.
 
 ## Tooling Standards
 - **Package manager**: pnpm

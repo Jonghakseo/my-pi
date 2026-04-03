@@ -217,7 +217,7 @@ export function expandTabs(s: string, tabSize = 4): string {
 /**
  * Derive the extension name (e.g. "minimal") from its import.meta.url or file path.
  *
- * Source: themeMap.ts
+ * Source: shared extension-name parsing helper
  */
 export function extensionName(fileUrl: string): string {
 	const filePath = fileUrl.startsWith("file://") ? fileURLToPath(fileUrl) : fileUrl;
