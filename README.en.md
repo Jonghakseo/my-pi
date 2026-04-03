@@ -100,7 +100,6 @@ Here are representative items from the 25+ custom TypeScript extensions, grouped
 
 | Extension | Description |
 |---|---|
-| **voice-input.ts** | `Option+V` voice dictation with TTS response — talk to your agent |
 | **footer.ts** | Custom footer showing model, git branch, context usage |
 | **working-text.ts** | Humorous spinner text with elapsed time during processing |
 | **idle-screensaver.ts** | Terminal screensaver when idle |
@@ -211,7 +210,6 @@ The setup currently ships with 7 themes, hot-swappable with `Ctrl+X`:
 | `Ctrl+Shift+F` | Reveal the latest file reference in Finder |
 | `Ctrl+Shift+R` | Quick Look the latest file reference |
 | `Ctrl+O` | Toggle tool output collapse/expand |
-| `Option+V` | Voice input (dictation + TTS) |
 
 
 ## 🌐 Web Research Extension

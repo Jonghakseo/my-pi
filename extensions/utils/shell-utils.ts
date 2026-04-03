@@ -29,7 +29,7 @@ export function hasRmRf(command: string): boolean {
 	return false;
 }
 
-// ─── Recorder args (from voice-input.ts) ───────────────────────────────────
+// ─── Recorder args ─────────────────────────────────────────────────────────
 
 /** Build command-line arguments for the audio recorder (sox/rec). */
 export function buildRecorderArgs(bin: string, wavPath: string): string[] {

@@ -60,8 +60,7 @@ Custom extensions for the pi coding agent. All extensions are written in TypeScr
 ├── session-replay.ts      # Session replay overlay UI
 ├── theme-cycler.ts        # Ctrl+X to cycle through themes
 ├── themeMap.ts            # Default theme mapping per extension
-├── upload-image-url.ts    # Upload images to GitHub storage and return URLs
-└── voice-input.ts         # Option+V voice dictation + response TTS summary
+└── upload-image-url.ts    # Upload images to GitHub storage and return URLs
 ```
 
 ## Key Patterns
