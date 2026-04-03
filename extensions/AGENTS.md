@@ -58,7 +58,6 @@ Custom extensions for the pi coding agent. All extensions are written in TypeScr
 ├── working-text.ts              # Spinner working message (funny text + elapsed time)
 ├── auto-name.ts           # Auto session name detection from first user message
 ├── session-replay.ts      # Session replay overlay UI
-├── status-overlay.ts      # /status — skills, tools & extensions list overlay
 ├── theme-cycler.ts        # Ctrl+X to cycle through themes
 ├── themeMap.ts            # Default theme mapping per extension
 ├── upload-image-url.ts    # Upload images to GitHub storage and return URLs

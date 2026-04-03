@@ -29,7 +29,7 @@
 |----------|----------|------|
 | Skills | self-healing, stress-interview, code-polishing, to-html | 4 |
 | Agents | worker, reviewer, verifier, planner, challenger, simplifier, finder, searcher, browser, code-cleaner, security-auditor | 11 |
-| Extensions | memory-layer, subagent/, system-mode, claude-mcp-bridge, diff-overlay, status-overlay, 등 | 29+ |
+| Extensions | memory-layer, subagent/, system-mode, claude-mcp-bridge, diff-overlay, 등 | 29+ |
 
 ---
 
