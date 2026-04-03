@@ -35,7 +35,7 @@
 | [`until.ts`](./until.ts) | `/until`, `until_report` 기반 반복 작업 관리 |
 | [`upload-image-url.ts`](./upload-image-url.ts) | 이미지 → GitHub 스토리지 업로드 |
 | [`usage-analytics.ts`](./usage-analytics.ts) | 서브에이전트·스킬 사용 통계 오버레이 |
-| [`working-text.ts`](./working-text.ts) | 스피너 작업 메시지 (재미 텍스트 + 경과 시간) |
+| [`working-text.ts`](./working-text.ts) | 스피너 작업 메시지 (팁 텍스트 + 경과 시간) |
 
 ## 기술 스택
 
