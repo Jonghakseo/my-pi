@@ -157,7 +157,7 @@ gstack의 두 가지 핵심 원칙:
 
 | 항목             | gstack                     | pi-agent                              | 강제력          |
 | -------------- | -------------------------- | ------------------------------------- | ------------ |
-| rm -rf 보호      | `/careful` (hook → ask)    | `damage-control-rmrf.ts` (확장 → block) | 양쪽 강제        |
+| rm -rf 보호      | `/careful` (hook → ask)    | 없음                                    | gstack이 우위   |
 | 편집 범위 잠금       | `/freeze` (hook → deny)    | `dynamic-agents-md.ts` (에이전트별)        | gstack이 더 세밀 |
 | 디버깅 scope lock | `/investigate` (자동 freeze) | `systematic-debugging` (없음)           | gstack이 우위   |
 | 파괴적 SQL 보호     | `/careful` (패턴 매치)         | 없음                                    | gstack이 우위   |

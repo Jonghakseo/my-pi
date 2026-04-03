@@ -4,7 +4,7 @@
  * All functions are deterministic and side-effect free.
  */
 
-// ─── rm -rf detection (from damage-control-rmrf.ts) ────────────────────────
+// ─── rm -rf detection ───────────────────────────────────────────────────────
 
 /** Detect if a shell command contains `rm -rf` (recursive + force). */
 export function hasRmRf(command: string): boolean {

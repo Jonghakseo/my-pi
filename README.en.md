@@ -115,7 +115,6 @@ Here are representative items from the 25+ custom TypeScript extensions, grouped
 | Extension | Description |
 |---|---|
 | **todo-write.ts** | Task management — `todo_write` tool, persistent storage, TUI rendering |
-| **session-replay.ts** | `/replay` — browse and replay past sessions |
 | **auto-name.ts** | Auto-detect session name from first user message |
 | **upload-image-url.ts** | Upload images to GitHub CDN for embedding |
 | **clipboard.ts** | Copy text to clipboard via OSC52 escape sequences |
@@ -129,7 +128,6 @@ Here are representative items from the 25+ custom TypeScript extensions, grouped
 
 | Extension | Description |
 |---|---|
-| **damage-control-rmrf.ts** | 🛡️ Blocks destructive `rm -rf` commands before they execute |
 | **command-typo-assist.ts** | Detects command typos and offers auto-correction |
 
 ---
@@ -233,7 +231,7 @@ Every agent prompt is crafted like a job description. Every extension solves a r
 A reviewer that only reviews catches more bugs than a generalist asked to "also review." The challenger agent exists solely to poke holes — and it's one of the most valuable agents in the system.
 
 **3. Safety is a feature, not a constraint.**
-`damage-control-rmrf.ts` exists because one accidental `rm -rf /` is one too many. Typo detection, confirmation prompts, and thinking visibility are all first-class concerns.
+Safety mechanisms like typo detection, confirmation prompts, and thinking visibility are not productivity-killing restrictions — they are core product features.
 
 **4. The terminal is the IDE.**
 Voice input, git diffs, GitHub PRs, screensavers — all inside the terminal. No context-switching required.

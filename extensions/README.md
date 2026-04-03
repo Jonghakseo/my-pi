@@ -18,7 +18,6 @@
 | [`command-typo-assist.ts`](./command-typo-assist.ts) | 슬래시 커맨드 오타 감지 → 제안 + 에디터 프리필 |
 | [`context.ts`](./context.ts) | 컨텍스트 윈도우 사용량 & 세션 통계 오버레이 |
 | [`cross-agent.ts`](./cross-agent.ts) | .claude/.gemini/.codex 디렉토리에서 커맨드/스킬 로드 |
-| [`damage-control-rmrf.ts`](./damage-control-rmrf.ts) | `rm -rf` 안전 가드 |
 | [`delayed-action.ts`](./delayed-action.ts) | 지연 실행 스케줄링 |
 | [`diff-overlay.ts`](./diff-overlay.ts) | Diff 뷰어 오버레이 |
 | [`dynamic-agents-md.ts`](./dynamic-agents-md.ts) | 디렉토리 스코프별 동적 AGENTS.md 로딩 |
@@ -29,7 +28,6 @@
 | [`idle-screensaver.ts`](./idle-screensaver.ts) | 유휴 시 세션 컨텍스트 스크린세이버 |
 | [`override-builtin-tools.ts`](./override-builtin-tools.ts) | 도구 출력 접기/펼치기 |
 | [`footer.ts`](./footer.ts) | 커스텀 푸터 UI (모델, 브랜치, 컨텍스트 바) |
-| [`session-replay.ts`](./session-replay.ts) | 세션 리플레이 뷰어 |
 | [`theme-cycler.ts`](./theme-cycler.ts) | `Ctrl+X`로 테마 순환 |
 | [`todo-write.ts`](./todo-write.ts) | `todo_write` 도구와 TUI 기반 할 일 관리 |
 | [`until.ts`](./until.ts) | `/until`, `until_report` 기반 반복 작업 관리 |
