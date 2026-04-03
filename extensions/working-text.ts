@@ -8,20 +8,14 @@ import { ELAPSED_STATUS_KEY } from "./utils/status-keys.ts";
 import { formatElapsedSince } from "./utils/time-utils.ts";
 
 const TIP_MESSAGES = [
-	"tips: /until 로 조건부 루프 로직을 실행할 수 있습니다",
-	"tips: todo_write 로 진행 상황을 즉시 기록할 수 있습니다",
-	"tips: /files 로 현재 작업 트리 파일을 빠르게 탐색할 수 있습니다",
-	"tips: /diff 로 변경 사항을 분할 화면에서 확인할 수 있습니다",
-	"tips: /replay 로 이전 세션 흐름을 다시 볼 수 있습니다",
-	"tips: recall 로 저장된 규칙과 메모리를 다시 불러올 수 있습니다",
-	"tips: remember 로 반복 요청을 장기 기억에 저장할 수 있습니다",
-	"tips: AskUserQuestion 으로 선택지형 질문을 보낼 수 있습니다",
-	"tips: show_widget 으로 차트·표·위젯을 바로 띄울 수 있습니다",
-	"tips: subagent batch 로 여러 에이전트를 병렬 실행할 수 있습니다",
-	"tips: subagent chain 으로 구현→리뷰 흐름을 순차 실행할 수 있습니다",
-	"tips: /context 로 현재 세션의 컨텍스트 사용량을 확인할 수 있습니다",
+	"tips: /files 로 현재 작업 파일을 빠르게 탐색할 수 있습니다",
+	"tips: /diff 로 변경 사항을 확인할 수 있습니다",
+	"tips: /until 로 반복 점검 작업을 예약할 수 있습니다",
+	"tips: /memory 로 저장된 메모리를 찾아볼 수 있습니다",
+	"tips: /remember 로 자주 반복하는 요청을 저장할 수 있습니다",
+	"tips: /github 로 현재 브랜치 PR 상태를 확인할 수 있습니다",
+	"tips: /theme 로 테마를 바꿀 수 있습니다",
 	"tips: /fork-panel 로 현재 세션을 새 패널로 분기할 수 있습니다",
-	"tips: clipboard 도구로 답변을 바로 클립보드에 복사할 수 있습니다",
 ] as const;
 
 const ROTATE_MS = 8000;
