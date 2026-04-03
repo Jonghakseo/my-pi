@@ -52,6 +52,7 @@ const todoWidgetAgentRunningStore = new Map<string, boolean>();
 const todoTurnStore = new Map<string, number>();
 const TODO_HIDE_COMPLETED_AFTER_TURNS = 2;
 const TODO_HIDE_COMPLETED_AFTER_MS = 90_000;
+const TODO_MAX_VISIBLE_COMPLETED_WIDGET_ITEMS = 2;
 const TODO_STATE_ENTRY_TYPE = "todo-write-state";
 const TODO_COMPACTION_REMINDER_TYPE = "todo-write-compaction-reminder";
 
@@ -139,17 +140,38 @@ export function applyTodoWrite(todos: TodoWriteParamsType["todos"]): {
 	return { state: { tasks } };
 }
 
+function renderTodoWidgetTaskLine(task: TodoTask): string {
+	const isDone = task.status === "completed";
+	const marker = task.status === "in_progress" ? "→" : isDone ? "●" : "○";
+	const displayText = task.status === "in_progress" && task.activeForm ? task.activeForm : task.content;
+	return isDone ? `~~${marker} ${displayText}` : `${marker} ${displayText}`;
+}
+
 export function renderTodoWidgetLines(state: TodoState): string[] {
 	if (getTodoTaskCount(state) === 0) return [];
 
+	const completedTasks = state.tasks.filter((task) => task.status === "completed");
+	const hiddenCompletedCount = Math.max(0, completedTasks.length - TODO_MAX_VISIBLE_COMPLETED_WIDGET_ITEMS);
 	const lines: string[] = [];
+	let seenCompletedCount = 0;
+	let insertedCompletedSummary = false;
 
 	for (const task of state.tasks) {
-		const isDone = task.status === "completed";
-		const marker = task.status === "in_progress" ? "→" : isDone ? "●" : "○";
-		const displayText = task.status === "in_progress" && task.activeForm ? task.activeForm : task.content;
-		// Prefix with ~~ for strikethrough styling (applied in widget render)
-		lines.push(isDone ? `~~${marker} ${displayText}` : `${marker} ${displayText}`);
+		if (task.status !== "completed") {
+			lines.push(renderTodoWidgetTaskLine(task));
+			continue;
+		}
+
+		seenCompletedCount += 1;
+		if (seenCompletedCount <= hiddenCompletedCount) {
+			if (!insertedCompletedSummary) {
+				lines.push(`완료 +${hiddenCompletedCount}`);
+				insertedCompletedSummary = true;
+			}
+			continue;
+		}
+
+		lines.push(renderTodoWidgetTaskLine(task));
 	}
 
 	return lines;
@@ -209,6 +231,22 @@ type TodoStateEntryData = {
 	tasks: TodoTask[];
 	updatedAt: number;
 };
+
+function persistTodoWriteStateEntry(pi: Pick<ExtensionAPI, "appendEntry">, state: TodoState): void {
+	pi.appendEntry<TodoStateEntryData>(TODO_STATE_ENTRY_TYPE, {
+		tasks: cloneTasks(state.tasks),
+		updatedAt: Date.now(),
+	});
+}
+
+function clearTodoWriteState(
+	ctx: Pick<ExtensionContext, "cwd" | "sessionManager">,
+	pi: Pick<ExtensionAPI, "appendEntry">,
+): void {
+	const empty = createEmptyState();
+	writeTodoWriteState(ctx, empty);
+	persistTodoWriteStateEntry(pi, empty);
+}
 
 // ── Legacy persistence migration ────────────────────────────────────────────
 
@@ -336,7 +374,7 @@ function setTodoWidgetAgentRunning(ctx: Pick<ExtensionContext, "cwd" | "sessionM
 	todoWidgetAgentRunningStore.set(key, running);
 }
 
-async function syncTodoWidget(ctx: ExtensionContext): Promise<void> {
+async function syncTodoWidget(ctx: ExtensionContext, pi: Pick<ExtensionAPI, "appendEntry">): Promise<void> {
 	if (!ctx.hasUI) return;
 
 	const key = getTodoStateKey(ctx);
@@ -354,7 +392,7 @@ async function syncTodoWidget(ctx: ExtensionContext): Promise<void> {
 		// When hide conditions are met, clear state entirely
 		// so that todo-reminder context is no longer injected into LLM turns.
 		if (visibility.hidden && state.tasks.length > 0) {
-			writeTodoWriteState(ctx, createEmptyState());
+			clearTodoWriteState(ctx, pi);
 			todoWidgetMetaStore.delete(key);
 		}
 		clearTodoWidgetTimer();
@@ -369,7 +407,7 @@ async function syncTodoWidget(ctx: ExtensionContext): Promise<void> {
 		const remainingMs = Math.max(0, TODO_HIDE_COMPLETED_AFTER_MS - elapsedMs);
 		const hideTimer = setTimeout(() => {
 			todoWidgetHideTimerByKey.delete(key);
-			void syncTodoWidget(ctx);
+			void syncTodoWidget(ctx, pi);
 		}, remainingMs);
 		todoWidgetHideTimerByKey.set(key, hideTimer);
 	}
@@ -399,6 +437,9 @@ async function syncTodoWidget(ctx: ExtensionContext): Promise<void> {
 					}
 					if (line.startsWith("~~")) {
 						return theme.fg("dim", theme.strikethrough(truncateToWidth(line.slice(2), lineWidth)));
+					}
+					if (line.startsWith("...")) {
+						return theme.fg("dim", truncateToWidth(line, lineWidth));
 					}
 					return theme.fg("toolOutput", truncateToWidth(line, lineWidth));
 				});
@@ -448,11 +489,8 @@ export default function todoWriteExtension(pi: ExtensionAPI): void {
 			const applied = applyTodoWrite(params.todos);
 			const summary = renderTodoWriteSummary(applied.state);
 			writeTodoWriteState(ctx, applied.state);
-			pi.appendEntry<TodoStateEntryData>(TODO_STATE_ENTRY_TYPE, {
-				tasks: cloneTasks(applied.state.tasks),
-				updatedAt: Date.now(),
-			});
-			await syncTodoWidget(ctx);
+			persistTodoWriteStateEntry(pi, applied.state);
+			await syncTodoWidget(ctx, pi);
 			return {
 				content: [{ type: "text" as const, text: summary }],
 				details: { tasks: applied.state.tasks, summary },
@@ -474,7 +512,7 @@ export default function todoWriteExtension(pi: ExtensionAPI): void {
 		const key = getTodoStateKey(ctx);
 		const visibility = getTodoWidgetVisibility(state, todoWidgetMetaStore.get(key), getTodoTurn(key), Date.now());
 		if (visibility.hidden) {
-			writeTodoWriteState(ctx, createEmptyState());
+			clearTodoWriteState(ctx, pi);
 			todoWidgetMetaStore.delete(key);
 			return;
 		}
@@ -493,41 +531,41 @@ export default function todoWriteExtension(pi: ExtensionAPI): void {
 
 	pi.on("agent_start", async (_event, ctx) => {
 		setTodoWidgetAgentRunning(ctx, true);
-		await syncTodoWidget(ctx);
+		await syncTodoWidget(ctx, pi);
 	});
 
 	pi.on("agent_end", async (_event, ctx) => {
 		setTodoWidgetAgentRunning(ctx, false);
-		await syncTodoWidget(ctx);
+		await syncTodoWidget(ctx, pi);
 	});
 
 	pi.on("session_start", async (_event, ctx) => {
 		setTodoWidgetAgentRunning(ctx, false);
 		restoreTodoWriteState(ctx);
-		await syncTodoWidget(ctx);
+		await syncTodoWidget(ctx, pi);
 	});
 
 	pi.on("session_switch", async (_event, ctx) => {
 		setTodoWidgetAgentRunning(ctx, false);
 		restoreTodoWriteState(ctx);
-		await syncTodoWidget(ctx);
+		await syncTodoWidget(ctx, pi);
 	});
 
 	pi.on("session_fork", async (_event, ctx) => {
 		setTodoWidgetAgentRunning(ctx, false);
 		restoreTodoWriteState(ctx);
-		await syncTodoWidget(ctx);
+		await syncTodoWidget(ctx, pi);
 	});
 
 	pi.on("session_tree", async (_event, ctx) => {
 		setTodoWidgetAgentRunning(ctx, false);
 		restoreTodoWriteState(ctx);
-		await syncTodoWidget(ctx);
+		await syncTodoWidget(ctx, pi);
 	});
 
 	pi.on("session_compact", async (_event, ctx) => {
 		const state = restoreTodoWriteState(ctx);
-		await syncTodoWidget(ctx);
+		await syncTodoWidget(ctx, pi);
 		const reminder = buildPostCompactionTodoReminder(state);
 		if (!reminder) return;
 
@@ -548,7 +586,7 @@ export default function todoWriteExtension(pi: ExtensionAPI): void {
 
 	pi.on("message_end", async (_event, ctx) => {
 		incrementTodoTurn(ctx);
-		await syncTodoWidget(ctx);
+		await syncTodoWidget(ctx, pi);
 	});
 
 	pi.on("session_shutdown", async (_event, ctx) => {
