@@ -81,6 +81,35 @@ describe("todo-write", () => {
 		expect(lines).toEqual(["~~● Read source", "→ Map callsites", "○ Write patch"]);
 	});
 
+	it("shows at most two completed widget lines and collapses older ones", () => {
+		const state = {
+			tasks: [
+				{ id: "task-1", content: "분석", status: "completed" as const },
+				{ id: "task-2", content: "구현", status: "completed" as const },
+				{ id: "task-3", content: "검증", status: "completed" as const },
+				{ id: "task-4", content: "커밋 생성", status: "completed" as const },
+			],
+		};
+
+		const lines = renderTodoWidgetLines(state);
+		expect(lines).toEqual(["완료 +2", "~~● 검증", "~~● 커밋 생성"]);
+	});
+
+	it("keeps non-completed widget lines visible while collapsing old completed ones", () => {
+		const state = {
+			tasks: [
+				{ id: "task-1", content: "초기 분석", status: "completed" as const },
+				{ id: "task-2", content: "다음 구현", status: "in_progress" as const },
+				{ id: "task-3", content: "리뷰", status: "completed" as const },
+				{ id: "task-4", content: "배포", status: "completed" as const },
+				{ id: "task-5", content: "문서화", status: "pending" as const },
+			],
+		};
+
+		const lines = renderTodoWidgetLines(state);
+		expect(lines).toEqual(["완료 +1", "→ 다음 구현", "~~● 리뷰", "~~● 배포", "○ 문서화"]);
+	});
+
 	it("renders widget lines using activeForm for in_progress tasks", () => {
 		const state = {
 			tasks: [
@@ -170,6 +199,37 @@ describe("todo-write persistence", () => {
 		expect(restored).toEqual({
 			tasks: [{ id: "task-1", content: "Finish patch", status: "in_progress" }],
 		});
+	});
+
+	it("restores an empty latest persisted state so auto-cleared todos stay cleared", () => {
+		const ctx = {
+			cwd: "/tmp/project",
+			sessionManager: {
+				getSessionFile: () => "session.jsonl",
+				getBranch: () => [
+					{
+						type: "custom",
+						customType: "todo-write-state",
+						data: {
+							tasks: [{ id: "task-1", content: "Finished task", status: "completed" as const }],
+							updatedAt: 1,
+						},
+					},
+					{
+						type: "custom",
+						customType: "todo-write-state",
+						data: {
+							tasks: [],
+							updatedAt: 2,
+						},
+					},
+				],
+			},
+		} as unknown as Pick<ExtensionContext, "cwd" | "sessionManager">;
+
+		const restored = restoreTodoWriteState(ctx);
+
+		expect(restored).toEqual({ tasks: [] });
 	});
 
 	it("migrates legacy abandoned status to completed on restore", () => {
