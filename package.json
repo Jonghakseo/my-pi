@@ -1,41 +1,41 @@
 {
-  "name": "@jonghakseo/my-pi",
-  "version": "0.1.1",
-  "description": "A personal AI operating system built on pi — 11 agents, 20+ extensions, 5 themes, automated daily retrospectives",
-  "keywords": [
-    "pi-package"
-  ],
-  "license": "MIT",
-  "author": "Jonghakseo",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/Jonghakseo/my-pi.git"
-  },
-  "scripts": {
-    "sync-agents": "node scripts/sync-agents.mjs",
-    "postinstall": "node scripts/sync-agents.mjs"
-  },
-  "pi": {
-    "extensions": [
-      "./extensions"
-    ],
-    "skills": [
-      "./skills"
-    ],
-    "prompts": [
-      "./prompts"
-    ],
-    "themes": [
-      "./themes"
-    ]
-  },
-  "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.27.0"
-  },
-  "peerDependencies": {
-    "@mariozechner/pi-coding-agent": "*",
-    "@sinclair/typebox": "*",
-    "@mariozechner/pi-tui": "*"
-  },
-  "packageManager": "pnpm@10.24.0+sha512.01ff8ae71b4419903b65c60fb2dc9d34cf8bb6e06d03bde112ef38f7a34d6904c424ba66bea5cdcf12890230bf39f9580473140ed9c946fef328b6e5238a345a"
+	"name": "@jonghakseo/my-pi",
+	"version": "0.1.1",
+	"description": "A personal AI operating system built on pi — 11 agents, 20+ extensions, 5 themes, automated daily retrospectives",
+	"keywords": [
+		"pi-package"
+	],
+	"license": "MIT",
+	"author": "Jonghakseo",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/Jonghakseo/my-pi.git"
+	},
+	"scripts": {
+		"sync-agents": "node scripts/sync-agents.mjs",
+		"postinstall": "node scripts/sync-agents.mjs"
+	},
+	"pi": {
+		"extensions": [
+			"./extensions"
+		],
+		"skills": [
+			"./skills"
+		],
+		"prompts": [
+			"./prompts"
+		],
+		"themes": [
+			"./themes"
+		]
+	},
+	"dependencies": {
+		"@modelcontextprotocol/sdk": "^1.27.0"
+	},
+	"peerDependencies": {
+		"@mariozechner/pi-coding-agent": "*",
+		"@sinclair/typebox": "*",
+		"@mariozechner/pi-tui": "*"
+	},
+	"packageManager": "pnpm@10.24.0+sha512.01ff8ae71b4419903b65c60fb2dc9d34cf8bb6e06d03bde112ef38f7a34d6904c424ba66bea5cdcf12890230bf39f9580473140ed9c946fef328b6e5238a345a"
 }

@@ -176,13 +176,12 @@ The setup currently ships with 7 themes, hot-swappable with `Ctrl+X`:
 
 ## 🌐 Web Research Extension
 
-This setup uses **pi-web-access** for `web_search`, `fetch_content`, and `get_search_content` tools.
+This setup vendors **pi-web-access** locally in `extensions/web-access/` for the `web_search`, `fetch_content`, and `get_search_content` tools.
 
-- Repository: https://github.com/nicobailon/pi-web-access
+- Upstream repository: https://github.com/nicobailon/pi-web-access
+- Local extension path: `extensions/web-access/`
+- Bundled `librarian` skill path: `skills/librarian/`
 
-```bash
-pi install npm:pi-web-access
-```
 ---
 
 ## 💡 Philosophy

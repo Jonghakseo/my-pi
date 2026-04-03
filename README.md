@@ -176,13 +176,12 @@
 
 ## 🌐 웹 리서치 확장
 
-이 셋업은 `web_search`, `fetch_content`, `get_search_content` 도구 사용을 위해 **pi-web-access**를 함께 사용한다.
+이 셋업은 `web_search`, `fetch_content`, `get_search_content` 도구 사용을 위해 **pi-web-access** 소스를 로컬 `extensions/web-access/`에 벤더링해서 사용한다.
 
-- 레포지토리: https://github.com/nicobailon/pi-web-access
+- 업스트림 레포지토리: https://github.com/nicobailon/pi-web-access
+- 확장 로컬 경로: `extensions/web-access/`
+- 포함된 `librarian` 스킬 로컬 경로: `skills/librarian/`
 
-```bash
-pi install npm:pi-web-access
-```
 ---
 
 ## 💡 설계 철학
