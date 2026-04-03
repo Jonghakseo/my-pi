@@ -26,6 +26,7 @@
 | [`fork-panel.ts`](./fork-panel.ts) | 현재 세션을 Ghostty split panel로 포크 |
 | [`github-overlay.ts`](./github-overlay.ts) | GitHub PR 뷰 (gh CLI 연동) |
 | [`idle-screensaver.ts`](./idle-screensaver.ts) | 유휴 시 세션 컨텍스트 스크린세이버 |
+| [`interactive-shell/`](./interactive-shell/index.ts) | 인터랙티브/핸즈프리/디스패치 모드의 셸 오버레이 |
 | [`override-builtin-tools.ts`](./override-builtin-tools.ts) | 도구 출력 접기/펼치기 |
 | [`footer.ts`](./footer.ts) | 커스텀 푸터 UI (모델, 브랜치, 컨텍스트 바) |
 | [`theme-cycler.ts`](./theme-cycler.ts) | `Ctrl+X`로 테마 순환 |
