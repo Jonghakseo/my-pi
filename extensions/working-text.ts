@@ -1,32 +1,27 @@
 /**
- * Working text extension — shows rotating sayings + elapsed time
- * in the built-in spinner (⠋ 절차탁마 — 학문과 덕행을 부지런히 닦음 · 12초).
+ * Working text extension — shows rotating productivity tips + elapsed time
+ * in the built-in spinner (⠋ tips: /until 로 조건부 루프 로직을 실행할 수 있습니다 · 12초).
  */
 
 import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
 import { ELAPSED_STATUS_KEY } from "./utils/status-keys.ts";
 import { formatElapsedSince } from "./utils/time-utils.ts";
 
-const FUNNY_MESSAGES = [
-	// 국립국어원 표준국어대사전 뜻풀이를 바탕으로 축약
-	"절차탁마 — 학문과 덕행을 부지런히 닦음",
-	"격물치지 — 사물의 이치를 연구해 지식을 완전하게 함",
-	"발본색원 — 근본 원인을 없애 다시 생기지 않게 함",
-	"심사숙고 — 깊이 잘 생각함",
-	"실사구시 — 사실에 토대를 두어 진리를 탐구함",
-	"온고지신 — 옛것을 익혀 새것을 앎",
-	"수기치인 — 자신을 닦은 뒤 남을 다스림",
-	"반면교사 — 부정적인 면에서 얻는 깨달음",
-	"괄목상대 — 학식이나 재주가 놀랄 만큼 늚",
-	"유비무환 — 미리 준비하면 걱정이 없음",
-	"형설지공 — 어려운 여건에서도 꾸준히 공부함",
-	"화룡점정 — 가장 중요한 부분을 완성함",
-	"청출어람 — 제자나 후배가 스승이나 선배보다 나음",
-	"타산지석 — 남의 하찮은 말과 행동도 도움이 됨",
-	"우공이산 — 끊임없이 노력하면 반드시 이루어짐",
-	"권토중래 — 실패 뒤 힘을 회복해 다시 나아감",
-	"금과옥조 — 귀중히 여겨 꼭 지켜야 할 법칙",
-	"백가쟁명 — 여러 학설과 주장이 자유롭게 논쟁함",
+const TIP_MESSAGES = [
+	"tips: /until 로 조건부 루프 로직을 실행할 수 있습니다",
+	"tips: todo_write 로 진행 상황을 즉시 기록할 수 있습니다",
+	"tips: /files 로 현재 작업 트리 파일을 빠르게 탐색할 수 있습니다",
+	"tips: /diff 로 변경 사항을 분할 화면에서 확인할 수 있습니다",
+	"tips: /replay 로 이전 세션 흐름을 다시 볼 수 있습니다",
+	"tips: recall 로 저장된 규칙과 메모리를 다시 불러올 수 있습니다",
+	"tips: remember 로 반복 요청을 장기 기억에 저장할 수 있습니다",
+	"tips: AskUserQuestion 으로 선택지형 질문을 보낼 수 있습니다",
+	"tips: show_widget 으로 차트·표·위젯을 바로 띄울 수 있습니다",
+	"tips: subagent batch 로 여러 에이전트를 병렬 실행할 수 있습니다",
+	"tips: subagent chain 으로 구현→리뷰 흐름을 순차 실행할 수 있습니다",
+	"tips: /context 로 현재 세션의 컨텍스트 사용량을 확인할 수 있습니다",
+	"tips: /fork-panel 로 현재 세션을 새 패널로 분기할 수 있습니다",
+	"tips: clipboard 도구로 답변을 바로 클립보드에 복사할 수 있습니다",
 ] as const;
 
 const ROTATE_MS = 8000;
@@ -54,7 +49,7 @@ export default function (pi: ExtensionAPI) {
 			if (!latestCtx?.hasUI || runStartedAt <= 0) return;
 			const now = Date.now();
 			if (now - lastRotateAt >= ROTATE_MS) {
-				currentMessage = pick(FUNNY_MESSAGES);
+				currentMessage = pick(TIP_MESSAGES);
 				lastRotateAt = now;
 			}
 			latestCtx.ui.setWorkingMessage(`${currentMessage} · ${formatElapsedSince(runStartedAt)}`);
@@ -65,7 +60,7 @@ export default function (pi: ExtensionAPI) {
 		latestCtx = ctx;
 		if (ctx.hasUI) ctx.ui.setStatus(ELAPSED_STATUS_KEY, undefined);
 		runStartedAt = Date.now();
-		currentMessage = pick(FUNNY_MESSAGES);
+		currentMessage = pick(TIP_MESSAGES);
 		lastRotateAt = Date.now();
 		startTimer(ctx);
 	});

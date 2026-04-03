@@ -49,7 +49,7 @@ Custom extensions for the pi coding agent. All extensions are written in TypeScr
 ├── idle-screensaver.ts    # Idle screensaver — session context display after inactivity
 ├── override-builtin-tools.ts # Compact tool output rendering (collapsed/expanded toggle)
 ├── footer.ts              # Custom footer UI (model, branch, context bar)
-├── working-text.ts              # Spinner working message (funny text + elapsed time)
+├── working-text.ts              # Spinner working message (tip text + elapsed time)
 ├── auto-name.ts           # Auto session name detection from first user message
 ├── session-replay.ts      # Session replay overlay UI
 ├── theme-cycler.ts        # Ctrl+X to cycle through themes
