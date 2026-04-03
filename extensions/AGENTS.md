@@ -46,6 +46,7 @@ Custom extensions for the pi coding agent. All extensions are written in TypeScr
 ├── files.ts               # File picker / diff viewer UI
 ├── github-overlay.ts      # GitHub PR view overlay (gh CLI integration)
 ├── idle-screensaver.ts    # Idle screensaver — session context display after inactivity
+├── interactive-shell/     # Interactive shell overlay (interactive/hands-free/dispatch)
 ├── override-builtin-tools.ts # Compact tool output rendering (collapsed/expanded toggle)
 ├── footer.ts              # Custom footer UI (model, branch, context bar)
 ├── working-text.ts              # Spinner working message (tip text + elapsed time)
