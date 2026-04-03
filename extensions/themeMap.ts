@@ -31,7 +31,6 @@ export const THEME_MAP: Record<string, string> = {
 	"pi-pi": "rose-pine", // warm creative meta-agent
 	"pure-focus": "everforest", // calm, distraction-free
 	"purpose-gate": "tokyo-night", // intentional, sharp focus
-	"session-replay": "catppuccin-mocha", // soft, reflective history
 	"subagent-widget": "cyberpunk", // multi-agent futuristic
 	"system-select": "catppuccin-mocha", // soft selection UI
 	"theme-cycler": "synthwave", // neon, it's a theme tool

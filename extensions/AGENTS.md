@@ -40,7 +40,6 @@ Custom extensions for the pi coding agent. All extensions are written in TypeScr
 ├── command-typo-assist.ts # Slash command typo detection → suggest + editor prefill
 ├── context.ts             # /context — context window usage & session stats overlay
 ├── cross-agent.ts         # Load commands/skills from .claude/.gemini/.codex dirs
-├── damage-control-rmrf.ts # Safety guard against rm -rf
 ├── delayed-action.ts      # Delayed action scheduling ("do this later" style)
 ├── diff-overlay.ts        # /diff — Git diff split-pane overlay (file list + diff viewer)
 ├── dynamic-agents-md.ts   # Dynamic AGENTS.md loading per directory scope
@@ -51,7 +50,6 @@ Custom extensions for the pi coding agent. All extensions are written in TypeScr
 ├── footer.ts              # Custom footer UI (model, branch, context bar)
 ├── working-text.ts              # Spinner working message (tip text + elapsed time)
 ├── auto-name.ts           # Auto session name detection from first user message
-├── session-replay.ts      # Session replay overlay UI
 ├── theme-cycler.ts        # Ctrl+X to cycle through themes
 ├── themeMap.ts            # Default theme mapping per extension
 └── upload-image-url.ts    # Upload images to GitHub storage and return URLs
