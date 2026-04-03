@@ -31,7 +31,6 @@
 | [`override-builtin-tools.ts`](./override-builtin-tools.ts) | 도구 출력 접기/펼치기 |
 | [`footer.ts`](./footer.ts) | 커스텀 푸터 UI (모델, 브랜치, 컨텍스트 바) |
 | [`session-replay.ts`](./session-replay.ts) | 세션 리플레이 뷰어 |
-| [`status-overlay.ts`](./status-overlay.ts) | 스킬, 도구 & 확장 목록 오버레이 |
 | [`theme-cycler.ts`](./theme-cycler.ts) | `Ctrl+X`로 테마 순환 |
 | [`todo-write.ts`](./todo-write.ts) | `todo_write` 도구와 TUI 기반 할 일 관리 |
 | [`until.ts`](./until.ts) | `/until`, `until_report` 기반 반복 작업 관리 |

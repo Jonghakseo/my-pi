@@ -107,7 +107,6 @@ Here are representative items from the 25+ custom TypeScript extensions, grouped
 | **theme-cycler.ts** | `Ctrl+X` to cycle through all themes on-the-fly |
 | **diff-overlay.ts** | `/diff` — split-pane git diff viewer overlay |
 | **github-overlay.ts** | GitHub PR view directly in the terminal |
-| **status-overlay.ts** | `/status` — extension and skill status dashboard |
 | **files.ts** | `/files` — git tree file browser with open/edit/diff quick actions |
 | **fork-panel.ts** | `/fork-panel` — fork the current session into a new Ghostty split panel |
 | **generative-ui/** | `visualize_read_me`, `show_widget` — native visual widgets and renderers |
