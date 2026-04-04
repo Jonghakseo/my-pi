@@ -1,42 +1,42 @@
+import { execFileSync } from "node:child_process";
+import { randomUUID } from "node:crypto";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { createRequire } from "node:module";
+import { homedir, platform } from "node:os";
+import { join } from "node:path";
+import { complete, getModel, type Model, StringEnum } from "@mariozechner/pi-ai";
 import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
 import { Box, Text, truncateToWidth } from "@mariozechner/pi-tui";
 import { Type } from "@sinclair/typebox";
-import { StringEnum, complete, getModel, type Model } from "@mariozechner/pi-ai";
-import { fetchAllContent, type ExtractedContent } from "./extract.js";
-import { clearCloneCache } from "./github-extract.js";
-import { search, type SearchProvider, type ResolvedSearchProvider } from "./gemini-search.js";
+import { type ActivityEntry, activityMonitor } from "./activity.js";
 import { executeCodeSearch } from "./code-search.js";
+import { type CuratorServerHandle, startCuratorServer } from "./curator-server.js";
+import { isExaAvailable } from "./exa.js";
+import { type ExtractedContent, fetchAllContent } from "./extract.js";
+import { isGeminiApiAvailable } from "./gemini-api.js";
+import { type ResolvedSearchProvider, type SearchProvider, search } from "./gemini-search.js";
+import { getActiveGoogleEmail, isGeminiWebAvailable } from "./gemini-web.js";
+import { clearCloneCache } from "./github-extract.js";
 import type { SearchResult } from "./perplexity.js";
-import { formatSeconds } from "./utils.js";
+import { isPerplexityAvailable } from "./perplexity.js";
 import {
 	clearResults,
 	deleteResult,
 	generateId,
 	getAllResults,
 	getResult,
-	restoreFromSession,
-	storeResult,
 	type QueryResultData,
+	restoreFromSession,
 	type StoredSearchData,
+	storeResult,
 } from "./storage.js";
-import { activityMonitor, type ActivityEntry } from "./activity.js";
-import { startCuratorServer, type CuratorServerHandle } from "./curator-server.js";
 import {
 	buildDeterministicSummary,
 	generateSummaryDraft,
 	type SummaryGenerationContext,
 	type SummaryMeta,
 } from "./summary-review.js";
-import { randomUUID } from "node:crypto";
-import { execFileSync } from "node:child_process";
-import { createRequire } from "node:module";
-import { platform, homedir } from "node:os";
-import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
-import { join } from "node:path";
-import { isPerplexityAvailable } from "./perplexity.js";
-import { isExaAvailable } from "./exa.js";
-import { isGeminiApiAvailable } from "./gemini-api.js";
-import { getActiveGoogleEmail, isGeminiWebAvailable } from "./gemini-web.js";
+import { formatSeconds } from "./utils.js";
 
 const WEB_SEARCH_CONFIG_PATH = join(homedir(), ".pi", "web-search.json");
 
@@ -91,7 +91,7 @@ function saveConfig(updates: Partial<WebSearchConfig>): void {
 	Object.assign(config, updates);
 	const dir = join(homedir(), ".pi");
 	if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
-	writeFileSync(WEB_SEARCH_CONFIG_PATH, JSON.stringify(config, null, 2) + "\n");
+	writeFileSync(WEB_SEARCH_CONFIG_PATH, `${JSON.stringify(config, null, 2)}\n`);
 }
 
 const DEFAULT_SHORTCUTS = { curate: "ctrl+shift+s", activity: "ctrl+shift+w" };
@@ -102,8 +102,7 @@ function loadConfigForExtensionInit(): WebSearchConfig {
 	try {
 		return loadConfig();
 	} catch (err) {
-		const message = err instanceof Error ? err.message : String(err);
-		console.error(`[pi-web-access] ${message}`);
+		const _message = err instanceof Error ? err.message : String(err);
 		return {};
 	}
 }
@@ -164,10 +163,7 @@ async function loadCuratorBootstrap(requestedProvider: unknown): Promise<Curator
 	};
 }
 
-function resolveProvider(
-	requested: unknown,
-	available: ProviderAvailability,
-): ResolvedSearchProvider {
+function resolveProvider(requested: unknown, available: ProviderAvailability): ResolvedSearchProvider {
 	const provider = normalizeProviderInput(requested ?? loadConfig().provider ?? "auto") ?? "auto";
 
 	if (provider === "auto") {
@@ -214,7 +210,9 @@ interface PendingCurate {
 	summaryModels: Array<{ value: string; label: string }>;
 	defaultSummaryModel: string | null;
 	timeoutSeconds: number;
-	onUpdate: ((update: { content: Array<{ type: string; text: string }>; details?: Record<string, unknown> }) => void) | undefined;
+	onUpdate:
+		| ((update: { content: Array<{ type: string; text: string }>; details?: Record<string, unknown> }) => void)
+		| undefined;
 	signal: AbortSignal | undefined;
 	abortSearches: () => void;
 	finish: (value: unknown) => void;
@@ -259,8 +257,8 @@ function formatQueryHeader(query: string, provider: string | undefined, duplicat
 
 function hasFullInlineCoverage(urls: string[], inlineContent: ExtractedContent[] | undefined): boolean {
 	if (!inlineContent || inlineContent.length === 0) return false;
-	const coveredUrls = new Set(inlineContent.map(c => c.url));
-	return urls.every(url => coveredUrls.has(url));
+	const coveredUrls = new Set(inlineContent.map((c) => c.url));
+	return urls.every((url) => coveredUrls.has(url));
 }
 
 function formatFullResults(queryData: QueryResultData): string {
@@ -284,7 +282,9 @@ function abortPendingFetches(): void {
 function closeCurator(): void {
 	const win = glimpseWin;
 	glimpseWin = null;
-	try { win?.close(); } catch {}
+	try {
+		win?.close();
+	} catch {}
 	cancelPendingCurate();
 	if (activeCurator) {
 		activeCurator.close();
@@ -294,11 +294,12 @@ function closeCurator(): void {
 
 async function openInBrowser(pi: ExtensionAPI, url: string): Promise<void> {
 	const plat = platform();
-	const result = plat === "darwin"
-		? await pi.exec("open", [url])
-		: plat === "win32"
-			? await pi.exec("cmd", ["/c", "start", "", url])
-			: await pi.exec("xdg-open", [url]);
+	const result =
+		plat === "darwin"
+			? await pi.exec("open", [url])
+			: plat === "win32"
+				? await pi.exec("cmd", ["/c", "start", "", url])
+				: await pi.exec("xdg-open", [url]);
 	if (result.code !== 0) {
 		throw new Error(result.stderr || `Failed to open browser (exit code ${result.code})`);
 	}
@@ -381,8 +382,11 @@ function openInGlimpse(
 }
 
 function extractDomain(url: string): string {
-	try { return new URL(url).hostname; }
-	catch { return url; }
+	try {
+		return new URL(url).hostname;
+	} catch {
+		return url;
+	}
 }
 
 function updateWidget(ctx: ExtensionContext): void {
@@ -390,13 +394,13 @@ function updateWidget(ctx: ExtensionContext): void {
 	const entries = activityMonitor.getEntries();
 	const lines: string[] = [];
 
-	lines.push(theme.fg("accent", "─── Web Search Activity " + "─".repeat(36)));
+	lines.push(theme.fg("accent", `─── Web Search Activity ${"─".repeat(36)}`));
 
 	if (entries.length === 0) {
 		lines.push(theme.fg("muted", "  No activity yet"));
 	} else {
 		for (const e of entries) {
-			lines.push("  " + formatEntryLine(e, theme));
+			lines.push(`  ${formatEntryLine(e, theme)}`);
 		}
 	}
 
@@ -413,10 +417,7 @@ function updateWidget(ctx: ExtensionContext): void {
 	ctx.ui.setWidget("web-activity", new Text(lines.join("\n"), 0, 0));
 }
 
-function formatEntryLine(
-	entry: ActivityEntry,
-	theme: { fg: (color: string, text: string) => string },
-): string {
+function formatEntryLine(entry: ActivityEntry, theme: { fg: (color: string, text: string) => string }): string {
 	const typeStr = entry.type === "api" ? "API" : "GET";
 	const target =
 		entry.type === "api"
@@ -484,7 +485,7 @@ export default function (pi: ExtensionAPI) {
 				};
 				storeResult(fetchId, data);
 				pi.appendEntry("web-search-results", data);
-				const ok = fetched.filter(f => !f.error).length;
+				const ok = fetched.filter((f) => !f.error).length;
 				pi.sendMessage(
 					{
 						customType: "web-search-content-ready",
@@ -509,14 +510,19 @@ export default function (pi: ExtensionAPI) {
 					);
 				}
 			})
-			.finally(() => { pendingFetches.delete(fetchId); });
+			.finally(() => {
+				pendingFetches.delete(fetchId);
+			});
 		return fetchId;
 	}
 
 	function storeAndPublishSearch(results: QueryResultData[]): string {
 		const id = generateId();
 		const data: StoredSearchData = {
-			id, type: "search", timestamp: Date.now(), queries: results,
+			id,
+			type: "search",
+			timestamp: Date.now(),
+			queries: results,
 		};
 		storeResult(id, data);
 		pi.appendEntry("web-search-results", data);
@@ -551,9 +557,12 @@ export default function (pi: ExtensionAPI) {
 		return {
 			model: meta.model,
 			durationMs: Number.isFinite(meta.durationMs) && meta.durationMs >= 0 ? meta.durationMs : 0,
-			tokenEstimate: Number.isFinite(meta.tokenEstimate) && meta.tokenEstimate >= 0
-				? meta.tokenEstimate
-				: (normalizedText.length > 0 ? Math.max(1, Math.ceil(normalizedText.length / 4)) : 0),
+			tokenEstimate:
+				Number.isFinite(meta.tokenEstimate) && meta.tokenEstimate >= 0
+					? meta.tokenEstimate
+					: normalizedText.length > 0
+						? Math.max(1, Math.ceil(normalizedText.length / 4))
+						: 0,
 			fallbackUsed: meta.fallbackUsed === true,
 			fallbackReason: meta.fallbackReason,
 			edited: meta.edited === true,
@@ -582,10 +591,14 @@ export default function (pi: ExtensionAPI) {
 			const auth = await ctx.modelRegistry.getApiKeyAndHeaders(model);
 			if (auth.ok && auth.apiKey) return { model, apiKey: auth.apiKey };
 		}
-		throw new Error(`No model available: ${candidates.map(c => `${c.provider}/${c.id}`).join(", ")}`);
+		throw new Error(`No model available: ${candidates.map((c) => `${c.provider}/${c.id}`).join(", ")}`);
 	}
 
-	async function rewriteSearchQuery(query: string, ctx: SummaryGenerationContext, signal: AbortSignal): Promise<string> {
+	async function rewriteSearchQuery(
+		query: string,
+		ctx: SummaryGenerationContext,
+		signal: AbortSignal,
+	): Promise<string> {
 		const { model, apiKey } = await resolveFirstAvailableModel(ctx, [
 			{ provider: "anthropic", id: "claude-haiku-4-5" },
 			{ provider: "google", id: "gemini-2.5-flash" },
@@ -594,18 +607,25 @@ export default function (pi: ExtensionAPI) {
 		const response = await complete(
 			model,
 			{
-				messages: [{
-					role: "user",
-					content: [{ type: "text", text: `Rewrite this web search query to get better, more specific results. Add relevant year qualifiers, precise technical terms, and specificity. Return ONLY the improved query text, nothing else.\n\nQuery: ${query}` }],
-					timestamp: Date.now(),
-				}],
+				messages: [
+					{
+						role: "user",
+						content: [
+							{
+								type: "text",
+								text: `Rewrite this web search query to get better, more specific results. Add relevant year qualifiers, precise technical terms, and specificity. Return ONLY the improved query text, nothing else.\n\nQuery: ${query}`,
+							},
+						],
+						timestamp: Date.now(),
+					},
+				],
 			},
 			{ apiKey, signal },
 		);
 		if (response.stopReason === "aborted") throw new Error("Aborted");
 		const contentParts = Array.isArray(response.content) ? response.content : [];
 		const text = contentParts
-			.map(p => {
+			.map((p) => {
 				if (!p || typeof p !== "object") return "";
 				const part = p as Record<string, unknown>;
 				return typeof part.text === "string" ? part.text : "";
@@ -670,8 +690,7 @@ export default function (pi: ExtensionAPI) {
 				addModel(model.provider, model.id);
 			}
 		} catch (err) {
-			const message = err instanceof Error ? err.message : String(err);
-			console.error(`Failed to load summary models: ${message}`);
+			const _message = err instanceof Error ? err.message : String(err);
 		}
 
 		const currentModelValue = summaryContext.model
@@ -681,10 +700,7 @@ export default function (pi: ExtensionAPI) {
 			addModel(summaryContext.model.provider, summaryContext.model.id);
 		}
 
-		const preferredDefaults = [
-			"anthropic/claude-haiku-4-5",
-			"openai-codex/gpt-5.3-codex-spark",
-		];
+		const preferredDefaults = ["anthropic/claude-haiku-4-5", "openai-codex/gpt-5.3-codex-spark"];
 		let defaultSummaryModel: string | null = null;
 		for (const preferred of preferredDefaults) {
 			if (availableValues.has(preferred)) {
@@ -721,27 +737,26 @@ export default function (pi: ExtensionAPI) {
 	}
 
 	function buildSearchReturn(opts: SearchReturnOptions) {
-		const sc = opts.results.filter(r => !r.error).length;
+		const sc = opts.results.filter((r) => !r.error).length;
 		const tr = opts.results.reduce((sum, r) => sum + r.results.length, 0);
 
 		const hasApprovedSummary = typeof opts.approvedSummary === "string" && opts.approvedSummary.trim().length > 0;
 		let output = "";
 		if (hasApprovedSummary) {
-			output = opts.approvedSummary!.trim();
+			output = opts.approvedSummary?.trim();
 		} else {
 			if (opts.curated) {
-				output += "[These results were manually curated by the user in the browser. Use them as-is — do not re-search or discard.]\n\n";
+				output +=
+					"[These results were manually curated by the user in the browser. Use them as-is — do not re-search or discard.]\n\n";
 			}
 			const duplicateQueries = opts.curated ? duplicateQuerySet(opts.results) : new Set<string>();
 			for (const { query, answer, results, error, provider } of opts.results) {
 				if (opts.queryList.length > 1) {
-					output += opts.curated
-						? formatQueryHeader(query, provider, duplicateQueries)
-						: `## Query: "${query}"\n\n`;
+					output += opts.curated ? formatQueryHeader(query, provider, duplicateQueries) : `## Query: "${query}"\n\n`;
 				}
 				if (error) output += `Error: ${error}\n\n`;
 				else if (results.length === 0) output += "No results found.\n\n";
-				else output += formatSearchSummary(results, answer) + "\n\n";
+				else output += `${formatSearchSummary(results, answer)}\n\n`;
 			}
 		}
 
@@ -781,30 +796,32 @@ export default function (pi: ExtensionAPI) {
 				fetchId,
 				fetchUrls: isBackgroundFetch ? opts.urls : undefined,
 				searchId,
-				...(opts.curated ? {
-					curated: true,
-					curatedFrom: opts.curatedFrom,
-					curatedQueries: opts.results.map(r => ({
-						query: r.query,
-						provider: r.provider || null,
-						answer: r.answer || null,
-						sources: r.results.map(s => ({ title: s.title, url: s.url })),
-						error: r.error,
-					})),
-				} : {}),
-				...((opts.workflow && hasApprovedSummary)
+				...(opts.curated
 					? {
-						summary: {
-							text: opts.approvedSummary!.trim(),
-							workflow: opts.workflow,
-							model: opts.summaryMeta?.model ?? null,
-							durationMs: opts.summaryMeta?.durationMs ?? 0,
-							tokenEstimate: opts.summaryMeta?.tokenEstimate ?? 0,
-							fallbackUsed: opts.summaryMeta?.fallbackUsed === true,
-							fallbackReason: opts.summaryMeta?.fallbackReason,
-							edited: opts.summaryMeta?.edited === true,
-						},
-					}
+							curated: true,
+							curatedFrom: opts.curatedFrom,
+							curatedQueries: opts.results.map((r) => ({
+								query: r.query,
+								provider: r.provider || null,
+								answer: r.answer || null,
+								sources: r.results.map((s) => ({ title: s.title, url: s.url })),
+								error: r.error,
+							})),
+						}
+					: {}),
+				...(opts.workflow && hasApprovedSummary
+					? {
+							summary: {
+								text: opts.approvedSummary?.trim(),
+								workflow: opts.workflow,
+								model: opts.summaryMeta?.model ?? null,
+								durationMs: opts.summaryMeta?.durationMs ?? 0,
+								tokenEstimate: opts.summaryMeta?.tokenEstimate ?? 0,
+								fallbackUsed: opts.summaryMeta?.fallbackUsed === true,
+								fallbackReason: opts.summaryMeta?.fallbackReason,
+								edited: opts.summaryMeta?.edited === true,
+							},
+						}
 					: {}),
 			},
 		};
@@ -842,9 +859,7 @@ export default function (pi: ExtensionAPI) {
 			pc.phase = "curating";
 
 			const searchAbort = new AbortController();
-			const addSearchSignal = pc.signal
-				? AbortSignal.any([pc.signal, searchAbort.signal])
-				: searchAbort.signal;
+			const addSearchSignal = pc.signal ? AbortSignal.any([pc.signal, searchAbort.signal]) : searchAbort.signal;
 
 			const sessionToken = randomUUID();
 			handle = await startCuratorServer(
@@ -882,12 +897,13 @@ export default function (pi: ExtensionAPI) {
 					onSubmit(payload) {
 						if (pendingCurate !== pc) return;
 						searchAbort.abort();
-						const filtered = payload.selectedQueryIndices.length > 0
-							? filterByQueryIndices(payload.selectedQueryIndices, pc.searchResults)
-							: collectAllResultsAndUrls(pc.searchResults);
-						const filteredInline = pc.allInlineContent.filter(c => filtered.urls.includes(c.url));
+						const filtered =
+							payload.selectedQueryIndices.length > 0
+								? filterByQueryIndices(payload.selectedQueryIndices, pc.searchResults)
+								: collectAllResultsAndUrls(pc.searchResults);
+						const filteredInline = pc.allInlineContent.filter((c) => filtered.urls.includes(c.url));
 						const base: SearchReturnOptions = {
-							queryList: filtered.results.map(r => r.query),
+							queryList: filtered.results.map((r) => r.query),
 							results: filtered.results,
 							urls: filtered.urls,
 							includeContent: pc.includeContent,
@@ -908,21 +924,26 @@ export default function (pi: ExtensionAPI) {
 						if (pendingCurate !== pc) return;
 						searchAbort.abort();
 						if (reason === "timeout") {
-							const resolvedSummary = resolveSummaryForSubmit({ selectedQueryIndices: [], summary: undefined, summaryMeta: undefined }, pc.searchResults);
+							const resolvedSummary = resolveSummaryForSubmit(
+								{ selectedQueryIndices: [], summary: undefined, summaryMeta: undefined },
+								pc.searchResults,
+							);
 							const all = collectAllResultsAndUrls(pc.searchResults);
-							const filteredInline = pc.allInlineContent.filter(c => all.urls.includes(c.url));
-							pc.finish(buildSearchReturn({
-								queryList: all.results.map(r => r.query),
-								results: all.results,
-								urls: all.urls,
-								includeContent: pc.includeContent,
-								inlineContent: filteredInline.length > 0 ? filteredInline : undefined,
-								curated: true,
-								curatedFrom: pc.searchResults.size,
-								workflow: pc.workflow,
-								approvedSummary: resolvedSummary.approvedSummary,
-								summaryMeta: resolvedSummary.summaryMeta,
-							}));
+							const filteredInline = pc.allInlineContent.filter((c) => all.urls.includes(c.url));
+							pc.finish(
+								buildSearchReturn({
+									queryList: all.results.map((r) => r.query),
+									results: all.results,
+									urls: all.urls,
+									includeContent: pc.includeContent,
+									inlineContent: filteredInline.length > 0 ? filteredInline : undefined,
+									curated: true,
+									curatedFrom: pc.searchResults.size,
+									workflow: pc.workflow,
+									approvedSummary: resolvedSummary.approvedSummary,
+									summaryMeta: resolvedSummary.summaryMeta,
+								}),
+							);
 						} else {
 							pc.finish(buildCurationCancelledReturn(reason));
 						}
@@ -936,18 +957,21 @@ export default function (pi: ExtensionAPI) {
 						try {
 							saveConfig({ provider: normalized });
 						} catch (err) {
-							const message = err instanceof Error ? err.message : String(err);
-							console.error(`Failed to persist default provider: ${message}`);
+							const _message = err instanceof Error ? err.message : String(err);
 						}
 					},
 					async onAddSearch(query, queryIndex, provider) {
 						if (pendingCurate !== pc) throw new Error("Curator session is no longer active.");
 						const normalizedProvider = normalizeProviderInput(provider);
-						const requestedProvider = !normalizedProvider || normalizedProvider === "auto"
-							? pc.defaultProvider
-							: normalizedProvider;
+						const requestedProvider =
+							!normalizedProvider || normalizedProvider === "auto" ? pc.defaultProvider : normalizedProvider;
 						try {
-							const { answer, results, inlineContent, provider: actualProvider } = await search(query, {
+							const {
+								answer,
+								results,
+								inlineContent,
+								provider: actualProvider,
+							} = await search(query, {
 								provider: requestedProvider,
 								numResults: pc.numResults,
 								recencyFilter: pc.recencyFilter,
@@ -960,13 +984,19 @@ export default function (pi: ExtensionAPI) {
 							if (inlineContent) pc.allInlineContent.push(...inlineContent);
 							return {
 								answer,
-								results: results.map(r => ({ title: r.title, url: r.url, domain: extractDomain(r.url) })),
+								results: results.map((r) => ({ title: r.title, url: r.url, domain: extractDomain(r.url) })),
 								provider: actualProvider,
 							};
 						} catch (err) {
 							const message = err instanceof Error ? err.message : String(err);
 							if (pendingCurate === pc) {
-								pc.searchResults.set(queryIndex, { query, answer: "", results: [], error: message, provider: requestedProvider });
+								pc.searchResults.set(queryIndex, {
+									query,
+									answer: "",
+									results: [],
+									error: message,
+									provider: requestedProvider,
+								});
 							}
 							throw err;
 						}
@@ -991,7 +1021,7 @@ export default function (pi: ExtensionAPI) {
 				} else {
 					handle.pushResult(qi, {
 						answer: data.answer,
-						results: data.results.map(r => ({ title: r.title, url: r.url, domain: extractDomain(r.url) })),
+						results: data.results.map((r) => ({ title: r.title, url: r.url, domain: extractDomain(r.url) })),
 						provider: data.provider || pc.defaultProvider,
 					});
 				}
@@ -999,7 +1029,12 @@ export default function (pi: ExtensionAPI) {
 			if (searchesComplete) handle.searchesDone();
 
 			pc.onUpdate?.({
-				content: [{ type: "text", text: searchesComplete ? "Waiting for summary approval in browser..." : "Searches streaming to browser..." }],
+				content: [
+					{
+						type: "text",
+						text: searchesComplete ? "Waiting for summary approval in browser..." : "Searches streaming to browser...",
+					},
+				],
 				details: { phase: "curating", progress: searchesComplete ? 1 : 0.5 },
 			});
 
@@ -1016,15 +1051,13 @@ export default function (pi: ExtensionAPI) {
 					});
 					return;
 				} catch (err) {
-					const message = err instanceof Error ? err.message : String(err);
-					console.error(`Failed to open Glimpse curator window: ${message}`);
+					const _message = err instanceof Error ? err.message : String(err);
 					glimpseWin = null;
 				}
 			}
 			await openInBrowser(pi, handle.url);
 		} catch (err) {
-			const message = err instanceof Error ? err.message : String(err);
-			console.error(`Failed to open curator UI: ${message}`);
+			const _message = err instanceof Error ? err.message : String(err);
 			if (pendingCurate === pc || (handle && activeCurator === handle)) {
 				closeCurator();
 			}
@@ -1078,23 +1111,32 @@ export default function (pi: ExtensionAPI) {
 	pi.registerTool({
 		name: "web_search",
 		label: "Web Search",
-		description:
-			`Search the web using Perplexity AI, Exa, or Gemini. Returns an AI-synthesized answer with source citations. For comprehensive research, prefer queries (plural) with 2-4 varied angles over a single query — each query gets its own synthesized answer, so varying phrasing and scope gives much broader coverage. When includeContent is true, full page content is fetched in the background. Searches auto-open the interactive browser curator and stream results live; set workflow to "none" to skip curation. Provider auto-selects: Exa (direct API with key, MCP fallback without), else Perplexity (needs key), else Gemini API (needs key), else Gemini Web (needs a supported Chromium-based browser login).`,
+		description: `Search the web using Perplexity AI, Exa, or Gemini. Returns an AI-synthesized answer with source citations. For comprehensive research, prefer queries (plural) with 2-4 varied angles over a single query — each query gets its own synthesized answer, so varying phrasing and scope gives much broader coverage. When includeContent is true, full page content is fetched in the background. Searches auto-open the interactive browser curator and stream results live; set workflow to "none" to skip curation. Provider auto-selects: Exa (direct API with key, MCP fallback without), else Perplexity (needs key), else Gemini API (needs key), else Gemini Web (needs a supported Chromium-based browser login).`,
 		parameters: Type.Object({
-			query: Type.Optional(Type.String({ description: "Single search query. For research tasks, prefer 'queries' with multiple varied angles instead." })),
-			queries: Type.Optional(Type.Array(Type.String(), { description: "Multiple queries searched in sequence, each returning its own synthesized answer. Prefer this for research — vary phrasing, scope, and angle across 2-4 queries to maximize coverage. Good: ['React vs Vue performance benchmarks 2026', 'React vs Vue developer experience comparison', 'React ecosystem size vs Vue ecosystem']. Bad: ['React vs Vue', 'React vs Vue comparison', 'React vs Vue review'] (too similar, redundant results)." })),
+			query: Type.Optional(
+				Type.String({
+					description: "Single search query. For research tasks, prefer 'queries' with multiple varied angles instead.",
+				}),
+			),
+			queries: Type.Optional(
+				Type.Array(Type.String(), {
+					description:
+						"Multiple queries searched in sequence, each returning its own synthesized answer. Prefer this for research — vary phrasing, scope, and angle across 2-4 queries to maximize coverage. Good: ['React vs Vue performance benchmarks 2026', 'React vs Vue developer experience comparison', 'React ecosystem size vs Vue ecosystem']. Bad: ['React vs Vue', 'React vs Vue comparison', 'React vs Vue review'] (too similar, redundant results).",
+				}),
+			),
 			numResults: Type.Optional(Type.Number({ description: "Results per query (default: 5, max: 20)" })),
 			includeContent: Type.Optional(Type.Boolean({ description: "Fetch full page content (async)" })),
-			recencyFilter: Type.Optional(
-				StringEnum(["day", "week", "month", "year"], { description: "Filter by recency" }),
+			recencyFilter: Type.Optional(StringEnum(["day", "week", "month", "year"], { description: "Filter by recency" })),
+			domainFilter: Type.Optional(
+				Type.Array(Type.String(), { description: "Limit to domains (prefix with - to exclude)" }),
 			),
-			domainFilter: Type.Optional(Type.Array(Type.String(), { description: "Limit to domains (prefix with - to exclude)" })),
 			provider: Type.Optional(
 				StringEnum(["auto", "perplexity", "gemini", "exa"], { description: "Search provider (default: auto)" }),
 			),
 			workflow: Type.Optional(
 				StringEnum(["none", "summary-review"], {
-					description: "Search workflow mode: none = no curator, summary-review = open curator with auto summary draft (default)",
+					description:
+						"Search workflow mode: none = no curator, summary-review = open curator with auto summary draft (default)",
 				}),
 			),
 		}),
@@ -1102,7 +1144,9 @@ export default function (pi: ExtensionAPI) {
 		async execute(_toolCallId, params, signal, onUpdate, ctx) {
 			const rawQueryList: unknown[] = Array.isArray(params.queries)
 				? params.queries
-				: (params.query !== undefined ? [params.query] : []);
+				: params.query !== undefined
+					? [params.query]
+					: [];
 			const queryList = normalizeQueryList(rawQueryList);
 			const configWorkflow = loadConfigForExtensionInit().workflow;
 			const workflow = resolveWorkflow(params.workflow ?? configWorkflow, ctx?.hasUI !== false);
@@ -1133,9 +1177,7 @@ export default function (pi: ExtensionAPI) {
 				const searchResults = new Map<number, QueryResultData>();
 				const allInlineContent: ExtractedContent[] = [];
 				const searchAbort = new AbortController();
-				const searchSignal = signal
-					? AbortSignal.any([signal, searchAbort.signal])
-					: searchAbort.signal;
+				const searchSignal = signal ? AbortSignal.any([signal, searchAbort.signal]) : searchAbort.signal;
 				let cancelled = false;
 
 				const bootstrap = await loadCuratorBootstrap(params.provider);
@@ -1219,14 +1261,20 @@ export default function (pi: ExtensionAPI) {
 						if (activeCurator) {
 							activeCurator.pushResult(qi, {
 								answer,
-								results: results.map(r => ({ title: r.title, url: r.url, domain: extractDomain(r.url) })),
+								results: results.map((r) => ({ title: r.title, url: r.url, domain: extractDomain(r.url) })),
 								provider,
 							});
 						}
 					} catch (err) {
 						if (signal?.aborted || cancelled || searchAbort.signal.aborted) break;
 						const message = err instanceof Error ? err.message : String(err);
-						searchResults.set(qi, { query: queryList[qi], answer: "", results: [], error: message, provider: requestedProvider });
+						searchResults.set(qi, {
+							query: queryList[qi],
+							answer: "",
+							results: [],
+							error: message,
+							provider: requestedProvider,
+						});
 						if (activeCurator) {
 							activeCurator.pushError(qi, message, requestedProvider);
 						}
@@ -1282,9 +1330,8 @@ export default function (pi: ExtensionAPI) {
 					if (inlineContent) allInlineContent.push(...inlineContent);
 				} catch (err) {
 					const message = err instanceof Error ? err.message : String(err);
-					const requestedProvider = typeof resolvedProvider === "string" && resolvedProvider !== "auto"
-						? resolvedProvider
-						: undefined;
+					const requestedProvider =
+						typeof resolvedProvider === "string" && resolvedProvider !== "auto" ? resolvedProvider : undefined;
 					searchResults.push({ query, answer: "", results: [], error: message, provider: requestedProvider });
 				}
 			}
@@ -1302,19 +1349,21 @@ export default function (pi: ExtensionAPI) {
 			const input = args as { query?: unknown; queries?: unknown };
 			const rawQueryList: unknown[] = Array.isArray(input.queries)
 				? input.queries
-				: (input.query !== undefined ? [input.query] : []);
+				: input.query !== undefined
+					? [input.query]
+					: [];
 			const queryList = normalizeQueryList(rawQueryList);
 			if (queryList.length === 0) {
 				return new Text(theme.fg("toolTitle", theme.bold("search ")) + theme.fg("error", "(no query)"), 0, 0);
 			}
 			if (queryList.length === 1) {
 				const q = queryList[0];
-				const display = q.length > 60 ? q.slice(0, 57) + "..." : q;
+				const display = q.length > 60 ? `${q.slice(0, 57)}...` : q;
 				return new Text(theme.fg("toolTitle", theme.bold("search ")) + theme.fg("accent", `"${display}"`), 0, 0);
 			}
 			const lines = [theme.fg("toolTitle", theme.bold("search ")) + theme.fg("accent", `${queryList.length} queries`)];
 			for (const q of queryList.slice(0, 5)) {
-				const display = q.length > 50 ? q.slice(0, 47) + "..." : q;
+				const display = q.length > 50 ? `${q.slice(0, 47)}...` : q;
 				lines.push(theme.fg("muted", `  "${display}"`));
 			}
 			if (queryList.length > 5) {
@@ -1366,7 +1415,7 @@ export default function (pi: ExtensionAPI) {
 					const progress = details?.progress ?? 0;
 					const bar = "\u2588".repeat(Math.floor(progress * 10)) + "\u2591".repeat(10 - Math.floor(progress * 10));
 					const query = details?.currentQuery || "";
-					const display = query.length > 40 ? query.slice(0, 37) + "..." : query;
+					const display = query.length > 40 ? `${query.slice(0, 37)}...` : query;
 					return new Text(theme.fg("accent", `[${bar}] ${display}`), 0, 0);
 				}
 				const progress = details?.progress ?? 0;
@@ -1379,7 +1428,8 @@ export default function (pi: ExtensionAPI) {
 			}
 
 			let statusLine: string;
-			const queryInfo = details?.queryCount === 1 ? "" : `${details?.successfulQueries}/${details?.queryCount} queries, `;
+			const queryInfo =
+				details?.queryCount === 1 ? "" : `${details?.successfulQueries}/${details?.queryCount} queries, `;
 			statusLine = theme.fg("success", `${queryInfo}${details?.totalResults ?? 0} sources`);
 			if (details?.curated && details?.curatedFrom) {
 				statusLine += theme.fg("muted", ` (${details.queryCount}/${details.curatedFrom} queries curated)`);
@@ -1394,7 +1444,7 @@ export default function (pi: ExtensionAPI) {
 			const lines = [statusLine];
 			if (details?.summary?.text) {
 				lines.push("");
-				lines.push(theme.fg("accent", `── Summary (${details.summary.workflow}) ` + "─".repeat(32)));
+				lines.push(theme.fg("accent", `── Summary (${details.summary.workflow}) ${"─".repeat(32)}`));
 				lines.push("");
 				for (const line of details.summary.text.split("\n")) {
 					lines.push(`  ${line}`);
@@ -1410,7 +1460,7 @@ export default function (pi: ExtensionAPI) {
 				if (details.summary.fallbackReason) {
 					metaParts.push(`reason=${details.summary.fallbackReason}`);
 				}
-				lines.push(theme.fg("dim", "  " + metaParts.join(" · ")));
+				lines.push(theme.fg("dim", `  ${metaParts.join(" · ")}`));
 			}
 
 			const queryDetails = details?.curatedQueries;
@@ -1418,11 +1468,13 @@ export default function (pi: ExtensionAPI) {
 				const kept = queryDetails.length;
 				const from = details?.curatedFrom ?? kept;
 				lines.push("");
-				lines.push(theme.fg("accent", `\u2500\u2500 Curated Results (${kept} of ${from} queries kept) ` + "\u2500".repeat(24)));
+				lines.push(
+					theme.fg("accent", `\u2500\u2500 Curated Results (${kept} of ${from} queries kept) ${"\u2500".repeat(24)}`),
+				);
 
 				for (const cq of queryDetails) {
 					lines.push("");
-					const dq = cq.query.length > 65 ? cq.query.slice(0, 62) + "..." : cq.query;
+					const dq = cq.query.length > 65 ? `${cq.query.slice(0, 62)}...` : cq.query;
 					const providerLabel = cq.provider ? ` (${cq.provider})` : "";
 					lines.push(theme.fg("accent", `  "${dq}"${providerLabel}`));
 
@@ -1439,7 +1491,7 @@ export default function (pi: ExtensionAPI) {
 						lines.push("");
 						for (const s of cq.sources) {
 							const domain = s.url.replace(/^https?:\/\//, "").replace(/\/.*$/, "");
-							const title = s.title.length > 50 ? s.title.slice(0, 47) + "..." : s.title;
+							const title = s.title.length > 50 ? `${s.title.slice(0, 47)}...` : s.title;
 							lines.push(theme.fg("muted", `  \u25b8 ${title}`) + theme.fg("dim", ` \u00b7 ${domain}`));
 						}
 					}
@@ -1447,7 +1499,7 @@ export default function (pi: ExtensionAPI) {
 				lines.push("");
 			} else {
 				const textContent = result.content.find((c) => c.type === "text")?.text || "";
-				const preview = textContent.length > 500 ? textContent.slice(0, 500) + "..." : textContent;
+				const preview = textContent.length > 500 ? `${textContent.slice(0, 500)}...` : textContent;
 				for (const line of preview.split("\n")) {
 					lines.push(theme.fg("dim", line));
 				}
@@ -1459,8 +1511,8 @@ export default function (pi: ExtensionAPI) {
 				} else {
 					lines.push(theme.fg("muted", "Fetching:"));
 					for (const u of details.fetchUrls.slice(0, 5)) {
-						const display = u.length > 60 ? u.slice(0, 57) + "..." : u;
-						lines.push(theme.fg("dim", "  " + display));
+						const display = u.length > 60 ? `${u.slice(0, 57)}...` : u;
+						lines.push(theme.fg("dim", `  ${display}`));
 					}
 					if (details.fetchUrls.length > 5) {
 						lines.push(theme.fg("dim", `  ... and ${details.fetchUrls.length - 5} more`));
@@ -1477,12 +1529,12 @@ export default function (pi: ExtensionAPI) {
 				let collapsedLines = 1; // statusLine
 				const summaryPreview = details?.summary?.text?.trim() || "";
 				if (summaryPreview) {
-					const preview = summaryPreview.length > 120 ? summaryPreview.slice(0, 117) + "..." : summaryPreview;
+					const preview = summaryPreview.length > 120 ? `${summaryPreview.slice(0, 117)}...` : summaryPreview;
 					box.addChild(new Text(theme.fg("dim", preview), 0, 0));
 					collapsedLines++;
 				} else if (details?.curatedQueries?.length) {
 					for (const cq of details.curatedQueries.slice(0, 3)) {
-						const dq = cq.query.length > 55 ? cq.query.slice(0, 52) + "..." : cq.query;
+						const dq = cq.query.length > 55 ? `${cq.query.slice(0, 52)}...` : cq.query;
 						const srcCount = cq.sources?.length ?? 0;
 						const suffix = cq.error ? theme.fg("error", " (error)") : theme.fg("dim", ` · ${srcCount} sources`);
 						box.addChild(new Text(theme.fg("accent", `  "${dq}"`) + suffix, 0, 0));
@@ -1494,20 +1546,22 @@ export default function (pi: ExtensionAPI) {
 					}
 				} else {
 					const textContent = result.content.find((c) => c.type === "text")?.text || "";
-					const firstContentLine = textContent.split("\n").find(l => {
+					const firstContentLine = textContent.split("\n").find((l) => {
 						const t = l.trim();
 						return t && !t.startsWith("[") && !t.startsWith("#") && !t.startsWith("---");
 					});
 					const fallbackLine = (firstContentLine?.trim() || "").replace(/\*\*/g, "");
 					if (fallbackLine) {
-						const preview = fallbackLine.length > 120 ? fallbackLine.slice(0, 117) + "..." : fallbackLine;
+						const preview = fallbackLine.length > 120 ? `${fallbackLine.slice(0, 117)}...` : fallbackLine;
 						box.addChild(new Text(theme.fg("dim", preview), 0, 0));
 						collapsedLines++;
 					}
 				}
 				const moreLines = Math.max(0, totalLines - collapsedLines);
 				if (moreLines > 0) {
-					box.addChild(new Text(theme.fg("muted", `\n... (${moreLines} more lines, ${totalLines} total, ctrl+o to expand)`), 0, 0));
+					box.addChild(
+						new Text(theme.fg("muted", `\n... (${moreLines} more lines, ${totalLines} total, ctrl+o to expand)`), 0, 0),
+					);
 				}
 				return box;
 			}
@@ -1519,14 +1573,17 @@ export default function (pi: ExtensionAPI) {
 	pi.registerTool({
 		name: "code_search",
 		label: "Code Search",
-		description: "Search for code examples, documentation, and API references. Returns relevant code snippets and docs from GitHub, Stack Overflow, and official documentation. Use for any programming question — API usage, library examples, debugging help.",
+		description:
+			"Search for code examples, documentation, and API references. Returns relevant code snippets and docs from GitHub, Stack Overflow, and official documentation. Use for any programming question — API usage, library examples, debugging help.",
 		parameters: Type.Object({
 			query: Type.String({ description: "Programming question, API, library, or debugging topic to search for" }),
-			maxTokens: Type.Optional(Type.Integer({
-				minimum: 1000,
-				maximum: 50000,
-				description: "Maximum tokens of code/documentation context to return (default: 5000)",
-			})),
+			maxTokens: Type.Optional(
+				Type.Integer({
+					minimum: 1000,
+					maximum: 50000,
+					description: "Maximum tokens of code/documentation context to return (default: 5000)",
+				}),
+			),
 		}),
 
 		async execute(toolCallId, params, signal) {
@@ -1535,9 +1592,7 @@ export default function (pi: ExtensionAPI) {
 
 		renderCall(args, theme) {
 			const { query } = args as { query?: string };
-			const display = !query
-				? "(no query)"
-				: query.length > 70 ? query.slice(0, 67) + "..." : query;
+			const display = !query ? "(no query)" : query.length > 70 ? `${query.slice(0, 67)}...` : query;
 			return new Text(theme.fg("toolTitle", theme.bold("code_search ")) + theme.fg("accent", display), 0, 0);
 		},
 
@@ -1547,40 +1602,55 @@ export default function (pi: ExtensionAPI) {
 				return new Text(theme.fg("error", `Error: ${details.error}`), 0, 0);
 			}
 
-			const summary = theme.fg("success", "code context returned") +
-				theme.fg("muted", ` (${details?.maxTokens ?? 5000} tokens max)`);
+			const summary =
+				theme.fg("success", "code context returned") + theme.fg("muted", ` (${details?.maxTokens ?? 5000} tokens max)`);
 			if (!expanded) return new Text(summary, 0, 0);
 
 			const textContent = result.content.find((c) => c.type === "text")?.text || "";
-			const preview = textContent.length > 500 ? textContent.slice(0, 500) + "..." : textContent;
-			return new Text(summary + "\n" + theme.fg("dim", preview), 0, 0);
+			const preview = textContent.length > 500 ? `${textContent.slice(0, 500)}...` : textContent;
+			return new Text(`${summary}\n${theme.fg("dim", preview)}`, 0, 0);
 		},
 	});
 
 	pi.registerTool({
 		name: "fetch_content",
 		label: "Fetch Content",
-		description: "Fetch URL(s) and extract readable content as markdown. Supports YouTube video transcripts (with thumbnail), GitHub repository contents, and local video files (with frame thumbnail). Video frames can be extracted via timestamp/range or sampled across the entire video with frames alone. Falls back to Gemini for pages that block bots or fail Readability extraction. For YouTube and video files: ALWAYS pass the user's specific question via the prompt parameter — this directs the AI to focus on that aspect of the video, producing much better results than a generic extraction. Content is always stored and can be retrieved with get_search_content.",
+		description:
+			"Fetch URL(s) and extract readable content as markdown. Supports YouTube video transcripts (with thumbnail), GitHub repository contents, and local video files (with frame thumbnail). Video frames can be extracted via timestamp/range or sampled across the entire video with frames alone. Falls back to Gemini for pages that block bots or fail Readability extraction. For YouTube and video files: ALWAYS pass the user's specific question via the prompt parameter — this directs the AI to focus on that aspect of the video, producing much better results than a generic extraction. Content is always stored and can be retrieved with get_search_content.",
 		parameters: Type.Object({
 			url: Type.Optional(Type.String({ description: "Single URL to fetch" })),
 			urls: Type.Optional(Type.Array(Type.String(), { description: "Multiple URLs (parallel)" })),
-			forceClone: Type.Optional(Type.Boolean({
-				description: "Force cloning large GitHub repositories that exceed the size threshold",
-			})),
-			prompt: Type.Optional(Type.String({
-				description: "Question or instruction for video analysis (YouTube and video files). Pass the user's specific question here — e.g. 'describe the book shown at the advice for beginners section'. Without this, a generic transcript extraction is used which may miss what the user is asking about.",
-			})),
-			timestamp: Type.Optional(Type.String({
-				description: "Extract video frame(s) at a timestamp or time range. Single: '1:23:45', '23:45', or '85' (seconds). Range: '23:41-25:00' extracts evenly-spaced frames across that span (default 6). Use frames with ranges to control density; single+frames uses a fixed 5s interval. YouTube requires yt-dlp + ffmpeg; local videos require ffmpeg. Use a range when you know the approximate area but not the exact moment — you'll get a contact sheet to visually identify the right frame.",
-			})),
-			frames: Type.Optional(Type.Integer({
-				minimum: 1,
-				maximum: 12,
-				description: "Number of frames to extract. Use with timestamp range for custom density, with single timestamp to get N frames at 5s intervals, or alone to sample across the entire video. Requires yt-dlp + ffmpeg for YouTube, ffmpeg for local video.",
-			})),
-			model: Type.Optional(Type.String({
-				description: "Override the Gemini model for video/YouTube analysis (e.g. 'gemini-2.5-flash', 'gemini-3-flash-preview'). Defaults to config or gemini-3-flash-preview.",
-			})),
+			forceClone: Type.Optional(
+				Type.Boolean({
+					description: "Force cloning large GitHub repositories that exceed the size threshold",
+				}),
+			),
+			prompt: Type.Optional(
+				Type.String({
+					description:
+						"Question or instruction for video analysis (YouTube and video files). Pass the user's specific question here — e.g. 'describe the book shown at the advice for beginners section'. Without this, a generic transcript extraction is used which may miss what the user is asking about.",
+				}),
+			),
+			timestamp: Type.Optional(
+				Type.String({
+					description:
+						"Extract video frame(s) at a timestamp or time range. Single: '1:23:45', '23:45', or '85' (seconds). Range: '23:41-25:00' extracts evenly-spaced frames across that span (default 6). Use frames with ranges to control density; single+frames uses a fixed 5s interval. YouTube requires yt-dlp + ffmpeg; local videos require ffmpeg. Use a range when you know the approximate area but not the exact moment — you'll get a contact sheet to visually identify the right frame.",
+				}),
+			),
+			frames: Type.Optional(
+				Type.Integer({
+					minimum: 1,
+					maximum: 12,
+					description:
+						"Number of frames to extract. Use with timestamp range for custom density, with single timestamp to get N frames at 5s intervals, or alone to sample across the entire video. Requires yt-dlp + ffmpeg for YouTube, ffmpeg for local video.",
+				}),
+			),
+			model: Type.Optional(
+				Type.String({
+					description:
+						"Override the Gemini model for video/YouTube analysis (e.g. 'gemini-2.5-flash', 'gemini-3-flash-preview'). Defaults to config or gemini-3-flash-preview.",
+				}),
+			),
 		}),
 
 		async execute(_toolCallId, params, signal, onUpdate) {
@@ -1624,18 +1694,28 @@ export default function (pi: ExtensionAPI) {
 				if (result.error) {
 					return {
 						content: [{ type: "text", text: `Error: ${result.error}` }],
-						details: { urls: urlList, urlCount: 1, successful: 0, error: result.error, responseId, prompt: params.prompt, timestamp: params.timestamp, frames: params.frames },
+						details: {
+							urls: urlList,
+							urlCount: 1,
+							successful: 0,
+							error: result.error,
+							responseId,
+							prompt: params.prompt,
+							timestamp: params.timestamp,
+							frames: params.frames,
+						},
 					};
 				}
 
 				const fullLength = result.content.length;
 				const truncated = fullLength > MAX_INLINE_CONTENT;
 				let output = truncated
-					? result.content.slice(0, MAX_INLINE_CONTENT) + "\n\n[Content truncated...]"
+					? `${result.content.slice(0, MAX_INLINE_CONTENT)}\n\n[Content truncated...]`
 					: result.content;
 
 				if (truncated) {
-					output += `\n\n---\nShowing ${MAX_INLINE_CONTENT} of ${fullLength} chars. ` +
+					output +=
+						`\n\n---\nShowing ${MAX_INLINE_CONTENT} of ${fullLength} chars. ` +
 						`Use get_search_content({ responseId: "${responseId}", urlIndex: 0 }) for full content.`;
 				}
 
@@ -1689,20 +1769,27 @@ export default function (pi: ExtensionAPI) {
 		},
 
 		renderCall(args, theme) {
-			const { url, urls, prompt, timestamp, frames, model } = args as { url?: string; urls?: string[]; prompt?: string; timestamp?: string; frames?: number; model?: string };
+			const { url, urls, prompt, timestamp, frames, model } = args as {
+				url?: string;
+				urls?: string[];
+				prompt?: string;
+				timestamp?: string;
+				frames?: number;
+				model?: string;
+			};
 			const urlList = urls ?? (url ? [url] : []);
 			if (urlList.length === 0) {
 				return new Text(theme.fg("toolTitle", theme.bold("fetch ")) + theme.fg("error", "(no URL)"), 0, 0);
 			}
 			const lines: string[] = [];
 			if (urlList.length === 1) {
-				const display = urlList[0].length > 60 ? urlList[0].slice(0, 57) + "..." : urlList[0];
+				const display = urlList[0].length > 60 ? `${urlList[0].slice(0, 57)}...` : urlList[0];
 				lines.push(theme.fg("toolTitle", theme.bold("fetch ")) + theme.fg("accent", display));
 			} else {
 				lines.push(theme.fg("toolTitle", theme.bold("fetch ")) + theme.fg("accent", `${urlList.length} URLs`));
 				for (const u of urlList.slice(0, 5)) {
-					const display = u.length > 60 ? u.slice(0, 57) + "..." : u;
-					lines.push(theme.fg("muted", "  " + display));
+					const display = u.length > 60 ? `${u.slice(0, 57)}...` : u;
+					lines.push(theme.fg("muted", `  ${display}`));
 				}
 				if (urlList.length > 5) {
 					lines.push(theme.fg("muted", `  ... and ${urlList.length - 5} more`));
@@ -1715,7 +1802,7 @@ export default function (pi: ExtensionAPI) {
 				lines.push(theme.fg("dim", "  frames: ") + theme.fg("warning", String(frames)));
 			}
 			if (prompt) {
-				const display = prompt.length > 250 ? prompt.slice(0, 247) + "..." : prompt;
+				const display = prompt.length > 250 ? `${prompt.slice(0, 247)}...` : prompt;
 				lines.push(theme.fg("dim", "  prompt: ") + theme.fg("muted", `"${display}"`));
 			}
 			if (model) {
@@ -1756,12 +1843,14 @@ export default function (pi: ExtensionAPI) {
 			if (details?.urlCount === 1) {
 				const title = details?.title || "Untitled";
 				const imgCount = details?.imageCount ?? (details?.hasImage ? 1 : 0);
-				const imageBadge = imgCount > 1
-					? theme.fg("accent", ` [${imgCount} images]`)
-					: imgCount === 1
-						? theme.fg("accent", " [image]")
-						: "";
-				let statusLine = theme.fg("success", title) + theme.fg("muted", ` (${details?.totalChars ?? 0} chars)`) + imageBadge;
+				const imageBadge =
+					imgCount > 1
+						? theme.fg("accent", ` [${imgCount} images]`)
+						: imgCount === 1
+							? theme.fg("accent", " [image]")
+							: "";
+				let statusLine =
+					theme.fg("success", title) + theme.fg("muted", ` (${details?.totalChars ?? 0} chars)`) + imageBadge;
 				if (details?.truncated) {
 					statusLine += theme.fg("warning", " [truncated]");
 				}
@@ -1770,12 +1859,12 @@ export default function (pi: ExtensionAPI) {
 				}
 				const textContent = result.content.find((c) => c.type === "text")?.text || "";
 				if (!expanded) {
-					const brief = textContent.length > 200 ? textContent.slice(0, 200) + "..." : textContent;
-					return new Text(statusLine + "\n" + theme.fg("dim", brief), 0, 0);
+					const brief = textContent.length > 200 ? `${textContent.slice(0, 200)}...` : textContent;
+					return new Text(`${statusLine}\n${theme.fg("dim", brief)}`, 0, 0);
 				}
 				const lines = [statusLine];
 				if (details?.prompt) {
-					const display = details.prompt.length > 250 ? details.prompt.slice(0, 247) + "..." : details.prompt;
+					const display = details.prompt.length > 250 ? `${details.prompt.slice(0, 247)}...` : details.prompt;
 					lines.push(theme.fg("dim", `  prompt: "${display}"`));
 				}
 				if (details?.timestamp) {
@@ -1784,19 +1873,21 @@ export default function (pi: ExtensionAPI) {
 				if (typeof details?.frames === "number") {
 					lines.push(theme.fg("dim", `  frames: ${details.frames}`));
 				}
-				const preview = textContent.length > 500 ? textContent.slice(0, 500) + "..." : textContent;
+				const preview = textContent.length > 500 ? `${textContent.slice(0, 500)}...` : textContent;
 				lines.push(theme.fg("dim", preview));
 				return new Text(lines.join("\n"), 0, 0);
 			}
 
 			const countColor = (details?.successful ?? 0) > 0 ? "success" : "error";
-			const statusLine = theme.fg(countColor, `${details?.successful}/${details?.urlCount} URLs`) + theme.fg("muted", " (content stored)");
+			const statusLine =
+				theme.fg(countColor, `${details?.successful}/${details?.urlCount} URLs`) +
+				theme.fg("muted", " (content stored)");
 			if (!expanded) {
 				return new Text(statusLine, 0, 0);
 			}
 			const textContent = result.content.find((c) => c.type === "text")?.text || "";
-			const preview = textContent.length > 500 ? textContent.slice(0, 500) + "..." : textContent;
-			return new Text(statusLine + "\n" + theme.fg("dim", preview), 0, 0);
+			const preview = textContent.length > 500 ? `${textContent.slice(0, 500)}...` : textContent;
+			return new Text(`${statusLine}\n${theme.fg("dim", preview)}`, 0, 0);
 		},
 	});
 
@@ -1837,7 +1928,9 @@ export default function (pi: ExtensionAPI) {
 					queryData = data.queries[params.queryIndex];
 					if (!queryData) {
 						return {
-							content: [{ type: "text", text: `Index ${params.queryIndex} out of range (0-${data.queries.length - 1})` }],
+							content: [
+								{ type: "text", text: `Index ${params.queryIndex} out of range (0-${data.queries.length - 1})` },
+							],
 							details: { error: "Index out of range" },
 						};
 					}
@@ -1920,9 +2013,13 @@ export default function (pi: ExtensionAPI) {
 			let target = "";
 			if (query) target = `query="${query}"`;
 			else if (queryIndex !== undefined) target = `queryIndex=${queryIndex}`;
-			else if (url) target = url.length > 30 ? url.slice(0, 27) + "..." : url;
+			else if (url) target = url.length > 30 ? `${url.slice(0, 27)}...` : url;
 			else if (urlIndex !== undefined) target = `urlIndex=${urlIndex}`;
-			return new Text(theme.fg("toolTitle", theme.bold("get_content ")) + theme.fg("accent", target || responseId.slice(0, 8)), 0, 0);
+			return new Text(
+				theme.fg("toolTitle", theme.bold("get_content ")) + theme.fg("accent", target || responseId.slice(0, 8)),
+				0,
+				0,
+			);
 		},
 
 		renderResult(result, { expanded }, theme) {
@@ -1943,7 +2040,9 @@ export default function (pi: ExtensionAPI) {
 			if (details?.query) {
 				statusLine = theme.fg("success", `"${details.query}"`) + theme.fg("muted", ` (${details.resultCount} results)`);
 			} else {
-				statusLine = theme.fg("success", details?.title || "Content") + theme.fg("muted", ` (${details?.contentLength ?? 0} chars)`);
+				statusLine =
+					theme.fg("success", details?.title || "Content") +
+					theme.fg("muted", ` (${details?.contentLength ?? 0} chars)`);
 			}
 
 			if (!expanded) {
@@ -1951,8 +2050,8 @@ export default function (pi: ExtensionAPI) {
 			}
 
 			const textContent = result.content.find((c) => c.type === "text")?.text || "";
-			const preview = textContent.length > 500 ? textContent.slice(0, 500) + "..." : textContent;
-			return new Text(statusLine + "\n" + theme.fg("dim", preview), 0, 0);
+			const preview = textContent.length > 500 ? `${textContent.slice(0, 500)}...` : textContent;
+			return new Text(`${statusLine}\n${theme.fg("dim", preview)}`, 0, 0);
 		},
 	});
 
@@ -1963,9 +2062,7 @@ export default function (pi: ExtensionAPI) {
 			const sessionToken = randomUUID();
 
 			const raw = args.trim();
-			const queries = raw.length > 0
-				? normalizeQueryList(raw.split(","))
-				: [];
+			const queries = raw.length > 0 ? normalizeQueryList(raw.split(",")) : [];
 
 			let bootstrap: CuratorBootstrap;
 			try {
@@ -1993,12 +2090,15 @@ export default function (pi: ExtensionAPI) {
 			let commandHandle: CuratorServerHandle | null = null;
 
 			function sendFollowUpFromReturn(payload: ReturnType<typeof buildSearchReturn>) {
-				pi.sendMessage({
-					customType: "web-search-results",
-					content: payload.content,
-					display: "tool",
-					details: payload.details,
-				}, { triggerTurn: true, deliverAs: "followUp" });
+				pi.sendMessage(
+					{
+						customType: "web-search-results",
+						content: payload.content,
+						display: "tool",
+						details: payload.details,
+					},
+					{ triggerTurn: true, deliverAs: "followUp" },
+				);
 			}
 
 			try {
@@ -2030,11 +2130,12 @@ export default function (pi: ExtensionAPI) {
 							if (commandHandle && activeCurator !== commandHandle) return;
 							aborted = true;
 							searchAbort.abort();
-							const filtered = payload.selectedQueryIndices.length > 0
-								? filterByQueryIndices(payload.selectedQueryIndices, collected)
-								: collectAllResultsAndUrls(collected);
+							const filtered =
+								payload.selectedQueryIndices.length > 0
+									? filterByQueryIndices(payload.selectedQueryIndices, collected)
+									: collectAllResultsAndUrls(collected);
 							const base: SearchReturnOptions = {
-								queryList: filtered.results.map(r => r.query),
+								queryList: filtered.results.map((r) => r.query),
 								results: filtered.results,
 								urls: filtered.urls,
 								includeContent: false,
@@ -2056,18 +2157,23 @@ export default function (pi: ExtensionAPI) {
 							searchAbort.abort();
 							if (reason === "timeout") {
 								const all = collectAllResultsAndUrls(collected);
-								const resolvedSummary = resolveSummaryForSubmit({ selectedQueryIndices: [], summary: undefined, summaryMeta: undefined }, collected);
-								sendFollowUpFromReturn(buildSearchReturn({
-									queryList: all.results.map(r => r.query),
-									results: all.results,
-									urls: all.urls,
-									includeContent: false,
-									curated: true,
-									curatedFrom: collected.size,
-									workflow: "summary-review",
-									approvedSummary: resolvedSummary.approvedSummary,
-									summaryMeta: resolvedSummary.summaryMeta,
-								}));
+								const resolvedSummary = resolveSummaryForSubmit(
+									{ selectedQueryIndices: [], summary: undefined, summaryMeta: undefined },
+									collected,
+								);
+								sendFollowUpFromReturn(
+									buildSearchReturn({
+										queryList: all.results.map((r) => r.query),
+										results: all.results,
+										urls: all.urls,
+										includeContent: false,
+										curated: true,
+										curatedFrom: collected.size,
+										workflow: "summary-review",
+										approvedSummary: resolvedSummary.approvedSummary,
+										summaryMeta: resolvedSummary.summaryMeta,
+									}),
+								);
 							}
 							closeCurator();
 						},
@@ -2079,8 +2185,7 @@ export default function (pi: ExtensionAPI) {
 							try {
 								saveConfig({ provider: normalized });
 							} catch (err) {
-								const message = err instanceof Error ? err.message : String(err);
-								console.error(`Failed to persist default provider: ${message}`);
+								const _message = err instanceof Error ? err.message : String(err);
 							}
 						},
 						async onAddSearch(query, queryIndex, provider) {
@@ -2088,11 +2193,14 @@ export default function (pi: ExtensionAPI) {
 								throw new Error("Curator session is no longer active.");
 							}
 							const normalizedProvider = normalizeProviderInput(provider);
-							const requestedProvider = !normalizedProvider || normalizedProvider === "auto"
-								? currentProvider
-								: normalizedProvider;
+							const requestedProvider =
+								!normalizedProvider || normalizedProvider === "auto" ? currentProvider : normalizedProvider;
 							try {
-								const { answer, results, provider: actualProvider } = await search(query, {
+								const {
+									answer,
+									results,
+									provider: actualProvider,
+								} = await search(query, {
 									provider: requestedProvider,
 									signal: searchAbort.signal,
 								});
@@ -2102,13 +2210,19 @@ export default function (pi: ExtensionAPI) {
 								collected.set(queryIndex, { query, answer, results, error: null, provider: actualProvider });
 								return {
 									answer,
-									results: results.map(r => ({ title: r.title, url: r.url, domain: extractDomain(r.url) })),
+									results: results.map((r) => ({ title: r.title, url: r.url, domain: extractDomain(r.url) })),
 									provider: actualProvider,
 								};
 							} catch (err) {
 								const message = err instanceof Error ? err.message : String(err);
 								if (!commandHandle || activeCurator === commandHandle) {
-									collected.set(queryIndex, { query, answer: "", results: [], error: message, provider: requestedProvider });
+									collected.set(queryIndex, {
+										query,
+										answer: "",
+										results: [],
+										error: message,
+										provider: requestedProvider,
+									});
 								}
 								throw err;
 							}
@@ -2136,8 +2250,7 @@ export default function (pi: ExtensionAPI) {
 							}
 						});
 					} catch (err) {
-						const message = err instanceof Error ? err.message : String(err);
-						console.error(`Failed to open Glimpse curator window: ${message}`);
+						const _message = err instanceof Error ? err.message : String(err);
 						glimpseWin = null;
 						await openInBrowser(pi, handle.url);
 					}
@@ -2158,7 +2271,7 @@ export default function (pi: ExtensionAPI) {
 								if (aborted || activeCurator !== handle) break;
 								handle.pushResult(qi, {
 									answer,
-									results: results.map(r => ({ title: r.title, url: r.url, domain: extractDomain(r.url) })),
+									results: results.map((r) => ({ title: r.title, url: r.url, domain: extractDomain(r.url) })),
 									provider,
 								});
 								collected.set(qi, { query: queries[qi], answer, results, error: null, provider });
@@ -2166,7 +2279,13 @@ export default function (pi: ExtensionAPI) {
 								if (aborted || activeCurator !== handle) break;
 								const message = err instanceof Error ? err.message : String(err);
 								handle.pushError(qi, message, requestedProvider);
-								collected.set(qi, { query: queries[qi], answer: "", results: [], error: message, provider: requestedProvider });
+								collected.set(qi, {
+									query: queries[qi],
+									answer: "",
+									results: [],
+									error: message,
+									provider: requestedProvider,
+								});
 							}
 						}
 						if (!aborted && activeCurator === handle) handle.searchesDone();
@@ -2210,15 +2329,19 @@ export default function (pi: ExtensionAPI) {
 				return;
 			}
 
-			const label = newWorkflow === "none"
-				? "Curator disabled — web_search will return raw results"
-				: "Curator enabled — web_search will open curator and auto-generate a summary draft";
-			pi.sendMessage({
-				customType: "curator-config",
-				content: [{ type: "text", text: label }],
-				display: "tool",
-				details: { workflow: newWorkflow },
-			}, { triggerTurn: false, deliverAs: "followUp" });
+			const label =
+				newWorkflow === "none"
+					? "Curator disabled — web_search will return raw results"
+					: "Curator enabled — web_search will open curator and auto-generate a summary draft";
+			pi.sendMessage(
+				{
+					customType: "curator-config",
+					content: [{ type: "text", text: label }],
+					display: "tool",
+					details: { workflow: newWorkflow },
+				},
+				{ triggerTurn: false, deliverAs: "followUp" },
+			);
 		},
 	});
 
@@ -2227,12 +2350,20 @@ export default function (pi: ExtensionAPI) {
 		handler: async () => {
 			const cookies = await isGeminiWebAvailable();
 			if (!cookies) {
-				pi.sendMessage({
-					customType: "google-account",
-					content: [{ type: "text", text: "Gemini Web is unavailable. Sign into gemini.google.com in a supported Chromium-based browser." }],
-					display: "tool",
-					details: { available: false },
-				}, { triggerTurn: true, deliverAs: "followUp" });
+				pi.sendMessage(
+					{
+						customType: "google-account",
+						content: [
+							{
+								type: "text",
+								text: "Gemini Web is unavailable. Sign into gemini.google.com in a supported Chromium-based browser.",
+							},
+						],
+						display: "tool",
+						details: { available: false },
+					},
+					{ triggerTurn: true, deliverAs: "followUp" },
+				);
 				return;
 			}
 
@@ -2241,12 +2372,15 @@ export default function (pi: ExtensionAPI) {
 				? `Active Google account: ${email}`
 				: "Gemini Web is available, but the active Google account could not be determined.";
 
-			pi.sendMessage({
-				customType: "google-account",
-				content: [{ type: "text", text }],
-				display: "tool",
-				details: { available: true, email: email ?? null },
-			}, { triggerTurn: true, deliverAs: "followUp" });
+			pi.sendMessage(
+				{
+					customType: "google-account",
+					content: [{ type: "text", text }],
+					display: "tool",
+					details: { available: true, email: email ?? null },
+				},
+				{ triggerTurn: true, deliverAs: "followUp" },
+			);
 		},
 	});
 
@@ -2304,7 +2438,7 @@ export default function (pi: ExtensionAPI) {
 					info += "URLs:\n";
 					const urls = selected.urls.slice(0, 10);
 					for (const u of urls) {
-						const urlDisplay = u.url.length > 50 ? u.url.slice(0, 47) + "..." : u.url;
+						const urlDisplay = u.url.length > 50 ? `${u.url.slice(0, 47)}...` : u.url;
 						info += `- ${urlDisplay} (${u.error || `${u.content.length} chars`})\n`;
 					}
 					if (selected.urls.length > 10) {

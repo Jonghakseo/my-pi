@@ -1,4 +1,4 @@
-import { PtyTerminalSession } from "./pty-session.js";
+import type { PtyTerminalSession } from "./pty-session.js";
 
 export interface BackgroundSession {
 	id: string;
@@ -59,17 +59,71 @@ export interface ActiveSession {
 
 // Human-readable session slug generation
 const SLUG_ADJECTIVES = [
-	"amber", "brisk", "calm", "clear", "cool", "crisp", "dawn", "ember",
-	"fast", "fresh", "gentle", "keen", "kind", "lucky", "mellow", "mild",
-	"neat", "nimble", "nova", "quick", "quiet", "rapid", "sharp", "swift",
-	"tender", "tidy", "vivid", "warm", "wild", "young",
+	"amber",
+	"brisk",
+	"calm",
+	"clear",
+	"cool",
+	"crisp",
+	"dawn",
+	"ember",
+	"fast",
+	"fresh",
+	"gentle",
+	"keen",
+	"kind",
+	"lucky",
+	"mellow",
+	"mild",
+	"neat",
+	"nimble",
+	"nova",
+	"quick",
+	"quiet",
+	"rapid",
+	"sharp",
+	"swift",
+	"tender",
+	"tidy",
+	"vivid",
+	"warm",
+	"wild",
+	"young",
 ];
 
 const SLUG_NOUNS = [
-	"atlas", "bloom", "breeze", "cedar", "cloud", "comet", "coral", "cove",
-	"crest", "delta", "dune", "ember", "falcon", "fjord", "glade", "haven",
-	"kelp", "lagoon", "meadow", "mist", "nexus", "orbit", "pine", "reef",
-	"ridge", "river", "sage", "shell", "shore", "summit", "trail", "zephyr",
+	"atlas",
+	"bloom",
+	"breeze",
+	"cedar",
+	"cloud",
+	"comet",
+	"coral",
+	"cove",
+	"crest",
+	"delta",
+	"dune",
+	"ember",
+	"falcon",
+	"fjord",
+	"glade",
+	"haven",
+	"kelp",
+	"lagoon",
+	"meadow",
+	"mist",
+	"nexus",
+	"orbit",
+	"pine",
+	"reef",
+	"ridge",
+	"river",
+	"sage",
+	"shell",
+	"shore",
+	"summit",
+	"trail",
+	"zephyr",
 ];
 
 function randomChoice<T>(arr: T[]): T {
@@ -129,7 +183,7 @@ function deriveSessionName(command: string): string {
 	if (trimmed.length <= 60) return trimmed;
 
 	// Truncate with ellipsis
-	return trimmed.slice(0, 57) + "...";
+	return `${trimmed.slice(0, 57)}...`;
 }
 
 export class ShellSessionManager {
@@ -141,12 +195,18 @@ export class ShellSessionManager {
 
 	onChange(listener: () => void): () => void {
 		this.changeListeners.add(listener);
-		return () => { this.changeListeners.delete(listener); };
+		return () => {
+			this.changeListeners.delete(listener);
+		};
 	}
 
 	private notifyChange(): void {
 		for (const listener of this.changeListeners) {
-			try { listener(); } catch { /* ignore */ }
+			try {
+				listener();
+			} catch {
+				/* ignore */
+			}
 		}
 	}
 
@@ -188,7 +248,13 @@ export class ShellSessionManager {
 		return true;
 	}
 
-	add(command: string, session: PtyTerminalSession, name?: string, reason?: string, options?: { id?: string; noAutoCleanup?: boolean; startedAt?: Date }): string {
+	add(
+		command: string,
+		session: PtyTerminalSession,
+		name?: string,
+		reason?: string,
+		options?: { id?: string; noAutoCleanup?: boolean; startedAt?: Date },
+	): string {
 		const id = options?.id ?? generateSessionId(name);
 		if (options?.id) usedIds.add(id);
 		const entry: BackgroundSession = {

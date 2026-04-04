@@ -22,7 +22,6 @@ export async function checkGhAvailable(): Promise<boolean> {
 export function showGhHint(): void {
 	if (!ghHintShown) {
 		ghHintShown = true;
-		console.error("[pi-web-access] Install `gh` CLI for better GitHub repo access including private repos.");
 	}
 }
 
@@ -76,7 +75,7 @@ async function fetchTreeViaApi(owner: string, repo: string, ref: string): Promis
 				}
 				const truncated = paths.length > MAX_TREE_ENTRIES;
 				const display = paths.slice(0, MAX_TREE_ENTRIES).join("\n");
-				resolve(truncated ? display + `\n... (${paths.length} total entries)` : display);
+				resolve(truncated ? `${display}\n... (${paths.length} total entries)` : display);
 			},
 		);
 	});
@@ -97,7 +96,7 @@ async function fetchReadmeViaApi(owner: string, repo: string, ref: string): Prom
 				}
 				try {
 					const decoded = Buffer.from(stdout.trim(), "base64").toString("utf-8");
-					resolve(decoded.length > 8192 ? decoded.slice(0, 8192) + "\n\n[README truncated at 8K chars]" : decoded);
+					resolve(decoded.length > 8192 ? `${decoded.slice(0, 8192)}\n\n[README truncated at 8K chars]` : decoded);
 				} catch {
 					resolve(null);
 				}
@@ -165,10 +164,7 @@ export async function fetchViaApi(
 		};
 	}
 
-	const [tree, readme] = await Promise.all([
-		fetchTreeViaApi(owner, repo, ref),
-		fetchReadmeViaApi(owner, repo, ref),
-	]);
+	const [tree, readme] = await Promise.all([fetchTreeViaApi(owner, repo, ref), fetchReadmeViaApi(owner, repo, ref)]);
 
 	if (!tree && !readme) return null;
 

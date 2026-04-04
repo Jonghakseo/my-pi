@@ -572,9 +572,9 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 			};
 		}
 
-		params = parsedCommand.params;
-		const asyncAction = params.asyncAction ?? "run";
-		const contextMode = params.contextMode ?? "isolated";
+		const cmdParams = parsedCommand.params;
+		const asyncAction = cmdParams.asyncAction ?? "run";
+		const contextMode = cmdParams.contextMode ?? "isolated";
 		const inheritMainContext = contextMode === "main";
 		const rawMainContext = inheritMainContext ? buildMainContextText(ctx) : { text: "", totalMessageCount: 0 };
 		const mainContextText = rawMainContext.text;
@@ -624,14 +624,14 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 		if (hasSingle || hasBatch || hasChain) {
 			const requestedNames: string[] = [];
 			if (hasSingle) {
-				const name = (params.agent as string | undefined) ?? (params.continueFromRunId ? undefined : "worker");
+				const name = (cmdParams.agent as string | undefined) ?? (cmdParams.continueFromRunId ? undefined : "worker");
 				if (name) requestedNames.push(name);
 			}
-			if (hasBatch && Array.isArray(params.runs)) {
-				for (const item of params.runs as BatchOrChainItem[]) requestedNames.push(item.agent);
+			if (hasBatch && Array.isArray(cmdParams.runs)) {
+				for (const item of cmdParams.runs as BatchOrChainItem[]) requestedNames.push(item.agent);
 			}
-			if (hasChain && Array.isArray(params.steps)) {
-				for (const step of params.steps as BatchOrChainItem[]) requestedNames.push(step.agent);
+			if (hasChain && Array.isArray(cmdParams.steps)) {
+				for (const step of cmdParams.steps as BatchOrChainItem[]) requestedNames.push(step.agent);
 			}
 			const unknownNames = [...new Set(requestedNames)].filter((name) => !agents.some((a) => a.name === name));
 			if (unknownNames.length > 0) {
@@ -691,7 +691,7 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 			};
 		}
 
-		const rawRunIds = Array.isArray(params.runIds) ? params.runIds : undefined;
+		const rawRunIds = Array.isArray(cmdParams.runIds) ? cmdParams.runIds : undefined;
 		const invalidRunIds = (rawRunIds ?? []).filter((value) => !Number.isInteger(value));
 		if (invalidRunIds.length > 0) {
 			return {
@@ -702,7 +702,7 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 		}
 
 		const runIdsFromArray = ((rawRunIds ?? []) as number[]).filter((value) => Number.isInteger(value));
-		const hasRunId = Number.isInteger(params.runId);
+		const hasRunId = Number.isInteger(cmdParams.runId);
 		const hasRunIds = runIdsFromArray.length > 0;
 		const isBulkAction = asyncAction === "abort" || asyncAction === "remove";
 
@@ -732,7 +732,7 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 				};
 			}
 
-			const targetRunIds = hasRunIds ? Array.from(new Set(runIdsFromArray)) : [params.runId as number];
+			const targetRunIds = hasRunIds ? Array.from(new Set(runIdsFromArray)) : [cmdParams.runId as number];
 			const firstRunId = targetRunIds[0];
 
 			if (asyncAction === "status" || asyncAction === "detail") {
@@ -895,7 +895,13 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 			}
 		}
 
-		const requestedLaunchCount = hasBatch ? (Array.isArray(params.runs) ? params.runs.length : 0) : hasChain ? 1 : 1;
+		const requestedLaunchCount = hasBatch
+			? Array.isArray(cmdParams.runs)
+				? cmdParams.runs.length
+				: 0
+			: hasChain
+				? 1
+				: 1;
 		if (runCounts.running + requestedLaunchCount > MAX_CONCURRENT_ASYNC_SUBAGENT_RUNS) {
 			return {
 				content: [
@@ -1002,7 +1008,7 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 		}
 
 		if (hasSingle) {
-			const continuationRunId = Number.isInteger(params.runId) ? (params.runId as number) : undefined;
+			const continuationRunId = Number.isInteger(cmdParams.runId) ? (cmdParams.runId as number) : undefined;
 			let continueFromRun: CommandRunState | undefined;
 			if (continuationRunId !== undefined) {
 				continueFromRun = store.commandRuns.get(continuationRunId);
@@ -1036,8 +1042,8 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 				}
 			}
 
-			const resolvedAgent = (params.agent ?? continueFromRun?.agent ?? "worker") as string;
-			const rawTask = typeof params.task === "string" ? params.task : "";
+			const resolvedAgent = (cmdParams.agent ?? continueFromRun?.agent ?? "worker") as string;
+			const rawTask = typeof cmdParams.task === "string" ? cmdParams.task : "";
 			if (!rawTask.trim()) {
 				return {
 					content: [{ type: "text", text: withIdleRunWarning("subagent run/continue requires task.") }],
@@ -1148,7 +1154,7 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 		}
 
 		if (hasBatch) {
-			const runs = Array.isArray(params.runs) ? (params.runs as BatchOrChainItem[]) : [];
+			const runs = Array.isArray(cmdParams.runs) ? (cmdParams.runs as BatchOrChainItem[]) : [];
 			if (runs.length < 2) {
 				return {
 					content: [{ type: "text", text: "batch requires at least 2 runs." }],
@@ -1316,7 +1322,7 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 		}
 
 		if (hasChain) {
-			const steps = Array.isArray(params.steps) ? (params.steps as BatchOrChainItem[]) : [];
+			const steps = Array.isArray(cmdParams.steps) ? (cmdParams.steps as BatchOrChainItem[]) : [];
 			if (steps.length < 2) {
 				return {
 					content: [{ type: "text", text: "chain requires at least 2 steps." }],

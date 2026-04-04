@@ -2,7 +2,10 @@ import { stripVTControlCharacters } from "node:util";
 
 export const MAX_RAW_OUTPUT_SIZE = 1024 * 1024;
 
-export function trimRawOutput(rawOutput: string, lastStreamPosition: number): { rawOutput: string; lastStreamPosition: number } {
+export function trimRawOutput(
+	rawOutput: string,
+	lastStreamPosition: number,
+): { rawOutput: string; lastStreamPosition: number } {
 	if (rawOutput.length <= MAX_RAW_OUTPUT_SIZE) {
 		return { rawOutput, lastStreamPosition };
 	}
@@ -14,7 +17,10 @@ export function trimRawOutput(rawOutput: string, lastStreamPosition: number): { 
 	};
 }
 
-export function sliceLogOutput(text: string, options: { offset?: number; limit?: number; stripAnsi?: boolean } = {}): {
+export function sliceLogOutput(
+	text: string,
+	options: { offset?: number; limit?: number; stripAnsi?: boolean } = {},
+): {
 	slice: string;
 	totalLines: number;
 	totalChars: number;
@@ -46,9 +52,10 @@ export function sliceLogOutput(text: string, options: { offset?: number; limit?:
 		start = 0;
 	}
 
-	const end = typeof options.limit === "number" && Number.isFinite(options.limit)
-		? start + Math.max(0, Math.floor(options.limit))
-		: undefined;
+	const end =
+		typeof options.limit === "number" && Number.isFinite(options.limit)
+			? start + Math.max(0, Math.floor(options.limit))
+			: undefined;
 	const selectedLines = lines.slice(start, end);
 	return {
 		slice: selectedLines.join("\n"),

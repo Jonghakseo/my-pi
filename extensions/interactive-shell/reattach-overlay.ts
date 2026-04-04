@@ -1,18 +1,23 @@
+import type { Theme } from "@mariozechner/pi-coding-agent";
 import type { Component, Focusable, TUI } from "@mariozechner/pi-tui";
 import { matchesKey, truncateToWidth, visibleWidth } from "@mariozechner/pi-tui";
-import type { Theme } from "@mariozechner/pi-coding-agent";
-import { PtyTerminalSession } from "./pty-session.js";
-import { sessionManager } from "./session-manager.js";
 import type { InteractiveShellConfig } from "./config.js";
 import {
-	type InteractiveShellResult,
+	captureCompletionOutput,
+	captureTransferOutput,
+	maybeBuildHandoffPreview,
+	maybeWriteHandoffSnapshot,
+} from "./handoff-utils.js";
+import type { PtyTerminalSession } from "./pty-session.js";
+import { sessionManager } from "./session-manager.js";
+import {
 	type DialogChoice,
-	type OverlayState,
-	HEADER_LINES,
 	FOOTER_LINES_COMPACT,
 	FOOTER_LINES_DIALOG,
+	HEADER_LINES,
+	type InteractiveShellResult,
+	type OverlayState,
 } from "./types.js";
-import { captureCompletionOutput, captureTransferOutput, maybeBuildHandoffPreview, maybeWriteHandoffSnapshot } from "./handoff-utils.js";
 
 export class ReattachOverlay implements Component, Focusable {
 	focused = false;
@@ -109,11 +114,15 @@ export class ReattachOverlay implements Component, Focusable {
 		return captureTransferOutput(this.session, this.config);
 	}
 
-	private maybeBuildHandoffPreview(when: "exit" | "detach" | "kill" | "transfer"): InteractiveShellResult["handoffPreview"] | undefined {
+	private maybeBuildHandoffPreview(
+		when: "exit" | "detach" | "kill" | "transfer",
+	): InteractiveShellResult["handoffPreview"] | undefined {
 		return maybeBuildHandoffPreview(this.session, when, this.config);
 	}
 
-	private maybeWriteHandoffSnapshot(when: "exit" | "detach" | "kill" | "transfer"): InteractiveShellResult["handoff"] | undefined {
+	private maybeWriteHandoffSnapshot(
+		when: "exit" | "detach" | "kill" | "transfer",
+	): InteractiveShellResult["handoff"] | undefined {
 		return maybeWriteHandoffSnapshot(this.session, when, this.config, { command: this.bgSession.command });
 	}
 
@@ -289,6 +298,7 @@ export class ReattachOverlay implements Component, Focusable {
 	}
 
 	render(width: number): string[] {
+		// biome-ignore lint/style/noParameterAssign: width clamping
 		width = Math.max(4, width);
 		const th = this.theme;
 		const border = (s: string) => th.fg("border", s);
@@ -312,15 +322,13 @@ export class ReattachOverlay implements Component, Focusable {
 		const idLabel = `[${this.bgSession.id}]`;
 		const pid = `PID: ${this.session.pid}`;
 
-		lines.push(border("╭" + "─".repeat(width - 2) + "╮"));
+		lines.push(border(`╭${"─".repeat(width - 2)}╮`));
 		lines.push(
 			row(
 				accent(title) +
 					" " +
 					dim(idLabel) +
-					" ".repeat(
-						Math.max(1, innerWidth - visibleWidth(title) - idLabel.length - pid.length - 1),
-					) +
+					" ".repeat(Math.max(1, innerWidth - visibleWidth(title) - idLabel.length - pid.length - 1)) +
 					dim(pid),
 			),
 		);
@@ -330,7 +338,7 @@ export class ReattachOverlay implements Component, Focusable {
 			? `Reattached • ${sanitizedReason} • Ctrl+B background`
 			: "Reattached • Ctrl+B background";
 		lines.push(row(dim(truncateToWidth(hint, innerWidth, "..."))));
-		lines.push(border("├" + "─".repeat(width - 2) + "┤"));
+		lines.push(border(`├${"─".repeat(width - 2)}┤`));
 
 		const overlayHeight = Math.floor((this.tui.terminal.rows * this.config.overlayHeightPercent) / 100);
 		const footerHeight = this.state === "detach-dialog" ? FOOTER_LINES_DIALOG : FOOTER_LINES_COMPACT;
@@ -355,15 +363,11 @@ export class ReattachOverlay implements Component, Focusable {
 			const padLen = Math.max(0, Math.floor((width - 2 - visibleWidth(hintText)) / 2));
 			lines.push(
 				border("├") +
-					dim(
-						" ".repeat(padLen) +
-							hintText +
-							" ".repeat(width - 2 - padLen - visibleWidth(hintText)),
-					) +
+					dim(" ".repeat(padLen) + hintText + " ".repeat(width - 2 - padLen - visibleWidth(hintText))) +
 					border("┤"),
 			);
 		} else {
-			lines.push(border("├" + "─".repeat(width - 2) + "┤"));
+			lines.push(border(`├${"─".repeat(width - 2)}┤`));
 		}
 
 		const footerLines: string[] = [];
@@ -397,7 +401,7 @@ export class ReattachOverlay implements Component, Focusable {
 		}
 		lines.push(...footerLines);
 
-		lines.push(border("╰" + "─".repeat(width - 2) + "╯"));
+		lines.push(border(`╰${"─".repeat(width - 2)}╯`));
 
 		return lines;
 	}

@@ -70,17 +70,13 @@ export function loadConfig(cwd: string): InteractiveShellConfig {
 	if (existsSync(globalPath)) {
 		try {
 			globalConfig = JSON.parse(readFileSync(globalPath, "utf-8"));
-		} catch (error) {
-			console.error(`Warning: Could not parse ${globalPath}: ${String(error)}`);
-		}
+		} catch (_error) {}
 	}
 
 	if (existsSync(projectPath)) {
 		try {
 			projectConfig = JSON.parse(readFileSync(projectPath, "utf-8"));
-		} catch (error) {
-			console.error(`Warning: Could not parse ${projectPath}: ${String(error)}`);
-		}
+		} catch (_error) {}
 	}
 
 	const merged = { ...DEFAULT_CONFIG, ...globalConfig, ...projectConfig };
@@ -95,12 +91,7 @@ export function loadConfig(cwd: string): InteractiveShellConfig {
 		ansiReemit: merged.ansiReemit !== false,
 		handoffPreviewEnabled: merged.handoffPreviewEnabled !== false,
 		handoffPreviewLines: clampInt(merged.handoffPreviewLines, DEFAULT_CONFIG.handoffPreviewLines, 0, 500),
-		handoffPreviewMaxChars: clampInt(
-			merged.handoffPreviewMaxChars,
-			DEFAULT_CONFIG.handoffPreviewMaxChars,
-			0,
-			50000,
-		),
+		handoffPreviewMaxChars: clampInt(merged.handoffPreviewMaxChars, DEFAULT_CONFIG.handoffPreviewMaxChars, 0, 50000),
 		handoffSnapshotEnabled: merged.handoffSnapshotEnabled === true,
 		handoffSnapshotLines: clampInt(merged.handoffSnapshotLines, DEFAULT_CONFIG.handoffSnapshotLines, 0, 5000),
 		handoffSnapshotMaxChars: clampInt(
@@ -114,7 +105,12 @@ export function loadConfig(cwd: string): InteractiveShellConfig {
 		transferMaxChars: clampInt(merged.transferMaxChars, DEFAULT_CONFIG.transferMaxChars, 1000, 100000),
 		// Dispatch completion notification output
 		completionNotifyLines: clampInt(merged.completionNotifyLines, DEFAULT_CONFIG.completionNotifyLines, 10, 500),
-		completionNotifyMaxChars: clampInt(merged.completionNotifyMaxChars, DEFAULT_CONFIG.completionNotifyMaxChars, 1000, 50000),
+		completionNotifyMaxChars: clampInt(
+			merged.completionNotifyMaxChars,
+			DEFAULT_CONFIG.completionNotifyMaxChars,
+			1000,
+			50000,
+		),
 		// Hands-free mode
 		handsFreeUpdateMode: merged.handsFreeUpdateMode === "interval" ? "interval" : "on-quiet",
 		handsFreeUpdateInterval: clampInt(
@@ -129,12 +125,7 @@ export function loadConfig(cwd: string): InteractiveShellConfig {
 			1000,
 			30000,
 		),
-		autoExitGracePeriod: clampInt(
-			merged.autoExitGracePeriod,
-			DEFAULT_CONFIG.autoExitGracePeriod,
-			5000,
-			120000,
-		),
+		autoExitGracePeriod: clampInt(merged.autoExitGracePeriod, DEFAULT_CONFIG.autoExitGracePeriod, 5000, 120000),
 		handsFreeUpdateMaxChars: clampInt(
 			merged.handsFreeUpdateMaxChars,
 			DEFAULT_CONFIG.handsFreeUpdateMaxChars,
@@ -148,12 +139,7 @@ export function loadConfig(cwd: string): InteractiveShellConfig {
 			1000000,
 		),
 		// Query rate limiting (min 5 seconds, max 300 seconds)
-		minQueryIntervalSeconds: clampInt(
-			merged.minQueryIntervalSeconds,
-			DEFAULT_CONFIG.minQueryIntervalSeconds,
-			5,
-			300,
-		),
+		minQueryIntervalSeconds: clampInt(merged.minQueryIntervalSeconds, DEFAULT_CONFIG.minQueryIntervalSeconds, 5, 300),
 	};
 }
 

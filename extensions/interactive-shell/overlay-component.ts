@@ -1,23 +1,27 @@
 import { stripVTControlCharacters } from "node:util";
+import type { Theme } from "@mariozechner/pi-coding-agent";
 import type { Component, Focusable, TUI } from "@mariozechner/pi-tui";
 import { matchesKey, truncateToWidth, visibleWidth } from "@mariozechner/pi-tui";
-import type { Theme } from "@mariozechner/pi-coding-agent";
-import { PtyTerminalSession } from "./pty-session.js";
-import { sessionManager, generateSessionId } from "./session-manager.js";
 import type { InteractiveShellConfig } from "./config.js";
 import {
-	type InteractiveShellResult,
-	type HandsFreeUpdate,
-	type InteractiveShellOptions,
+	captureCompletionOutput,
+	captureTransferOutput,
+	maybeBuildHandoffPreview,
+	maybeWriteHandoffSnapshot,
+} from "./handoff-utils.js";
+import { PtyTerminalSession } from "./pty-session.js";
+import { generateSessionId, sessionManager } from "./session-manager.js";
+import { createSessionQueryState, getSessionOutput } from "./session-query.js";
+import {
 	type DialogChoice,
-	type OverlayState,
-	HEADER_LINES,
 	FOOTER_LINES_COMPACT,
 	FOOTER_LINES_DIALOG,
 	formatDuration,
+	HEADER_LINES,
+	type InteractiveShellOptions,
+	type InteractiveShellResult,
+	type OverlayState,
 } from "./types.js";
-import { captureCompletionOutput, captureTransferOutput, maybeBuildHandoffPreview, maybeWriteHandoffSnapshot } from "./handoff-utils.js";
-import { createSessionQueryState, getSessionOutput } from "./session-query.js";
 
 export class InteractiveShellOverlay implements Component, Focusable {
 	focused = false;
@@ -176,7 +180,7 @@ export class InteractiveShellOverlay implements Component, Focusable {
 			}, options.timeout);
 		}
 
-		if (options.existingSession && options.existingSession.exited) {
+		if (options.existingSession?.exited) {
 			queueMicrotask(() => {
 				if (this.finished) return;
 				this.stopTimeout();
@@ -207,8 +211,33 @@ export class InteractiveShellOverlay implements Component, Focusable {
 	// Public methods for non-blocking mode (agent queries)
 
 	/** Get rendered terminal output (last N lines, truncated if too large) */
-	getOutputSinceLastCheck(options: { skipRateLimit?: boolean; lines?: number; maxChars?: number; offset?: number; drain?: boolean; incremental?: boolean } | boolean = false): { output: string; truncated: boolean; totalBytes: number; totalLines?: number; hasMore?: boolean; rateLimited?: boolean; waitSeconds?: number } {
-		return getSessionOutput(this.session, this.config, this.queryState, options, this.completionResult?.completionOutput);
+	getOutputSinceLastCheck(
+		options:
+			| {
+					skipRateLimit?: boolean;
+					lines?: number;
+					maxChars?: number;
+					offset?: number;
+					drain?: boolean;
+					incremental?: boolean;
+			  }
+			| boolean = false,
+	): {
+		output: string;
+		truncated: boolean;
+		totalBytes: number;
+		totalLines?: number;
+		hasMore?: boolean;
+		rateLimited?: boolean;
+		waitSeconds?: number;
+	} {
+		return getSessionOutput(
+			this.session,
+			this.config,
+			this.queryState,
+			options,
+			this.completionResult?.completionOutput,
+		);
 	}
 
 	/** Get current session status */
@@ -540,15 +569,25 @@ export class InteractiveShellOverlay implements Component, Focusable {
 		return captureTransferOutput(this.session, this.config);
 	}
 
-	private maybeBuildHandoffPreview(when: "exit" | "detach" | "kill" | "timeout" | "transfer"): InteractiveShellResult["handoffPreview"] | undefined {
+	private maybeBuildHandoffPreview(
+		when: "exit" | "detach" | "kill" | "timeout" | "transfer",
+	): InteractiveShellResult["handoffPreview"] | undefined {
 		return maybeBuildHandoffPreview(this.session, when, this.config, this.options);
 	}
 
-	private maybeWriteHandoffSnapshot(when: "exit" | "detach" | "kill" | "timeout" | "transfer"): InteractiveShellResult["handoff"] | undefined {
-		return maybeWriteHandoffSnapshot(this.session, when, this.config, {
-			command: this.options.command,
-			cwd: this.options.cwd,
-		}, this.options);
+	private maybeWriteHandoffSnapshot(
+		when: "exit" | "detach" | "kill" | "timeout" | "transfer",
+	): InteractiveShellResult["handoff"] | undefined {
+		return maybeWriteHandoffSnapshot(
+			this.session,
+			when,
+			this.config,
+			{
+				command: this.options.command,
+				cwd: this.options.cwd,
+			},
+			this.options,
+		);
 	}
 
 	private finishWithExit(): void {
@@ -601,7 +640,13 @@ export class InteractiveShellOverlay implements Component, Focusable {
 		const addOptions = this.sessionId
 			? { id: this.sessionId, noAutoCleanup: this.options.mode === "dispatch", startedAt: new Date(this.startTime) }
 			: undefined;
-		const id = sessionManager.add(this.options.command, this.session, this.options.name, this.options.reason, addOptions);
+		const id = sessionManager.add(
+			this.options.command,
+			this.session,
+			this.options.name,
+			this.options.reason,
+			addOptions,
+		);
 		const result: InteractiveShellResult = {
 			exitCode: null,
 			backgrounded: true,
@@ -853,6 +898,7 @@ export class InteractiveShellOverlay implements Component, Focusable {
 	}
 
 	render(width: number): string[] {
+		// biome-ignore lint/style/noParameterAssign: width clamping
 		width = Math.max(4, width);
 		const th = this.theme;
 		const border = (s: string) => th.fg("border", s);
@@ -874,14 +920,8 @@ export class InteractiveShellOverlay implements Component, Focusable {
 		const sanitizedCommand = this.options.command.replace(/\s+/g, " ").trim();
 		const title = truncateToWidth(sanitizedCommand, innerWidth - 20, "...");
 		const pid = `PID: ${this.session.pid}`;
-		lines.push(border("╭" + "─".repeat(width - 2) + "╮"));
-		lines.push(
-			row(
-				accent(title) +
-					" ".repeat(Math.max(1, innerWidth - visibleWidth(title) - pid.length)) +
-					dim(pid),
-			),
-		);
+		lines.push(border(`╭${"─".repeat(width - 2)}╮`));
+		lines.push(row(accent(title) + " ".repeat(Math.max(1, innerWidth - visibleWidth(title) - pid.length)) + dim(pid)));
 		let hint: string;
 		// Sanitize reason: collapse newlines and whitespace to single spaces for display
 		const sanitizedReason = this.options.reason?.replace(/\s+/g, " ").trim();
@@ -893,12 +933,10 @@ export class InteractiveShellOverlay implements Component, Focusable {
 				? `You took over • ${sanitizedReason} • Ctrl+B background`
 				: "You took over • Ctrl+B background";
 		} else {
-			hint = sanitizedReason
-				? `Ctrl+B background • ${sanitizedReason}`
-				: "Ctrl+B background";
+			hint = sanitizedReason ? `Ctrl+B background • ${sanitizedReason}` : "Ctrl+B background";
 		}
 		lines.push(row(dim(truncateToWidth(hint, innerWidth, "..."))));
-		lines.push(border("├" + "─".repeat(width - 2) + "┤"));
+		lines.push(border(`├${"─".repeat(width - 2)}┤`));
 
 		const overlayHeight = Math.floor((this.tui.terminal.rows * this.config.overlayHeightPercent) / 100);
 		const footerHeight = this.state === "detach-dialog" ? FOOTER_LINES_DIALOG : FOOTER_LINES_COMPACT;
@@ -923,15 +961,11 @@ export class InteractiveShellOverlay implements Component, Focusable {
 			const padLen = Math.max(0, Math.floor((width - 2 - visibleWidth(hintText)) / 2));
 			lines.push(
 				border("├") +
-					dim(
-						" ".repeat(padLen) +
-							hintText +
-							" ".repeat(width - 2 - padLen - visibleWidth(hintText)),
-					) +
+					dim(" ".repeat(padLen) + hintText + " ".repeat(width - 2 - padLen - visibleWidth(hintText))) +
 					border("┤"),
 			);
 		} else {
-			lines.push(border("├" + "─".repeat(width - 2) + "┤"));
+			lines.push(border(`├${"─".repeat(width - 2)}┤`));
 		}
 
 		const footerLines: string[] = [];
@@ -967,7 +1001,7 @@ export class InteractiveShellOverlay implements Component, Focusable {
 		}
 		lines.push(...footerLines);
 
-		lines.push(border("╰" + "─".repeat(width - 2) + "╯"));
+		lines.push(border(`╰${"─".repeat(width - 2)}╯`));
 
 		return lines;
 	}

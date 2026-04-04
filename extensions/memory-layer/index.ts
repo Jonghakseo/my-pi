@@ -247,11 +247,9 @@ export default function memoryLayerExtension(pi: ExtensionAPI) {
 
 			if (!ctx.hasUI) {
 				if (!displayEntries.length) {
-					console.log("No memories stored.");
 					return;
 				}
-				for (const e of displayEntries) {
-					console.log(`[${e.scope}] ${e.topic} / ${e.title}`);
+				for (const _e of displayEntries) {
 				}
 				return;
 			}
@@ -834,8 +832,6 @@ export default function memoryLayerExtension(pi: ExtensionAPI) {
 			// Graceful degradation
 		}
 	});
-
-
 
 	// ── before_agent_start: Memory Injection ──────────────────────────────
 

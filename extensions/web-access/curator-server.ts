@@ -19,10 +19,19 @@ export interface CuratorServerOptions {
 }
 
 export interface CuratorServerCallbacks {
-	onSubmit: (payload: { selectedQueryIndices: number[]; summary?: string; summaryMeta?: SummaryMeta; rawResults?: boolean }) => void;
+	onSubmit: (payload: {
+		selectedQueryIndices: number[];
+		summary?: string;
+		summaryMeta?: SummaryMeta;
+		rawResults?: boolean;
+	}) => void;
 	onCancel: (reason: "user" | "timeout" | "stale") => void;
 	onProviderChange: (provider: string) => void;
-	onAddSearch: (query: string, queryIndex: number, provider?: string) => Promise<{
+	onAddSearch: (
+		query: string,
+		queryIndex: number,
+		provider?: string,
+	) => Promise<{
 		answer: string;
 		results: Array<{ title: string; url: string; domain: string }>;
 		provider: string;
@@ -40,7 +49,10 @@ export interface CuratorServerHandle {
 	server: http.Server;
 	url: string;
 	close: () => void;
-	pushResult: (queryIndex: number, data: { answer: string; results: Array<{ title: string; url: string; domain: string }>; provider: string }) => void;
+	pushResult: (
+		queryIndex: number,
+		data: { answer: string; results: Array<{ title: string; url: string; domain: string }>; provider: string },
+	) => void;
 	pushError: (queryIndex: number, error: string, provider?: string) => void;
 	searchesDone: () => void;
 }
@@ -160,15 +172,8 @@ export function startCuratorServer(
 	options: CuratorServerOptions,
 	callbacks: CuratorServerCallbacks,
 ): Promise<CuratorServerHandle> {
-	const {
-		queries,
-		sessionToken,
-		timeout,
-		availableProviders,
-		defaultProvider,
-		summaryModels,
-		defaultSummaryModel,
-	} = options;
+	const { queries, sessionToken, timeout, availableProviders, defaultProvider, summaryModels, defaultSummaryModel } =
+		options;
 	let browserConnected = false;
 	let lastHeartbeatAt = Date.now();
 	let completed = false;
@@ -202,7 +207,9 @@ export function startCuratorServer(
 		}
 		abortInFlightSummarize();
 		if (sseResponse) {
-			try { sseResponse.end(); } catch {}
+			try {
+				sseResponse.end();
+			} catch {}
 			sseResponse = null;
 		}
 		return true;
@@ -236,7 +243,10 @@ export function startCuratorServer(
 		const payload = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
 		const res = sseResponse;
 		if (res && !res.writableEnded && res.socket && !res.socket.destroyed) {
-			try { res.write(payload); return; } catch {}
+			try {
+				res.write(payload);
+				return;
+			} catch {}
 		}
 		sseBuffer.push(payload);
 	}
@@ -284,7 +294,9 @@ export function startCuratorServer(
 					return;
 				}
 				if (sseResponse) {
-					try { sseResponse.end(); } catch {}
+					try {
+						sseResponse.end();
+					} catch {}
 				}
 				res.writeHead(200, {
 					"Content-Type": "text/event-stream",
@@ -310,7 +322,9 @@ export function startCuratorServer(
 				if (sseKeepalive) clearInterval(sseKeepalive);
 				sseKeepalive = setInterval(() => {
 					if (sseResponse) {
-						try { sseResponse.write(":keepalive\n\n"); } catch {}
+						try {
+							sseResponse.write(":keepalive\n\n");
+						} catch {}
 					}
 				}, 15000);
 				req.on("close", () => {
@@ -422,9 +436,8 @@ export function startCuratorServer(
 				}
 
 				const bodyFeedback = (body as { feedback?: unknown }).feedback;
-				const feedback = typeof bodyFeedback === "string" && bodyFeedback.trim().length > 0
-					? bodyFeedback.trim()
-					: undefined;
+				const feedback =
+					typeof bodyFeedback === "string" && bodyFeedback.trim().length > 0 ? bodyFeedback.trim() : undefined;
 
 				abortInFlightSummarize();
 				const controller = new AbortController();
@@ -527,7 +540,9 @@ export function startCuratorServer(
 				}
 				const rawResults = (body as { rawResults?: unknown }).rawResults === true;
 				sendJson(res, 200, { ok: true });
-				setImmediate(() => callbacks.onSubmit({ selectedQueryIndices: parsed.indices, summary, summaryMeta, rawResults }));
+				setImmediate(() =>
+					callbacks.onSubmit({ selectedQueryIndices: parsed.indices, summary, summaryMeta, rawResults }),
+				);
 				return;
 			}
 
@@ -581,7 +596,9 @@ export function startCuratorServer(
 				url,
 				close: () => {
 					const wasOpen = markCompleted();
-					try { server.close(); } catch {}
+					try {
+						server.close();
+					} catch {}
 					if (wasOpen) {
 						setImmediate(() => callbacks.onCancel("stale"));
 					}

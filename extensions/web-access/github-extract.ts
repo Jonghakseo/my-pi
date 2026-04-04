@@ -1,7 +1,17 @@
-import { existsSync, readFileSync, rmSync, statSync, readdirSync, openSync, readSync, closeSync, realpathSync } from "node:fs";
 import { execFile } from "node:child_process";
+import {
+	closeSync,
+	existsSync,
+	openSync,
+	readdirSync,
+	readFileSync,
+	readSync,
+	realpathSync,
+	rmSync,
+	statSync,
+} from "node:fs";
 import { homedir } from "node:os";
-import { extname, join, resolve as resolvePath, sep as pathSep } from "node:path";
+import { extname, join, sep as pathSep, resolve as resolvePath } from "node:path";
 import { activityMonitor } from "./activity.js";
 import type { ExtractedContent } from "./extract.js";
 import { checkGhAvailable, checkRepoSize, fetchViaApi, showGhHint } from "./github-api.js";
@@ -9,21 +19,85 @@ import { checkGhAvailable, checkRepoSize, fetchViaApi, showGhHint } from "./gith
 const CONFIG_PATH = join(homedir(), ".pi", "web-search.json");
 
 const BINARY_EXTENSIONS = new Set([
-	".png", ".jpg", ".jpeg", ".gif", ".bmp", ".ico", ".webp", ".svg", ".tiff", ".tif",
-	".mp3", ".mp4", ".avi", ".mov", ".mkv", ".flv", ".wmv", ".wav", ".ogg", ".webm", ".flac", ".aac",
-	".zip", ".tar", ".gz", ".bz2", ".xz", ".7z", ".rar", ".zst",
-	".exe", ".dll", ".so", ".dylib", ".bin", ".o", ".a", ".lib",
-	".woff", ".woff2", ".ttf", ".otf", ".eot",
-	".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx",
-	".sqlite", ".db", ".sqlite3",
-	".pyc", ".pyo", ".class", ".jar", ".war",
-	".iso", ".img", ".dmg",
+	".png",
+	".jpg",
+	".jpeg",
+	".gif",
+	".bmp",
+	".ico",
+	".webp",
+	".svg",
+	".tiff",
+	".tif",
+	".mp3",
+	".mp4",
+	".avi",
+	".mov",
+	".mkv",
+	".flv",
+	".wmv",
+	".wav",
+	".ogg",
+	".webm",
+	".flac",
+	".aac",
+	".zip",
+	".tar",
+	".gz",
+	".bz2",
+	".xz",
+	".7z",
+	".rar",
+	".zst",
+	".exe",
+	".dll",
+	".so",
+	".dylib",
+	".bin",
+	".o",
+	".a",
+	".lib",
+	".woff",
+	".woff2",
+	".ttf",
+	".otf",
+	".eot",
+	".pdf",
+	".doc",
+	".docx",
+	".xls",
+	".xlsx",
+	".ppt",
+	".pptx",
+	".sqlite",
+	".db",
+	".sqlite3",
+	".pyc",
+	".pyo",
+	".class",
+	".jar",
+	".war",
+	".iso",
+	".img",
+	".dmg",
 ]);
 
 const NOISE_DIRS = new Set([
-	"node_modules", "vendor", ".next", "dist", "build", "__pycache__",
-	".venv", "venv", ".tox", ".mypy_cache", ".pytest_cache",
-	"target", ".gradle", ".idea", ".vscode",
+	"node_modules",
+	"vendor",
+	".next",
+	"dist",
+	"build",
+	"__pycache__",
+	".venv",
+	"venv",
+	".tox",
+	".mypy_cache",
+	".pytest_cache",
+	"target",
+	".gradle",
+	".idea",
+	".vscode",
 ]);
 
 const MAX_INLINE_FILE_CHARS = 100_000;
@@ -85,9 +159,13 @@ function loadGitHubConfig(): GitHubCloneConfig {
 	}
 
 	const rawText = readFileSync(CONFIG_PATH, "utf-8");
-	let raw: { githubClone?: { enabled?: unknown; maxRepoSizeMB?: unknown; cloneTimeoutSeconds?: unknown; clonePath?: unknown } };
+	let raw: {
+		githubClone?: { enabled?: unknown; maxRepoSizeMB?: unknown; cloneTimeoutSeconds?: unknown; clonePath?: unknown };
+	};
 	try {
-		raw = JSON.parse(rawText) as { githubClone?: { enabled?: unknown; maxRepoSizeMB?: unknown; cloneTimeoutSeconds?: unknown; clonePath?: unknown } };
+		raw = JSON.parse(rawText) as {
+			githubClone?: { enabled?: unknown; maxRepoSizeMB?: unknown; cloneTimeoutSeconds?: unknown; clonePath?: unknown };
+		};
 	} catch (err) {
 		const message = err instanceof Error ? err.message : String(err);
 		throw new Error(`Failed to parse ${CONFIG_PATH}: ${message}`);
@@ -104,12 +182,35 @@ function loadGitHubConfig(): GitHubCloneConfig {
 }
 
 const NON_CODE_SEGMENTS = new Set([
-	"issues", "pull", "pulls", "discussions", "releases", "wiki",
-	"actions", "settings", "security", "projects", "graphs",
-	"compare", "commits", "tags", "branches", "stargazers",
-	"watchers", "network", "forks", "milestone", "labels",
-	"packages", "codespaces", "contribute", "community",
-	"sponsors", "invitations", "notifications", "insights",
+	"issues",
+	"pull",
+	"pulls",
+	"discussions",
+	"releases",
+	"wiki",
+	"actions",
+	"settings",
+	"security",
+	"projects",
+	"graphs",
+	"compare",
+	"commits",
+	"tags",
+	"branches",
+	"stargazers",
+	"watchers",
+	"network",
+	"forks",
+	"milestone",
+	"labels",
+	"packages",
+	"codespaces",
+	"contribute",
+	"community",
+	"sponsors",
+	"invitations",
+	"notifications",
+	"insights",
 ]);
 
 export function parseGitHubUrl(url: string): GitHubUrlInfo | null {
@@ -178,8 +279,7 @@ function execClone(args: string[], localPath: string, timeoutMs: number, signal?
 			if (err) {
 				try {
 					rmSync(localPath, { recursive: true, force: true });
-				} catch {
-				}
+				} catch {}
 				resolve(null);
 				return;
 			}
@@ -205,8 +305,7 @@ async function cloneRepo(
 
 	try {
 		rmSync(localPath, { recursive: true, force: true });
-	} catch {
-	}
+	} catch {}
 
 	const timeoutMs = config.cloneTimeoutSeconds * 1000;
 	const hasGh = await checkGhAvailable();
@@ -310,7 +409,7 @@ function buildTree(rootPath: string): string {
 				continue;
 			}
 
-			let stat;
+			let stat: ReturnType<typeof statSync> | undefined;
 			try {
 				stat = statSync(safePath);
 			} catch {
@@ -381,10 +480,8 @@ function readReadme(localPath: string): string | null {
 		if (existsSync(readmePath)) {
 			try {
 				const content = readFileSync(readmePath, "utf-8");
-				return content.length > 8192 ? content.slice(0, 8192) + "\n\n[README truncated at 8K chars]" : content;
-			} catch {
-				continue;
-			}
+				return content.length > 8192 ? `${content.slice(0, 8192)}\n\n[README truncated at 8K chars]` : content;
+			} catch {}
 		}
 	}
 	return null;
@@ -466,7 +563,9 @@ function generateContent(localPath: string, info: GitHubUrlInfo): string {
 		if (isBinaryFile(fullFilePath)) {
 			const ext = extname(filePath).replace(".", "");
 			lines.push(`## ${filePath}`);
-			lines.push(`Binary file (${ext}, ${formatFileSize(stat.size)}). Use \`read\` or \`bash\` tools at the path above to inspect.`);
+			lines.push(
+				`Binary file (${ext}, ${formatFileSize(stat.size)}). Use \`read\` or \`bash\` tools at the path above to inspect.`,
+			);
 			return lines.join("\n");
 		}
 
@@ -626,8 +725,7 @@ export function clearCloneCache(): void {
 	for (const entry of cloneCache.values()) {
 		try {
 			rmSync(entry.localPath, { recursive: true, force: true });
-		} catch {
-		}
+		} catch {}
 	}
 	cloneCache.clear();
 	cachedConfig = null;

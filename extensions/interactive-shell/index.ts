@@ -1,20 +1,25 @@
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
-import { InteractiveShellOverlay } from "./overlay-component.js";
-import { ReattachOverlay } from "./reattach-overlay.js";
-import { PtyTerminalSession } from "./pty-session.js";
-import type { InteractiveShellResult, HandsFreeUpdate } from "./types.js";
-import { sessionManager, generateSessionId } from "./session-manager.js";
-import { loadConfig } from "./config.js";
-import type { InteractiveShellConfig } from "./config.js";
-import { translateInput } from "./key-encoding.js";
-import { TOOL_NAME, TOOL_LABEL, TOOL_DESCRIPTION, toolParameters, type ToolParams } from "./tool-schema.js";
-import { formatDuration, formatDurationMs } from "./types.js";
-import { HeadlessDispatchMonitor } from "./headless-monitor.js";
-import type { HeadlessCompletionInfo } from "./headless-monitor.js";
 import { setupBackgroundWidget } from "./background-widget.js";
-import { buildDispatchNotification, buildHandsFreeUpdateMessage, buildResultNotification, summarizeInteractiveResult } from "./notification-utils.js";
-import { createSessionQueryState, getSessionOutput } from "./session-query.js";
+import type { InteractiveShellConfig } from "./config.js";
+import { loadConfig } from "./config.js";
+import type { HeadlessCompletionInfo } from "./headless-monitor.js";
+import { HeadlessDispatchMonitor } from "./headless-monitor.js";
+import { translateInput } from "./key-encoding.js";
+import {
+	buildDispatchNotification,
+	buildHandsFreeUpdateMessage,
+	buildResultNotification,
+	summarizeInteractiveResult,
+} from "./notification-utils.js";
+import { InteractiveShellOverlay } from "./overlay-component.js";
+import { PtyTerminalSession } from "./pty-session.js";
+import { ReattachOverlay } from "./reattach-overlay.js";
 import { InteractiveShellCoordinator } from "./runtime-coordinator.js";
+import { generateSessionId, sessionManager } from "./session-manager.js";
+import { createSessionQueryState, getSessionOutput } from "./session-query.js";
+import { TOOL_DESCRIPTION, TOOL_LABEL, TOOL_NAME, type ToolParams, toolParameters } from "./tool-schema.js";
+import type { HandsFreeUpdate, InteractiveShellResult } from "./types.js";
+import { formatDuration, formatDurationMs } from "./types.js";
 
 const coordinator = new InteractiveShellCoordinator();
 
@@ -26,12 +31,15 @@ function makeMonitorCompletionCallback(
 	return (info) => {
 		const duration = formatDuration(Date.now() - startTime);
 		const content = buildDispatchNotification(id, info, duration);
-		pi.sendMessage({
-			customType: "interactive-shell-transfer",
-			content,
-			display: true,
-			details: { sessionId: id, duration, ...info },
-		}, { triggerTurn: true });
+		pi.sendMessage(
+			{
+				customType: "interactive-shell-transfer",
+				content,
+				display: true,
+				details: { sessionId: id, duration, ...info },
+			},
+			{ triggerTurn: true },
+		);
 		pi.events.emit("interactive-shell:transfer", { sessionId: id, ...info });
 		sessionManager.unregisterActive(id, false);
 		coordinator.deleteMonitor(id);
@@ -64,7 +72,7 @@ function registerHeadlessActive(
 		},
 		background: () => {},
 		getOutput: (opts) => getSessionOutput(session, config, queryState, opts, getCompletionOutput()),
-		getStatus: () => session.exited ? "exited" : "running",
+		getStatus: () => (session.exited ? "exited" : "running"),
 		getRuntime: () => Date.now() - startTime,
 		getResult: () => monitor.getResult(),
 		onComplete: (cb) => monitor.registerCompleteCallback(cb),
@@ -76,12 +84,15 @@ function makeNonBlockingUpdateHandler(pi: ExtensionAPI): (update: HandsFreeUpdat
 		pi.events.emit("interactive-shell:update", update);
 		const message = buildHandsFreeUpdateMessage(update);
 		if (!message) return;
-		pi.sendMessage({
-			customType: "interactive-shell-update",
-			content: message.content,
-			display: true,
-			details: message.details,
-		}, { triggerTurn: true });
+		pi.sendMessage(
+			{
+				customType: "interactive-shell-update",
+				content: message.content,
+				display: true,
+				details: message.details,
+			},
+			{ triggerTurn: true },
+		);
 	};
 }
 
@@ -153,7 +164,14 @@ export default function interactiveShellExtension(pi: ExtensionAPI) {
 					if (!hMonitor || hMonitor.disposed) {
 						coordinator.markAgentHandledCompletion(sessionId);
 					}
-					const { output, truncated, totalBytes, totalLines, hasMore } = session.getOutput({ skipRateLimit: true, lines: outputLines, maxChars: outputMaxChars, offset: outputOffset, drain, incremental });
+					const { output, truncated, totalBytes, totalLines, hasMore } = session.getOutput({
+						skipRateLimit: true,
+						lines: outputLines,
+						maxChars: outputMaxChars,
+						offset: outputOffset,
+						drain,
+						incremental,
+					});
 					const status = session.getStatus();
 					const runtime = session.getRuntime();
 					session.kill();
@@ -162,8 +180,23 @@ export default function interactiveShellExtension(pi: ExtensionAPI) {
 					const truncatedNote = truncated ? ` (${totalBytes} bytes total, truncated)` : "";
 					const hasMoreNote = hasMore === true ? " (more available)" : "";
 					return {
-						content: [{ type: "text", text: `Session ${sessionId} killed after ${formatDurationMs(runtime)}${output ? `\n\nFinal output${truncatedNote}${hasMoreNote}:\n${output}` : ""}` }],
-						details: { sessionId, status: "killed", runtime, output, outputTruncated: truncated, outputTotalBytes: totalBytes, outputTotalLines: totalLines, hasMore, previousStatus: status },
+						content: [
+							{
+								type: "text",
+								text: `Session ${sessionId} killed after ${formatDurationMs(runtime)}${output ? `\n\nFinal output${truncatedNote}${hasMoreNote}:\n${output}` : ""}`,
+							},
+						],
+						details: {
+							sessionId,
+							status: "killed",
+							runtime,
+							output,
+							outputTruncated: truncated,
+							outputTotalBytes: totalBytes,
+							outputTotalLines: totalLines,
+							hasMore,
+							previousStatus: status,
+						},
 					};
 				}
 
@@ -218,9 +251,21 @@ export default function interactiveShellExtension(pi: ExtensionAPI) {
 							details: { sessionId, error: "write_failed" },
 						};
 					}
-					const inputDesc = typeof effectiveInput === "string"
-						? effectiveInput.length === 0 ? "(empty)" : effectiveInput.length > 50 ? `${effectiveInput.slice(0, 50)}...` : effectiveInput
-						: [effectiveInput.text ?? "", effectiveInput.keys ? `keys:[${effectiveInput.keys.join(",")}]` : "", effectiveInput.hex ? `hex:[${effectiveInput.hex.length} bytes]` : "", effectiveInput.paste ? `paste:[${effectiveInput.paste.length} chars]` : ""].filter(Boolean).join(" + ") || "(empty)";
+					const inputDesc =
+						typeof effectiveInput === "string"
+							? effectiveInput.length === 0
+								? "(empty)"
+								: effectiveInput.length > 50
+									? `${effectiveInput.slice(0, 50)}...`
+									: effectiveInput
+							: [
+									effectiveInput.text ?? "",
+									effectiveInput.keys ? `keys:[${effectiveInput.keys.join(",")}]` : "",
+									effectiveInput.hex ? `hex:[${effectiveInput.hex.length} bytes]` : "",
+									effectiveInput.paste ? `paste:[${effectiveInput.paste.length} chars]` : "",
+								]
+									.filter(Boolean)
+									.join(" + ") || "(empty)";
 					actions.push(`sent: ${inputDesc}`);
 				}
 
@@ -230,18 +275,48 @@ export default function interactiveShellExtension(pi: ExtensionAPI) {
 					const result = session.getResult();
 
 					if (result) {
-						const { output, truncated, totalBytes, totalLines, hasMore } = session.getOutput({ skipRateLimit: true, lines: outputLines, maxChars: outputMaxChars, offset: outputOffset, drain, incremental });
+						const { output, truncated, totalBytes, totalLines, hasMore } = session.getOutput({
+							skipRateLimit: true,
+							lines: outputLines,
+							maxChars: outputMaxChars,
+							offset: outputOffset,
+							drain,
+							incremental,
+						});
 						const truncatedNote = truncated ? ` (${totalBytes} bytes total, truncated)` : "";
 						const hasOutput = output.length > 0;
 						const hasMoreNote = hasMore === true ? " (more available)" : "";
 						sessionManager.unregisterActive(sessionId, !result.backgrounded);
 						return {
-							content: [{ type: "text", text: `Session ${sessionId} ${status} after ${formatDurationMs(runtime)}${hasOutput ? `\n\nOutput${truncatedNote}${hasMoreNote}:\n${output}` : ""}` }],
-							details: { sessionId, status, runtime, output, outputTruncated: truncated, outputTotalBytes: totalBytes, outputTotalLines: totalLines, hasMore, exitCode: result.exitCode, signal: result.signal, backgroundId: result.backgroundId },
+							content: [
+								{
+									type: "text",
+									text: `Session ${sessionId} ${status} after ${formatDurationMs(runtime)}${hasOutput ? `\n\nOutput${truncatedNote}${hasMoreNote}:\n${output}` : ""}`,
+								},
+							],
+							details: {
+								sessionId,
+								status,
+								runtime,
+								output,
+								outputTruncated: truncated,
+								outputTotalBytes: totalBytes,
+								outputTotalLines: totalLines,
+								hasMore,
+								exitCode: result.exitCode,
+								signal: result.signal,
+								backgroundId: result.backgroundId,
+							},
 						};
 					}
 
-					const outputResult = session.getOutput({ lines: outputLines, maxChars: outputMaxChars, offset: outputOffset, drain, incremental });
+					const outputResult = session.getOutput({
+						lines: outputLines,
+						maxChars: outputMaxChars,
+						offset: outputOffset,
+						drain,
+						incremental,
+					});
 
 					if (outputResult.rateLimited && outputResult.waitSeconds) {
 						const waitMs = outputResult.waitSeconds * 1000;
@@ -253,10 +328,20 @@ export default function interactiveShellExtension(pi: ExtensionAPI) {
 						if (completedEarly) {
 							const earlySession = sessionManager.getActive(sessionId);
 							if (!earlySession) {
-								return { content: [{ type: "text", text: `Session ${sessionId} ended` }], details: { sessionId, status: "ended" } };
+								return {
+									content: [{ type: "text", text: `Session ${sessionId} ended` }],
+									details: { sessionId, status: "ended" },
+								};
 							}
 							const earlyResult = earlySession.getResult();
-							const { output, truncated, totalBytes, totalLines, hasMore } = earlySession.getOutput({ skipRateLimit: true, lines: outputLines, maxChars: outputMaxChars, offset: outputOffset, drain, incremental });
+							const { output, truncated, totalBytes, totalLines, hasMore } = earlySession.getOutput({
+								skipRateLimit: true,
+								lines: outputLines,
+								maxChars: outputMaxChars,
+								offset: outputOffset,
+								drain,
+								incremental,
+							});
 							const earlyStatus = earlySession.getStatus();
 							const earlyRuntime = earlySession.getRuntime();
 							const truncatedNote = truncated ? ` (${totalBytes} bytes total, truncated)` : "";
@@ -265,17 +350,55 @@ export default function interactiveShellExtension(pi: ExtensionAPI) {
 							if (earlyResult) {
 								sessionManager.unregisterActive(sessionId, !earlyResult.backgrounded);
 								return {
-									content: [{ type: "text", text: `Session ${sessionId} ${earlyStatus} after ${formatDurationMs(earlyRuntime)}${hasOutput ? `\n\nOutput${truncatedNote}${hasMoreNote}:\n${output}` : ""}` }],
-									details: { sessionId, status: earlyStatus, runtime: earlyRuntime, output, outputTruncated: truncated, outputTotalBytes: totalBytes, outputTotalLines: totalLines, hasMore, exitCode: earlyResult.exitCode, signal: earlyResult.signal, backgroundId: earlyResult.backgroundId },
+									content: [
+										{
+											type: "text",
+											text: `Session ${sessionId} ${earlyStatus} after ${formatDurationMs(earlyRuntime)}${hasOutput ? `\n\nOutput${truncatedNote}${hasMoreNote}:\n${output}` : ""}`,
+										},
+									],
+									details: {
+										sessionId,
+										status: earlyStatus,
+										runtime: earlyRuntime,
+										output,
+										outputTruncated: truncated,
+										outputTotalBytes: totalBytes,
+										outputTotalLines: totalLines,
+										hasMore,
+										exitCode: earlyResult.exitCode,
+										signal: earlyResult.signal,
+										backgroundId: earlyResult.backgroundId,
+									},
 								};
 							}
 							return {
-								content: [{ type: "text", text: `Session ${sessionId} ${earlyStatus} (${formatDurationMs(earlyRuntime)})${hasOutput ? `\n\nOutput${truncatedNote}${hasMoreNote}:\n${output}` : ""}` }],
-								details: { sessionId, status: earlyStatus, runtime: earlyRuntime, output, outputTruncated: truncated, outputTotalBytes: totalBytes, outputTotalLines: totalLines, hasMore, hasOutput },
+								content: [
+									{
+										type: "text",
+										text: `Session ${sessionId} ${earlyStatus} (${formatDurationMs(earlyRuntime)})${hasOutput ? `\n\nOutput${truncatedNote}${hasMoreNote}:\n${output}` : ""}`,
+									},
+								],
+								details: {
+									sessionId,
+									status: earlyStatus,
+									runtime: earlyRuntime,
+									output,
+									outputTruncated: truncated,
+									outputTotalBytes: totalBytes,
+									outputTotalLines: totalLines,
+									hasMore,
+									hasOutput,
+								},
 							};
 						}
 
-						const freshOutput = session.getOutput({ lines: outputLines, maxChars: outputMaxChars, offset: outputOffset, drain, incremental });
+						const freshOutput = session.getOutput({
+							lines: outputLines,
+							maxChars: outputMaxChars,
+							offset: outputOffset,
+							drain,
+							incremental,
+						});
 						const truncatedNote = freshOutput.truncated ? ` (${freshOutput.totalBytes} bytes total, truncated)` : "";
 						const hasOutput = freshOutput.output.length > 0;
 						const hasMoreNote = freshOutput.hasMore === true ? " (more available)" : "";
@@ -285,13 +408,45 @@ export default function interactiveShellExtension(pi: ExtensionAPI) {
 						if (freshResult) {
 							sessionManager.unregisterActive(sessionId, !freshResult.backgrounded);
 							return {
-								content: [{ type: "text", text: `Session ${sessionId} ${freshStatus} after ${formatDurationMs(freshRuntime)}${hasOutput ? `\n\nOutput${truncatedNote}${hasMoreNote}:\n${freshOutput.output}` : ""}` }],
-								details: { sessionId, status: freshStatus, runtime: freshRuntime, output: freshOutput.output, outputTruncated: freshOutput.truncated, outputTotalBytes: freshOutput.totalBytes, outputTotalLines: freshOutput.totalLines, hasMore: freshOutput.hasMore, exitCode: freshResult.exitCode, signal: freshResult.signal, backgroundId: freshResult.backgroundId },
+								content: [
+									{
+										type: "text",
+										text: `Session ${sessionId} ${freshStatus} after ${formatDurationMs(freshRuntime)}${hasOutput ? `\n\nOutput${truncatedNote}${hasMoreNote}:\n${freshOutput.output}` : ""}`,
+									},
+								],
+								details: {
+									sessionId,
+									status: freshStatus,
+									runtime: freshRuntime,
+									output: freshOutput.output,
+									outputTruncated: freshOutput.truncated,
+									outputTotalBytes: freshOutput.totalBytes,
+									outputTotalLines: freshOutput.totalLines,
+									hasMore: freshOutput.hasMore,
+									exitCode: freshResult.exitCode,
+									signal: freshResult.signal,
+									backgroundId: freshResult.backgroundId,
+								},
 							};
 						}
 						return {
-							content: [{ type: "text", text: `Session ${sessionId} ${freshStatus} (${formatDurationMs(freshRuntime)})${hasOutput ? `\n\nOutput${truncatedNote}${hasMoreNote}:\n${freshOutput.output}` : ""}` }],
-							details: { sessionId, status: freshStatus, runtime: freshRuntime, output: freshOutput.output, outputTruncated: freshOutput.truncated, outputTotalBytes: freshOutput.totalBytes, outputTotalLines: freshOutput.totalLines, hasMore: freshOutput.hasMore, hasOutput },
+							content: [
+								{
+									type: "text",
+									text: `Session ${sessionId} ${freshStatus} (${formatDurationMs(freshRuntime)})${hasOutput ? `\n\nOutput${truncatedNote}${hasMoreNote}:\n${freshOutput.output}` : ""}`,
+								},
+							],
+							details: {
+								sessionId,
+								status: freshStatus,
+								runtime: freshRuntime,
+								output: freshOutput.output,
+								outputTruncated: freshOutput.truncated,
+								outputTotalBytes: freshOutput.totalBytes,
+								outputTotalLines: freshOutput.totalLines,
+								hasMore: freshOutput.hasMore,
+								hasOutput,
+							},
 						};
 					}
 
@@ -300,8 +455,23 @@ export default function interactiveShellExtension(pi: ExtensionAPI) {
 					const hasOutput = output.length > 0;
 					const hasMoreNote = hasMore === true ? " (more available)" : "";
 					return {
-						content: [{ type: "text", text: `Session ${sessionId} ${status} (${formatDurationMs(runtime)})${hasOutput ? `\n\nOutput${truncatedNote}${hasMoreNote}:\n${output}` : ""}` }],
-						details: { sessionId, status, runtime, output, outputTruncated: truncated, outputTotalBytes: totalBytes, outputTotalLines: totalLines, hasMore, hasOutput },
+						content: [
+							{
+								type: "text",
+								text: `Session ${sessionId} ${status} (${formatDurationMs(runtime)})${hasOutput ? `\n\nOutput${truncatedNote}${hasMoreNote}:\n${output}` : ""}`,
+							},
+						],
+						details: {
+							sessionId,
+							status,
+							runtime,
+							output,
+							outputTruncated: truncated,
+							outputTotalBytes: totalBytes,
+							outputTotalLines: totalLines,
+							hasMore,
+							hasOutput,
+						},
 					};
 				}
 
@@ -369,35 +539,38 @@ export default function interactiveShellExtension(pi: ExtensionAPI) {
 				try {
 					overlayPromise = ctx.ui.custom<InteractiveShellResult>(
 						(tui, theme, _kb, done) =>
-							new InteractiveShellOverlay(tui, theme, {
-								command: bgSession.command,
-								existingSession: bgSession.session,
-								sessionId: reattachSessionId,
-								mode,
-								cwd: cwd ?? ctx.cwd,
-								name: bgSession.name,
-								reason: bgSession.reason ?? reason,
-								startedAt: attachStartTime,
-								handsFreeUpdateMode: handsFree?.updateMode,
-								handsFreeUpdateInterval: handsFree?.updateInterval,
-								handsFreeQuietThreshold: handsFree?.quietThreshold,
-								handsFreeUpdateMaxChars: handsFree?.updateMaxChars,
-								handsFreeMaxTotalChars: handsFree?.maxTotalChars,
-								autoExitOnQuiet: mode === "dispatch"
-									? handsFree?.autoExitOnQuiet !== false
-									: handsFree?.autoExitOnQuiet === true,
-								autoExitGracePeriod: handsFree?.gracePeriod ?? config.autoExitGracePeriod,
-								onHandsFreeUpdate: mode === "hands-free"
-									? makeNonBlockingUpdateHandler(pi)
-									: undefined,
-								handoffPreviewEnabled: handoffPreview?.enabled,
-								handoffPreviewLines: handoffPreview?.lines,
-								handoffPreviewMaxChars: handoffPreview?.maxChars,
-								handoffSnapshotEnabled: handoffSnapshot?.enabled,
-								handoffSnapshotLines: handoffSnapshot?.lines,
-								handoffSnapshotMaxChars: handoffSnapshot?.maxChars,
-								timeout,
-							}, config, done),
+							new InteractiveShellOverlay(
+								tui,
+								theme,
+								{
+									command: bgSession.command,
+									existingSession: bgSession.session,
+									sessionId: reattachSessionId,
+									mode,
+									cwd: cwd ?? ctx.cwd,
+									name: bgSession.name,
+									reason: bgSession.reason ?? reason,
+									startedAt: attachStartTime,
+									handsFreeUpdateMode: handsFree?.updateMode,
+									handsFreeUpdateInterval: handsFree?.updateInterval,
+									handsFreeQuietThreshold: handsFree?.quietThreshold,
+									handsFreeUpdateMaxChars: handsFree?.updateMaxChars,
+									handsFreeMaxTotalChars: handsFree?.maxTotalChars,
+									autoExitOnQuiet:
+										mode === "dispatch" ? handsFree?.autoExitOnQuiet !== false : handsFree?.autoExitOnQuiet === true,
+									autoExitGracePeriod: handsFree?.gracePeriod ?? config.autoExitGracePeriod,
+									onHandsFreeUpdate: mode === "hands-free" ? makeNonBlockingUpdateHandler(pi) : undefined,
+									handoffPreviewEnabled: handoffPreview?.enabled,
+									handoffPreviewLines: handoffPreview?.lines,
+									handoffPreviewMaxChars: handoffPreview?.maxChars,
+									handoffSnapshotEnabled: handoffSnapshot?.enabled,
+									handoffSnapshotLines: handoffSnapshot?.lines,
+									handoffSnapshotMaxChars: handoffSnapshot?.maxChars,
+									timeout,
+								},
+								config,
+								done,
+							),
 						{
 							overlay: true,
 							overlayOptions: {
@@ -426,10 +599,22 @@ export default function interactiveShellExtension(pi: ExtensionAPI) {
 						onOverlayError: restoreAttachSession,
 					});
 					return {
-						content: [{ type: "text", text: mode === "dispatch"
-							? `Reattached to ${reattachSessionId}. You'll be notified when it completes.`
-							: `Reattached to ${reattachSessionId}.\nUse interactive_shell({ sessionId: "${reattachSessionId}" }) to check status/output.` }],
-						details: { sessionId: reattachSessionId, status: "running", command: bgSession.command, reason: bgSession.reason, mode },
+						content: [
+							{
+								type: "text",
+								text:
+									mode === "dispatch"
+										? `Reattached to ${reattachSessionId}. You'll be notified when it completes.`
+										: `Reattached to ${reattachSessionId}.\nUse interactive_shell({ sessionId: "${reattachSessionId}" }) to check status/output.`,
+							},
+						],
+						details: {
+							sessionId: reattachSessionId,
+							status: "running",
+							command: bgSession.command,
+							reason: bgSession.reason,
+							mode,
+						},
 					};
 				}
 
@@ -453,7 +638,20 @@ export default function interactiveShellExtension(pi: ExtensionAPI) {
 					sessionManager.scheduleCleanup(attach);
 				}
 
-				return { content: [{ type: "text", text: summarizeInteractiveResult(command ?? bgSession.command, result, timeout, bgSession.reason ?? reason) }], details: result };
+				return {
+					content: [
+						{
+							type: "text",
+							text: summarizeInteractiveResult(
+								command ?? bgSession.command,
+								result,
+								timeout,
+								bgSession.reason ?? reason,
+							),
+						},
+					],
+					details: result,
+				};
 			}
 
 			// ── Branch 3: List background sessions ──
@@ -462,29 +660,47 @@ export default function interactiveShellExtension(pi: ExtensionAPI) {
 				if (sessions.length === 0) {
 					return { content: [{ type: "text", text: "No background sessions." }], details: { sessions: [], count: 0 } };
 				}
-				const lines = sessions.map(s => {
+				const lines = sessions.map((s) => {
 					const status = s.session.exited ? "exited" : "running";
 					const duration = formatDuration(Date.now() - s.startedAt.getTime());
 					const r = s.reason ? ` \u2022 ${s.reason}` : "";
 					return `  ${s.id} - ${s.command}${r} (${status}, ${duration})`;
 				});
-				return { content: [{ type: "text", text: `Background sessions:\n${lines.join("\n")}` }], details: { count: sessions.length, sessions: sessions.map((s) => ({ id: s.id, command: s.command, reason: s.reason, exited: s.session.exited, startedAt: s.startedAt.toISOString() })) } };
+				return {
+					content: [{ type: "text", text: `Background sessions:\n${lines.join("\n")}` }],
+					details: {
+						count: sessions.length,
+						sessions: sessions.map((s) => ({
+							id: s.id,
+							command: s.command,
+							reason: s.reason,
+							exited: s.session.exited,
+							startedAt: s.startedAt.toISOString(),
+						})),
+					},
+				};
 			}
 
 			// ── Branch 3b: Dismiss background sessions ──
 			if (dismissBackground) {
 				if (typeof dismissBackground === "string") {
-					if (!sessionManager.list().some(s => s.id === dismissBackground)) {
-						return { content: [{ type: "text", text: `Background session not found: ${dismissBackground}` }], isError: true, details: { error: "background_session_not_found", sessionId: dismissBackground } };
+					if (!sessionManager.list().some((s) => s.id === dismissBackground)) {
+						return {
+							content: [{ type: "text", text: `Background session not found: ${dismissBackground}` }],
+							isError: true,
+							details: { error: "background_session_not_found", sessionId: dismissBackground },
+						};
 					}
 				}
 
-				const targetIds = typeof dismissBackground === "string"
-					? [dismissBackground]
-					: sessionManager.list().map(s => s.id);
+				const targetIds =
+					typeof dismissBackground === "string" ? [dismissBackground] : sessionManager.list().map((s) => s.id);
 
 				if (targetIds.length === 0) {
-					return { content: [{ type: "text", text: "No background sessions to dismiss." }], details: { dismissed: [], count: 0 } };
+					return {
+						content: [{ type: "text", text: "No background sessions to dismiss." }],
+						details: { dismissed: [], count: 0 },
+					};
 				}
 
 				for (const tid of targetIds) {
@@ -493,16 +709,25 @@ export default function interactiveShellExtension(pi: ExtensionAPI) {
 					sessionManager.remove(tid);
 				}
 
-				const summary = targetIds.length === 1
-					? `Dismissed session ${targetIds[0]}.`
-					: `Dismissed ${targetIds.length} sessions: ${targetIds.join(", ")}.`;
-				return { content: [{ type: "text", text: summary }], details: { dismissed: targetIds, count: targetIds.length } };
+				const summary =
+					targetIds.length === 1
+						? `Dismissed session ${targetIds[0]}.`
+						: `Dismissed ${targetIds.length} sessions: ${targetIds.join(", ")}.`;
+				return {
+					content: [{ type: "text", text: summary }],
+					details: { dismissed: targetIds, count: targetIds.length },
+				};
 			}
 
 			// ── Branch 4: Start new session ──
 			if (!command) {
 				return {
-					content: [{ type: "text", text: "One of 'command', 'sessionId', 'attach', 'listBackground', or 'dismissBackground' is required." }],
+					content: [
+						{
+							type: "text",
+							text: "One of 'command', 'sessionId', 'attach', 'listBackground', or 'dismissBackground' is required.",
+						},
+					],
 					isError: true,
 					details: { error: "missing_required_parameter" },
 				};
@@ -515,24 +740,38 @@ export default function interactiveShellExtension(pi: ExtensionAPI) {
 			// ── Branch 4a: Headless dispatch ──
 			if (mode === "dispatch" && background) {
 				const id = generateSessionId(name);
-				const session = new PtyTerminalSession(
-					{ command, cwd: effectiveCwd, cols: 120, rows: 40, scrollback: config.scrollbackLines },
-				);
+				const session = new PtyTerminalSession({
+					command,
+					cwd: effectiveCwd,
+					cols: 120,
+					rows: 40,
+					scrollback: config.scrollbackLines,
+				});
 
 				const startTime = Date.now();
 				sessionManager.add(command, session, name, reason, { id, noAutoCleanup: true, startedAt: new Date(startTime) });
 
-				const monitor = new HeadlessDispatchMonitor(session, config, {
-					autoExitOnQuiet: handsFree?.autoExitOnQuiet !== false,
-					quietThreshold: handsFree?.quietThreshold ?? config.handsFreeQuietThreshold,
-					gracePeriod: handsFree?.gracePeriod ?? config.autoExitGracePeriod,
-					timeout,
-					startedAt: startTime,
-				}, makeMonitorCompletionCallback(pi, id, startTime));
+				const monitor = new HeadlessDispatchMonitor(
+					session,
+					config,
+					{
+						autoExitOnQuiet: handsFree?.autoExitOnQuiet !== false,
+						quietThreshold: handsFree?.quietThreshold ?? config.handsFreeQuietThreshold,
+						gracePeriod: handsFree?.gracePeriod ?? config.autoExitGracePeriod,
+						timeout,
+						startedAt: startTime,
+					},
+					makeMonitorCompletionCallback(pi, id, startTime),
+				);
 				registerHeadlessActive(id, command, reason, session, monitor, startTime, config);
 
 				return {
-					content: [{ type: "text", text: `Session dispatched in background (id: ${id}).\nYou'll be notified when it completes. User can /attach ${id} to watch.` }],
+					content: [
+						{
+							type: "text",
+							text: `Session dispatched in background (id: ${id}).\nYou'll be notified when it completes. User can /attach ${id} to watch.`,
+						},
+					],
 					details: { sessionId: id, backgroundId: id, mode: "dispatch", background: true },
 				};
 			}
@@ -556,7 +795,12 @@ export default function interactiveShellExtension(pi: ExtensionAPI) {
 
 			if (coordinator.isOverlayOpen()) {
 				return {
-					content: [{ type: "text", text: "An interactive shell overlay is already open. Wait for it to close or kill the active session before starting a new one." }],
+					content: [
+						{
+							type: "text",
+							text: "An interactive shell overlay is already open. Wait for it to close or kill the active session before starting a new one.",
+						},
+					],
 					isError: true,
 					details: { error: "overlay_already_open" },
 				};
@@ -568,7 +812,12 @@ export default function interactiveShellExtension(pi: ExtensionAPI) {
 			if (isNonBlocking && generatedSessionId) {
 				if (!coordinator.beginOverlay()) {
 					return {
-						content: [{ type: "text", text: "An interactive shell overlay is already open. Wait for it to close or kill the active session before starting a new one." }],
+						content: [
+							{
+								type: "text",
+								text: "An interactive shell overlay is already open. Wait for it to close or kill the active session before starting a new one.",
+							},
+						],
 						isError: true,
 						details: { error: "overlay_already_open" },
 					};
@@ -579,34 +828,37 @@ export default function interactiveShellExtension(pi: ExtensionAPI) {
 				try {
 					overlayPromise = ctx.ui.custom<InteractiveShellResult>(
 						(tui, theme, _kb, done) =>
-							new InteractiveShellOverlay(tui, theme, {
-								command,
-								cwd: effectiveCwd,
-								name,
-								reason,
-								mode,
-								sessionId: generatedSessionId,
-								startedAt: overlayStartTime,
-								handsFreeUpdateMode: handsFree?.updateMode,
-								handsFreeUpdateInterval: handsFree?.updateInterval,
-								handsFreeQuietThreshold: handsFree?.quietThreshold,
-								handsFreeUpdateMaxChars: handsFree?.updateMaxChars,
-								handsFreeMaxTotalChars: handsFree?.maxTotalChars,
-								autoExitOnQuiet: mode === "dispatch"
-									? handsFree?.autoExitOnQuiet !== false
-									: handsFree?.autoExitOnQuiet === true,
-								autoExitGracePeriod: handsFree?.gracePeriod ?? config.autoExitGracePeriod,
-								onHandsFreeUpdate: mode === "hands-free"
-									? makeNonBlockingUpdateHandler(pi)
-									: undefined,
-								handoffPreviewEnabled: handoffPreview?.enabled,
-								handoffPreviewLines: handoffPreview?.lines,
-								handoffPreviewMaxChars: handoffPreview?.maxChars,
-								handoffSnapshotEnabled: handoffSnapshot?.enabled,
-								handoffSnapshotLines: handoffSnapshot?.lines,
-								handoffSnapshotMaxChars: handoffSnapshot?.maxChars,
-								timeout,
-							}, config, done),
+							new InteractiveShellOverlay(
+								tui,
+								theme,
+								{
+									command,
+									cwd: effectiveCwd,
+									name,
+									reason,
+									mode,
+									sessionId: generatedSessionId,
+									startedAt: overlayStartTime,
+									handsFreeUpdateMode: handsFree?.updateMode,
+									handsFreeUpdateInterval: handsFree?.updateInterval,
+									handsFreeQuietThreshold: handsFree?.quietThreshold,
+									handsFreeUpdateMaxChars: handsFree?.updateMaxChars,
+									handsFreeMaxTotalChars: handsFree?.maxTotalChars,
+									autoExitOnQuiet:
+										mode === "dispatch" ? handsFree?.autoExitOnQuiet !== false : handsFree?.autoExitOnQuiet === true,
+									autoExitGracePeriod: handsFree?.gracePeriod ?? config.autoExitGracePeriod,
+									onHandsFreeUpdate: mode === "hands-free" ? makeNonBlockingUpdateHandler(pi) : undefined,
+									handoffPreviewEnabled: handoffPreview?.enabled,
+									handoffPreviewLines: handoffPreview?.lines,
+									handoffPreviewMaxChars: handoffPreview?.maxChars,
+									handoffSnapshotEnabled: handoffSnapshot?.enabled,
+									handoffSnapshotLines: handoffSnapshot?.lines,
+									handoffSnapshotMaxChars: handoffSnapshot?.maxChars,
+									timeout,
+								},
+								config,
+								done,
+							),
 						{
 							overlay: true,
 							overlayOptions: {
@@ -634,12 +886,22 @@ export default function interactiveShellExtension(pi: ExtensionAPI) {
 
 				if (mode === "dispatch") {
 					return {
-						content: [{ type: "text", text: `Session dispatched (id: ${generatedSessionId}).\nYou'll be notified when it completes.\nYou can still query with interactive_shell({ sessionId: "${generatedSessionId}" }) if needed.` }],
+						content: [
+							{
+								type: "text",
+								text: `Session dispatched (id: ${generatedSessionId}).\nYou'll be notified when it completes.\nYou can still query with interactive_shell({ sessionId: "${generatedSessionId}" }) if needed.`,
+							},
+						],
 						details: { sessionId: generatedSessionId, status: "running", command, reason, mode },
 					};
 				}
 				return {
-					content: [{ type: "text", text: `Session started: ${generatedSessionId}\nCommand: ${command}\n\nUse interactive_shell({ sessionId: "${generatedSessionId}" }) to check status/output.\nUse interactive_shell({ sessionId: "${generatedSessionId}", kill: true }) to end when done.` }],
+					content: [
+						{
+							type: "text",
+							text: `Session started: ${generatedSessionId}\nCommand: ${command}\n\nUse interactive_shell({ sessionId: "${generatedSessionId}" }) to check status/output.\nUse interactive_shell({ sessionId: "${generatedSessionId}", kill: true }) to end when done.`,
+						},
+					],
 					details: { sessionId: generatedSessionId, status: "running", command, reason },
 				};
 			}
@@ -647,7 +909,12 @@ export default function interactiveShellExtension(pi: ExtensionAPI) {
 			// ── Blocking (interactive) path ──
 			if (!coordinator.beginOverlay()) {
 				return {
-					content: [{ type: "text", text: "An interactive shell overlay is already open. Wait for it to close or kill the active session before starting a new one." }],
+					content: [
+						{
+							type: "text",
+							text: "An interactive shell overlay is already open. Wait for it to close or kill the active session before starting a new one.",
+						},
+					],
 					isError: true,
 					details: { error: "overlay_already_open" },
 				};
@@ -661,65 +928,71 @@ export default function interactiveShellExtension(pi: ExtensionAPI) {
 			try {
 				result = await ctx.ui.custom<InteractiveShellResult>(
 					(tui, theme, _kb, done) =>
-						new InteractiveShellOverlay(tui, theme, {
-							command,
-							cwd: effectiveCwd,
-							name,
-							reason,
-							mode,
-							sessionId: generatedSessionId,
-							handsFreeUpdateMode: handsFree?.updateMode,
-							handsFreeUpdateInterval: handsFree?.updateInterval,
-							handsFreeQuietThreshold: handsFree?.quietThreshold,
-							handsFreeUpdateMaxChars: handsFree?.updateMaxChars,
-							handsFreeMaxTotalChars: handsFree?.maxTotalChars,
-							autoExitOnQuiet: handsFree?.autoExitOnQuiet,
-							autoExitGracePeriod: handsFree?.gracePeriod ?? config.autoExitGracePeriod,
-							streamingMode: mode === "hands-free",
-							onHandsFreeUpdate: mode === "hands-free"
-								? (update) => {
-									let statusText: string;
-									switch (update.status) {
-										case "user-takeover":
-											statusText = `User took over session ${update.sessionId}`;
-											break;
-										case "exited":
-											statusText = `Session ${update.sessionId} exited`;
-											break;
-										case "killed":
-											statusText = `Session ${update.sessionId} killed`;
-											break;
-										default: {
-											const budgetInfo = update.budgetExhausted ? " [budget exhausted]" : "";
-											statusText = `Session ${update.sessionId} running (${formatDurationMs(update.runtime)})${budgetInfo}`;
-										}
-									}
-									const newOutput = update.status === "running" && update.tail.length > 0
-										? `\n\n${update.tail.join("\n")}`
-										: "";
-									onUpdate?.({
-										content: [{ type: "text", text: statusText + newOutput }],
-										details: {
-											status: update.status,
-											sessionId: update.sessionId,
-											runtime: update.runtime,
-											newChars: update.tail.join("\n").length,
-											totalCharsSent: update.totalCharsSent,
-											budgetExhausted: update.budgetExhausted,
-											userTookOver: update.userTookOver,
-										},
-									});
-									pi.events.emit("interactive-shell:update", update);
-								}
-								: undefined,
-							handoffPreviewEnabled: handoffPreview?.enabled,
-							handoffPreviewLines: handoffPreview?.lines,
-							handoffPreviewMaxChars: handoffPreview?.maxChars,
-							handoffSnapshotEnabled: handoffSnapshot?.enabled,
-							handoffSnapshotLines: handoffSnapshot?.lines,
-							handoffSnapshotMaxChars: handoffSnapshot?.maxChars,
-							timeout,
-						}, config, done),
+						new InteractiveShellOverlay(
+							tui,
+							theme,
+							{
+								command,
+								cwd: effectiveCwd,
+								name,
+								reason,
+								mode,
+								sessionId: generatedSessionId,
+								handsFreeUpdateMode: handsFree?.updateMode,
+								handsFreeUpdateInterval: handsFree?.updateInterval,
+								handsFreeQuietThreshold: handsFree?.quietThreshold,
+								handsFreeUpdateMaxChars: handsFree?.updateMaxChars,
+								handsFreeMaxTotalChars: handsFree?.maxTotalChars,
+								autoExitOnQuiet: handsFree?.autoExitOnQuiet,
+								autoExitGracePeriod: handsFree?.gracePeriod ?? config.autoExitGracePeriod,
+								streamingMode: mode === "hands-free",
+								onHandsFreeUpdate:
+									mode === "hands-free"
+										? (update) => {
+												let statusText: string;
+												switch (update.status) {
+													case "user-takeover":
+														statusText = `User took over session ${update.sessionId}`;
+														break;
+													case "exited":
+														statusText = `Session ${update.sessionId} exited`;
+														break;
+													case "killed":
+														statusText = `Session ${update.sessionId} killed`;
+														break;
+													default: {
+														const budgetInfo = update.budgetExhausted ? " [budget exhausted]" : "";
+														statusText = `Session ${update.sessionId} running (${formatDurationMs(update.runtime)})${budgetInfo}`;
+													}
+												}
+												const newOutput =
+													update.status === "running" && update.tail.length > 0 ? `\n\n${update.tail.join("\n")}` : "";
+												onUpdate?.({
+													content: [{ type: "text", text: statusText + newOutput }],
+													details: {
+														status: update.status,
+														sessionId: update.sessionId,
+														runtime: update.runtime,
+														newChars: update.tail.join("\n").length,
+														totalCharsSent: update.totalCharsSent,
+														budgetExhausted: update.budgetExhausted,
+														userTookOver: update.userTookOver,
+													},
+												});
+												pi.events.emit("interactive-shell:update", update);
+											}
+										: undefined,
+								handoffPreviewEnabled: handoffPreview?.enabled,
+								handoffPreviewLines: handoffPreview?.lines,
+								handoffPreviewMaxChars: handoffPreview?.maxChars,
+								handoffSnapshotEnabled: handoffSnapshot?.enabled,
+								handoffSnapshotLines: handoffSnapshot?.lines,
+								handoffSnapshotMaxChars: handoffSnapshot?.maxChars,
+								timeout,
+							},
+							config,
+							done,
+						),
 					{
 						overlay: true,
 						overlayOptions: {
@@ -734,7 +1007,10 @@ export default function interactiveShellExtension(pi: ExtensionAPI) {
 				coordinator.endOverlay();
 			}
 
-			return { content: [{ type: "text", text: summarizeInteractiveResult(command, result, timeout, reason) }], details: result };
+			return {
+				content: [{ type: "text", text: summarizeInteractiveResult(command, result, timeout, reason) }],
+				details: result,
+			};
 		},
 	});
 
@@ -783,7 +1059,13 @@ export default function interactiveShellExtension(pi: ExtensionAPI) {
 			try {
 				const result = await ctx.ui.custom<InteractiveShellResult>(
 					(tui, theme, _kb, done) =>
-						new ReattachOverlay(tui, theme, { id: session.id, command: session.command, reason: session.reason, session: session.session }, config, done),
+						new ReattachOverlay(
+							tui,
+							theme,
+							{ id: session.id, command: session.command, reason: session.reason, session: session.session },
+							config,
+							done,
+						),
 					{
 						overlay: true,
 						overlayOptions: {
@@ -823,7 +1105,7 @@ export default function interactiveShellExtension(pi: ExtensionAPI) {
 			let targetIds: string[];
 			const arg = args.trim();
 			if (arg) {
-				if (!sessions.some(s => s.id === arg)) {
+				if (!sessions.some((s) => s.id === arg)) {
 					ctx.ui.notify(`Session not found: ${arg}`, "error");
 					return;
 				}
@@ -831,16 +1113,17 @@ export default function interactiveShellExtension(pi: ExtensionAPI) {
 			} else if (sessions.length === 1) {
 				targetIds = [sessions[0].id];
 			} else {
-				const options = ["All sessions", ...sessions.map((s) => {
-					const status = s.session.exited ? "exited" : "running";
-					const duration = formatDuration(Date.now() - s.startedAt.getTime());
-					return `${s.id} (${status}, ${duration})`;
-				})];
+				const options = [
+					"All sessions",
+					...sessions.map((s) => {
+						const status = s.session.exited ? "exited" : "running";
+						const duration = formatDuration(Date.now() - s.startedAt.getTime());
+						return `${s.id} (${status}, ${duration})`;
+					}),
+				];
 				const choice = await ctx.ui.select("Dismiss sessions", options);
 				if (!choice) return;
-				targetIds = choice === "All sessions"
-					? sessions.map(s => s.id)
-					: [choice.split(" (")[0]];
+				targetIds = choice === "All sessions" ? sessions.map((s) => s.id) : [choice.split(" (")[0]];
 			}
 
 			for (const tid of targetIds) {
@@ -867,99 +1150,140 @@ function setupDispatchCompletion(
 		timeout?: number;
 		handsFree?: { autoExitOnQuiet?: boolean; quietThreshold?: number; gracePeriod?: number };
 		overlayStartTime?: number;
-		onOverlayError?: () => { releaseId?: boolean; disposeMonitor?: boolean } | void;
+		onOverlayError?: () => { releaseId?: boolean; disposeMonitor?: boolean } | undefined;
 	},
 ): void {
 	const { id, mode, command, reason } = ctx;
 
-	overlayPromise.then((result) => {
-		coordinator.endOverlay();
+	overlayPromise
+		.then((result) => {
+			coordinator.endOverlay();
 
-		const wasAgentInitiated = coordinator.consumeAgentHandledCompletion(id);
+			const wasAgentInitiated = coordinator.consumeAgentHandledCompletion(id);
 
-		if (result.transferred) {
-			const truncatedNote = result.transferred.truncated
-				? ` (truncated from ${result.transferred.totalLines} total lines)`
-				: "";
-			const content = `Session ${id} output transferred (${result.transferred.lines.length} lines${truncatedNote}):\n\n${result.transferred.lines.join("\n")}`;
-			pi.sendMessage({
-				customType: "interactive-shell-transfer",
-				content,
-				display: true,
-				details: { sessionId: id, transferred: result.transferred, exitCode: result.exitCode, signal: result.signal },
-			}, { triggerTurn: true });
-			pi.events.emit("interactive-shell:transfer", { sessionId: id, transferred: result.transferred, exitCode: result.exitCode, signal: result.signal });
-			sessionManager.unregisterActive(id, true);
-			coordinator.disposeMonitor(id);
-			return;
-		}
-
-		if (mode === "dispatch" && result.backgrounded) {
-			if (!wasAgentInitiated) {
-				pi.sendMessage({
-					customType: "interactive-shell-transfer",
-					content: `Session ${id} moved to background (id: ${result.backgroundId}).`,
-					display: true,
-					details: { sessionId: id, backgroundId: result.backgroundId },
-				}, { triggerTurn: true });
-			}
-			sessionManager.unregisterActive(id, false);
-
-			const bgId = result.backgroundId!;
-			const existingMonitor = coordinator.getMonitor(id);
-			const bgSession = sessionManager.get(bgId);
-			if (!bgSession) return;
-
-			if (existingMonitor && !existingMonitor.disposed) {
-				coordinator.deleteMonitor(id);
-				registerHeadlessActive(bgId, command, reason, bgSession.session, existingMonitor, bgSession.startedAt.getTime(), config);
+			if (result.transferred) {
+				const truncatedNote = result.transferred.truncated
+					? ` (truncated from ${result.transferred.totalLines} total lines)`
+					: "";
+				const content = `Session ${id} output transferred (${result.transferred.lines.length} lines${truncatedNote}):\n\n${result.transferred.lines.join("\n")}`;
+				pi.sendMessage(
+					{
+						customType: "interactive-shell-transfer",
+						content,
+						display: true,
+						details: {
+							sessionId: id,
+							transferred: result.transferred,
+							exitCode: result.exitCode,
+							signal: result.signal,
+						},
+					},
+					{ triggerTurn: true },
+				);
+				pi.events.emit("interactive-shell:transfer", {
+					sessionId: id,
+					transferred: result.transferred,
+					exitCode: result.exitCode,
+					signal: result.signal,
+				});
+				sessionManager.unregisterActive(id, true);
+				coordinator.disposeMonitor(id);
 				return;
 			}
 
-			const elapsed = ctx.overlayStartTime ? Date.now() - ctx.overlayStartTime : 0;
-			const remainingTimeout = ctx.timeout ? Math.max(0, ctx.timeout - elapsed) : undefined;
-			const bgStartTime = bgSession.startedAt.getTime();
-			const monitor = new HeadlessDispatchMonitor(bgSession.session, config, {
-				autoExitOnQuiet: ctx.handsFree?.autoExitOnQuiet !== false,
-				quietThreshold: ctx.handsFree?.quietThreshold ?? config.handsFreeQuietThreshold,
-				gracePeriod: ctx.handsFree?.gracePeriod ?? config.autoExitGracePeriod,
-				timeout: remainingTimeout,
-				startedAt: bgStartTime,
-			}, makeMonitorCompletionCallback(pi, bgId, bgStartTime));
-			registerHeadlessActive(bgId, command, reason, bgSession.session, monitor, bgStartTime, config);
-			return;
-		}
+			if (mode === "dispatch" && result.backgrounded) {
+				if (!wasAgentInitiated) {
+					pi.sendMessage(
+						{
+							customType: "interactive-shell-transfer",
+							content: `Session ${id} moved to background (id: ${result.backgroundId}).`,
+							display: true,
+							details: { sessionId: id, backgroundId: result.backgroundId },
+						},
+						{ triggerTurn: true },
+					);
+				}
+				sessionManager.unregisterActive(id, false);
 
-		if (mode === "dispatch") {
-			if (!wasAgentInitiated) {
-				const content = buildResultNotification(id, result);
-				pi.sendMessage({
-					customType: "interactive-shell-transfer",
-					content,
-					display: true,
-					details: { sessionId: id, exitCode: result.exitCode, signal: result.signal, timedOut: result.timedOut, cancelled: result.cancelled, completionOutput: result.completionOutput },
-				}, { triggerTurn: true });
+				const bgId = result.backgroundId!;
+				const existingMonitor = coordinator.getMonitor(id);
+				const bgSession = sessionManager.get(bgId);
+				if (!bgSession) return;
+
+				if (existingMonitor && !existingMonitor.disposed) {
+					coordinator.deleteMonitor(id);
+					registerHeadlessActive(
+						bgId,
+						command,
+						reason,
+						bgSession.session,
+						existingMonitor,
+						bgSession.startedAt.getTime(),
+						config,
+					);
+					return;
+				}
+
+				const elapsed = ctx.overlayStartTime ? Date.now() - ctx.overlayStartTime : 0;
+				const remainingTimeout = ctx.timeout ? Math.max(0, ctx.timeout - elapsed) : undefined;
+				const bgStartTime = bgSession.startedAt.getTime();
+				const monitor = new HeadlessDispatchMonitor(
+					bgSession.session,
+					config,
+					{
+						autoExitOnQuiet: ctx.handsFree?.autoExitOnQuiet !== false,
+						quietThreshold: ctx.handsFree?.quietThreshold ?? config.handsFreeQuietThreshold,
+						gracePeriod: ctx.handsFree?.gracePeriod ?? config.autoExitGracePeriod,
+						timeout: remainingTimeout,
+						startedAt: bgStartTime,
+					},
+					makeMonitorCompletionCallback(pi, bgId, bgStartTime),
+				);
+				registerHeadlessActive(bgId, command, reason, bgSession.session, monitor, bgStartTime, config);
+				return;
 			}
-			pi.events.emit("interactive-shell:transfer", {
-				sessionId: id,
-				completionOutput: result.completionOutput,
-				exitCode: result.exitCode,
-				signal: result.signal,
-				timedOut: result.timedOut,
-				cancelled: result.cancelled,
-			});
-			sessionManager.unregisterActive(id, true);
-			coordinator.disposeMonitor(id);
-			return;
-		}
 
-		coordinator.disposeMonitor(id);
-	}).catch(() => {
-		coordinator.endOverlay();
-		const recovery = ctx.onOverlayError?.();
-		sessionManager.unregisterActive(id, recovery?.releaseId ?? true);
-		if (recovery?.disposeMonitor !== false) {
+			if (mode === "dispatch") {
+				if (!wasAgentInitiated) {
+					const content = buildResultNotification(id, result);
+					pi.sendMessage(
+						{
+							customType: "interactive-shell-transfer",
+							content,
+							display: true,
+							details: {
+								sessionId: id,
+								exitCode: result.exitCode,
+								signal: result.signal,
+								timedOut: result.timedOut,
+								cancelled: result.cancelled,
+								completionOutput: result.completionOutput,
+							},
+						},
+						{ triggerTurn: true },
+					);
+				}
+				pi.events.emit("interactive-shell:transfer", {
+					sessionId: id,
+					completionOutput: result.completionOutput,
+					exitCode: result.exitCode,
+					signal: result.signal,
+					timedOut: result.timedOut,
+					cancelled: result.cancelled,
+				});
+				sessionManager.unregisterActive(id, true);
+				coordinator.disposeMonitor(id);
+				return;
+			}
+
 			coordinator.disposeMonitor(id);
-		}
-	});
+		})
+		.catch(() => {
+			coordinator.endOverlay();
+			const recovery = ctx.onOverlayError?.();
+			sessionManager.unregisterActive(id, recovery?.releaseId ?? true);
+			if (recovery?.disposeMonitor !== false) {
+				coordinator.disposeMonitor(id);
+			}
+		});
 }

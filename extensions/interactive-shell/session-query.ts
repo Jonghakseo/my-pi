@@ -1,7 +1,7 @@
 import type { InteractiveShellConfig } from "./config.js";
+import type { PtyTerminalSession } from "./pty-session.js";
 import type { OutputOptions, OutputResult } from "./session-manager.js";
 import type { InteractiveShellResult } from "./types.js";
-import type { PtyTerminalSession } from "./pty-session.js";
 
 /** Mutable query bookkeeping kept per active session. */
 export interface SessionQueryState {
@@ -120,7 +120,7 @@ function getOffsetOutput(
 		stripAnsi: true,
 	});
 	const output = truncateForMaxChars(result.slice, requestedMaxChars);
-	const hasMore = (offset + result.sliceLineCount) < result.totalLines;
+	const hasMore = offset + result.sliceLineCount < result.totalLines;
 	return {
 		output: output.value,
 		truncated: output.truncated || hasMore,
@@ -130,7 +130,9 @@ function getOffsetOutput(
 	};
 }
 
-function buildCompletionOutputResult(completionOutput: NonNullable<InteractiveShellResult["completionOutput"]>): OutputResult {
+function buildCompletionOutputResult(
+	completionOutput: NonNullable<InteractiveShellResult["completionOutput"]>,
+): OutputResult {
 	const output = completionOutput.lines.join("\n");
 	return {
 		output,
@@ -144,9 +146,7 @@ function buildTruncatedOutput(output: string, requestedMaxChars: number, sliceFr
 	const truncated = output.length > requestedMaxChars;
 	let value = output;
 	if (truncated) {
-		value = sliceFromEnd
-			? output.slice(-requestedMaxChars)
-			: output.slice(0, requestedMaxChars);
+		value = sliceFromEnd ? output.slice(-requestedMaxChars) : output.slice(0, requestedMaxChars);
 	}
 	return {
 		output: value,
