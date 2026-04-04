@@ -507,96 +507,105 @@ function sameStringArray(a: string[], b: string[]): boolean {
 	return true;
 }
 
-export function normalizeTodoMetadata(
-	todo: TodoFrontMatter,
-	options: { inferFromText?: boolean; bodyText?: string; extractFromTags?: boolean } = {},
-): boolean {
+function applyNormalizedTodoScalars(todo: TodoFrontMatter): boolean {
 	let changed = false;
-
 	const normalizedTags = normalizeTodoTags(todo.tags);
 	if (!sameStringArray(todo.tags, normalizedTags)) {
 		todo.tags = normalizedTags;
 		changed = true;
 	}
-
 	const normalizedPriority = normalizePriority(todo.priority);
 	if (todo.priority !== normalizedPriority) {
 		todo.priority = normalizedPriority;
 		changed = true;
 	}
-
 	const normalizedDueDate = normalizeDueDate(todo.due_date);
 	if (todo.due_date !== normalizedDueDate) {
 		todo.due_date = normalizedDueDate;
 		changed = true;
 	}
-
 	const normalizedEstimate = normalizeEstimate(todo.estimate);
 	if (todo.estimate !== normalizedEstimate) {
 		todo.estimate = normalizedEstimate;
 		changed = true;
 	}
+	return changed;
+}
 
+function extractMetadataFromTags(todo: TodoFrontMatter): boolean {
+	const remainingTags: string[] = [];
+	let extractedPriority: TodoPriority | undefined;
+	let extractedDueDate: string | undefined;
+	let extractedEstimate: string | undefined;
+
+	for (const tag of todo.tags) {
+		const parsed = parseStructuredTag(tag);
+		if (!parsed) {
+			remainingTags.push(tag);
+			continue;
+		}
+		if (parsed.field === "priority" && !extractedPriority) {
+			extractedPriority = normalizePriority(parsed.value);
+			continue;
+		}
+		if (parsed.field === "due_date" && !extractedDueDate) {
+			extractedDueDate = normalizeDueDate(parsed.value);
+			continue;
+		}
+		if (parsed.field === "estimate" && !extractedEstimate) {
+			extractedEstimate = normalizeEstimate(parsed.value);
+		}
+	}
+
+	let changed = false;
+	if (!sameStringArray(todo.tags, remainingTags)) {
+		todo.tags = remainingTags;
+		changed = true;
+	}
+	if (!todo.priority && extractedPriority) {
+		todo.priority = extractedPriority;
+		changed = true;
+	}
+	if (!todo.due_date && extractedDueDate) {
+		todo.due_date = extractedDueDate;
+		changed = true;
+	}
+	if (!todo.estimate && extractedEstimate) {
+		todo.estimate = extractedEstimate;
+		changed = true;
+	}
+	return changed;
+}
+
+function applyInferredTodoMetadata(todo: TodoFrontMatter, bodyText?: string): boolean {
+	const inferred = inferMetadataFromText(`${todo.title ?? ""}\n${bodyText ?? ""}`);
+	let changed = false;
+	if (!todo.priority && inferred.priority) {
+		todo.priority = inferred.priority;
+		changed = true;
+	}
+	if (!todo.due_date && inferred.due_date) {
+		todo.due_date = inferred.due_date;
+		changed = true;
+	}
+	if (!todo.estimate && inferred.estimate) {
+		todo.estimate = inferred.estimate;
+		changed = true;
+	}
+	return changed;
+}
+
+export function normalizeTodoMetadata(
+	todo: TodoFrontMatter,
+	options: { inferFromText?: boolean; bodyText?: string; extractFromTags?: boolean } = {},
+): boolean {
+	let changed = applyNormalizedTodoScalars(todo);
 	if (options.extractFromTags ?? true) {
-		const remainingTags: string[] = [];
-		let extractedPriority: TodoPriority | undefined;
-		let extractedDueDate: string | undefined;
-		let extractedEstimate: string | undefined;
-
-		for (const tag of todo.tags) {
-			const parsed = parseStructuredTag(tag);
-			if (!parsed) {
-				remainingTags.push(tag);
-				continue;
-			}
-			if (parsed.field === "priority" && !extractedPriority) {
-				extractedPriority = normalizePriority(parsed.value);
-				continue;
-			}
-			if (parsed.field === "due_date" && !extractedDueDate) {
-				extractedDueDate = normalizeDueDate(parsed.value);
-				continue;
-			}
-			if (parsed.field === "estimate" && !extractedEstimate) {
-				extractedEstimate = normalizeEstimate(parsed.value);
-			}
-		}
-
-		if (!sameStringArray(todo.tags, remainingTags)) {
-			todo.tags = remainingTags;
-			changed = true;
-		}
-
-		if (!todo.priority && extractedPriority) {
-			todo.priority = extractedPriority;
-			changed = true;
-		}
-		if (!todo.due_date && extractedDueDate) {
-			todo.due_date = extractedDueDate;
-			changed = true;
-		}
-		if (!todo.estimate && extractedEstimate) {
-			todo.estimate = extractedEstimate;
-			changed = true;
-		}
+		changed = extractMetadataFromTags(todo) || changed;
 	}
-
 	if (options.inferFromText) {
-		const inferred = inferMetadataFromText(`${todo.title ?? ""}\n${options.bodyText ?? ""}`);
-		if (!todo.priority && inferred.priority) {
-			todo.priority = inferred.priority;
-			changed = true;
-		}
-		if (!todo.due_date && inferred.due_date) {
-			todo.due_date = inferred.due_date;
-			changed = true;
-		}
-		if (!todo.estimate && inferred.estimate) {
-			todo.estimate = inferred.estimate;
-			changed = true;
-		}
+		changed = applyInferredTodoMetadata(todo, options.bodyText) || changed;
 	}
-
 	return changed;
 }
 

@@ -163,6 +163,7 @@ async function loadCuratorBootstrap(requestedProvider: unknown): Promise<Curator
 	};
 }
 
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: provider fallback priority is centralized here so availability rules stay explicit.
 function resolveProvider(requested: unknown, available: ProviderAvailability): ResolvedSearchProvider {
 	const provider = normalizeProviderInput(requested ?? loadConfig().provider ?? "auto") ?? "auto";
 
@@ -464,6 +465,7 @@ function handleSessionChange(ctx: ExtensionContext): void {
 	}
 }
 
+// biome-ignore lint/complexity/noExcessiveLinesPerFunction: extension initialization intentionally co-locates related tool and command registrations.
 export default function (pi: ExtensionAPI) {
 	const initConfig = loadConfigForExtensionInit();
 	const curateKey = initConfig.shortcuts?.curate || DEFAULT_SHORTCUTS.curate;
@@ -736,6 +738,7 @@ export default function (pi: ExtensionAPI) {
 		};
 	}
 
+	// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: search output formatting handles curated and non-curated response variants in one place.
 	function buildSearchReturn(opts: SearchReturnOptions) {
 		const sc = opts.results.filter((r) => !r.error).length;
 		const tr = opts.results.reduce((sum, r) => sum + r.results.length, 0);
@@ -853,6 +856,7 @@ export default function (pi: ExtensionAPI) {
 		return { results, urls };
 	}
 
+	// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: browser bootstrapping coordinates server lifecycle, summary callbacks, and cancellation for one curator session.
 	async function openCuratorBrowser(pc: PendingCurate, searchesComplete = true): Promise<void> {
 		let handle: CuratorServerHandle | null = null;
 		try {
@@ -1141,6 +1145,7 @@ export default function (pi: ExtensionAPI) {
 			),
 		}),
 
+		// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: the web_search tool execute path coordinates validation, curator workflow, background fetch, and storage.
 		async execute(_toolCallId, params, signal, onUpdate, ctx) {
 			const rawQueryList: unknown[] = Array.isArray(params.queries)
 				? params.queries
@@ -1372,6 +1377,7 @@ export default function (pi: ExtensionAPI) {
 			return new Text(lines.join("\n"), 0, 0);
 		},
 
+		// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: search result rendering supports partial progress, curated summaries, and multiple detail layouts.
 		renderResult(result, { expanded, isPartial }, theme) {
 			type QueryDetail = {
 				query: string;
@@ -1653,6 +1659,7 @@ export default function (pi: ExtensionAPI) {
 			),
 		}),
 
+		// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: fetch_content execution combines validation, progress updates, storage, and thumbnail handling.
 		async execute(_toolCallId, params, signal, onUpdate) {
 			const urlList = params.urls ?? (params.url ? [params.url] : []);
 			if (urlList.length === 0) {
@@ -1768,6 +1775,7 @@ export default function (pi: ExtensionAPI) {
 			};
 		},
 
+		// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: fetch_content call rendering conditionally presents URL, prompt, frame, and model metadata.
 		renderCall(args, theme) {
 			const { url, urls, prompt, timestamp, frames, model } = args as {
 				url?: string;
@@ -1811,6 +1819,7 @@ export default function (pi: ExtensionAPI) {
 			return new Text(lines.join("\n"), 0, 0);
 		},
 
+		// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: fetch_content result rendering covers progress, errors, media metadata, and preview variants.
 		renderResult(result, { expanded, isPartial }, theme) {
 			const details = result.details as {
 				urlCount?: number;
@@ -1903,6 +1912,7 @@ export default function (pi: ExtensionAPI) {
 			urlIndex: Type.Optional(Type.Number({ description: "Get content for URL at index" })),
 		}),
 
+		// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: get_search_content must resolve multiple selector modes against stored search and fetch payloads.
 		async execute(_toolCallId, params) {
 			const data = getResult(params.responseId);
 			if (!data) {
@@ -2057,6 +2067,7 @@ export default function (pi: ExtensionAPI) {
 
 	pi.registerCommand("websearch", {
 		description: "Open web search curator",
+		// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: websearch command setup keeps curator startup, provider selection, and browser fallback in one command handler.
 		handler: async (args, ctx) => {
 			closeCurator();
 			const sessionToken = randomUUID();
@@ -2259,6 +2270,7 @@ export default function (pi: ExtensionAPI) {
 				}
 
 				if (queries.length > 0) {
+					// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: initial curator searches are streamed sequentially to preserve ordering and active-session guards.
 					(async () => {
 						for (let qi = 0; qi < queries.length; qi++) {
 							if (aborted || activeCurator !== handle) break;
@@ -2386,6 +2398,7 @@ export default function (pi: ExtensionAPI) {
 
 	pi.registerCommand("search", {
 		description: "Browse stored web search results",
+		// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: stored-result browsing handles mixed search/fetch entries and detail previews in one interactive flow.
 		handler: async (_args, ctx) => {
 			const results = getAllResults();
 

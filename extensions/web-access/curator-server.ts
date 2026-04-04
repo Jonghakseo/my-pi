@@ -261,6 +261,7 @@ export function startCuratorServer(
 		defaultSummaryModel,
 	);
 
+	// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: the in-memory curator server intentionally keeps the route table in one closure over shared session state.
 	const server = http.createServer(async (req, res) => {
 		try {
 			const method = req.method || "GET";

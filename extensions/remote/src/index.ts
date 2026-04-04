@@ -20,6 +20,15 @@ export interface RemoteOptions {
 	sessionFile?: string;
 }
 
+interface RemoteLaunchContext {
+	env?: Record<string, string>;
+	piArgs: string[];
+	piPath: string;
+	requestedMode: "funnel" | "lan" | null;
+	sessionFile?: string;
+	launcherCwd: string;
+}
+
 const GRACE_PERIOD_MS = 30_000;
 
 function resolvePiPath(piPath?: string): string {
@@ -46,36 +55,58 @@ function isJoinServerUnavailableError(error: unknown): boolean {
 	);
 }
 
+async function tryJoinExistingServer(context: RemoteLaunchContext): Promise<(() => Promise<void>) | null> {
+	const existingServer = readLockfile();
+	const canJoinExisting =
+		existingServer && (context.requestedMode === null || existingServer.mode === context.requestedMode);
+	if (!canJoinExisting || !existingServer) {
+		return null;
+	}
+
+	try {
+		return await startClient(existingServer, {
+			piPath: context.piPath,
+			args: context.piArgs,
+			cwd: context.launcherCwd,
+			env: context.env,
+			sessionFile: context.sessionFile,
+		});
+	} catch (error) {
+		if (!isJoinServerUnavailableError(error)) {
+			throw error;
+		}
+
+		process.stderr.write(
+			`[pi-remote] Existing server unavailable: ${error instanceof Error ? error.message : String(error)}. Starting server mode.\n`,
+		);
+		removeLockfileIfMatches(existingServer);
+		return null;
+	}
+}
+
+function updateRemotePinEnv(env: Record<string, string>, nextPin?: string): void {
+	if (nextPin) {
+		env.PI_REMOTE_PIN = nextPin;
+		return;
+	}
+	Reflect.deleteProperty(env, "PI_REMOTE_PIN");
+}
+
 export async function startRemote(options: RemoteOptions = {}): Promise<() => Promise<void>> {
 	const launcherCwd = options.cwd ?? process.cwd();
 	const piPath = resolvePiPath(options.piPath);
 	const piArgs = options.args ?? [];
-
-	// Try to join an existing server (client mode).
-	// Explicit transport requests only reuse a server of the same transport.
-	const existingServer = readLockfile();
 	const requestedMode = options.funnel ? "funnel" : options.forceLan ? "lan" : null;
-	const canJoinExisting = existingServer && (requestedMode === null || existingServer.mode === requestedMode);
-	if (canJoinExisting && existingServer) {
-		try {
-			return await startClient(existingServer, {
-				piPath,
-				args: piArgs,
-				cwd: launcherCwd,
-				env: options.env,
-				sessionFile: options.sessionFile,
-			});
-		} catch (error) {
-			if (!isJoinServerUnavailableError(error)) {
-				throw error;
-			}
-
-			// Only dead/unreachable existing servers should trigger fallback to server mode.
-			process.stderr.write(
-				`[pi-remote] Existing server unavailable: ${error instanceof Error ? error.message : String(error)}. Starting server mode.\n`,
-			);
-			removeLockfileIfMatches(existingServer);
-		}
+	const joinedCleanup = await tryJoinExistingServer({
+		env: options.env,
+		piArgs,
+		piPath,
+		requestedMode,
+		sessionFile: options.sessionFile,
+		launcherCwd,
+	});
+	if (joinedCleanup) {
+		return joinedCleanup;
 	}
 
 	const modeResult = await resolveMode({ forceLan: options.forceLan, funnel: options.funnel });
@@ -108,6 +139,15 @@ export async function startRemote(options: RemoteOptions = {}): Promise<() => Pr
 
 	const baseEnv: Record<string, string> = {
 		...(options.env ?? (process.env as Record<string, string>)),
+	};
+
+	const setPinAndSync = (nextPin?: string, reason?: string): void => {
+		pin = nextPin;
+		updateRemotePinEnv(baseEnv, nextPin);
+		syncLockfile();
+		if (reason && reason !== "initial_pin") {
+			process.stdout.write(`\r\n\x1b[33m⚠ PIN rotated (${reason}). New PIN: ${nextPin}\x1b[0m\r\n`);
+		}
 	};
 
 	const sessionManager = new SessionManager({
@@ -180,16 +220,7 @@ export async function startRemote(options: RemoteOptions = {}): Promise<() => Pr
 		initializeAuth({
 			mode,
 			onPinChange: (nextPin, reason) => {
-				pin = nextPin;
-				if (nextPin) {
-					baseEnv.PI_REMOTE_PIN = nextPin;
-				} else {
-					delete baseEnv.PI_REMOTE_PIN;
-				}
-				syncLockfile();
-				if (reason !== "initial_pin") {
-					process.stdout.write(`\r\n\x1b[33m⚠ PIN rotated (${reason}). New PIN: ${nextPin}\x1b[0m\r\n`);
-				}
+				setPinAndSync(nextPin, reason);
 			},
 		});
 	};

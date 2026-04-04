@@ -104,6 +104,7 @@ export function isPerplexityAvailable(): boolean {
 	return !!(normalizeApiKey(process.env.PERPLEXITY_API_KEY) ?? normalizeApiKey(config.perplexityApiKey));
 }
 
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: request shaping, rate-limit tracking, and response normalization are kept together for API parity.
 export async function searchWithPerplexity(query: string, options: SearchOptions = {}): Promise<SearchResponse> {
 	checkRateLimit();
 

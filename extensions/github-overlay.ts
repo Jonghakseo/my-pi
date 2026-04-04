@@ -730,6 +730,7 @@ function checkIcon(state: CheckState): string {
 	return "·";
 }
 
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: GitHub overlay fetch intentionally keeps the sequential PR hydration flow readable in one place.
 async function fetchOverlayData(pi: ExtensionAPI, cwd: string): Promise<OverlayFetchResult> {
 	const warnings: string[] = [];
 
@@ -875,6 +876,7 @@ async function fetchOverlayData(pi: ExtensionAPI, cwd: string): Promise<OverlayF
 	};
 }
 
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: overlay rendering intentionally groups header, checks, and threaded comments in a single pass.
 function renderOverlayContent(
 	theme: OverlayTheme,
 	state: OverlayState,
@@ -1146,6 +1148,7 @@ class GithubOverlayUI {
 		}
 	}
 
+	// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: keyboard handling keeps selection and scroll coupling explicit for the overlay.
 	handleInput(data: string, tui: OverlayTui): void {
 		const maxScroll = this.currentMaxScroll();
 		const hasSelectableComments = this.commentKeys.length > 0;
@@ -1328,6 +1331,7 @@ function _renderPlainSummary(result: OverlayFetchResult): string {
 	return lines.join("\n");
 }
 
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: review-thread export performs paginated GraphQL fetch and markdown formatting in one linear workflow.
 async function fetchAndFormatReviewThreads(pi: ExtensionAPI, cwd: string): Promise<string> {
 	const repoNameWithOwner = await getRepoNameWithOwner(pi, cwd);
 	if (!repoNameWithOwner) {

@@ -201,6 +201,7 @@ export async function runSingleAgent(
 			let unparsedStdoutCount = 0;
 			const unparsedStdoutTail: string[] = [];
 
+			// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: event-stream parsing intentionally handles every runtime event in one ordered state machine.
 			const processLine = (line: string) => {
 				if (!line.trim()) return;
 				let event: any;

@@ -466,6 +466,43 @@ interface OverallSkillSummary {
  * Compute overall stats.
  * Deduped hybrid counting: end is primary, batch/chain starts are fallback.
  */
+function updateOverallAgentSummary(
+	agentMap: Map<string, { total: number; done: number; error: number; durations: number[]; lastUsed: number }>,
+	name: string,
+	update: Partial<{ total: number; done: number; error: number; elapsedMs: number; epoch: number }>,
+): void {
+	const agent = agentMap.get(name) ?? { total: 0, done: 0, error: 0, durations: [], lastUsed: 0 };
+	agent.total += update.total ?? 0;
+	agent.done += update.done ?? 0;
+	agent.error += update.error ?? 0;
+	if ((update.elapsedMs ?? 0) > 0) {
+		agent.durations.push(update.elapsedMs as number);
+	}
+	if ((update.epoch ?? 0) > agent.lastUsed) {
+		agent.lastUsed = update.epoch as number;
+	}
+	agentMap.set(name, agent);
+}
+
+function updateOverallSkillSummary(
+	skillMap: Map<string, { total: number; lastUsed: number }>,
+	entry: SkillReadEntry,
+): void {
+	const skill = skillMap.get(entry.skill) ?? { total: 0, lastUsed: 0 };
+	skill.total += 1;
+	if (entry.epoch > skill.lastUsed) {
+		skill.lastUsed = entry.epoch;
+	}
+	skillMap.set(entry.skill, skill);
+}
+
+function shouldCountFallbackStart(start: SubagentStartEntry, completedKeys: Set<string>): boolean {
+	if ((start.mode !== "batch" && start.mode !== "chain") || start.agent === "_continue") {
+		return false;
+	}
+	return !getRunAnalyticsKeys(start).some((key) => completedKeys.has(key));
+}
+
 function computeOverall(entries: LogEntry[]): {
 	agents: OverallAgentSummary[];
 	skills: OverallSkillSummary[];
@@ -485,28 +522,24 @@ function computeOverall(entries: LogEntry[]): {
 
 	for (const entry of entries) {
 		if (entry.type === "subagent_end") {
-			const a = agentMap.get(entry.agent) ?? { total: 0, done: 0, error: 0, durations: [], lastUsed: 0 };
-			a.total++;
-			if (entry.status === "done") a.done++;
-			else a.error++;
-			if (entry.elapsedMs != null && entry.elapsedMs > 0) a.durations.push(entry.elapsedMs);
-			if (entry.epoch > a.lastUsed) a.lastUsed = entry.epoch;
-			agentMap.set(entry.agent, a);
-		} else if (entry.type === "subagent_start") {
+			updateOverallAgentSummary(agentMap, entry.agent, {
+				total: 1,
+				done: entry.status === "done" ? 1 : 0,
+				error: entry.status === "error" ? 1 : 0,
+				elapsedMs: entry.elapsedMs,
+				epoch: entry.epoch,
+			});
+			continue;
+		}
+		if (entry.type === "subagent_start") {
 			const start = entry as SubagentStartEntry;
-			if ((start.mode === "batch" || start.mode === "chain") && start.agent !== "_continue") {
-				const keys = getRunAnalyticsKeys(start);
-				if (keys.some((key) => completedKeys.has(key))) continue;
-				const a = agentMap.get(start.agent) ?? { total: 0, done: 0, error: 0, durations: [], lastUsed: 0 };
-				a.total++;
-				if (start.epoch > a.lastUsed) a.lastUsed = start.epoch;
-				agentMap.set(start.agent, a);
+			if (shouldCountFallbackStart(start, completedKeys)) {
+				updateOverallAgentSummary(agentMap, start.agent, { total: 1, epoch: start.epoch });
 			}
-		} else if (entry.type === "skill_read") {
-			const s = skillMap.get(entry.skill) ?? { total: 0, lastUsed: 0 };
-			s.total++;
-			if (entry.epoch > s.lastUsed) s.lastUsed = entry.epoch;
-			skillMap.set(entry.skill, s);
+			continue;
+		}
+		if (entry.type === "skill_read") {
+			updateOverallSkillSummary(skillMap, entry);
 		}
 	}
 
@@ -765,6 +798,59 @@ export const __test__ = {
 
 const SKILL_DEBOUNCE_MS = 10_000; // 같은 스킬의 10초 내 중복 read를 무시
 
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: launch logging intentionally supports both detailed and legacy subagent result payloads.
+function logSubagentLaunch(event: { input?: unknown; details?: unknown; toolName: string; isError?: boolean }): void {
+	if (event.toolName !== "subagent" || event.isError) return;
+	const input = event.input as Record<string, unknown> | undefined;
+	const details = event.details as Record<string, unknown> | undefined;
+	const verb = parseSubagentCommandVerb(input?.command);
+	if (verb !== "run" && verb !== "continue" && verb !== "batch" && verb !== "chain") return;
+
+	const mode = verbToMode(verb);
+	const { ts, epoch } = now();
+	const launches = Array.isArray(details?.launches) ? details.launches : [];
+	if (launches.length > 0) {
+		for (const launch of launches) {
+			if (!launch || typeof launch !== "object") continue;
+			appendLog({
+				type: "subagent_start",
+				ts,
+				epoch,
+				agent: typeof launch.agent === "string" ? launch.agent : "unknown",
+				mode,
+				runId: typeof launch.runId === "number" ? launch.runId : undefined,
+				batchId: typeof launch.batchId === "string" ? launch.batchId : undefined,
+				pipelineId: typeof launch.pipelineId === "string" ? launch.pipelineId : undefined,
+				stepIndex: typeof launch.stepIndex === "number" ? launch.stepIndex : undefined,
+			});
+		}
+		return;
+	}
+
+	const command = String(input?.command ?? "");
+	for (const agent of extractAgentNames(command, verb)) {
+		appendLog({ type: "subagent_start", ts, epoch, agent, mode });
+	}
+}
+
+function logSkillRead(
+	event: { input?: unknown; toolName: string; isError?: boolean },
+	skillLastLogged: Map<string, number>,
+): void {
+	if (event.toolName !== "read" || event.isError) return;
+	const input = event.input as Record<string, unknown> | undefined;
+	const filePath = typeof input?.path === "string" ? input.path : null;
+	if (!filePath || !/SKILL\.md$/i.test(filePath)) return;
+
+	const skill = extractSkillName(filePath);
+	if (!skill) return;
+	const { ts, epoch } = now();
+	const lastEpoch = skillLastLogged.get(skill) ?? 0;
+	if (epoch - lastEpoch < SKILL_DEBOUNCE_MS) return;
+	skillLastLogged.set(skill, epoch);
+	appendLog({ type: "skill_read", ts, epoch, skill, path: filePath });
+}
+
 export default function (pi: ExtensionAPI) {
 	// Track the number of session entries already processed to avoid
 	// re-scanning historical completion events on session_start.
@@ -774,51 +860,8 @@ export default function (pi: ExtensionAPI) {
 
 	// ── Subagent launch tracking ──
 	pi.on("tool_result", async (event, _ctx) => {
-		// Track subagent launches
-		if (event.toolName === "subagent" && !event.isError) {
-			const input = event.input as Record<string, unknown> | undefined;
-			const details = event.details as Record<string, unknown> | undefined;
-			const verb = parseSubagentCommandVerb(input?.command);
-			if (verb === "run" || verb === "continue" || verb === "batch" || verb === "chain") {
-				const mode = verbToMode(verb);
-				const { ts, epoch } = now();
-				const launches = Array.isArray(details?.launches) ? details.launches : [];
-				if (launches.length > 0) {
-					for (const launch of launches) {
-						if (!launch || typeof launch !== "object") continue;
-						const agent = typeof launch.agent === "string" ? launch.agent : "unknown";
-						const runId = typeof launch.runId === "number" ? launch.runId : undefined;
-						const batchId = typeof launch.batchId === "string" ? launch.batchId : undefined;
-						const pipelineId = typeof launch.pipelineId === "string" ? launch.pipelineId : undefined;
-						const stepIndex = typeof launch.stepIndex === "number" ? launch.stepIndex : undefined;
-						appendLog({ type: "subagent_start", ts, epoch, agent, mode, runId, batchId, pipelineId, stepIndex });
-					}
-				} else {
-					const command = String(input?.command ?? "");
-					const agents = extractAgentNames(command, verb);
-					for (const agent of agents) {
-						appendLog({ type: "subagent_start", ts, epoch, agent, mode });
-					}
-				}
-			}
-		}
-
-		// Track skill reads (debounced: same skill within 10s is ignored)
-		if (event.toolName === "read" && !event.isError) {
-			const input = event.input as Record<string, unknown> | undefined;
-			const filePath = typeof input?.path === "string" ? input.path : null;
-			if (filePath && /SKILL\.md$/i.test(filePath)) {
-				const skill = extractSkillName(filePath);
-				if (skill) {
-					const { ts, epoch } = now();
-					const lastEpoch = skillLastLogged.get(skill) ?? 0;
-					if (epoch - lastEpoch >= SKILL_DEBOUNCE_MS) {
-						skillLastLogged.set(skill, epoch);
-						appendLog({ type: "skill_read", ts, epoch, skill, path: filePath });
-					}
-				}
-			}
-		}
+		logSubagentLaunch(event);
+		logSkillRead(event, skillLastLogged);
 	});
 
 	// ── Subagent completion tracking ──

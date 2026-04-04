@@ -380,6 +380,7 @@ function colorDiffLine(t: Theme, line: string): string {
 	return line;
 }
 
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: tree row rendering keeps selection and styling logic in one place for overlay consistency.
 function renderFiles(t: Theme, st: DiffState, w: number, h: number): string[] {
 	const visibleRows = getVisibleRows(st);
 	if (visibleRows.length === 0) return [t.fg("muted", " (no changes)")];
@@ -444,6 +445,7 @@ function renderFiles(t: Theme, st: DiffState, w: number, h: number): string[] {
 	return lines;
 }
 
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: commit row rendering intentionally mirrors diff-pane selection semantics.
 function renderCommits(t: Theme, st: DiffState, w: number, h: number): string[] {
 	if (st.commits.length === 0) return [t.fg("muted", " (no commits in branch scope)")];
 
@@ -534,6 +536,7 @@ function renderDiff(t: Theme, st: DiffState, w: number, h: number): string[] {
 	return lines;
 }
 
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: commit file pane interleaves fold state and inline diff rows for TUI rendering.
 function renderCommitFiles(t: Theme, st: DiffState, w: number, h: number): string[] {
 	const selectedCommit = st.commits[st.commitSelectedIndex];
 	if (!selectedCommit) return [t.fg("muted", "  (no commit selected)")];
@@ -780,6 +783,7 @@ class DiffOverlay {
 		}
 	}
 
+	// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: keyboard routing is stateful and kept flat to preserve exact overlay behavior.
 	private handleDiffModeInput(data: string, tui: Tui): void {
 		const st = this.st;
 		const rows = getVisibleRows(st);
@@ -862,6 +866,7 @@ class DiffOverlay {
 		tui.requestRender();
 	}
 
+	// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: commit-mode navigation combines selection and viewport rules for predictable arrow-key behavior.
 	private handleCommitModeInput(data: string, tui: Tui): void {
 		const st = this.st;
 
@@ -1027,6 +1032,7 @@ class DiffOverlay {
 		else this.handleCommitModeInput(data, tui);
 	}
 
+	// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: frame rendering composes multiple panes and headers in one pass for width-aware alignment.
 	render(w: number, h: number, t: Theme): string[] {
 		const st = this.st;
 
@@ -1119,6 +1125,7 @@ export default function diffOverlayExtension(pi: ExtensionAPI) {
 		const root = await gitRoot(pi, ctx.cwd);
 		if (!root) {
 			if (ctx.hasUI) ctx.ui.notify("Not a git repository", "error");
+			// biome-ignore lint/suspicious/noConsole: non-UI fallback needs plain terminal output.
 			else console.log("Not a git repository");
 			return;
 		}
@@ -1190,9 +1197,11 @@ export default function diffOverlayExtension(pi: ExtensionAPI) {
 
 		if (!ctx.hasUI) {
 			if (files.length === 0) {
+				// biome-ignore lint/suspicious/noConsole: non-UI fallback needs plain terminal output.
 				console.log("No changes.");
 				return;
 			}
+			// biome-ignore lint/suspicious/noConsole: non-UI fallback lists changed files in the terminal.
 			for (const f of files) console.log(`${icon(f.status)} ${f.path}`);
 			return;
 		}

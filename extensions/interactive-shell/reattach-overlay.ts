@@ -273,7 +273,7 @@ export class ReattachOverlay implements Component, Focusable {
 			const currentIdx = options.indexOf(this.dialogSelection);
 			const direction = matchesKey(data, "up") ? -1 : 1;
 			const newIdx = (currentIdx + direction + options.length) % options.length;
-			this.dialogSelection = options[newIdx]!;
+			this.dialogSelection = options[newIdx] ?? this.dialogSelection;
 			this.tui.requestRender();
 			return;
 		}

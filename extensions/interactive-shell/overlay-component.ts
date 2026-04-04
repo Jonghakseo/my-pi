@@ -355,49 +355,49 @@ export class InteractiveShellOverlay implements Component, Focusable {
 		}, this.currentUpdateInterval);
 	}
 
+	private flushPendingHandsFreeOutput(): void {
+		if (!this.hasUnsentData) return;
+		this.emitHandsFreeUpdate();
+		this.hasUnsentData = false;
+	}
+
+	private emitHandsFreeKilledUpdate(): void {
+		if (!this.options.onHandsFreeUpdate || !this.sessionId) return;
+		this.options.onHandsFreeUpdate({
+			status: "killed",
+			sessionId: this.sessionId,
+			runtime: Date.now() - this.startTime,
+			tail: [],
+			tailTruncated: false,
+			totalCharsSent: this.totalCharsSent,
+			budgetExhausted: this.budgetExhausted,
+		});
+	}
+
+	private handleHandsFreeQuietTimeout(): void {
+		if (this.state !== "hands-free") return;
+		if (!this.options.autoExitOnQuiet) {
+			this.flushPendingHandsFreeOutput();
+			return;
+		}
+
+		const gracePeriod = this.options.autoExitGracePeriod ?? this.config.autoExitGracePeriod;
+		if (Date.now() - this.startTime < gracePeriod) {
+			this.flushPendingHandsFreeOutput();
+			this.resetQuietTimer();
+			return;
+		}
+
+		this.flushPendingHandsFreeOutput();
+		this.emitHandsFreeKilledUpdate();
+		this.finishWithKill();
+	}
+
 	private resetQuietTimer(): void {
 		this.stopQuietTimer();
 		this.quietTimer = setTimeout(() => {
 			this.quietTimer = null;
-			if (this.state === "hands-free") {
-				// Auto-exit on quiet: kill session when output stops (agent likely finished task)
-				if (this.options.autoExitOnQuiet) {
-					const gracePeriod = this.options.autoExitGracePeriod ?? this.config.autoExitGracePeriod;
-					if (Date.now() - this.startTime < gracePeriod) {
-						if (this.hasUnsentData) {
-							this.emitHandsFreeUpdate();
-							this.hasUnsentData = false;
-						}
-						this.resetQuietTimer();
-						return;
-					}
-					// Emit final update with any pending output
-					if (this.hasUnsentData) {
-						this.emitHandsFreeUpdate();
-						this.hasUnsentData = false;
-					}
-					// Send completion notification and auto-close
-					// Use "killed" status since we're forcibly terminating (matches finishWithKill's cancelled=true)
-					if (this.options.onHandsFreeUpdate && this.sessionId) {
-						this.options.onHandsFreeUpdate({
-							status: "killed",
-							sessionId: this.sessionId,
-							runtime: Date.now() - this.startTime,
-							tail: [],
-							tailTruncated: false,
-							totalCharsSent: this.totalCharsSent,
-							budgetExhausted: this.budgetExhausted,
-						});
-					}
-					this.finishWithKill();
-					return;
-				}
-				// Normal behavior: just emit update
-				if (this.hasUnsentData) {
-					this.emitHandsFreeUpdate();
-					this.hasUnsentData = false;
-				}
-			}
+			this.handleHandsFreeQuietTimeout();
 		}, this.currentQuietThreshold);
 	}
 
@@ -873,7 +873,7 @@ export class InteractiveShellOverlay implements Component, Focusable {
 			const currentIdx = options.indexOf(this.dialogSelection);
 			const direction = matchesKey(data, "up") ? -1 : 1;
 			const newIdx = (currentIdx + direction + options.length) % options.length;
-			this.dialogSelection = options[newIdx]!;
+			this.dialogSelection = options[newIdx] ?? this.dialogSelection;
 			this.tui.requestRender();
 			return;
 		}
@@ -897,6 +897,7 @@ export class InteractiveShellOverlay implements Component, Focusable {
 		}
 	}
 
+	// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: overlay rendering combines layout, session viewport, and state-specific footer contracts
 	render(width: number): string[] {
 		// biome-ignore lint/style/noParameterAssign: width clamping
 		width = Math.max(4, width);

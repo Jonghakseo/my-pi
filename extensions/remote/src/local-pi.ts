@@ -12,13 +12,21 @@ function replaceSessionArg(args: string[], sessionFile?: string): string[] {
 }
 
 function stripRemoteEnv(env: Record<string, string>): Record<string, string> {
-	const nextEnv = { ...env };
-	delete nextEnv.PI_REMOTE_URL;
-	delete nextEnv.PI_REMOTE_MODE;
-	delete nextEnv.PI_REMOTE_REASON;
-	delete nextEnv.PI_REMOTE_PIN;
-	delete nextEnv.PI_REMOTE_SESSION_ID;
-	delete nextEnv.PI_REMOTE_ATTACH_LOCAL;
+	const {
+		PI_REMOTE_URL: _remoteUrl,
+		PI_REMOTE_MODE: _remoteMode,
+		PI_REMOTE_REASON: _remoteReason,
+		PI_REMOTE_PIN: _remotePin,
+		PI_REMOTE_SESSION_ID: _remoteSessionId,
+		PI_REMOTE_ATTACH_LOCAL: _remoteAttachLocal,
+		...nextEnv
+	} = env;
+	void _remoteUrl;
+	void _remoteMode;
+	void _remoteReason;
+	void _remotePin;
+	void _remoteSessionId;
+	void _remoteAttachLocal;
 	return nextEnv;
 }
 

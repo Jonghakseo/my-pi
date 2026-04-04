@@ -1,4 +1,5 @@
 /** biome-ignore-all lint/suspicious/noExplicitAny: subagent tool execution bridges untyped session state, UI hooks, and tool payloads. */
+/** biome-ignore-all lint/complexity/noExcessiveCognitiveComplexity: subagent tool execution intentionally centralizes branching for the CLI contract. */
 /**
  * Subagent tool execute handler — extracted from commands.ts for modularity.
  *
@@ -519,8 +520,10 @@ function makePendingCompletion(message: PendingCompletion["message"], triggerTur
 	};
 }
 
+// biome-ignore lint/complexity/noExcessiveLinesPerFunction: factory intentionally co-locates the subagent tool lifecycle for shared closures and messaging.
 export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore) {
-	return async (
+	// biome-ignore lint/complexity/noExcessiveLinesPerFunction: execute handler coordinates validation, launch, and completion delivery across single/batch/chain modes.
+	const execute = async (
 		_toolCallId: string,
 		params: Record<string, any>,
 		_signal: AbortSignal | undefined,
@@ -1508,4 +1511,6 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 			isError: true,
 		};
 	};
+
+	return execute;
 }

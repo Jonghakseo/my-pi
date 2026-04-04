@@ -85,6 +85,14 @@ function delay(): Promise<void> {
 	return new Promise((resolve) => setImmediate(resolve));
 }
 
+function parseBrowserMessage(raw: WebSocket.RawData): BrowserMessage | null {
+	try {
+		return JSON.parse(raw.toString()) as BrowserMessage;
+	} catch {
+		return null;
+	}
+}
+
 export function setupTerminalWebSocket(
 	httpServer: Server,
 	mode: ServerMode,
@@ -207,124 +215,107 @@ export function setupTerminalWebSocket(
 			send(ws, { type: "auth_required", pinLength: mode === "funnel" ? 8 : 6 });
 		}
 
-		ws.on("message", async (raw) => {
-			try {
-				const message = JSON.parse(raw.toString()) as BrowserMessage;
-
-				if (message.type === "pong") {
+		const authorizeClient = async (token: string): Promise<void> => {
+			state.authenticated = true;
+			state.missedPongs = 0;
+			clearAuthTimeout(state);
+			startHeartbeat(ws, state);
+			send(ws, { type: "auth_ok", token });
+			sendSessionList(ws, state);
+		};
+		const getSession = (sessionId: string): Session | null => {
+			const session = sessionManager.get(sessionId);
+			if (!session) {
+				send(ws, { type: "session_error", reason: "session_not_found", sessionId });
+				return null;
+			}
+			return session;
+		};
+		const handleScopedMessage = async (message: BrowserMessage): Promise<void> => {
+			switch (message.type) {
+				case "auth_pin": {
+					const result = verifyPin(message.pin, remoteIp);
+					if (!result.ok) {
+						send(ws, { type: "auth_fail", reason: result.reason });
+						return;
+					}
+					await authorizeClient(await createJwt());
+					return;
+				}
+				case "auth_token":
+					if (!(await verifyJwt(message.token))) {
+						send(ws, { type: "auth_fail", reason: "Session expired. Re-enter the PIN." });
+						return;
+					}
+					await authorizeClient(message.token);
+					return;
+				case "resume":
+					await handleResume(ws, state, message.sessionId, message.lastOffset);
+					return;
+				case "input": {
+					if (state.activeSessionId !== message.sessionId) {
+						send(ws, { type: "session_error", reason: "active_session_mismatch", sessionId: message.sessionId });
+						return;
+					}
+					getSession(message.sessionId)?.write(message.data, ws);
+					return;
+				}
+				case "resize":
+					getSession(message.sessionId)?.resize(ws, message.cols, message.rows, message.mobile);
+					return;
+				case "session_create":
+					try {
+						sessionManager.create({
+							name: message.name,
+							cols: message.cols,
+							rows: message.rows,
+							fromSessionId: message.fromSessionId,
+						});
+					} catch (error) {
+						send(ws, { type: "session_error", reason: formatSessionCreateError(error) });
+					}
+					return;
+				case "session_kill": {
+					const killTarget = getSession(message.sessionId);
+					if (!killTarget) {
+						return;
+					}
+					if (killTarget.getState().attachLocal) {
+						send(ws, { type: "session_error", reason: "cannot_kill_local_session", sessionId: message.sessionId });
+						return;
+					}
+					sessionManager.kill(message.sessionId);
+					return;
+				}
+				case "session_title":
+					getSession(message.sessionId)?.setTitle(message.title);
+					return;
+				case "session_list":
+					sendSessionList(ws, state);
+					return;
+				case "pong":
 					state.missedPongs = 0;
 					return;
-				}
-
-				if (!state.authenticated && message.type !== "auth_pin" && message.type !== "auth_token") {
-					return;
-				}
-
-				if (isSessionScopedMessage(message) && !message.sessionId) {
-					send(ws, { type: "session_error", reason: "sessionId_required" });
-					return;
-				}
-
-				switch (message.type) {
-					case "auth_pin": {
-						const result = verifyPin(message.pin, remoteIp);
-						if (!result.ok) {
-							send(ws, { type: "auth_fail", reason: result.reason });
-							return;
-						}
-
-						const token = await createJwt();
-						state.authenticated = true;
-						state.missedPongs = 0;
-						clearAuthTimeout(state);
-						startHeartbeat(ws, state);
-						send(ws, { type: "auth_ok", token });
-						sendSessionList(ws, state);
-						break;
-					}
-					case "auth_token": {
-						if (!(await verifyJwt(message.token))) {
-							send(ws, { type: "auth_fail", reason: "Session expired. Re-enter the PIN." });
-							return;
-						}
-
-						state.authenticated = true;
-						state.missedPongs = 0;
-						clearAuthTimeout(state);
-						startHeartbeat(ws, state);
-						send(ws, { type: "auth_ok", token: message.token });
-						sendSessionList(ws, state);
-						break;
-					}
-					case "resume": {
-						await handleResume(ws, state, message.sessionId, message.lastOffset);
-						break;
-					}
-					case "input": {
-						if (state.activeSessionId !== message.sessionId) {
-							send(ws, { type: "session_error", reason: "active_session_mismatch", sessionId: message.sessionId });
-							return;
-						}
-						const session = sessionManager.get(message.sessionId);
-						if (!session) {
-							send(ws, { type: "session_error", reason: "session_not_found", sessionId: message.sessionId });
-							return;
-						}
-						session.write(message.data, ws);
-						break;
-					}
-					case "resize": {
-						const session = sessionManager.get(message.sessionId);
-						if (!session) {
-							send(ws, { type: "session_error", reason: "session_not_found", sessionId: message.sessionId });
-							return;
-						}
-						session.resize(ws, message.cols, message.rows, message.mobile);
-						break;
-					}
-					case "session_create": {
-						try {
-							sessionManager.create({
-								name: message.name,
-								cols: message.cols,
-								rows: message.rows,
-								fromSessionId: message.fromSessionId,
-							});
-						} catch (error) {
-							send(ws, { type: "session_error", reason: formatSessionCreateError(error) });
-						}
-						break;
-					}
-					case "session_kill": {
-						const killTarget = sessionManager.get(message.sessionId);
-						if (!killTarget) {
-							send(ws, { type: "session_error", reason: "session_not_found", sessionId: message.sessionId });
-							return;
-						}
-						if (killTarget.getState().attachLocal) {
-							send(ws, { type: "session_error", reason: "cannot_kill_local_session", sessionId: message.sessionId });
-							return;
-						}
-						sessionManager.kill(message.sessionId);
-						break;
-					}
-					case "session_title": {
-						const session = sessionManager.get(message.sessionId);
-						if (!session) {
-							send(ws, { type: "session_error", reason: "session_not_found", sessionId: message.sessionId });
-							return;
-						}
-						session.setTitle(message.title);
-						break;
-					}
-					case "session_list": {
-						sendSessionList(ws, state);
-						break;
-					}
-				}
-			} catch {
-				// ignore malformed WS payloads
 			}
+		};
+
+		ws.on("message", async (raw) => {
+			const message = parseBrowserMessage(raw);
+			if (!message) {
+				return;
+			}
+			if (message.type === "pong") {
+				state.missedPongs = 0;
+				return;
+			}
+			if (!state.authenticated && message.type !== "auth_pin" && message.type !== "auth_token") {
+				return;
+			}
+			if (isSessionScopedMessage(message) && !message.sessionId) {
+				send(ws, { type: "session_error", reason: "sessionId_required" });
+				return;
+			}
+			await handleScopedMessage(message);
 		});
 
 		ws.on("close", () => {
@@ -379,6 +370,63 @@ export function setupTerminalWebSocket(
 		send(ws, { type: "session_list", sessions: sessionManager.list() });
 	}
 
+	function prepareResumeState(
+		session: Session,
+		lastOffset: number,
+		resumeId: number,
+		ws: WebSocket,
+		sessionId: string,
+	): { replayData: string; replayStartOffset: number; lastSentOffset: number } {
+		let replayData = "";
+		let replayStartOffset = session.outputBuffer.getCurrentOffset();
+		let lastSentOffset = lastOffset;
+		let shouldReset = lastOffset <= 0;
+
+		if (lastOffset > 0) {
+			const delta = session.outputBuffer.getFrom(lastOffset);
+			if (delta === null) {
+				shouldReset = true;
+			} else {
+				replayData = delta.data;
+				replayStartOffset = delta.newOffset - delta.data.length;
+			}
+		}
+
+		if (shouldReset) {
+			const snapshot = session.outputBuffer.getLastN(REPLAY_CAP_BYTES);
+			replayData = snapshot.data;
+			replayStartOffset = snapshot.offset - snapshot.data.length;
+			lastSentOffset = replayStartOffset;
+			send(ws, { type: "reset", sessionId, resumeId });
+		}
+
+		return { replayData, replayStartOffset, lastSentOffset };
+	}
+
+	async function streamReplayChunks(
+		ws: WebSocket,
+		state: ClientState,
+		sessionId: string,
+		resumeId: number,
+		replayToken: number,
+		data: string,
+		startOffset: number,
+	): Promise<number | null> {
+		let lastOffset = startOffset;
+		for (let index = 0; index < data.length; index += REPLAY_CHUNK_SIZE) {
+			if (state.replayToken !== replayToken || ws.readyState !== WebSocket.OPEN) {
+				return null;
+			}
+
+			const chunk = data.slice(index, index + REPLAY_CHUNK_SIZE);
+			const chunkOffset = startOffset + index + chunk.length;
+			send(ws, { type: "data", data: chunk, offset: chunkOffset, sessionId, resumeId }, true);
+			lastOffset = chunkOffset;
+			await delay();
+		}
+		return lastOffset;
+	}
+
 	async function handleResume(ws: WebSocket, state: ClientState, sessionId: string, lastOffset: number): Promise<void> {
 		const session = sessionManager.get(sessionId);
 		if (!session) {
@@ -407,41 +455,23 @@ export function setupTerminalWebSocket(
 			sessionId,
 		});
 
-		let replayData = "";
-		let replayStartOffset = session.outputBuffer.getCurrentOffset();
-		let lastSentOffset = lastOffset;
-		let shouldReset = lastOffset <= 0;
+		const prepared = prepareResumeState(session, lastOffset, resumeId, ws, sessionId);
+		let lastSentOffset = prepared.lastSentOffset;
 
-		if (lastOffset > 0) {
-			const delta = session.outputBuffer.getFrom(lastOffset);
-			if (delta === null) {
-				shouldReset = true;
-			} else {
-				replayData = delta.data;
-				replayStartOffset = delta.newOffset - delta.data.length;
+		if (prepared.replayData) {
+			const replayOffset = await streamReplayChunks(
+				ws,
+				state,
+				sessionId,
+				resumeId,
+				replayToken,
+				prepared.replayData,
+				prepared.replayStartOffset,
+			);
+			if (replayOffset === null) {
+				return;
 			}
-		}
-
-		if (shouldReset) {
-			const snapshot = session.outputBuffer.getLastN(REPLAY_CAP_BYTES);
-			replayData = snapshot.data;
-			replayStartOffset = snapshot.offset - snapshot.data.length;
-			lastSentOffset = replayStartOffset;
-			send(ws, { type: "reset", sessionId, resumeId });
-		}
-
-		if (replayData) {
-			for (let index = 0; index < replayData.length; index += REPLAY_CHUNK_SIZE) {
-				if (state.replayToken !== replayToken || ws.readyState !== WebSocket.OPEN) {
-					return;
-				}
-
-				const chunk = replayData.slice(index, index + REPLAY_CHUNK_SIZE);
-				const chunkOffset = replayStartOffset + index + chunk.length;
-				send(ws, { type: "data", data: chunk, offset: chunkOffset, sessionId, resumeId }, true);
-				lastSentOffset = chunkOffset;
-				await delay();
-			}
+			lastSentOffset = replayOffset;
 		}
 
 		if (state.replayToken !== replayToken || ws.readyState !== WebSocket.OPEN) {
@@ -450,17 +480,20 @@ export function setupTerminalWebSocket(
 
 		const catchUpDelta = session.outputBuffer.getFrom(lastSentOffset);
 		if (catchUpDelta?.data) {
-			for (let index = 0; index < catchUpDelta.data.length; index += REPLAY_CHUNK_SIZE) {
-				if (state.replayToken !== replayToken || ws.readyState !== WebSocket.OPEN) {
-					return;
-				}
-
-				const chunk = catchUpDelta.data.slice(index, index + REPLAY_CHUNK_SIZE);
-				const chunkOffset = lastSentOffset + index + chunk.length;
-				send(ws, { type: "data", data: chunk, offset: chunkOffset, sessionId, resumeId }, true);
-				await delay();
+			const catchUpOffset = await streamReplayChunks(
+				ws,
+				state,
+				sessionId,
+				resumeId,
+				replayToken,
+				catchUpDelta.data,
+				lastSentOffset,
+			);
+			if (catchUpOffset === null) {
+				return;
 			}
 			lastSentOffset = catchUpDelta.newOffset;
+			void lastSentOffset;
 		}
 
 		if (state.replayToken !== replayToken || ws.readyState !== WebSocket.OPEN) {

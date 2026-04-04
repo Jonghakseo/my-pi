@@ -273,133 +273,171 @@ export class TerminalView {
 	private handleServerMessage(message: ServerMessage): void {
 		switch (message.type) {
 			case "auth_required":
-				if (this.token) {
-					this.send({ type: "auth_token", token: this.token });
-				} else {
-					this.setConnectionState("disconnected");
-					this.options.onAuthRequired?.();
-				}
-				break;
+				this.handleAuthRequired();
+				return;
 			case "auth_ok":
-				this.setToken(message.token);
-				this.setConnectionState("connected");
-				this.afterAuthenticatedOpen();
-				break;
+				this.handleAuthOk(message.token);
+				return;
 			case "auth_fail":
-				this.setToken(null);
-				this.setConnectionState("disconnected");
-				this.options.onAuthRequired?.(message.reason);
-				break;
+				this.handleAuthFail(message.reason);
+				return;
 			case "session_list":
 				this.options.onSessionList?.(message.sessions);
-				break;
-			case "session_created": {
-				const shouldAutoSelect = this.pendingCreateSelect;
-				if (shouldAutoSelect) {
-					this.pendingCreateSelect = false;
-				}
-				this.options.onSessionCreated?.(message.session, shouldAutoSelect);
-				break;
-			}
+				return;
+			case "session_created":
+				this.handleSessionCreated(message.session);
+				return;
 			case "session_updated":
 				this.options.onSessionUpdated?.(message.session);
-				break;
+				return;
 			case "session_killed":
-				this.handleActiveSessionEnded(message.sessionId);
-				this.options.onSessionKilled?.(message.sessionId);
-				break;
+				this.handleSessionEndedMessage(message.sessionId, this.options.onSessionKilled);
+				return;
 			case "session_removed":
-				this.handleActiveSessionEnded(message.sessionId);
-				this.options.onSessionRemoved?.(message.sessionId);
-				break;
+				this.handleSessionEndedMessage(message.sessionId, this.options.onSessionRemoved);
+				return;
 			case "session_error":
-				if (!message.sessionId) {
-					this.pendingCreateSelect = false;
-				}
-				if (message.reason === "session_not_found" && message.sessionId === this.activeSessionId) {
-					this.handleActiveSessionEnded(message.sessionId);
-				}
-				this.options.onSessionError?.(message.reason, message.sessionId);
-				break;
+				this.handleSessionErrorMessage(message.reason, message.sessionId);
+				return;
 			case "state":
-				if (message.sessionId !== this.activeSessionId) {
-					return;
-				}
-				if (!message.running) {
-					this.pendingExitCodeBySession.set(message.sessionId, message.exitCode);
-				} else {
-					this.pendingExitCodeBySession.delete(message.sessionId);
-				}
-				break;
+				this.handleStateMessage(message.sessionId, message.running, message.exitCode);
+				return;
 			case "reset":
-				if (message.sessionId !== this.activeSessionId) {
-					return;
-				}
-				if (this.pendingResumeMode !== "switch" && this.pendingResumeMode !== "reconnect") {
-					return;
-				}
-				if (this.activeResumeId === null) {
-					this.activeResumeId = message.resumeId;
-				}
-				if (message.resumeId !== this.activeResumeId) {
-					return;
-				}
-				this.flushWrite();
-				this.terminal.reset();
-				this.hideBlankState();
-				this.lastOffsets.set(message.sessionId, 0);
-				break;
+				this.handleResetMessage(message.sessionId, message.resumeId);
+				return;
 			case "data":
-				if (!this.shouldRenderData(message.sessionId, message.resumeId)) {
-					return;
-				}
-				this.hideBlankState();
-				this.throttledWrite(message.data);
-				if (typeof message.offset === "number") {
-					this.lastOffsets.set(message.sessionId, message.offset);
-				} else {
-					const prev = this.lastOffsets.get(message.sessionId) ?? 0;
-					this.lastOffsets.set(message.sessionId, prev + message.data.length);
-				}
-				this.setConnectionState("connected");
-				break;
-			case "replay_complete": {
-				if (message.sessionId !== this.activeSessionId) {
-					return;
-				}
-				if (this.activeResumeId === null) {
-					this.activeResumeId = message.resumeId;
-				}
-				if (message.resumeId !== this.activeResumeId) {
-					return;
-				}
-				this.pendingResumeMode = null;
-				this.hideBlankState();
-				const pendingExitCode = this.pendingExitCodeBySession.get(message.sessionId);
-				if (this.pendingExitCodeBySession.has(message.sessionId)) {
-					this.flushWrite();
-					this.terminal.write(`\r\n\x1b[33mProcess exited (code ${pendingExitCode ?? "?"})\x1b[0m\r\n`);
-					this.pendingExitCodeBySession.delete(message.sessionId);
-				}
-				break;
-			}
+				this.handleDataMessage(message.sessionId, message.data, message.offset, message.resumeId);
+				return;
+			case "replay_complete":
+				this.handleReplayCompleteMessage(message.sessionId, message.resumeId);
+				return;
 			case "exit":
-				if (message.sessionId !== this.activeSessionId) {
-					return;
-				}
-				if (this.pendingResumeMode !== null) {
-					// Defer banner until replay_complete
-					this.pendingExitCodeBySession.set(message.sessionId, message.exitCode);
-				} else {
-					this.pendingExitCodeBySession.delete(message.sessionId);
-					this.flushWrite();
-					this.terminal.write(`\r\n\x1b[33mProcess exited (code ${message.exitCode ?? "?"})\x1b[0m\r\n`);
-				}
-				break;
+				this.handleExitMessage(message.sessionId, message.exitCode);
+				return;
 			case "ping":
 				this.send({ type: "pong" });
-				break;
+				return;
 		}
+	}
+
+	private handleAuthRequired(): void {
+		if (this.token) {
+			this.send({ type: "auth_token", token: this.token });
+			return;
+		}
+		this.setConnectionState("disconnected");
+		this.options.onAuthRequired?.();
+	}
+
+	private handleAuthOk(token: string): void {
+		this.setToken(token);
+		this.setConnectionState("connected");
+		this.afterAuthenticatedOpen();
+	}
+
+	private handleAuthFail(reason: string): void {
+		this.setToken(null);
+		this.setConnectionState("disconnected");
+		this.options.onAuthRequired?.(reason);
+	}
+
+	private handleSessionCreated(session: SessionInfo): void {
+		const shouldAutoSelect = this.pendingCreateSelect;
+		if (shouldAutoSelect) {
+			this.pendingCreateSelect = false;
+		}
+		this.options.onSessionCreated?.(session, shouldAutoSelect);
+	}
+
+	private handleSessionEndedMessage(sessionId: string, callback?: (sessionId: string) => void): void {
+		this.handleActiveSessionEnded(sessionId);
+		callback?.(sessionId);
+	}
+
+	private handleSessionErrorMessage(reason: string, sessionId?: string): void {
+		if (!sessionId) {
+			this.pendingCreateSelect = false;
+		}
+		if (reason === "session_not_found" && sessionId === this.activeSessionId) {
+			this.handleActiveSessionEnded(sessionId);
+		}
+		this.options.onSessionError?.(reason, sessionId);
+	}
+
+	private handleStateMessage(sessionId: string, running: boolean, exitCode: number | null): void {
+		if (sessionId !== this.activeSessionId) {
+			return;
+		}
+		if (!running) {
+			this.pendingExitCodeBySession.set(sessionId, exitCode);
+			return;
+		}
+		this.pendingExitCodeBySession.delete(sessionId);
+	}
+
+	private isActiveReplayMessage(sessionId: string, resumeId: number): boolean {
+		if (sessionId !== this.activeSessionId) {
+			return false;
+		}
+		if (this.activeResumeId === null) {
+			this.activeResumeId = resumeId;
+		}
+		return resumeId === this.activeResumeId;
+	}
+
+	private handleResetMessage(sessionId: string, resumeId: number): void {
+		if (this.pendingResumeMode !== "switch" && this.pendingResumeMode !== "reconnect") {
+			return;
+		}
+		if (!this.isActiveReplayMessage(sessionId, resumeId)) {
+			return;
+		}
+		this.flushWrite();
+		this.terminal.reset();
+		this.hideBlankState();
+		this.lastOffsets.set(sessionId, 0);
+	}
+
+	private handleDataMessage(sessionId: string, data: string, offset?: number, resumeId?: number): void {
+		if (!this.shouldRenderData(sessionId, resumeId)) {
+			return;
+		}
+		this.hideBlankState();
+		this.throttledWrite(data);
+		if (typeof offset === "number") {
+			this.lastOffsets.set(sessionId, offset);
+		} else {
+			const prev = this.lastOffsets.get(sessionId) ?? 0;
+			this.lastOffsets.set(sessionId, prev + data.length);
+		}
+		this.setConnectionState("connected");
+	}
+
+	private handleReplayCompleteMessage(sessionId: string, resumeId: number): void {
+		if (!this.isActiveReplayMessage(sessionId, resumeId)) {
+			return;
+		}
+		this.pendingResumeMode = null;
+		this.hideBlankState();
+		const pendingExitCode = this.pendingExitCodeBySession.get(sessionId);
+		if (this.pendingExitCodeBySession.has(sessionId)) {
+			this.flushWrite();
+			this.terminal.write(`\r\n\x1b[33mProcess exited (code ${pendingExitCode ?? "?"})\x1b[0m\r\n`);
+			this.pendingExitCodeBySession.delete(sessionId);
+		}
+	}
+
+	private handleExitMessage(sessionId: string, exitCode: number | null): void {
+		if (sessionId !== this.activeSessionId) {
+			return;
+		}
+		if (this.pendingResumeMode !== null) {
+			this.pendingExitCodeBySession.set(sessionId, exitCode);
+			return;
+		}
+		this.pendingExitCodeBySession.delete(sessionId);
+		this.flushWrite();
+		this.terminal.write(`\r\n\x1b[33mProcess exited (code ${exitCode ?? "?"})\x1b[0m\r\n`);
 	}
 
 	private shouldRenderData(sessionId: string, resumeId?: number): boolean {

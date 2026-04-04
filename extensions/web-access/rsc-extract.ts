@@ -10,6 +10,7 @@ export interface RSCExtractResult {
 	content: string;
 }
 
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: RSC extraction keeps chunk parsing, caching, and fallback assembly in one routine to preserve traversal state.
 export function extractRSCContent(html: string): RSCExtractResult | null {
 	if (!html.includes("self.__next_f.push")) {
 		return null;
@@ -81,6 +82,7 @@ export function extractRSCContent(html: string): RSCExtractResult | null {
 	type Node = unknown;
 	const visitedRefs = new Set<string>();
 
+	// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: node extraction must keep recursive tag handling and ref resolution tightly coupled.
 	function extractNode(node: Node, ctx = { inTable: false, inCode: false }): string {
 		if (node === null || node === undefined) return "";
 
@@ -220,6 +222,7 @@ export function extractRSCContent(html: string): RSCExtractResult | null {
 		const rows: string[][] = [];
 		let headerRowCount = 0;
 
+		// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: table walking handles nested refs, semantic sections, and row collection in one traversal.
 		function walkTable(node: unknown, isHeader = false): void {
 			if (node === null || node === undefined) return;
 
@@ -268,6 +271,7 @@ export function extractRSCContent(html: string): RSCExtractResult | null {
 			}
 		}
 
+		// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: cell walking resolves nested refs and component wrappers before normalizing markdown output.
 		function walkCells(node: unknown, cells: string[]): void {
 			if (node === null || node === undefined) return;
 

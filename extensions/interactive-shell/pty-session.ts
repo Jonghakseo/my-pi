@@ -326,6 +326,7 @@ export class PtyTerminalSession {
 		}
 	}
 
+	// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: cell-by-cell ANSI reconstruction must preserve terminal styling semantics
 	private renderLineFromCells(lineIndex: number, cols: number): string {
 		const buffer = this.xterm.buffer.active;
 		const line = buffer.getLine(lineIndex);
@@ -444,6 +445,7 @@ export class PtyTerminalSession {
 		return lines;
 	}
 
+	// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: tail extraction supports ANSI serialization fallback plus character-budget truncation
 	getTailLines(options: { lines: number; ansi?: boolean; maxChars?: number }): {
 		lines: string[];
 		totalLinesInBuffer: number;

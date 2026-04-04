@@ -59,6 +59,7 @@ function stringifyToolCallArguments(args: unknown): string {
  * Instead of copying the entire session file (which causes persona confusion),
  * this extracts context text: compaction summary + last 20 messages (+ assistant tool calls).
  */
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: main-context extraction preserves legacy entry handling, tool-call capture, and truncation rules.
 export function buildMainContextText(ctx: any): { text: string; totalMessageCount: number } {
 	try {
 		const entries = ctx.sessionManager.getEntries();

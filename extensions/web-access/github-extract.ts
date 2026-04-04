@@ -388,6 +388,7 @@ function readTextFile(path: string): string | null {
 function buildTree(rootPath: string): string {
 	const entries: string[] = [];
 
+	// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: tree walking mixes repo-boundary, noise filtering, and truncation checks in one recursive routine.
 	function walk(dir: string, relPath: string): void {
 		if (entries.length >= MAX_TREE_ENTRIES) return;
 
@@ -487,6 +488,7 @@ function readReadme(localPath: string): string | null {
 	return null;
 }
 
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: each GitHub URL type needs a tailored rendering path for safe inline inspection output.
 function generateContent(localPath: string, info: GitHubUrlInfo): string {
 	const lines: string[] = [];
 	lines.push(`Repository cloned to: ${localPath}`);
@@ -613,6 +615,7 @@ async function awaitCachedClone(
 	return fetchViaApi(url, owner, repo, info);
 }
 
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: clone, cache, size-threshold, and API fallback handling are intentionally coordinated in one flow.
 export async function extractGitHub(
 	url: string,
 	signal?: AbortSignal,

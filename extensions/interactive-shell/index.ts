@@ -96,6 +96,12 @@ function makeNonBlockingUpdateHandler(pi: ExtensionAPI): (update: HandsFreeUpdat
 	};
 }
 
+function extractSelectedId(choice: string, separator: string): string {
+	const [selected] = choice.split(separator);
+	return selected ?? choice;
+}
+
+// biome-ignore lint/complexity/noExcessiveLinesPerFunction: extension registration groups lifecycle hooks, tool registration, and slash commands in one module entrypoint
 export default function interactiveShellExtension(pi: ExtensionAPI) {
 	pi.on("session_start", (_event, ctx) => {
 		coordinator.replaceBackgroundWidgetCleanup(setupBackgroundWidget(ctx, sessionManager));
@@ -113,6 +119,8 @@ export default function interactiveShellExtension(pi: ExtensionAPI) {
 		description: TOOL_DESCRIPTION,
 		parameters: toolParameters,
 
+		// biome-ignore lint/complexity/noExcessiveLinesPerFunction: tool handler preserves existing output contracts across session control modes
+		// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: session orchestration spans querying, attach/detach flows, and dispatch handling with strict behavioral parity
 		async execute(_toolCallId, params, _signal, onUpdate, ctx) {
 			const {
 				command,
@@ -590,7 +598,7 @@ export default function interactiveShellExtension(pi: ExtensionAPI) {
 				if (isNonBlocking) {
 					setupDispatchCompletion(pi, overlayPromise, config, {
 						id: reattachSessionId,
-						mode: mode!,
+						mode: mode === "dispatch" ? "dispatch" : "hands-free",
 						command: bgSession.command,
 						reason: bgSession.reason,
 						timeout,
@@ -876,7 +884,7 @@ export default function interactiveShellExtension(pi: ExtensionAPI) {
 
 				setupDispatchCompletion(pi, overlayPromise, config, {
 					id: generatedSessionId,
-					mode: mode!,
+					mode: mode === "dispatch" ? "dispatch" : "hands-free",
 					command,
 					reason,
 					timeout,
@@ -1040,7 +1048,7 @@ export default function interactiveShellExtension(pi: ExtensionAPI) {
 				});
 				const choice = await ctx.ui.select("Background Sessions", options);
 				if (!choice) return;
-				targetId = choice.split(" - ")[0]!;
+				targetId = extractSelectedId(choice, " - ");
 			}
 
 			const monitor = coordinator.getMonitor(targetId);
@@ -1123,7 +1131,7 @@ export default function interactiveShellExtension(pi: ExtensionAPI) {
 				];
 				const choice = await ctx.ui.select("Dismiss sessions", options);
 				if (!choice) return;
-				targetIds = choice === "All sessions" ? sessions.map((s) => s.id) : [choice.split(" (")[0]];
+				targetIds = choice === "All sessions" ? sessions.map((s) => s.id) : [extractSelectedId(choice, " (")];
 			}
 
 			for (const tid of targetIds) {
@@ -1136,6 +1144,143 @@ export default function interactiveShellExtension(pi: ExtensionAPI) {
 			ctx.ui.notify(`Dismissed ${targetIds.length} ${noun}`, "info");
 		},
 	});
+}
+
+function handleTransferredDispatchResult(pi: ExtensionAPI, id: string, result: InteractiveShellResult): void {
+	if (!result.transferred) return;
+	const truncatedNote = result.transferred.truncated
+		? ` (truncated from ${result.transferred.totalLines} total lines)`
+		: "";
+	const content = `Session ${id} output transferred (${result.transferred.lines.length} lines${truncatedNote}):\n\n${result.transferred.lines.join("\n")}`;
+	pi.sendMessage(
+		{
+			customType: "interactive-shell-transfer",
+			content,
+			display: true,
+			details: {
+				sessionId: id,
+				transferred: result.transferred,
+				exitCode: result.exitCode,
+				signal: result.signal,
+			},
+		},
+		{ triggerTurn: true },
+	);
+	pi.events.emit("interactive-shell:transfer", {
+		sessionId: id,
+		transferred: result.transferred,
+		exitCode: result.exitCode,
+		signal: result.signal,
+	});
+	sessionManager.unregisterActive(id, true);
+	coordinator.disposeMonitor(id);
+}
+
+function handleDispatchBackgroundResult(
+	pi: ExtensionAPI,
+	id: string,
+	command: string,
+	reason: string | undefined,
+	result: InteractiveShellResult,
+	config: InteractiveShellConfig,
+	ctx: {
+		timeout?: number;
+		handsFree?: { autoExitOnQuiet?: boolean; quietThreshold?: number; gracePeriod?: number };
+		overlayStartTime?: number;
+	},
+	wasAgentInitiated: boolean,
+): void {
+	if (!result.backgrounded) return;
+	if (!wasAgentInitiated) {
+		pi.sendMessage(
+			{
+				customType: "interactive-shell-transfer",
+				content: `Session ${id} moved to background (id: ${result.backgroundId}).`,
+				display: true,
+				details: { sessionId: id, backgroundId: result.backgroundId },
+			},
+			{ triggerTurn: true },
+		);
+	}
+	sessionManager.unregisterActive(id, false);
+
+	const bgId = result.backgroundId;
+	if (!bgId) {
+		coordinator.disposeMonitor(id);
+		return;
+	}
+
+	const existingMonitor = coordinator.getMonitor(id);
+	const bgSession = sessionManager.get(bgId);
+	if (!bgSession) return;
+
+	if (existingMonitor && !existingMonitor.disposed) {
+		coordinator.deleteMonitor(id);
+		registerHeadlessActive(
+			bgId,
+			command,
+			reason,
+			bgSession.session,
+			existingMonitor,
+			bgSession.startedAt.getTime(),
+			config,
+		);
+		return;
+	}
+
+	const elapsed = ctx.overlayStartTime ? Date.now() - ctx.overlayStartTime : 0;
+	const remainingTimeout = ctx.timeout ? Math.max(0, ctx.timeout - elapsed) : undefined;
+	const bgStartTime = bgSession.startedAt.getTime();
+	const monitor = new HeadlessDispatchMonitor(
+		bgSession.session,
+		config,
+		{
+			autoExitOnQuiet: ctx.handsFree?.autoExitOnQuiet !== false,
+			quietThreshold: ctx.handsFree?.quietThreshold ?? config.handsFreeQuietThreshold,
+			gracePeriod: ctx.handsFree?.gracePeriod ?? config.autoExitGracePeriod,
+			timeout: remainingTimeout,
+			startedAt: bgStartTime,
+		},
+		makeMonitorCompletionCallback(pi, bgId, bgStartTime),
+	);
+	registerHeadlessActive(bgId, command, reason, bgSession.session, monitor, bgStartTime, config);
+}
+
+function handleDispatchCompletionNotification(
+	pi: ExtensionAPI,
+	id: string,
+	result: InteractiveShellResult,
+	wasAgentInitiated: boolean,
+): void {
+	if (!wasAgentInitiated) {
+		const content = buildResultNotification(id, result);
+		pi.sendMessage(
+			{
+				customType: "interactive-shell-transfer",
+				content,
+				display: true,
+				details: {
+					sessionId: id,
+					exitCode: result.exitCode,
+					signal: result.signal,
+					timedOut: result.timedOut,
+					cancelled: result.cancelled,
+					completionOutput: result.completionOutput,
+				},
+			},
+			{ triggerTurn: true },
+		);
+	}
+	pi.events.emit("interactive-shell:transfer", {
+		sessionId: id,
+		completionOutput: result.completionOutput,
+		exitCode: result.exitCode,
+		signal: result.signal,
+		timedOut: result.timedOut,
+		cancelled: result.cancelled,
+	});
+	sessionManager.unregisterActive(id, true);
+	coordinator.disposeMonitor(id);
 }
 
 function setupDispatchCompletion(
@@ -1160,119 +1305,18 @@ function setupDispatchCompletion(
 			coordinator.endOverlay();
 
 			const wasAgentInitiated = coordinator.consumeAgentHandledCompletion(id);
-
 			if (result.transferred) {
-				const truncatedNote = result.transferred.truncated
-					? ` (truncated from ${result.transferred.totalLines} total lines)`
-					: "";
-				const content = `Session ${id} output transferred (${result.transferred.lines.length} lines${truncatedNote}):\n\n${result.transferred.lines.join("\n")}`;
-				pi.sendMessage(
-					{
-						customType: "interactive-shell-transfer",
-						content,
-						display: true,
-						details: {
-							sessionId: id,
-							transferred: result.transferred,
-							exitCode: result.exitCode,
-							signal: result.signal,
-						},
-					},
-					{ triggerTurn: true },
-				);
-				pi.events.emit("interactive-shell:transfer", {
-					sessionId: id,
-					transferred: result.transferred,
-					exitCode: result.exitCode,
-					signal: result.signal,
-				});
-				sessionManager.unregisterActive(id, true);
-				coordinator.disposeMonitor(id);
+				handleTransferredDispatchResult(pi, id, result);
 				return;
 			}
 
 			if (mode === "dispatch" && result.backgrounded) {
-				if (!wasAgentInitiated) {
-					pi.sendMessage(
-						{
-							customType: "interactive-shell-transfer",
-							content: `Session ${id} moved to background (id: ${result.backgroundId}).`,
-							display: true,
-							details: { sessionId: id, backgroundId: result.backgroundId },
-						},
-						{ triggerTurn: true },
-					);
-				}
-				sessionManager.unregisterActive(id, false);
-
-				const bgId = result.backgroundId!;
-				const existingMonitor = coordinator.getMonitor(id);
-				const bgSession = sessionManager.get(bgId);
-				if (!bgSession) return;
-
-				if (existingMonitor && !existingMonitor.disposed) {
-					coordinator.deleteMonitor(id);
-					registerHeadlessActive(
-						bgId,
-						command,
-						reason,
-						bgSession.session,
-						existingMonitor,
-						bgSession.startedAt.getTime(),
-						config,
-					);
-					return;
-				}
-
-				const elapsed = ctx.overlayStartTime ? Date.now() - ctx.overlayStartTime : 0;
-				const remainingTimeout = ctx.timeout ? Math.max(0, ctx.timeout - elapsed) : undefined;
-				const bgStartTime = bgSession.startedAt.getTime();
-				const monitor = new HeadlessDispatchMonitor(
-					bgSession.session,
-					config,
-					{
-						autoExitOnQuiet: ctx.handsFree?.autoExitOnQuiet !== false,
-						quietThreshold: ctx.handsFree?.quietThreshold ?? config.handsFreeQuietThreshold,
-						gracePeriod: ctx.handsFree?.gracePeriod ?? config.autoExitGracePeriod,
-						timeout: remainingTimeout,
-						startedAt: bgStartTime,
-					},
-					makeMonitorCompletionCallback(pi, bgId, bgStartTime),
-				);
-				registerHeadlessActive(bgId, command, reason, bgSession.session, monitor, bgStartTime, config);
+				handleDispatchBackgroundResult(pi, id, command, reason, result, config, ctx, wasAgentInitiated);
 				return;
 			}
 
 			if (mode === "dispatch") {
-				if (!wasAgentInitiated) {
-					const content = buildResultNotification(id, result);
-					pi.sendMessage(
-						{
-							customType: "interactive-shell-transfer",
-							content,
-							display: true,
-							details: {
-								sessionId: id,
-								exitCode: result.exitCode,
-								signal: result.signal,
-								timedOut: result.timedOut,
-								cancelled: result.cancelled,
-								completionOutput: result.completionOutput,
-							},
-						},
-						{ triggerTurn: true },
-					);
-				}
-				pi.events.emit("interactive-shell:transfer", {
-					sessionId: id,
-					completionOutput: result.completionOutput,
-					exitCode: result.exitCode,
-					signal: result.signal,
-					timedOut: result.timedOut,
-					cancelled: result.cancelled,
-				});
-				sessionManager.unregisterActive(id, true);
-				coordinator.disposeMonitor(id);
+				handleDispatchCompletionNotification(pi, id, result, wasAgentInitiated);
 				return;
 			}
 

@@ -215,6 +215,7 @@ function safeVideoInfo(url: string): { info: ReturnType<typeof isVideoFile>; err
 	}
 }
 
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: this dispatcher preserves the ordered fallback strategy across URL, video, YouTube, GitHub, and HTTP extraction paths.
 export async function extractContent(
 	url: string,
 	signal?: AbortSignal,
@@ -511,6 +512,7 @@ function isLikelyJSRendered(html: string): boolean {
 	return textContent.length < 500 && scriptCount > 3;
 }
 
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: HTTP extraction must handle content-type specific branches while keeping shared fetch cleanup together.
 async function extractViaHttp(url: string, signal?: AbortSignal, options?: ExtractOptions): Promise<ExtractedContent> {
 	const timeoutMs = options?.timeoutMs ?? DEFAULT_TIMEOUT_MS;
 	const activityId = activityMonitor.logStart({ type: "fetch", url });

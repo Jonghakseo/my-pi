@@ -111,6 +111,7 @@ async function searchWithGemini(
 	return null;
 }
 
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: provider selection is intentionally centralized so fallback ordering stays consistent.
 export async function search(query: string, options: FullSearchOptions = {}): Promise<AttributedSearchResponse> {
 	const config = getSearchConfig();
 	const provider = options.provider ?? config.searchProvider;

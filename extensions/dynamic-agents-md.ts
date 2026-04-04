@@ -149,6 +149,53 @@ function formatBlockReason(targetPath: string, files: ContextFile[]): string {
 	].join("\n");
 }
 
+function collectNewContextFiles(
+	rawPaths: string[],
+	cwd: string,
+	injectedPaths: Set<string>,
+	staticDirs: Set<string>,
+): { allNewFiles: ContextFile[]; readAbsPaths: Set<string> } {
+	const allNewFiles: ContextFile[] = [];
+	const readAbsPaths = new Set<string>();
+
+	for (const rawPath of rawPaths) {
+		const absPath = toAbsolute(rawPath, cwd);
+		readAbsPaths.add(resolve(absPath));
+		const newFiles = discoverNewAgentsMd(dirname(absPath), injectedPaths, staticDirs);
+		for (const file of newFiles) {
+			if (!injectedPaths.has(file.path)) {
+				injectedPaths.add(file.path);
+				allNewFiles.push(file);
+			}
+		}
+	}
+
+	return { allNewFiles, readAbsPaths };
+}
+
+function appendInjectedContext(event: ToolResultEvent, toInject: ContextFile[]): ToolResultEventResult | undefined {
+	if (toInject.length === 0) return;
+
+	const suffix = formatInjection(toInject);
+	const existingContent = [...event.content];
+	let lastTextIdx = -1;
+	for (let i = existingContent.length - 1; i >= 0; i--) {
+		if (existingContent[i]?.type === "text") {
+			lastTextIdx = i;
+			break;
+		}
+	}
+
+	if (lastTextIdx >= 0) {
+		const last = existingContent[lastTextIdx] as TextContent;
+		existingContent[lastTextIdx] = { type: "text" as const, text: last.text + suffix };
+	} else {
+		existingContent.push({ type: "text" as const, text: suffix });
+	}
+
+	return { content: existingContent };
+}
+
 // --- Extension ---
 export default function (pi: ExtensionAPI) {
 	/** Directories already covered by pi's static loading. */
@@ -224,52 +271,15 @@ export default function (pi: ExtensionAPI) {
 
 	// Inject dynamic scope context when reading files in uncovered directories.
 	pi.on("tool_result", async (event, ctx): Promise<ToolResultEventResult | undefined> => {
-		if (event.toolName !== "read") return;
-		if (event.isError) return;
+		if (event.toolName !== "read" || event.isError) return;
 
 		const rawPaths = extractPaths(event);
 		if (rawPaths.length === 0) return;
 
-		// Collect all new AGENTS.md files across all read paths (handles parallel reads).
-		const allNewFiles: ContextFile[] = [];
-		const readAbsPaths = new Set<string>();
-
-		for (const rawPath of rawPaths) {
-			const absPath = toAbsolute(rawPath, ctx.cwd);
-			readAbsPaths.add(resolve(absPath));
-			const newFiles = discoverNewAgentsMd(dirname(absPath), injectedPaths, staticDirs);
-			for (const f of newFiles) {
-				if (!injectedPaths.has(f.path)) {
-					injectedPaths.add(f.path);
-					allNewFiles.push(f);
-				}
-			}
-		}
-
+		const { allNewFiles, readAbsPaths } = collectNewContextFiles(rawPaths, ctx.cwd, injectedPaths, staticDirs);
 		if (allNewFiles.length === 0) return;
 
-		// If user explicitly read AGENTS/CLAUDE itself, don't duplicate same content.
-		const toInject = allNewFiles.filter((f) => !readAbsPaths.has(resolve(f.path)));
-		if (toInject.length === 0) return;
-
-		const suffix = formatInjection(toInject);
-		const existingContent = [...event.content];
-
-		let lastTextIdx = -1;
-		for (let i = existingContent.length - 1; i >= 0; i--) {
-			if (existingContent[i]?.type === "text") {
-				lastTextIdx = i;
-				break;
-			}
-		}
-
-		if (lastTextIdx >= 0) {
-			const last = existingContent[lastTextIdx] as TextContent;
-			existingContent[lastTextIdx] = { type: "text" as const, text: last.text + suffix };
-		} else {
-			existingContent.push({ type: "text" as const, text: suffix });
-		}
-
-		return { content: existingContent };
+		const toInject = allNewFiles.filter((file) => !readAbsPaths.has(resolve(file.path)));
+		return appendInjectedContext(event, toInject);
 	});
 }

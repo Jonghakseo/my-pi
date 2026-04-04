@@ -130,12 +130,95 @@ function buildCancelledResult(
 	};
 }
 
+function buildExecutionParams(params: Record<string, unknown>): AskUserQuestionExecutionParams {
+	return {
+		question: typeof params.question === "string" ? params.question.trim() : "",
+		context: typeof params.context === "string" ? params.context.trim() : undefined,
+		options: normalizeOptions(params.options),
+		allowCustomAnswer: typeof params.allowCustomAnswer === "boolean" ? params.allowCustomAnswer : true,
+		allowMultiple: typeof params.allowMultiple === "boolean" ? params.allowMultiple : false,
+		placeholder: typeof params.placeholder === "string" ? params.placeholder : "",
+	};
+}
+
+function buildAskUserQuestionErrorResult(message: string, params: AskUserQuestionExecutionParams) {
+	return {
+		content: [{ type: "text" as const, text: message }],
+		details: buildDetails({
+			question: params.question,
+			context: params.context,
+			options: params.options,
+			allowCustomAnswer: params.allowCustomAnswer,
+			allowMultiple: params.allowMultiple,
+			cancelled: true,
+		}),
+		isError: true,
+	};
+}
+
+async function askSingleChoice(
+	ctx: ExtensionContext,
+	params: AskUserQuestionExecutionParams,
+): Promise<AskSingleChoiceResult | undefined> {
+	if (params.options.length > 0) {
+		const displayOptions = buildDisplayOptions(params.options);
+		const selectable = params.allowCustomAnswer ? [...displayOptions, OTHER_OPTION_LABEL] : [...displayOptions];
+		const selected = await ctx.ui.select(buildPrompt(params.question, params.context), selectable);
+		if (selected === undefined) return undefined;
+		if (selected === OTHER_OPTION_LABEL) {
+			const customInput = await promptForCustomInput(ctx, params.placeholder);
+			if (customInput === undefined) return undefined;
+			return {
+				answer: customInput,
+				selectedOption: "custom",
+				customInput,
+			};
+		}
+
+		const optionIndex = displayOptions.indexOf(selected);
+		return {
+			answer: optionIndex >= 0 ? params.options[optionIndex] : selected,
+			selectedOption: optionIndex >= 0 ? params.options[optionIndex] : selected,
+			selectedIndex: optionIndex >= 0 ? optionIndex + 1 : undefined,
+		};
+	}
+
+	const answer = await ctx.ui.input(buildPrompt(params.question, params.context), params.placeholder);
+	if (answer === undefined) return undefined;
+	return {
+		answer,
+		customInput: answer.trim() || undefined,
+	};
+}
+
 type MultiSelectResult = {
 	cancelled: boolean;
 	answers: string[];
 	selectedIndices: number[];
 	customInput?: string;
 };
+
+type AskSingleChoiceResult = {
+	answer: string;
+	selectedOption?: string;
+	selectedIndex?: number;
+	customInput?: string;
+};
+
+type AskUserQuestionExecutionParams = {
+	question: string;
+	context?: string;
+	options: string[];
+	allowCustomAnswer: boolean;
+	allowMultiple: boolean;
+	placeholder: string;
+};
+
+type OptionEntry =
+	| { kind: "option"; label: string; optionIndex: number }
+	| { kind: "custom"; label: string; customIndex: number }
+	| { kind: "other"; label: string }
+	| { kind: "done"; label: string };
 
 async function promptForCustomInput(ctx: ExtensionContext, placeholder: string): Promise<string | undefined> {
 	const answer = await ctx.ui.input("Your answer", placeholder);
@@ -146,6 +229,102 @@ async function promptForCustomInput(ctx: ExtensionContext, placeholder: string):
 		return "";
 	}
 	return normalized;
+}
+
+function buildMultiSelectEntries(
+	displayOptions: string[],
+	selectedOptionIndices: Set<number>,
+	allowCustomAnswer: boolean,
+	customAnswers: string[],
+): OptionEntry[] {
+	const entries: OptionEntry[] = displayOptions.map((option, index) => ({
+		kind: "option",
+		optionIndex: index,
+		label: `${selectedOptionIndices.has(index) ? "☑" : "☐"} ${index + 1}. ${option}`,
+	}));
+
+	if (!allowCustomAnswer) {
+		return entries;
+	}
+
+	entries.push({ kind: "other", label: OTHER_OPTION_LABEL });
+	customAnswers.forEach((answer, index) => {
+		entries.push({ kind: "custom", customIndex: index, label: `☑ custom ${index + 1}. ${answer}` });
+	});
+	return entries;
+}
+
+function buildSelectedSummary(
+	displayOptions: string[],
+	selectedOptionIndices: Set<number>,
+	customAnswers: string[],
+): string[] {
+	return [
+		...Array.from(selectedOptionIndices)
+			.sort((a, b) => a - b)
+			.map((index) => displayOptions[index]),
+		...customAnswers,
+	];
+}
+
+function findSelectedEntry(entries: OptionEntry[], choice: string): OptionEntry | undefined {
+	return entries.find((entry) => entry.label === choice);
+}
+
+function finalizeMultiSelect(
+	ctx: ExtensionContext,
+	options: string[],
+	selectedOptionIndices: Set<number>,
+	customAnswers: string[],
+): MultiSelectResult | null {
+	const answers = [
+		...Array.from(selectedOptionIndices)
+			.sort((a, b) => a - b)
+			.map((index) => options[index]),
+		...customAnswers,
+	];
+	if (answers.length === 0) {
+		ctx.ui.notify("Select at least one option before finishing.", "warning");
+		return null;
+	}
+	return {
+		cancelled: false,
+		answers,
+		selectedIndices: Array.from(selectedOptionIndices)
+			.sort((a, b) => a - b)
+			.map((index) => index + 1),
+		customInput: customAnswers.length > 0 ? customAnswers.join(", ") : undefined,
+	};
+}
+
+async function handleMultiSelectEntry(
+	ctx: ExtensionContext,
+	entry: OptionEntry,
+	selectedOptionIndices: Set<number>,
+	customAnswers: string[],
+	options: string[],
+	placeholder: string,
+): Promise<MultiSelectResult | null> {
+	if (entry.kind === "option") {
+		if (selectedOptionIndices.has(entry.optionIndex)) selectedOptionIndices.delete(entry.optionIndex);
+		else selectedOptionIndices.add(entry.optionIndex);
+		return null;
+	}
+
+	if (entry.kind === "custom") {
+		customAnswers.splice(entry.customIndex, 1);
+		return null;
+	}
+
+	if (entry.kind === "other") {
+		const customAnswer = await promptForCustomInput(ctx, placeholder);
+		if (customAnswer && !customAnswers.includes(customAnswer)) {
+			customAnswers.push(customAnswer);
+		}
+		return null;
+	}
+
+	return finalizeMultiSelect(ctx, options, selectedOptionIndices, customAnswers);
 }
 
 async function askMultipleOptions(
@@ -161,31 +340,8 @@ async function askMultipleOptions(
 	const displayOptions = options.map((option) => toDisplayText(option));
 
 	while (true) {
-		type Entry =
-			| { kind: "option"; label: string; optionIndex: number }
-			| { kind: "custom"; label: string; customIndex: number }
-			| { kind: "other"; label: string }
-			| { kind: "done"; label: string };
-
-		const entries: Entry[] = [];
-		for (let i = 0; i < options.length; i++) {
-			const checked = selectedOptionIndices.has(i) ? "☑" : "☐";
-			entries.push({ kind: "option", optionIndex: i, label: `${checked} ${i + 1}. ${displayOptions[i]}` });
-		}
-
-		if (allowCustomAnswer) {
-			entries.push({ kind: "other", label: OTHER_OPTION_LABEL });
-			for (let i = 0; i < customAnswers.length; i++) {
-				entries.push({ kind: "custom", customIndex: i, label: `☑ custom ${i + 1}. ${customAnswers[i]}` });
-			}
-		}
-
-		const selectedSummary = [
-			...Array.from(selectedOptionIndices)
-				.sort((a, b) => a - b)
-				.map((index) => displayOptions[index]),
-			...customAnswers,
-		];
+		const selectedSummary = buildSelectedSummary(displayOptions, selectedOptionIndices, customAnswers);
+		const entries = buildMultiSelectEntries(displayOptions, selectedOptionIndices, allowCustomAnswer, customAnswers);
 		entries.push({ kind: "done", label: `${DONE_OPTION_LABEL} (${selectedSummary.length} selected)` });
 
 		const choice = await ctx.ui.select(
@@ -197,49 +353,19 @@ async function askMultipleOptions(
 			return { cancelled: true, answers: [], selectedIndices: [] };
 		}
 
-		const selectedEntry = entries.find((entry) => entry.label === choice);
+		const selectedEntry = findSelectedEntry(entries, choice);
 		if (!selectedEntry) continue;
 
-		switch (selectedEntry.kind) {
-			case "option": {
-				if (selectedOptionIndices.has(selectedEntry.optionIndex)) {
-					selectedOptionIndices.delete(selectedEntry.optionIndex);
-				} else {
-					selectedOptionIndices.add(selectedEntry.optionIndex);
-				}
-				break;
-			}
-			case "custom": {
-				customAnswers.splice(selectedEntry.customIndex, 1);
-				break;
-			}
-			case "other": {
-				const customAnswer = await promptForCustomInput(ctx, placeholder);
-				if (customAnswer === undefined) continue;
-				if (!customAnswer) continue;
-				if (!customAnswers.includes(customAnswer)) customAnswers.push(customAnswer);
-				break;
-			}
-			case "done": {
-				const answers = [
-					...Array.from(selectedOptionIndices)
-						.sort((a, b) => a - b)
-						.map((index) => options[index]),
-					...customAnswers,
-				];
-				if (answers.length === 0) {
-					ctx.ui.notify("Select at least one option before finishing.", "warning");
-					break;
-				}
-				return {
-					cancelled: false,
-					answers,
-					selectedIndices: Array.from(selectedOptionIndices)
-						.sort((a, b) => a - b)
-						.map((index) => index + 1),
-					customInput: customAnswers.length > 0 ? customAnswers.join(", ") : undefined,
-				};
-			}
+		const result = await handleMultiSelectEntry(
+			ctx,
+			selectedEntry,
+			selectedOptionIndices,
+			customAnswers,
+			options,
+			placeholder,
+		);
+		if (result) {
+			return result;
 		}
 	}
 }
@@ -262,41 +388,18 @@ export default function askUserQuestionExtension(pi: ExtensionAPI) {
 		parameters: AskUserQuestionParams,
 
 		async execute(_toolCallId, params, _signal, _onUpdate, ctx: ExtensionContext) {
-			const question = typeof params.question === "string" ? params.question.trim() : "";
-			const context = typeof params.context === "string" ? params.context.trim() : undefined;
-			const options = normalizeOptions(params.options);
-			const allowCustomAnswer = params.allowCustomAnswer ?? true;
-			const allowMultiple = params.allowMultiple ?? false;
-			const placeholder = typeof params.placeholder === "string" ? params.placeholder : "";
+			const executionParams = buildExecutionParams(params as Record<string, unknown>);
+			const { question, context, options, allowCustomAnswer, allowMultiple } = executionParams;
 
 			if (!question) {
-				return {
-					content: [{ type: "text" as const, text: "AskUserQuestion requires a non-empty question." }],
-					details: buildDetails({
-						question,
-						context,
-						options,
-						allowCustomAnswer,
-						allowMultiple,
-						cancelled: true,
-					}),
-					isError: true,
-				};
+				return buildAskUserQuestionErrorResult("AskUserQuestion requires a non-empty question.", executionParams);
 			}
 
 			if (!ctx.hasUI) {
-				return {
-					content: [{ type: "text" as const, text: "AskUserQuestion requires interactive mode (UI unavailable)." }],
-					details: buildDetails({
-						question,
-						context,
-						options,
-						allowCustomAnswer,
-						allowMultiple,
-						cancelled: true,
-					}),
-					isError: true,
-				};
+				return buildAskUserQuestionErrorResult(
+					"AskUserQuestion requires interactive mode (UI unavailable).",
+					executionParams,
+				);
 			}
 
 			ctx.ui.notify("Waiting for input", "info");
@@ -308,9 +411,8 @@ export default function askUserQuestionExtension(pi: ExtensionAPI) {
 					context,
 					options,
 					allowCustomAnswer,
-					placeholder,
+					executionParams.placeholder,
 				);
-
 				if (multipleResult.cancelled) {
 					return buildCancelledResult(question, context, options, allowCustomAnswer, allowMultiple);
 				}
@@ -333,42 +435,12 @@ export default function askUserQuestionExtension(pi: ExtensionAPI) {
 				};
 			}
 
-			let answer: string | undefined;
-			let selectedOption: string | undefined;
-			let selectedIndex: number | undefined;
-			let customInput: string | undefined;
-
-			if (options.length > 0) {
-				const displayOptions = buildDisplayOptions(options);
-				const selectable = allowCustomAnswer ? [...displayOptions, OTHER_OPTION_LABEL] : [...displayOptions];
-				const selected = await ctx.ui.select(buildPrompt(question, context), selectable);
-
-				if (selected === undefined) {
-					return buildCancelledResult(question, context, options, allowCustomAnswer, allowMultiple);
-				}
-
-				if (selected === OTHER_OPTION_LABEL) {
-					selectedOption = "custom";
-					customInput = await promptForCustomInput(ctx, placeholder);
-					if (customInput === undefined) {
-						return buildCancelledResult(question, context, options, allowCustomAnswer, allowMultiple);
-					}
-					answer = customInput;
-				} else {
-					const optionIndex = displayOptions.indexOf(selected);
-					selectedOption = optionIndex >= 0 ? options[optionIndex] : selected;
-					selectedIndex = optionIndex >= 0 ? optionIndex + 1 : undefined;
-					answer = selectedOption;
-				}
-			} else {
-				answer = await ctx.ui.input(buildPrompt(question, context), placeholder);
-				if (answer === undefined) {
-					return buildCancelledResult(question, context, options, allowCustomAnswer, allowMultiple);
-				}
-				customInput = answer.trim() || undefined;
+			const singleChoice = await askSingleChoice(ctx, executionParams);
+			if (!singleChoice) {
+				return buildCancelledResult(question, context, options, allowCustomAnswer, allowMultiple);
 			}
 
-			const normalizedAnswer = answer.trim();
+			const normalizedAnswer = singleChoice.answer.trim();
 			return {
 				content: [{ type: "text" as const, text: normalizedAnswer || "(empty answer)" }],
 				details: buildDetails({
@@ -379,16 +451,16 @@ export default function askUserQuestionExtension(pi: ExtensionAPI) {
 					allowMultiple,
 					answer: normalizedAnswer,
 					answers: [normalizedAnswer],
-					selectedOption,
+					selectedOption: singleChoice.selectedOption,
 					selectedOptions:
-						selectedOption && selectedOption !== "custom"
-							? [selectedOption]
+						singleChoice.selectedOption && singleChoice.selectedOption !== "custom"
+							? [singleChoice.selectedOption]
 							: normalizedAnswer
 								? [normalizedAnswer]
 								: [],
-					selectedIndex,
-					selectedIndices: selectedIndex ? [selectedIndex] : undefined,
-					customInput: selectedOption === "custom" ? normalizedAnswer : customInput,
+					selectedIndex: singleChoice.selectedIndex,
+					selectedIndices: singleChoice.selectedIndex ? [singleChoice.selectedIndex] : undefined,
+					customInput: singleChoice.selectedOption === "custom" ? normalizedAnswer : singleChoice.customInput,
 				}),
 			};
 		},
