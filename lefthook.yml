@@ -1,0 +1,24 @@
+# Lefthook git hooks configuration
+# https://github.com/evilmartians/lefthook
+
+pre-commit:
+  parallel: true
+  commands:
+    biome-check:
+      root: extensions/
+      run: pnpm exec biome check .
+      skip:
+        - merge
+        - rebase
+    typecheck:
+      root: extensions/
+      run: pnpm run typecheck
+      skip:
+        - merge
+        - rebase
+
+pre-push:
+  commands:
+    test:
+      root: extensions/
+      run: pnpm run test
