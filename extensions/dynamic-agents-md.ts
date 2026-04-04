@@ -199,11 +199,13 @@ export default function (pi: ExtensionAPI) {
 		};
 	});
 
-	// ── Pre-emptive injection on broader tool results ──
-	// When grep/find/ls access files in new directories, eagerly load
-	// AGENTS.md so that subsequent edit/write calls pass without blocking.
+	// ── Pre-emptive registration on exploratory tool results ──
+	// When grep/find/ls access files in new directories, register the
+	// AGENTS.md path so subsequent edit/write calls pass without blocking.
+	// Guard: only register when exactly 1 new AGENTS.md is found.
+	// Multiple new files means the path crosses many scopes — skip to
+	// avoid silently swallowing context the LLM hasn't seen yet.
 	pi.on("tool_result", async (event, ctx): Promise<ToolResultEventResult | undefined> => {
-		// Only handle exploratory tools (not read — that's handled separately below).
 		const exploratoryTools = new Set(["grep", "find", "ls"]);
 		if (!exploratoryTools.has(event.toolName)) return;
 		if (event.isError) return;
@@ -214,15 +216,9 @@ export default function (pi: ExtensionAPI) {
 
 		const absPath = toAbsolute(rawPath, ctx.cwd);
 		const newFiles = discoverNewAgentsMd(absPath, injectedPaths, staticDirs);
-		for (const f of newFiles) {
-			if (!injectedPaths.has(f.path)) {
-				injectedPaths.add(f.path);
-			}
-		}
+		if (newFiles.length !== 1) return;
 
-		// Don't modify the tool result — just mark paths as injected.
-		// The content will be injected naturally when the LLM reads them,
-		// or the edit/write will pass since we've registered the paths.
+		injectedPaths.add(newFiles[0].path);
 		return;
 	});
 
