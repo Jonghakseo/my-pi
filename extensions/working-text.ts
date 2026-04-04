@@ -76,10 +76,6 @@ export default function (pi: ExtensionAPI) {
 		runStartedAt = 0;
 	});
 
-	pi.on("session_switch", async (_event) => {
-		stopTimer();
-		runStartedAt = 0;
-	});
 
 	pi.on("session_shutdown", async (_event) => {
 		stopTimer();

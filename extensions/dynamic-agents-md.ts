@@ -6,7 +6,7 @@
  * and dynamic context injection on read.
  *
  * How it works:
- *   1. On session_start/session_switch, record static AGENTS coverage
+ *   1. On session_start, record static AGENTS coverage
  *      (CWD→root + global agent dir) and mark those as already injected.
  *   2. On tool_call(edit/write), discover missing scoped AGENTS/CLAUDE files.
  *      If any are missing, block the tool call before modification.
@@ -180,9 +180,6 @@ export default function (pi: ExtensionAPI) {
 		resetState(_event, ctx);
 	});
 
-	pi.on("session_switch", async (_event, ctx) => {
-		resetState(_event, ctx);
-	});
 
 	// Enforce scope context before first edit/write in a new directory scope.
 	pi.on("tool_call", async (event, ctx): Promise<ToolCallEventResult | undefined> => {

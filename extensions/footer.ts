@@ -202,13 +202,6 @@ export default function (pi: ExtensionAPI) {
 		installFooter(pi, ctx);
 	});
 
-	pi.on("session_switch", async (_event, ctx) => {
-		installFooter(pi, ctx);
-	});
-
-	pi.on("session_fork", async (_event, ctx) => {
-		installFooter(pi, ctx);
-	});
 
 	pi.on("session_tree", async (_event, ctx) => {
 		installFooter(pi, ctx);

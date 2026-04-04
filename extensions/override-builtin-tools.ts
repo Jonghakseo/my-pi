@@ -273,12 +273,6 @@ export default function (pi: ExtensionAPI) {
 	pi.on("session_start", async (_e, ctx) => {
 		currentCwd = ctx.sessionManager.getCwd();
 	});
-	pi.on("session_switch", async (_e, ctx) => {
-		currentCwd = ctx.sessionManager.getCwd();
-	});
-	pi.on("session_fork", async (_e, ctx) => {
-		currentCwd = ctx.sessionManager.getCwd();
-	});
 	pi.on("session_tree", async (_e, ctx) => {
 		currentCwd = ctx.sessionManager.getCwd();
 	});

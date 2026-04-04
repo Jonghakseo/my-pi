@@ -835,21 +835,7 @@ export default function memoryLayerExtension(pi: ExtensionAPI) {
 		}
 	});
 
-	pi.on("session_switch", async (_event, ctx) => {
-		try {
-			currentProjectId = resolveCurrentProjectId(ctx.cwd);
-		} catch {
-			// Graceful degradation
-		}
-	});
 
-	pi.on("session_fork", async (_event, ctx) => {
-		try {
-			currentProjectId = resolveCurrentProjectId(ctx.cwd);
-		} catch {
-			// Graceful degradation
-		}
-	});
 
 	// ── before_agent_start: Memory Injection ──────────────────────────────
 
