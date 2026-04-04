@@ -40,6 +40,10 @@
 					"level": "warn",
 					"options": { "maxAllowedComplexity": 25 }
 				},
+				"noExcessiveLinesPerFunction": {
+					"level": "warn",
+					"options": { "maxLines": 500 }
+				},
 				"noForEach": "warn",
 				"noBannedTypes": "error",
 				"useFlatMap": "error"
