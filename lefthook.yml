@@ -6,7 +6,7 @@ pre-commit:
   commands:
     biome-check:
       root: extensions/
-      run: pnpm exec biome check --error-on-warnings .
+      run: pnpm exec biome check --error-on-warnings --reporter=summary .
       skip:
         - merge
         - rebase
