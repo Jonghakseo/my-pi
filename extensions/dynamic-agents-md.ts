@@ -22,7 +22,6 @@
 import type { AssistantMessageEvent, ImageContent, TextContent, ToolCall } from "@mariozechner/pi-ai";
 import {
 	type ExtensionAPI,
-	type ExtensionContext,
 	isToolCallEventType,
 	type ToolCallEventResult,
 	type ToolResultEvent,
@@ -202,12 +201,6 @@ export default function (pi: ExtensionAPI) {
 	/** Active streaming tool call states, keyed by contentIndex. */
 	let streamingStates = new Map<number, StreamingToolCallState>();
 
-	/** Whether we've already aborted for the current assistant turn. */
-	let abortedThisTurn = false;
-
-	/** Pending message to send after abort completes (agent_end). */
-	let pendingAbortMessage: string | null = null;
-
 	const resetState = (_event: unknown, ctx: { cwd: string }) => {
 		staticDirs = computeStaticCoveredDirs(ctx.cwd);
 		injectedPaths.clear();
@@ -236,30 +229,23 @@ export default function (pi: ExtensionAPI) {
 	// Reset streaming state at each turn start.
 	pi.on("turn_start", async () => {
 		streamingStates = new Map();
-		abortedThisTurn = false;
 	});
 
-	// After an abort-triggered agent_end, re-send the queued message as a new turn.
-	// At this point the agent is idle, so sendUserMessage will prompt a fresh run.
-	pi.on("agent_end", async (_event, _ctx) => {
-		const msg = pendingAbortMessage;
-		if (!msg) return;
-		pendingAbortMessage = null;
-		pi.sendUserMessage(msg);
-	});
-
-	// ── Streaming early-abort: detect edit/write targeting uncovered dirs ──
-	// This fires on every streaming token. We watch for toolcall_start/delta
-	// to extract the `path` argument before the LLM generates the expensive
-	// content/edits payload. If the target directory has an unloaded AGENTS.md,
-	// we abort immediately — saving potentially thousands of tokens.
-	pi.on("message_update", async (event: MessageUpdateEvent, ctx: ExtensionContext) => {
-		if (abortedThisTurn) return;
-
+	// ── Streaming early-discovery: pre-register AGENTS.md during streaming ──
+	// Watches toolcall_start/delta to extract the `path` argument as the LLM
+	// streams an edit/write call. If the target directory has an unloaded
+	// AGENTS.md, we eagerly discover and cache the paths so the tool_call
+	// block handler can fire instantly (without redundant filesystem walks).
+	//
+	// NOTE: We intentionally do NOT abort the stream here. Aborting during
+	// toolcall_delta truncates the JSON arguments mid-generation, which causes
+	// JSON parse errors and process hangs. The tool_call block handler is the
+	// safe checkpoint — it fires after the full tool call is generated but
+	// before execution, and blocks cleanly.
+	pi.on("message_update", async (event: MessageUpdateEvent, ctx) => {
 		const streamEvent = event.assistantMessageEvent as AssistantMessageEvent;
 
 		if (streamEvent.type === "toolcall_start") {
-			// Check the partial message to get the tool name at this content index.
 			const partial = streamEvent.partial;
 			const contentItem = partial.content[streamEvent.contentIndex];
 			if (!contentItem || contentItem.type !== "toolCall") return;
@@ -267,7 +253,6 @@ export default function (pi: ExtensionAPI) {
 			const toolCall = contentItem as ToolCall;
 			if (!GATED_TOOLS.has(toolCall.name)) return;
 
-			// Start tracking this tool call's argument stream.
 			streamingStates.set(streamEvent.contentIndex, {
 				contentIndex: streamEvent.contentIndex,
 				accumulatedArgs: "",
@@ -282,38 +267,18 @@ export default function (pi: ExtensionAPI) {
 
 			state.accumulatedArgs += streamEvent.delta;
 
-			// Try to extract `path` from accumulated JSON.
 			const rawPath = extractPathFromPartialJson(state.accumulatedArgs);
 			if (!rawPath) {
-				// If we've accumulated a lot without finding path, stop trying.
 				if (state.accumulatedArgs.length > 500) state.resolved = true;
 				return;
 			}
 
-			// Found path — mark resolved so we don't re-check.
+			// Found path — eagerly discover AGENTS.md for this directory.
+			// This pre-warms the cache so the tool_call handler doesn't
+			// need to walk the filesystem.
 			state.resolved = true;
-
 			const absPath = toAbsolute(rawPath, ctx.cwd);
-			const missing = discoverNewAgentsMd(dirname(absPath), injectedPaths, staticDirs);
-			if (missing.length === 0) return;
-
-			// Missing AGENTS.md detected! Abort the stream immediately.
-			abortedThisTurn = true;
-			ctx.abort();
-
-			// Queue the message for delivery after abort completes (agent_end).
-			// We can't use sendUserMessage during streaming with deliverAs: "followUp"
-			// because the aborted agent loop skips follow-up drain.
-			const list = missing.map((f) => `- ${f.path}`).join("\n");
-			pendingAbortMessage = [
-				"[Auto-aborted] edit/write to an uncovered directory scope was detected during streaming.",
-				`Target: ${absPath}`,
-				"",
-				"Unloaded AGENTS context files:",
-				list,
-				"",
-				"Read the above file(s) first, then retry the original edit/write.",
-			].join("\n");
+			discoverNewAgentsMd(dirname(absPath), injectedPaths, staticDirs);
 			return;
 		}
 	});
