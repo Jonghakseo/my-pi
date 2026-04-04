@@ -196,11 +196,6 @@ export default function idleScreensaver(pi: ExtensionAPI): void {
 
 	pi.on("session_start", (_event, ctx) => {
 		latestCtx = ctx;
-		scheduleIdleTimer();
-	});
-
-	pi.on("session_switch", (_event, ctx) => {
-		latestCtx = ctx;
 		clearIdleTimer();
 		overlayActive = false;
 		scheduleIdleTimer();

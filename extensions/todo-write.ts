@@ -545,17 +545,6 @@ export default function todoWriteExtension(pi: ExtensionAPI): void {
 		await syncTodoWidget(ctx, pi);
 	});
 
-	pi.on("session_switch", async (_event, ctx) => {
-		setTodoWidgetAgentRunning(ctx, false);
-		restoreTodoWriteState(ctx);
-		await syncTodoWidget(ctx, pi);
-	});
-
-	pi.on("session_fork", async (_event, ctx) => {
-		setTodoWidgetAgentRunning(ctx, false);
-		restoreTodoWriteState(ctx);
-		await syncTodoWidget(ctx, pi);
-	});
 
 	pi.on("session_tree", async (_event, ctx) => {
 		setTodoWidgetAgentRunning(ctx, false);

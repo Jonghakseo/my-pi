@@ -625,11 +625,6 @@ export default function (pi: ExtensionAPI) {
 		clearAllTasks();
 	});
 
-	pi.on("session_switch", async (_event, ctx) => {
-		agentRunning = false;
-		latestCtx = ctx;
-		clearAllTasks();
-	});
 
 	pi.on("session_shutdown", async () => {
 		agentRunning = false;

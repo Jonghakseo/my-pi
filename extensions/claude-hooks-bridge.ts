@@ -100,7 +100,7 @@ function getSessionId(ctx: ExtensionContext): string {
  * so an unstable ID creates a new file per turn instead of accumulating
  * within a single session file.
  *
- * We pin the ID on the first event and only reset on explicit session_switch
+ * We pin the ID on the first event and only reset on session_start
  * or session_shutdown.
  */
 let pinnedHookSessionId: string | null = null;
@@ -572,14 +572,17 @@ async function runHooks(
 }
 
 export default function claudeHooksBridge(pi: ExtensionAPI) {
-	pi.on("session_start", async (_event, ctx) => {
-		const loaded = loadSettings(ctx.cwd);
-		notifyOnceForParseError(ctx, loaded);
-		const settings = loaded.settings;
-
+	pi.on("session_start", async (event, ctx) => {
 		pinnedHookSessionId = getSessionId(ctx);
 		const sessionId = pinnedHookSessionId;
 		stopHookActiveBySession.set(sessionId, false);
+
+		// Only load settings & run SessionStart hooks on fresh starts, not resume/fork
+		if (event.reason === "resume" || event.reason === "fork") return;
+
+		const loaded = loadSettings(ctx.cwd);
+		notifyOnceForParseError(ctx, loaded);
+		const settings = loaded.settings;
 
 		if (settings && ctx.hasUI) {
 			const total = countHooks(settings);
@@ -610,12 +613,6 @@ export default function claudeHooksBridge(pi: ExtensionAPI) {
 				);
 			}
 		}
-	});
-
-	pi.on("session_switch", async (_event, ctx) => {
-		pinnedHookSessionId = getSessionId(ctx);
-		const sessionId = pinnedHookSessionId;
-		stopHookActiveBySession.set(sessionId, false);
 	});
 
 	pi.on("session_shutdown", async () => {

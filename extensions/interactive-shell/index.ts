@@ -89,9 +89,6 @@ export default function interactiveShellExtension(pi: ExtensionAPI) {
 	pi.on("session_start", (_event, ctx) => {
 		coordinator.replaceBackgroundWidgetCleanup(setupBackgroundWidget(ctx, sessionManager));
 	});
-	pi.on("session_switch", (_event, ctx) => {
-		coordinator.replaceBackgroundWidgetCleanup(setupBackgroundWidget(ctx, sessionManager));
-	});
 
 	pi.on("session_shutdown", () => {
 		coordinator.clearBackgroundWidget();

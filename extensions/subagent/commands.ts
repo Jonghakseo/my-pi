@@ -426,7 +426,7 @@ async function subBackHandler(ctx: any, store: SubagentStore): Promise<void> {
 			ctx.ui.notify("Failed to return to parent session.", "error");
 		}
 		// Note: currentParentSessionFile will be set correctly by restoreRunsFromSession
-		// when the parent session loads (via session_switch event).
+		// when the parent session loads (via session_start event).
 	} catch (err) {
 		ctx.ui.notify(`Session switch error: ${err}`, "error");
 	}
@@ -450,7 +450,7 @@ function toNonNegativeNumber(value: unknown): number | undefined {
 
 /**
  * Clear commandRuns and restore from current session entries.
- * Used by both session_start and session_switch handlers.
+ * Used by session_start handler (covers all session lifecycle reasons).
  * Also restores `currentParentSessionFile` from the latest `subagent-parent` entry.
  *
  * After restoring session entries, merges any still-running global live runs
@@ -2046,7 +2046,7 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 	let unsubTerminalInput: (() => void) | null = null;
 
 	function registerTerminalInputRedirect(ctx: any): void {
-		// Unsubscribe previous listener to avoid duplicates on session_switch.
+		// Unsubscribe previous listener to avoid duplicates on session change.
 		unsubTerminalInput?.();
 		unsubTerminalInput = null;
 
@@ -2125,8 +2125,4 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 		registerTerminalInputRedirect(ctx);
 	});
 
-	pi.on("session_switch", async (_event, ctx) => {
-		restoreRunsFromSession(store, ctx, pi);
-		registerTerminalInputRedirect(ctx);
-	});
 }

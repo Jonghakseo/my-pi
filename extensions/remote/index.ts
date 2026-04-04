@@ -159,7 +159,6 @@ export default function (pi: ExtensionAPI) {
 		}
 	});
 
-	pi.on("session_switch", syncWidget);
 	pi.on("session_shutdown", async (_event, ctx) => {
 		if (!ctx.hasUI) return;
 		ctx.ui.setWidget("remote-url", undefined);
