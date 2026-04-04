@@ -458,6 +458,7 @@ function toNonNegativeNumber(value: unknown): number | undefined {
  * Also delivers any pending completion messages for runs that finished while
  * the user was in a different session.
  */
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: session restoration must reconcile legacy entries, live runs, and pending completions in one pass.
 function restoreRunsFromSession(store: SubagentStore, ctx: any, pi?: ExtensionAPI): void {
 	let currentSessionFile: string | null = null;
 	try {
@@ -784,6 +785,7 @@ function restoreRunsFromSession(store: SubagentStore, ctx: any, pi?: ExtensionAP
 	updateCommandRunsWidget(store, ctx as unknown as WidgetRenderCtx);
 }
 
+// biome-ignore lint/complexity/noExcessiveLinesPerFunction: registration stays consolidated so commands, shortcuts, and event handlers share one store lifecycle.
 export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 	pi.registerTool({
 		name: "list-agents",
@@ -867,6 +869,7 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 			const merged = [...runItems, ...agentItems];
 			return merged.length > 0 ? merged : null;
 		},
+		// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: subcommand entrypoint handles continuation, alias resolution, and launch setup while preserving existing UX.
 		handler: async (args: string, ctx: ExtensionContext, forceMainContextFromWrapper = false) => {
 			captureSwitchSession(store, ctx);
 			const input = (args ?? "").trim();
@@ -1175,6 +1178,7 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 				updateCommandRunsWidget(store);
 			}, RUN_TICK_INTERVAL_MS);
 
+			// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: completion flow must preserve retry, pending-delivery, and widget update behavior.
 			void (async () => {
 				try {
 					const { result, retryCount } = await invokeWithAutoRetry({
@@ -1616,6 +1620,7 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 		},
 	});
 
+	// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: clear command supports all vs finished-only cleanup with consistent notifications.
 	const handleSubClear = async (args: string, ctx: any) => {
 		captureSwitchSession(store, ctx);
 		const mode = (args ?? "").trim().toLowerCase();
@@ -1667,6 +1672,7 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 		},
 	});
 
+	// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: abort command supports latest, all, and explicit-ID flows with shared messaging.
 	const handleSubAbort = async (args: string, ctx: any) => {
 		const raw = (args ?? "").trim().toLowerCase();
 		const running = Array.from(store.commandRuns.values())
@@ -1760,6 +1766,7 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 		},
 	});
 
+	// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: >> and >>> shortcuts intentionally share one stateful input router.
 	pi.on("input", async (event, ctx) => {
 		if (event.source === "extension") {
 			return { action: "continue" as const };
@@ -1948,6 +1955,7 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 		},
 	});
 
+	// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: << and <<< shortcuts intentionally share abort/clear routing in one handler.
 	pi.on("input", async (event, ctx) => {
 		if (event.source === "extension") {
 			return { action: "continue" as const };

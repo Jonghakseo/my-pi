@@ -554,99 +554,86 @@ interface LegacyRecord {
 	status: string;
 }
 
+type MigrationTarget = {
+	scope: MemoryScope;
+	projectId?: string;
+	filePath: string;
+	errorPrefix: string;
+};
+
+async function migrateLegacyRecords(target: MigrationTarget, records: LegacyRecord[], errors: string[]) {
+	const activeRecords = records.filter((r) => r.status === "active");
+	const existingEntries = await loadTopicEntries(target.scope, target.projectId, "general");
+	const sourceCounts = countByKey(activeRecords.map((r) => makeEntryKey(r.title, r.content)));
+	const existingCounts = countByKey(existingEntries.map((e) => makeEntryKey(e.title, e.content)));
+
+	let fileAllSucceeded = true;
+	let fileMigrated = 0;
+
+	for (const [key, srcCount] of sourceCounts) {
+		const needed = srcCount - (existingCounts.get(key) ?? 0);
+		if (needed <= 0) continue;
+		const sepIdx = key.indexOf("\0");
+		const title = key.slice(0, sepIdx);
+		const content = key.slice(sepIdx + 1);
+
+		for (let i = 0; i < needed; i++) {
+			try {
+				await saveMemory(target.scope, target.projectId, "general", "General", title, content);
+				fileMigrated++;
+			} catch (error) {
+				fileAllSucceeded = false;
+				errors.push(`${target.errorPrefix} "${title}": ${error instanceof Error ? error.message : "unknown"}`);
+			}
+		}
+	}
+
+	if (fileAllSucceeded) {
+		await fs.rename(target.filePath, `${target.filePath}.bak`);
+	}
+
+	return { migrated: fileMigrated, fileAllSucceeded };
+}
+
+async function migrateLegacyFile(target: MigrationTarget, errors: string[]) {
+	const raw = await fs.readFile(target.filePath, "utf8");
+	const records: LegacyRecord[] = JSON.parse(raw);
+	return migrateLegacyRecords(target, records, errors);
+}
+
 export async function migrateFromJson(): Promise<{ migrated: number; errors: string[] }> {
 	let migrated = 0;
 	const errors: string[] = [];
 
-	// 1) user.json
 	const userJson = path.join(MEMORY_BASE, "user.json");
 	try {
-		const raw = await fs.readFile(userJson, "utf8");
-		const records: LegacyRecord[] = JSON.parse(raw);
-		const activeRecords = records.filter((r) => r.status === "active");
-		let fileAllSucceeded = true;
-		let fileMigrated = 0;
-
-		// Issue 1 fix: count-based dedup preserves duplicate records
-		// Both source and existing use makeEntryKey for consistent normalization
-		const existingEntries = await loadTopicEntries("user", undefined, "general");
-		const sourceCounts = countByKey(activeRecords.map((r) => makeEntryKey(r.title, r.content)));
-		const existingCounts = countByKey(existingEntries.map((e) => makeEntryKey(e.title, e.content)));
-
-		for (const [key, srcCount] of sourceCounts) {
-			const needed = srcCount - (existingCounts.get(key) ?? 0);
-			if (needed <= 0) continue;
-			const sepIdx = key.indexOf("\0");
-			const title = key.slice(0, sepIdx);
-			const content = key.slice(sepIdx + 1);
-			for (let i = 0; i < needed; i++) {
-				try {
-					await saveMemory("user", undefined, "general", "General", title, content);
-					fileMigrated++;
-				} catch (e) {
-					fileAllSucceeded = false;
-					errors.push(`user "${title}": ${e instanceof Error ? e.message : "unknown"}`);
-				}
-			}
-		}
-
-		migrated += fileMigrated;
-
-		// Only rename to .bak if ALL records in this file succeeded
-		if (fileAllSucceeded) {
-			await fs.rename(userJson, `${userJson}.bak`);
-		}
+		const result = await migrateLegacyFile({ scope: "user", filePath: userJson, errorPrefix: "user" }, errors);
+		migrated += result.migrated;
 	} catch (err) {
 		if ((err as NodeJS.ErrnoException)?.code !== "ENOENT") {
 			errors.push(`user.json: ${err instanceof Error ? err.message : "unknown"}`);
 		}
 	}
 
-	// 2) project JSON files
 	try {
 		const projectFiles = await fs.readdir(PROJECTS_DIR);
 		for (const file of projectFiles) {
 			if (!file.endsWith(".json")) continue;
-			const fp = path.join(PROJECTS_DIR, file);
+			const projectId = file.replace(/\.json$/, "");
+			const filePath = path.join(PROJECTS_DIR, file);
 			try {
-				const raw = await fs.readFile(fp, "utf8");
-				const records: LegacyRecord[] = JSON.parse(raw);
-				const pid = file.replace(/\.json$/, "");
-				const activeRecords = records.filter((r) => r.status === "active");
-				let fileAllSucceeded = true;
-				let fileMigrated = 0;
-
-				// Issue 1 fix: count-based dedup preserves duplicate records
-				// Both source and existing use makeEntryKey for consistent normalization
-				const existingEntries = await loadTopicEntries("project", pid, "general");
-				const sourceCounts = countByKey(activeRecords.map((r) => makeEntryKey(r.title, r.content)));
-				const existingCounts = countByKey(existingEntries.map((e) => makeEntryKey(e.title, e.content)));
-
-				for (const [key, srcCount] of sourceCounts) {
-					const needed = srcCount - (existingCounts.get(key) ?? 0);
-					if (needed <= 0) continue;
-					const sepIdx = key.indexOf("\0");
-					const title = key.slice(0, sepIdx);
-					const content = key.slice(sepIdx + 1);
-					for (let i = 0; i < needed; i++) {
-						try {
-							await saveMemory("project", pid, "general", "General", title, content);
-							fileMigrated++;
-						} catch (e) {
-							fileAllSucceeded = false;
-							errors.push(`project "${pid}" "${title}": ${e instanceof Error ? e.message : "unknown"}`);
-						}
-					}
-				}
-
-				migrated += fileMigrated;
-
-				// Only rename if ALL records succeeded
-				if (fileAllSucceeded) {
-					await fs.rename(fp, `${fp}.bak`);
-				}
-			} catch (e) {
-				errors.push(`${file}: ${e instanceof Error ? e.message : "unknown"}`);
+				const result = await migrateLegacyFile(
+					{
+						scope: "project",
+						projectId,
+						filePath,
+						errorPrefix: `project "${projectId}"`,
+					},
+					errors,
+				);
+				migrated += result.migrated;
+			} catch (error) {
+				errors.push(`${file}: ${error instanceof Error ? error.message : "unknown"}`);
 			}
 		}
 	} catch {

@@ -384,37 +384,41 @@ function parseToolVisibilityKey(key: string): { serverName: string; toolName: st
 	return { serverName, toolName };
 }
 
-function parseDisabledToolKeys(value: unknown): Set<string> {
+function addDisabledToolKey(result: Set<string>, serverNameRaw: string, toolNameRaw: string): void {
+	const serverName = serverNameRaw.trim();
+	const toolName = toolNameRaw.trim();
+	if (!serverName || !toolName) return;
+	result.add(buildToolVisibilityKey(serverName, toolName));
+}
+
+function parseDisabledToolList(value: string[]): Set<string> {
 	const result = new Set<string>();
-	if (!value) return result;
-
-	if (Array.isArray(value)) {
-		for (const item of value) {
-			if (typeof item !== "string") continue;
-			const separatorIndex = item.indexOf("/");
-			if (separatorIndex <= 0 || separatorIndex >= item.length - 1) continue;
-			const serverName = item.slice(0, separatorIndex).trim();
-			const toolName = item.slice(separatorIndex + 1).trim();
-			if (!serverName || !toolName) continue;
-			result.add(buildToolVisibilityKey(serverName, toolName));
-		}
-		return result;
+	for (const item of value) {
+		if (typeof item !== "string") continue;
+		const separatorIndex = item.indexOf("/");
+		if (separatorIndex <= 0 || separatorIndex >= item.length - 1) continue;
+		addDisabledToolKey(result, item.slice(0, separatorIndex), item.slice(separatorIndex + 1));
 	}
+	return result;
+}
 
-	if (typeof value !== "object") return result;
-
-	for (const [serverNameRaw, tools] of Object.entries(value as Record<string, unknown>)) {
-		const serverName = serverNameRaw.trim();
-		if (!serverName || !Array.isArray(tools)) continue;
+function parseDisabledToolMap(value: Record<string, unknown>): Set<string> {
+	const result = new Set<string>();
+	for (const [serverNameRaw, tools] of Object.entries(value)) {
+		if (!Array.isArray(tools)) continue;
 		for (const toolNameRaw of tools) {
 			if (typeof toolNameRaw !== "string") continue;
-			const toolName = toolNameRaw.trim();
-			if (!toolName) continue;
-			result.add(buildToolVisibilityKey(serverName, toolName));
+			addDisabledToolKey(result, serverNameRaw, toolNameRaw);
 		}
 	}
-
 	return result;
+}
+
+function parseDisabledToolKeys(value: unknown): Set<string> {
+	if (!value) return new Set<string>();
+	if (Array.isArray(value)) return parseDisabledToolList(value);
+	if (typeof value !== "object") return new Set<string>();
+	return parseDisabledToolMap(value as Record<string, unknown>);
 }
 
 function loadToolVisibilitySettings(
@@ -831,6 +835,90 @@ function createParameterSchema(inputSchema: Record<string, unknown>): ReturnType
 	}
 
 	return Type.Object(properties, { additionalProperties: true });
+}
+
+function summarizeToolCallArgs(args: Record<string, unknown>, theme: Theme): string {
+	const entries = Object.entries(args).filter(([, value]) => value !== undefined && value !== null);
+	if (entries.length === 0) return "";
+
+	const firstEntry = entries[0];
+	if (!firstEntry) return "";
+
+	const [, firstVal] = firstEntry;
+	const str = typeof firstVal === "string" ? firstVal : JSON.stringify(firstVal);
+	const display = str.length > 80 ? `${str.slice(0, 77)}…` : str;
+	const extraCount = entries.length > 1 ? theme.fg("muted", ` +${entries.length - 1}`) : "";
+	return ` ${theme.fg("accent", display)}${extraCount}`;
+}
+
+function renderMcpToolCall(serverName: string, toolName: string, args: unknown, theme: Theme): Text {
+	const label = `${serverName}/${toolName}`;
+	const params = args as Record<string, unknown>;
+	const argText = summarizeToolCallArgs(params, theme);
+	return new Text(`${theme.fg("toolTitle", theme.bold(label))}${argText}`, 0, 0);
+}
+
+function buildMcpToolResultContent(
+	formatted: FormattedToolResult,
+	prepared: PreparedPayload,
+): Array<{ type: "text"; text: string }> {
+	const content: Array<{ type: "text"; text: string }> = [{ type: "text", text: prepared.text }];
+	for (const imgPath of formatted.imagePaths) {
+		content.push({ type: "text", text: `📎 Use Read tool to view: ${imgPath}` });
+	}
+	if (prepared.fullPayloadPath) {
+		content.push({ type: "text", text: `📄 Full payload file: ${prepared.fullPayloadPath}` });
+	}
+	return content;
+}
+
+type ReloadableContext = ExtensionContext & { reload: () => Promise<void> };
+
+async function executeMcpToolCall(args: {
+	manager: McpManager;
+	serverName: string;
+	tool: DiscoveredTool;
+	params: Record<string, unknown>;
+	signal?: AbortSignal;
+	isToolDisabled: (serverName: string, toolName: string) => boolean;
+}) {
+	const { manager, serverName, tool, params, signal, isToolDisabled } = args;
+	if (signal?.aborted) {
+		return {
+			content: [{ type: "text" as const, text: "Cancelled" }],
+			details: { server: serverName, tool: tool.name, cancelled: true },
+		};
+	}
+	if (isToolDisabled(serverName, tool.name)) {
+		return {
+			content: [{ type: "text" as const, text: "This MCP tool is disabled. Open /mcp-status → Tools to enable it." }],
+			details: { server: serverName, tool: tool.name, disabled: true, isError: true },
+		};
+	}
+
+	try {
+		const result = await manager.callTool(serverName, tool.name, params);
+		const formatted = formatToolResult(result);
+		const prepared = preparePayloadForClient(formatted.text, serverName, tool.name);
+		return {
+			content: buildMcpToolResultContent(formatted, prepared),
+			details: {
+				server: serverName,
+				tool: tool.name,
+				raw: prepared.truncated ? undefined : result,
+				payloadTruncated: prepared.truncated,
+				payloadOriginalLength: prepared.originalLength,
+				payloadFilePath: prepared.fullPayloadPath,
+				isError: Boolean((result as { isError?: boolean })?.isError),
+			},
+		};
+	} catch (error) {
+		const message = error instanceof Error ? error.message : String(error);
+		return {
+			content: [{ type: "text" as const, text: `MCP error: ${message}` }],
+			details: { server: serverName, tool: tool.name, error: message, isError: true },
+		};
+	}
 }
 
 // ── Overlay shared helpers ────────────────────────────────────
@@ -1257,6 +1345,128 @@ export default async function claudeMcpBridge(pi: ExtensionAPI) {
 		return { ok: true, disabled: nextDisabled };
 	}
 
+	function notifyStatusSummary(ctx: ExtensionContext): void {
+		const states = manager.getStates();
+		const summary = states.map((s) => `${s.name}=${s.status}${s.toolCount > 0 ? `(${s.toolCount})` : ""}`).join(", ");
+		const sourceText = manager.sourcePath ? ` | source: ${manager.sourcePath}` : "";
+		const disabledCount = manager
+			.getAllTools()
+			.filter(({ serverName, tool }) => isToolDisabled(serverName, tool.name)).length;
+		const disabledText = disabledCount > 0 ? ` | disabled tools: ${disabledCount}` : "";
+		ctx.ui.notify(`MCP: ${summary}${sourceText}${disabledText}`, "info");
+	}
+
+	function handleToolToggle(
+		ctx: ExtensionContext,
+		serverName: string,
+		toolName: string,
+		setReloadNeeded: (value: boolean) => void,
+	): void {
+		const toggled = toggleToolDisabled(serverName, toolName);
+		if (!toggled.ok) {
+			ctx.ui.notify(`Failed to save MCP tool settings: ${toggled.error}`, "warning");
+			return;
+		}
+
+		registerDiscoveredTools();
+		removeDisabledToolsFromActiveSet();
+
+		const piToolName = buildPiToolName(serverName, toolName);
+		if (toggled.disabled) {
+			if (registeredTools.has(piToolName)) {
+				setReloadNeeded(true);
+			}
+			setToolActive(piToolName, false);
+			ctx.ui.notify(`${piToolName}: disabled`, "info");
+			return;
+		}
+
+		if (registeredTools.has(piToolName)) {
+			setToolActive(piToolName, true);
+			ctx.ui.notify(`${piToolName}: enabled`, "info");
+			return;
+		}
+		ctx.ui.notify(`${piToolName}: enabled (connect or reload to register)`, "warning");
+	}
+
+	async function showToolOverlay(
+		ctx: ExtensionContext,
+		serverName: string,
+		setReloadNeeded: (value: boolean) => void,
+	): Promise<void> {
+		const tools = manager.getServerTools(serverName);
+		await ctx.ui.custom<null>(
+			(tui, theme, _kb, done) =>
+				new McpToolListOverlay(
+					tui,
+					theme,
+					() => done(null),
+					serverName,
+					tools,
+					(toolName) => isToolDisabled(serverName, toolName),
+					(toolName) => handleToolToggle(ctx, serverName, toolName, setReloadNeeded),
+				),
+			{ overlay: true, overlayOptions: { anchor: "center", width: "80%", minWidth: 50, maxHeight: "80%" } },
+		);
+	}
+
+	async function reconnectSelectedServer(ctx: ExtensionContext, serverName: string): Promise<void> {
+		await manager.reconnectServer(serverName);
+		registerDiscoveredTools();
+		removeDisabledToolsFromActiveSet();
+		updateStatus(ctx);
+		const updated = manager.getStates().find((s) => s.name === serverName);
+		if (updated?.status === "connected") {
+			ctx.ui.notify(`${serverName}: reconnected (${updated.toolCount} tools)`, "info");
+			return;
+		}
+		ctx.ui.notify(
+			`${serverName}: ${updated?.status ?? "unknown"}${updated?.error ? ` – ${updated.error}` : ""}`,
+			"warning",
+		);
+	}
+
+	async function openMcpStatusOverlay(ctx: ReloadableContext, disabledAtCommandStart: Set<string>): Promise<void> {
+		let shouldReloadForVisibility = false;
+		const setReloadNeeded = (value: boolean) => {
+			if (value) shouldReloadForVisibility = true;
+		};
+
+		serverList: while (true) {
+			const freshStates = manager.getStates();
+			const serverName = await ctx.ui.custom<string | null>(
+				(tui, theme, _kb, done) =>
+					new McpStatusOverlay(tui, theme, done, freshStates, manager.sourcePath, getOverlayWarnings()),
+				{ overlay: true, overlayOptions: { anchor: "center", width: "80%", minWidth: 50, maxHeight: "80%" } },
+			);
+			if (!serverName) break;
+
+			while (true) {
+				const serverState = manager.getStates().find((s) => s.name === serverName);
+				if (!serverState) break;
+
+				const action = await ctx.ui.custom<ServerAction | null>(
+					(tui, theme, _kb, done) => new McpActionOverlay(tui, theme, done, serverState),
+					{ overlay: true, overlayOptions: { anchor: "center", width: "80%", minWidth: 50, maxHeight: "80%" } },
+				);
+				if (action === "tools") {
+					await showToolOverlay(ctx, serverName, setReloadNeeded);
+					continue;
+				}
+				if (action === "reconnect") {
+					await reconnectSelectedServer(ctx, serverName);
+					continue serverList;
+				}
+				continue serverList;
+			}
+		}
+
+		if (shouldReloadForVisibility || hasNewlyDisabledTools(disabledAtCommandStart, disabledToolKeys)) {
+			ctx.ui.notify("Reloading runtime to hide disabled MCP tools...", "info");
+			await ctx.reload();
+		}
+	}
+
 	function registerDiscoveredTools(): void {
 		for (const { serverName, tool } of manager.getAllTools()) {
 			if (isToolDisabled(serverName, tool.name)) continue;
@@ -1271,24 +1481,7 @@ export default async function claudeMcpBridge(pi: ExtensionAPI) {
 				parameters: createParameterSchema(tool.inputSchema),
 
 				renderCall(args, theme) {
-					const label = `${serverName}/${tool.name}`;
-					const params = args as Record<string, unknown>;
-					const entries = Object.entries(params).filter(([, v]) => v !== undefined && v !== null);
-
-					let argText = "";
-					if (entries.length > 0) {
-						const firstEntry = entries[0];
-						if (firstEntry) {
-							const [, firstVal] = firstEntry;
-							const str = typeof firstVal === "string" ? firstVal : JSON.stringify(firstVal);
-							const display = str.length > 80 ? `${str.slice(0, 77)}…` : str;
-							argText = ` ${theme.fg("accent", display)}`;
-						}
-						if (entries.length > 1) {
-							argText += theme.fg("muted", ` +${entries.length - 1}`);
-						}
-					}
-					return new Text(`${theme.fg("toolTitle", theme.bold(label))}${argText}`, 0, 0);
+					return renderMcpToolCall(serverName, tool.name, args, theme);
 				},
 
 				renderResult(result, { expanded }, theme) {
@@ -1310,59 +1503,18 @@ export default async function claudeMcpBridge(pi: ExtensionAPI) {
 				},
 
 				async execute(_toolCallId, params, signal, onUpdate, _ctx) {
-					if (signal?.aborted) {
-						return {
-							content: [{ type: "text" as const, text: "Cancelled" }],
-							details: { server: serverName, tool: tool.name, cancelled: true },
-						};
-					}
-
-					if (isToolDisabled(serverName, tool.name)) {
-						return {
-							content: [
-								{ type: "text" as const, text: "This MCP tool is disabled. Open /mcp-status → Tools to enable it." },
-							],
-							details: { server: serverName, tool: tool.name, disabled: true, isError: true },
-						};
-					}
-
 					onUpdate?.({
 						content: [{ type: "text" as const, text: `Calling MCP ${serverName}/${tool.name}...` }],
 						details: { server: serverName, tool: tool.name, status: "running" },
 					});
-
-					try {
-						const result = await manager.callTool(serverName, tool.name, params as Record<string, unknown>);
-						const formatted = formatToolResult(result);
-						const prepared = preparePayloadForClient(formatted.text, serverName, tool.name);
-
-						const content: Array<{ type: "text"; text: string }> = [{ type: "text", text: prepared.text }];
-						for (const imgPath of formatted.imagePaths) {
-							content.push({ type: "text", text: `📎 Use Read tool to view: ${imgPath}` });
-						}
-						if (prepared.fullPayloadPath) {
-							content.push({ type: "text", text: `📄 Full payload file: ${prepared.fullPayloadPath}` });
-						}
-
-						return {
-							content,
-							details: {
-								server: serverName,
-								tool: tool.name,
-								raw: prepared.truncated ? undefined : result,
-								payloadTruncated: prepared.truncated,
-								payloadOriginalLength: prepared.originalLength,
-								payloadFilePath: prepared.fullPayloadPath,
-								isError: Boolean((result as { isError?: boolean })?.isError),
-							},
-						};
-					} catch (error) {
-						const message = error instanceof Error ? error.message : String(error);
-						return {
-							content: [{ type: "text" as const, text: `MCP error: ${message}` }],
-							details: { server: serverName, tool: tool.name, error: message, isError: true },
-						};
-					}
+					return executeMcpToolCall({
+						manager,
+						serverName,
+						tool,
+						params: params as Record<string, unknown>,
+						signal,
+						isToolDisabled,
+					});
 				},
 			});
 
@@ -1404,112 +1556,11 @@ export default async function claudeMcpBridge(pi: ExtensionAPI) {
 			}
 
 			const disabledAtCommandStart = new Set(disabledToolKeys);
-			let shouldReloadForVisibility = false;
-
 			if (!ctx.hasUI) {
-				const states = manager.getStates();
-				const summary = states
-					.map((s) => `${s.name}=${s.status}${s.toolCount > 0 ? `(${s.toolCount})` : ""}`)
-					.join(", ");
-				const sourceText = manager.sourcePath ? ` | source: ${manager.sourcePath}` : "";
-				const disabledCount = manager
-					.getAllTools()
-					.filter(({ serverName, tool }) => isToolDisabled(serverName, tool.name)).length;
-				const disabledText = disabledCount > 0 ? ` | disabled tools: ${disabledCount}` : "";
-				ctx.ui.notify(`MCP: ${summary}${sourceText}${disabledText}`, "info");
+				notifyStatusSummary(ctx);
 				return;
 			}
-
-			// Loop: server list → action menu → sub-view, then back
-			serverList: while (true) {
-				const freshStates = manager.getStates();
-				const serverName = await ctx.ui.custom<string | null>(
-					(tui, theme, _kb, done) =>
-						new McpStatusOverlay(tui, theme, done, freshStates, manager.sourcePath, getOverlayWarnings()),
-					{ overlay: true, overlayOptions: { anchor: "center", width: "80%", minWidth: 50, maxHeight: "80%" } },
-				);
-				if (!serverName) break;
-
-				// Action menu for selected server
-				while (true) {
-					const serverState = manager.getStates().find((s) => s.name === serverName);
-					if (!serverState) break;
-
-					const action = await ctx.ui.custom<ServerAction | null>(
-						(tui, theme, _kb, done) => new McpActionOverlay(tui, theme, done, serverState),
-						{ overlay: true, overlayOptions: { anchor: "center", width: "80%", minWidth: 50, maxHeight: "80%" } },
-					);
-
-					if (action === "tools") {
-						const tools = manager.getServerTools(serverName);
-						await ctx.ui.custom<null>(
-							(tui, theme, _kb, done) =>
-								new McpToolListOverlay(
-									tui,
-									theme,
-									() => done(null),
-									serverName,
-									tools,
-									(toolName) => isToolDisabled(serverName, toolName),
-									(toolName) => {
-										const toggled = toggleToolDisabled(serverName, toolName);
-										if (!toggled.ok) {
-											ctx.ui.notify(`Failed to save MCP tool settings: ${toggled.error}`, "warning");
-											return;
-										}
-
-										registerDiscoveredTools();
-										removeDisabledToolsFromActiveSet();
-
-										const piToolName = buildPiToolName(serverName, toolName);
-										if (toggled.disabled) {
-											if (registeredTools.has(piToolName)) {
-												shouldReloadForVisibility = true;
-											}
-											setToolActive(piToolName, false);
-											ctx.ui.notify(`${piToolName}: disabled`, "info");
-											return;
-										}
-
-										if (registeredTools.has(piToolName)) {
-											setToolActive(piToolName, true);
-											ctx.ui.notify(`${piToolName}: enabled`, "info");
-										} else {
-											ctx.ui.notify(`${piToolName}: enabled (connect or reload to register)`, "warning");
-										}
-									},
-								),
-							{ overlay: true, overlayOptions: { anchor: "center", width: "80%", minWidth: 50, maxHeight: "80%" } },
-						);
-						continue;
-					}
-
-					if (action === "reconnect") {
-						await manager.reconnectServer(serverName);
-						registerDiscoveredTools();
-						removeDisabledToolsFromActiveSet();
-						updateStatus(ctx);
-						const updated = manager.getStates().find((s) => s.name === serverName);
-						if (updated?.status === "connected") {
-							ctx.ui.notify(`${serverName}: reconnected (${updated.toolCount} tools)`, "info");
-						} else {
-							ctx.ui.notify(
-								`${serverName}: ${updated?.status ?? "unknown"}${updated?.error ? ` – ${updated.error}` : ""}`,
-								"warning",
-							);
-						}
-						continue serverList;
-					}
-
-					// null (ESC) → back to server list
-					continue serverList;
-				}
-			}
-
-			if (shouldReloadForVisibility || hasNewlyDisabledTools(disabledAtCommandStart, disabledToolKeys)) {
-				ctx.ui.notify("Reloading runtime to hide disabled MCP tools...", "info");
-				await ctx.reload();
-			}
+			await openMcpStatusOverlay(ctx as ReloadableContext, disabledAtCommandStart);
 		},
 	});
 

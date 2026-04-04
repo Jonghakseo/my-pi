@@ -63,6 +63,7 @@ const LINUX_BROWSER_CONFIGS: BrowserConfig[] = [
 	{ name: "Chrome", baseDir: ".config/google-chrome", secretToolApp: "chrome" },
 ];
 
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: cookie discovery and decryption must preserve the browser fallback flow.
 export async function getGoogleCookies(options?: {
 	profile?: string;
 	requiredCookies?: string[];

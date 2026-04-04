@@ -196,6 +196,7 @@ function parseRunTarget(
 	return { runId };
 }
 
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: CLI parsing intentionally centralizes validation branches to preserve exact error messages.
 function parseRunLike(
 	verb: "run" | "continue",
 	args: string[],
@@ -301,6 +302,7 @@ function parseRunLike(
 	return { params };
 }
 
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: batch/chain parsing keeps block-order validation in one place to preserve the CLI contract.
 function parseBatchOrChain(
 	verb: "batch" | "chain",
 	args: string[],

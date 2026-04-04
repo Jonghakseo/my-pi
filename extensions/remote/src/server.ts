@@ -110,96 +110,166 @@ async function handleRequest(
 		return;
 	}
 
-	if (method === "GET" && pathname === "/api/info") {
-		if (options.mode === "lan" && !(await httpAuthMiddleware(req, res))) return;
-		respondJson(res, 200, {
-			url: currentPublicUrl ?? buildBaseUrl(options, actualPort),
-			mode: options.mode,
-			hasTailscale: options.mode !== "lan",
-			reason: options.reason,
-			pinMayRotate: options.mode !== "lan",
-			pinLength: options.mode === "lan" ? undefined : options.mode === "funnel" ? 8 : 6,
-			token: options.mode === "lan" ? getLanToken() : undefined,
-		});
+	if (await handleApiRequest(req, res, options, actualPort, pathname, method)) {
 		return;
+	}
+
+	if (!(await shouldHandleStaticRequest(req, res, pathname, method, options.mode))) {
+		return;
+	}
+
+	serveStaticRequest(res, webDir, pathname, method);
+}
+
+async function handleApiRequest(
+	req: IncomingMessage,
+	res: ServerResponse,
+	options: ServerOptions,
+	actualPort: number,
+	pathname: string,
+	method: string,
+): Promise<boolean> {
+	if (method === "GET" && pathname === "/api/info") {
+		await handleInfoRequest(req, res, options, actualPort);
+		return true;
 	}
 
 	if (method === "POST" && pathname === "/api/auth") {
 		await handleAuthRequest(req, res);
-		return;
+		return true;
 	}
 
 	if (pathname === "/api/sessions") {
-		if (!(await httpAuthMiddleware(req, res))) return;
-
-		if (method === "GET") {
-			respondJson(res, 200, { sessions: options.sessions.list() });
-			return;
-		}
-
-		if (method === "POST") {
-			const body = (await readJsonBody(req)) as Record<string, unknown> | null;
-			if (body === null) {
-				respondJson(res, 400, { error: "Invalid or oversized request body" });
-				return;
-			}
-			try {
-				const session = options.sessions.create({
-					name: typeof body?.name === "string" ? body.name : undefined,
-					cols: typeof body?.cols === "number" ? body.cols : undefined,
-					rows: typeof body?.rows === "number" ? body.rows : undefined,
-					fromSessionId: typeof body?.fromSessionId === "string" ? body.fromSessionId : undefined,
-					sessionFile: typeof body?.sessionFile === "string" ? body.sessionFile : undefined,
-					cwd: typeof body?.cwd === "string" ? body.cwd : undefined,
-				});
-				respondJson(res, 201, { session: session.getState() });
-			} catch (error) {
-				respondJson(res, 400, { error: error instanceof Error ? error.message : "session_create_failed" });
-			}
-			return;
-		}
-
-		res.writeHead(405);
-		res.end("Method Not Allowed");
-		return;
+		await handleSessionsRequest(req, res, options, method);
+		return true;
 	}
 
 	const sessionDeleteMatch = pathname.match(/^\/api\/sessions\/([^/]+)$/);
-	if (sessionDeleteMatch) {
-		if (!(await httpAuthMiddleware(req, res))) return;
+	if (!sessionDeleteMatch) {
+		return false;
+	}
 
-		if (method !== "DELETE") {
-			res.writeHead(405);
-			res.end("Method Not Allowed");
-			return;
-		}
+	await handleSessionDeleteRequest(req, res, options, method, sessionDeleteMatch[1]);
+	return true;
+}
 
-		const sessionId = decodeURIComponent(sessionDeleteMatch[1]);
-		const deleteTarget = options.sessions.get(sessionId);
-		if (!deleteTarget) {
-			respondJson(res, 404, { error: "session_not_found" });
-			return;
-		}
-		if (deleteTarget.getState().attachLocal) {
-			respondJson(res, 403, { error: "cannot_kill_local_session" });
-			return;
-		}
-
-		options.sessions.kill(sessionId);
-		respondJson(res, 200, { ok: true, sessionId });
+async function handleInfoRequest(
+	req: IncomingMessage,
+	res: ServerResponse,
+	options: ServerOptions,
+	actualPort: number,
+): Promise<void> {
+	if (options.mode === "lan" && !(await httpAuthMiddleware(req, res))) {
 		return;
 	}
 
+	respondJson(res, 200, {
+		url: currentPublicUrl ?? buildBaseUrl(options, actualPort),
+		mode: options.mode,
+		hasTailscale: options.mode !== "lan",
+		reason: options.reason,
+		pinMayRotate: options.mode !== "lan",
+		pinLength: options.mode === "lan" ? undefined : options.mode === "funnel" ? 8 : 6,
+		token: options.mode === "lan" ? getLanToken() : undefined,
+	});
+}
+
+async function handleSessionsRequest(
+	req: IncomingMessage,
+	res: ServerResponse,
+	options: ServerOptions,
+	method: string,
+): Promise<void> {
+	if (!(await httpAuthMiddleware(req, res))) {
+		return;
+	}
+
+	if (method === "GET") {
+		respondJson(res, 200, { sessions: options.sessions.list() });
+		return;
+	}
+
+	if (method === "POST") {
+		await handleSessionCreateRequest(req, res, options);
+		return;
+	}
+
+	respondMethodNotAllowed(res);
+}
+
+async function handleSessionCreateRequest(
+	req: IncomingMessage,
+	res: ServerResponse,
+	options: ServerOptions,
+): Promise<void> {
+	const body = (await readJsonBody(req)) as Record<string, unknown> | null;
+	if (body === null) {
+		respondJson(res, 400, { error: "Invalid or oversized request body" });
+		return;
+	}
+
+	try {
+		const session = options.sessions.create({
+			name: typeof body.name === "string" ? body.name : undefined,
+			cols: typeof body.cols === "number" ? body.cols : undefined,
+			rows: typeof body.rows === "number" ? body.rows : undefined,
+			fromSessionId: typeof body.fromSessionId === "string" ? body.fromSessionId : undefined,
+			sessionFile: typeof body.sessionFile === "string" ? body.sessionFile : undefined,
+			cwd: typeof body.cwd === "string" ? body.cwd : undefined,
+		});
+		respondJson(res, 201, { session: session.getState() });
+	} catch (error) {
+		respondJson(res, 400, { error: error instanceof Error ? error.message : "session_create_failed" });
+	}
+}
+
+async function handleSessionDeleteRequest(
+	req: IncomingMessage,
+	res: ServerResponse,
+	options: ServerOptions,
+	method: string,
+	rawSessionId: string,
+): Promise<void> {
+	if (!(await httpAuthMiddleware(req, res))) {
+		return;
+	}
+
+	if (method !== "DELETE") {
+		respondMethodNotAllowed(res);
+		return;
+	}
+
+	const sessionId = decodeURIComponent(rawSessionId);
+	const deleteTarget = options.sessions.get(sessionId);
+	if (!deleteTarget) {
+		respondJson(res, 404, { error: "session_not_found" });
+		return;
+	}
+	if (deleteTarget.getState().attachLocal) {
+		respondJson(res, 403, { error: "cannot_kill_local_session" });
+		return;
+	}
+
+	options.sessions.kill(sessionId);
+	respondJson(res, 200, { ok: true, sessionId });
+}
+
+async function shouldHandleStaticRequest(
+	req: IncomingMessage,
+	res: ServerResponse,
+	pathname: string,
+	method: string,
+	mode: ServerMode,
+): Promise<boolean> {
 	if (method !== "GET" && method !== "HEAD") {
-		res.writeHead(405);
-		res.end("Method Not Allowed");
-		return;
+		respondMethodNotAllowed(res);
+		return false;
 	}
 
-	if (!(await shouldAllowStaticRequest(req, res, pathname, options.mode))) {
-		return;
-	}
+	return shouldAllowStaticRequest(req, res, pathname, mode);
+}
 
+function serveStaticRequest(res: ServerResponse, webDir: string, pathname: string, method: string): void {
 	const resolved = resolveStaticPath(webDir, pathname);
 	if (resolved && existsSync(resolved) && statSync(resolved).isFile()) {
 		const content = readFileSync(resolved);
@@ -217,6 +287,11 @@ async function handleRequest(
 
 	res.writeHead(404);
 	res.end("Not Found");
+}
+
+function respondMethodNotAllowed(res: ServerResponse): void {
+	res.writeHead(405);
+	res.end("Method Not Allowed");
 }
 
 async function shouldAllowStaticRequest(

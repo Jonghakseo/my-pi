@@ -59,6 +59,7 @@ export function renderSubagentToolCall(args: ToolRenderArgs, theme: RenderTheme)
 
 // ─── renderResult ────────────────────────────────────────────────────────────
 
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: renderer preserves expanded/collapsed parity while handling error, tool-call, and markdown states.
 export function renderSubagentToolResult(
 	result: ToolRenderResult,
 	{ expanded }: { expanded: boolean },

@@ -1,6 +1,30 @@
+import type { Theme } from "@mariozechner/pi-coding-agent";
+import type { TUI } from "@mariozechner/pi-tui";
 import { truncateToWidth, visibleWidth } from "@mariozechner/pi-tui";
 import type { ShellSessionManager } from "./session-manager.js";
 import { formatDuration } from "./types.js";
+
+function renderSessionLines(sessions: ReturnType<ShellSessionManager["list"]>, cols: number, theme: Theme): string[] {
+	const lines: string[] = [];
+	for (const s of sessions) {
+		const exited = s.session.exited;
+		const dot = exited ? theme.fg("dim", "○") : theme.fg("accent", "●");
+		const id = theme.fg("dim", s.id);
+		const cmd = s.command.replace(/\s+/g, " ").trim();
+		const truncCmd = cmd.length > 60 ? `${cmd.slice(0, 57)}...` : cmd;
+		const reason = s.reason ? theme.fg("dim", ` · ${s.reason}`) : "";
+		const status = exited ? theme.fg("dim", "exited") : theme.fg("success", "running");
+		const duration = theme.fg("dim", formatDuration(Date.now() - s.startedAt.getTime()));
+		const oneLine = ` ${dot} ${id}  ${truncCmd}${reason}  ${status} ${duration}`;
+		if (visibleWidth(oneLine) <= cols) {
+			lines.push(oneLine);
+			continue;
+		}
+		lines.push(truncateToWidth(` ${dot} ${id}  ${cmd}`, cols, "…"));
+		lines.push(truncateToWidth(`   ${status} ${duration}${reason}`, cols, "…"));
+	}
+	return lines;
+}
 
 export function setupBackgroundWidget(
 	// biome-ignore lint/complexity/noBannedTypes: overloaded pi API
@@ -31,32 +55,14 @@ export function setupBackgroundWidget(
 
 	ctx.ui.setWidget(
 		"bg-sessions",
-		(tui: any, theme: any) => {
+		(tui: TUI, theme: Theme) => {
 			tuiRef = tui;
 			return {
 				render: (width: number) => {
 					const sessions = sessionManager.list();
 					if (sessions.length === 0) return [];
 					const cols = width || tui.terminal?.columns || 120;
-					const lines: string[] = [];
-					for (const s of sessions) {
-						const exited = s.session.exited;
-						const dot = exited ? theme.fg("dim", "○") : theme.fg("accent", "●");
-						const id = theme.fg("dim", s.id);
-						const cmd = s.command.replace(/\s+/g, " ").trim();
-						const truncCmd = cmd.length > 60 ? `${cmd.slice(0, 57)}...` : cmd;
-						const reason = s.reason ? theme.fg("dim", ` · ${s.reason}`) : "";
-						const status = exited ? theme.fg("dim", "exited") : theme.fg("success", "running");
-						const duration = theme.fg("dim", formatDuration(Date.now() - s.startedAt.getTime()));
-						const oneLine = ` ${dot} ${id}  ${truncCmd}${reason}  ${status} ${duration}`;
-						if (visibleWidth(oneLine) <= cols) {
-							lines.push(oneLine);
-						} else {
-							lines.push(truncateToWidth(` ${dot} ${id}  ${cmd}`, cols, "…"));
-							lines.push(truncateToWidth(`   ${status} ${duration}${reason}`, cols, "…"));
-						}
-					}
-					return lines;
+					return renderSessionLines(sessions, cols, theme);
 				},
 				invalidate: () => {},
 			};

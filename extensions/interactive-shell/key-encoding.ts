@@ -153,6 +153,7 @@ function encodePaste(text: string, bracketed = true): string {
 }
 
 /** Parse a key token and return the escape sequence */
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: terminal modifier parsing intentionally supports multiple input syntaxes in one place
 function encodeKeyToken(token: string): string {
 	const normalized = token.trim().toLowerCase();
 	if (!normalized) return "";

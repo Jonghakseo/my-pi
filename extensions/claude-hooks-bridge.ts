@@ -273,72 +273,76 @@ function getLastAssistantMessage(ctx: ExtensionContext): string | undefined {
 	return undefined;
 }
 
+function mapAssistantTranscriptContent(content: Array<JsonRecord>): JsonRecord[] {
+	const mapped: JsonRecord[] = [];
+	for (const block of content) {
+		if (block.type === "text") {
+			mapped.push({ type: "text", text: block.text });
+			continue;
+		}
+		if (block.type === "toolCall") {
+			mapped.push({
+				type: "tool_use",
+				id: block.id,
+				name: block.name,
+				input: block.arguments,
+			});
+		}
+	}
+	return mapped;
+}
+
+function mapUserTranscriptContent(content: unknown): JsonRecord[] {
+	if (!Array.isArray(content)) return [];
+	const mapped: JsonRecord[] = [];
+	for (const block of content) {
+		if (block?.type === "text") {
+			mapped.push({ type: "text", text: block.text });
+		}
+	}
+	return mapped;
+}
+
+function mapTranscriptLine(message: { role: string; content: unknown; toolCallId?: string }): string | null {
+	if (message.role === "assistant") {
+		const mapped = Array.isArray(message.content)
+			? mapAssistantTranscriptContent(message.content as Array<JsonRecord>)
+			: [];
+		return mapped.length > 0 ? JSON.stringify({ type: "assistant", message: { content: mapped } }) : null;
+	}
+
+	if (message.role === "user") {
+		const mapped = mapUserTranscriptContent(message.content);
+		return mapped.length > 0 ? JSON.stringify({ type: "user", message: { content: mapped } }) : null;
+	}
+
+	if (message.role !== "toolResult") {
+		return null;
+	}
+
+	const text = extractTextFromBlocks(message.content);
+	return JSON.stringify({
+		type: "user",
+		message: {
+			content: [
+				{
+					type: "tool_result",
+					tool_use_id: message.toolCallId,
+					content: [{ type: "text", text }],
+				},
+			],
+		},
+	});
+}
+
 function toClaudeTranscriptLines(ctx: ExtensionContext): string[] {
 	const lines: string[] = [];
 	const entries = ctx.sessionManager.getEntries();
 
 	for (const entry of entries) {
-		// SessionEntry is a discriminated union on `type`; narrowing to "message"
-		// gives SessionMessageEntry whose `message` field is AgentMessage.
 		if (!entry || entry.type !== "message") continue;
-		const { message } = entry;
-
-		if (message.role === "assistant") {
-			const mapped: JsonRecord[] = [];
-			for (const block of message.content) {
-				if (block.type === "text") {
-					mapped.push({ type: "text", text: block.text });
-					continue;
-				}
-				if (block.type === "toolCall") {
-					mapped.push({
-						type: "tool_use",
-						id: block.id,
-						name: block.name,
-						input: block.arguments,
-					});
-				}
-			}
-
-			if (mapped.length > 0) {
-				lines.push(JSON.stringify({ type: "assistant", message: { content: mapped } }));
-			}
-			continue;
-		}
-
-		if (message.role === "user") {
-			const mapped: JsonRecord[] = [];
-			if (Array.isArray(message.content)) {
-				for (const block of message.content) {
-					if (block.type === "text") {
-						mapped.push({ type: "text", text: block.text });
-					}
-				}
-			}
-			if (mapped.length > 0) {
-				lines.push(JSON.stringify({ type: "user", message: { content: mapped } }));
-			}
-			continue;
-		}
-
-		if (message.role === "toolResult") {
-			const toolUseId = message.toolCallId;
-			const text = extractTextFromBlocks(message.content);
-			lines.push(
-				JSON.stringify({
-					type: "user",
-					message: {
-						content: [
-							{
-								type: "tool_result",
-								tool_use_id: toolUseId,
-								content: [{ type: "text", text }],
-							},
-						],
-					},
-				}),
-			);
-		}
+		const line = mapTranscriptLine(entry.message as { role: string; content: unknown; toolCallId?: string });
+		if (line) lines.push(line);
 	}
 
 	return lines;
@@ -571,48 +575,51 @@ async function runHooks(
 	return results;
 }
 
+function notifyHookCount(ctx: ExtensionContext, settings: ClaudeSettings | null): void {
+	if (!settings || !ctx.hasUI) return;
+	const total = countHooks(settings);
+	if (total > 0) {
+		ctx.ui.notify(`[claude-hooks-bridge] loaded ${total} hook(s) from ${SETTINGS_REL_PATH}`, "info");
+	}
+}
+
+function trimHookOutput(text: string): string {
+	return text.length > 1200 ? `${text.slice(0, 1200)}...` : text;
+}
+
+function notifySessionStartHookResult(ctx: ExtensionContext, result: HookExecResult): void {
+	if (!ctx.hasUI) return;
+	const out = result.stdout.trim();
+	const err = result.stderr.trim();
+	if (out) {
+		ctx.ui.notify(`[claude-hooks-bridge:SessionStart]\n${trimHookOutput(out)}`, "info");
+	}
+	if (err) {
+		ctx.ui.notify(`[claude-hooks-bridge:SessionStart stderr]\n${trimHookOutput(err)}`, "warning");
+	}
+}
+
+async function handleSessionStart(event: { reason?: string }, ctx: ExtensionContext): Promise<void> {
+	pinnedHookSessionId = getSessionId(ctx);
+	const sessionId = pinnedHookSessionId;
+	stopHookActiveBySession.set(sessionId, false);
+	if (event.reason === "resume" || event.reason === "fork") return;
+
+	const loaded = loadSettings(ctx.cwd);
+	notifyOnceForParseError(ctx, loaded);
+	const settings = loaded.settings;
+	notifyHookCount(ctx, settings);
+	if (!settings) return;
+
+	const results = await runHooks(settings, "SessionStart", ctx, makeBasePayload("SessionStart", ctx));
+	for (const result of results) {
+		notifySessionStartHookResult(ctx, result);
+	}
+}
+
 export default function claudeHooksBridge(pi: ExtensionAPI) {
 	pi.on("session_start", async (event, ctx) => {
-		pinnedHookSessionId = getSessionId(ctx);
-		const sessionId = pinnedHookSessionId;
-		stopHookActiveBySession.set(sessionId, false);
-
-		// Only load settings & run SessionStart hooks on fresh starts, not resume/fork
-		if (event.reason === "resume" || event.reason === "fork") return;
-
-		const loaded = loadSettings(ctx.cwd);
-		notifyOnceForParseError(ctx, loaded);
-		const settings = loaded.settings;
-
-		if (settings && ctx.hasUI) {
-			const total = countHooks(settings);
-			if (total > 0) {
-				ctx.ui.notify(`[claude-hooks-bridge] loaded ${total} hook(s) from ${SETTINGS_REL_PATH}`, "info");
-			}
-		}
-
-		if (!settings) return;
-
-		const payload = makeBasePayload("SessionStart", ctx);
-		const results = await runHooks(settings, "SessionStart", ctx, payload);
-
-		if (!ctx.hasUI) return;
-		for (const result of results) {
-			const out = result.stdout.trim();
-			const err = result.stderr.trim();
-			if (out) {
-				ctx.ui.notify(
-					`[claude-hooks-bridge:SessionStart]\n${out.length > 1200 ? `${out.slice(0, 1200)}...` : out}`,
-					"info",
-				);
-			}
-			if (err) {
-				ctx.ui.notify(
-					`[claude-hooks-bridge:SessionStart stderr]\n${err.length > 1200 ? `${err.slice(0, 1200)}...` : err}`,
-					"warning",
-				);
-			}
-		}
+		await handleSessionStart(event, ctx);
 	});
 
 	pi.on("session_shutdown", async () => {

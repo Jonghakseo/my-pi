@@ -113,6 +113,7 @@ function truncateReplayContent(text: string, max = REPLAY_CONTENT_MAX_CHARS): st
 
 // ─── Public API ──────────────────────────────────────────────────────────────
 
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: replay loading must preserve role-specific extraction and malformed-line tolerance.
 export function readSessionReplayItems(sessionFile: string): SessionReplayItem[] {
 	if (!sessionFile || !fs.existsSync(sessionFile)) return [];
 
@@ -313,6 +314,7 @@ export class SubagentSessionReplayOverlay {
 		tui.requestRender();
 	}
 
+	// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: replay overlay render combines layout, selection, and detail panes in one TUI pass.
 	render(width: number, _height: number, theme: any): string[] {
 		const container = new Container();
 		const pad = "  ";

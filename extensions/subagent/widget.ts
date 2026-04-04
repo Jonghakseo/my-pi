@@ -144,6 +144,7 @@ export function updateCommandRunsWidget(store: SubagentStore, ctx?: WidgetRender
 				box.addChild(content);
 
 				return {
+					// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: widget rendering combines status, usage bar, idle state, and separators in one pass.
 					render(width: number): string[] {
 						const lines: string[] = [];
 						const innerWidth = Math.max(1, width - 2);

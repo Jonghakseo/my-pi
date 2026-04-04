@@ -311,57 +311,61 @@ const toCanonicalPathMaybeMissing = (
 	}
 };
 
-const collectSessionFileChanges = (entries: SessionEntry[], cwd: string): Map<string, SessionFileChange> => {
+const isFileToolName = (name: string): name is FileToolName => name === "write" || name === "edit";
+
+const collectSessionToolCalls = (entries: SessionEntry[]): Map<string, { path: string; name: FileToolName }> => {
 	const toolCalls = new Map<string, { path: string; name: FileToolName }>();
 
 	for (const entry of entries) {
-		if (entry.type !== "message") continue;
-		const msg = entry.message;
+		if (entry.type !== "message" || entry.message.role !== "assistant" || !Array.isArray(entry.message.content)) {
+			continue;
+		}
 
-		if (msg.role === "assistant" && Array.isArray(msg.content)) {
-			for (const block of msg.content) {
-				if (block.type === "toolCall") {
-					const name = block.name as FileToolName;
-					if (name === "write" || name === "edit") {
-						const filePath = block.arguments?.path;
-						if (filePath && typeof filePath === "string") {
-							toolCalls.set(block.id, { path: filePath, name });
-						}
-					}
-				}
+		for (const block of entry.message.content) {
+			if (block.type !== "toolCall" || !isFileToolName(block.name)) continue;
+			const filePath = block.arguments?.path;
+			if (typeof filePath === "string") {
+				toolCalls.set(block.id, { path: filePath, name: block.name });
 			}
 		}
 	}
 
+	return toolCalls;
+};
+
+const applySessionFileChange = (
+	fileMap: Map<string, SessionFileChange>,
+	canonicalPath: string,
+	name: FileToolName,
+	timestamp: number,
+): void => {
+	const existing = fileMap.get(canonicalPath);
+	if (existing) {
+		existing.operations.add(name);
+		existing.lastTimestamp = Math.max(existing.lastTimestamp, timestamp);
+		return;
+	}
+
+	fileMap.set(canonicalPath, {
+		operations: new Set([name]),
+		lastTimestamp: timestamp,
+	});
+};
+
+const collectSessionFileChanges = (entries: SessionEntry[], cwd: string): Map<string, SessionFileChange> => {
+	const toolCalls = collectSessionToolCalls(entries);
 	const fileMap = new Map<string, SessionFileChange>();
 
 	for (const entry of entries) {
-		if (entry.type !== "message") continue;
-		const msg = entry.message;
+		if (entry.type !== "message" || entry.message.role !== "toolResult") continue;
+		const toolCall = toolCalls.get(entry.message.toolCallId);
+		if (!toolCall) continue;
 
-		if (msg.role === "toolResult") {
-			const toolCall = toolCalls.get(msg.toolCallId);
-			if (!toolCall) continue;
+		const resolvedPath = path.isAbsolute(toolCall.path) ? toolCall.path : path.resolve(cwd, toolCall.path);
+		const canonical = toCanonicalPath(resolvedPath);
+		if (!canonical) continue;
 
-			const resolvedPath = path.isAbsolute(toolCall.path) ? toolCall.path : path.resolve(cwd, toolCall.path);
-			const canonical = toCanonicalPath(resolvedPath);
-			if (!canonical) {
-				continue;
-			}
-
-			const existing = fileMap.get(canonical.canonicalPath);
-			if (existing) {
-				existing.operations.add(toolCall.name);
-				if (msg.timestamp > existing.lastTimestamp) {
-					existing.lastTimestamp = msg.timestamp;
-				}
-			} else {
-				fileMap.set(canonical.canonicalPath, {
-					operations: new Set([toolCall.name]),
-					lastTimestamp: msg.timestamp,
-				});
-			}
-		}
+		applySessionFileChange(fileMap, canonical.canonicalPath, toolCall.name, entry.message.timestamp);
 	}
 
 	return fileMap;

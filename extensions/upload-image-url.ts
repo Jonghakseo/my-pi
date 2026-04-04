@@ -93,6 +93,89 @@ function inferExtension(url: string, contentType?: string): string {
 	return ".png";
 }
 
+function buildUploadError(text: string) {
+	return {
+		content: [{ type: "text" as const, text }],
+		details: undefined,
+		isError: true,
+	};
+}
+
+function validateUploadRequest(url: unknown) {
+	if (!STORAGE_OWNER || !STORAGE_REPO) {
+		return buildUploadError(
+			"PI_STORAGE_OWNER and PI_STORAGE_REPO environment variables are required. Set them to use image upload.",
+		);
+	}
+	if (typeof url !== "string") {
+		return buildUploadError("URL must be a string");
+	}
+	return null;
+}
+
+function readLocalImage(url: string): Buffer {
+	const resolved = path.resolve(url);
+	if (!fs.existsSync(resolved)) {
+		throw new Error(`File not found: ${resolved}`);
+	}
+	const ext = path.extname(resolved).toLowerCase();
+	if (!ALLOWED_EXTENSIONS.has(ext)) {
+		throw new Error(`Unsupported image type: ${ext}`);
+	}
+	return fs.readFileSync(resolved);
+}
+
+async function downloadRemoteImage(url: string): Promise<{ buffer: Buffer; ext: string }> {
+	const res = await fetch(url);
+	if (!res.ok) {
+		throw new Error(`Download failed: HTTP ${res.status} from ${url}`);
+	}
+	const contentType = res.headers.get("content-type") ?? "";
+	const ext = inferExtension(url, contentType);
+	if (!ALLOWED_EXTENSIONS.has(ext)) {
+		throw new Error(`Unsupported image type: ${ext}`);
+	}
+	return { buffer: Buffer.from(await res.arrayBuffer()), ext };
+}
+
+async function loadImageBuffer(url: string): Promise<{ buffer: Buffer; ext: string }> {
+	const isLocal = !url.startsWith("http://") && !url.startsWith("https://");
+	if (isLocal) {
+		const resolved = path.resolve(url);
+		return {
+			buffer: readLocalImage(url),
+			ext: path.extname(resolved).toLowerCase(),
+		};
+	}
+	return downloadRemoteImage(url);
+}
+
+function buildStoragePath(filename: string | undefined, ext: string): { name: string; storagePath: string } {
+	const name = sanitizeFilename(filename || randomUUID()) + ext;
+	const repoCtx = getRepoContext();
+	const prNumber = repoCtx ? getPrNumber() : null;
+	const folder = repoCtx
+		? prNumber
+			? `${repoCtx.owner}/${repoCtx.repo}/${prNumber}`
+			: `${repoCtx.owner}/${repoCtx.repo}/general`
+		: "general";
+	return { name, storagePath: `${folder}/${name}` };
+}
+
+function uploadImageContent(storagePath: string, buffer: Buffer): void {
+	const payload = JSON.stringify({
+		message: `upload: ${storagePath}`,
+		content: buffer.toString("base64"),
+		branch: STORAGE_BRANCH,
+	});
+
+	execFileSync(
+		"gh",
+		["api", "--method", "PUT", `repos/${STORAGE_OWNER}/${STORAGE_REPO}/contents/${storagePath}`, "--input", "-"],
+		{ encoding: "utf-8", input: payload, stdio: ["pipe", "pipe", "pipe"], maxBuffer: 50 * 1024 * 1024 },
+	);
+}
+
 export default function uploadImageUrl(pi: ExtensionAPI) {
 	pi.registerTool({
 		name: "upload_image_url",
@@ -109,102 +192,19 @@ export default function uploadImageUrl(pi: ExtensionAPI) {
 			),
 		}),
 		async execute(_toolCallId, params, _signal, _onUpdate, _ctx) {
-			if (!STORAGE_OWNER || !STORAGE_REPO) {
-				return {
-					content: [
-						{
-							type: "text",
-							text: "PI_STORAGE_OWNER and PI_STORAGE_REPO environment variables are required. Set them to use image upload.",
-						},
-					],
-					details: undefined,
-					isError: true,
-				};
+			const validationError = validateUploadRequest(params.url);
+			if (validationError) {
+				return validationError;
 			}
 
 			const { url, filename } = params;
-
-			// Validate url parameter is a string before calling string methods
-			if (typeof url !== "string") {
-				return {
-					content: [{ type: "text", text: "URL must be a string" }],
-					details: undefined,
-					isError: true,
-				};
-			}
-
-			const isLocal = !url.startsWith("http://") && !url.startsWith("https://");
-
 			try {
-				let buffer: Buffer;
-				let ext: string;
-
-				if (isLocal) {
-					const resolved = path.resolve(url);
-					if (!fs.existsSync(resolved)) {
-						return {
-							content: [{ type: "text", text: `File not found: ${resolved}` }],
-							details: undefined,
-							isError: true,
-						};
-					}
-					ext = path.extname(resolved).toLowerCase();
-					if (!ALLOWED_EXTENSIONS.has(ext)) {
-						return {
-							content: [{ type: "text", text: `Unsupported image type: ${ext}` }],
-							details: undefined,
-							isError: true,
-						};
-					}
-					buffer = fs.readFileSync(resolved);
-				} else {
-					const res = await fetch(url);
-					if (!res.ok) {
-						return {
-							content: [{ type: "text", text: `Download failed: HTTP ${res.status} from ${url}` }],
-							details: undefined,
-							isError: true,
-						};
-					}
-					const contentType = res.headers.get("content-type") ?? "";
-					ext = inferExtension(url, contentType);
-					if (!ALLOWED_EXTENSIONS.has(ext)) {
-						return {
-							content: [{ type: "text", text: `Unsupported image type: ${ext}` }],
-							details: undefined,
-							isError: true,
-						};
-					}
-					buffer = Buffer.from(await res.arrayBuffer());
-				}
-
-				// Build storage path: {owner}/{repo}/{prNumber}/{file} or general/{file}
-				const name = sanitizeFilename(filename || randomUUID()) + ext;
-				const repoCtx = getRepoContext();
-				const prNumber = repoCtx ? getPrNumber() : null;
-				const folder = repoCtx
-					? prNumber
-						? `${repoCtx.owner}/${repoCtx.repo}/${prNumber}`
-						: `${repoCtx.owner}/${repoCtx.repo}/general`
-					: "general";
-				const storagePath = `${folder}/${name}`;
-
-				// Upload via gh api — JSON body piped through stdin to avoid argv size limit (E2BIG)
-				const payload = JSON.stringify({
-					message: `upload: ${storagePath}`,
-					content: buffer.toString("base64"),
-					branch: STORAGE_BRANCH,
-				});
-
-				execFileSync(
-					"gh",
-					["api", "--method", "PUT", `repos/${STORAGE_OWNER}/${STORAGE_REPO}/contents/${storagePath}`, "--input", "-"],
-					{ encoding: "utf-8", input: payload, stdio: ["pipe", "pipe", "pipe"], maxBuffer: 50 * 1024 * 1024 },
-				);
+				const { buffer, ext } = await loadImageBuffer(url);
+				const { name, storagePath } = buildStoragePath(filename, ext);
+				uploadImageContent(storagePath, buffer);
 
 				const rawUrl = `https://github.com/${STORAGE_OWNER}/${STORAGE_REPO}/blob/${STORAGE_BRANCH}/${storagePath}?raw=true`;
 				const markdown = `![${name}](${rawUrl})`;
-
 				return {
 					content: [
 						{

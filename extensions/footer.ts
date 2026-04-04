@@ -24,6 +24,12 @@ type FooterTheme = {
 
 type StatusStyler = (theme: FooterTheme, text: string) => string;
 
+type FooterStatusData = {
+	getExtensionStatuses: () => ReadonlyMap<string, string>;
+	getGitBranch: () => string | null;
+	onBranchChange: (listener: () => void) => () => void;
+};
+
 const STATUS_STYLE_MAP: Record<string, StatusStyler> = {
 	[NAME_STATUS_KEY]: (theme, text) => {
 		const chip = ` ${theme.fg("text", text)} `;
@@ -67,6 +73,60 @@ async function hasUncommittedChanges(pi: ExtensionAPI, cwd: string): Promise<boo
 		return false;
 	}
 	return result.stdout.trim().length > 0;
+}
+
+function buildFooterStatusEntries(ctx: ExtensionContext, footerData: FooterStatusData) {
+	const statusEntries = Array.from(footerData.getExtensionStatuses().entries())
+		.filter(([key]) => key !== NAME_STATUS_KEY)
+		.map(([key, text]) => [key, sanitizeStatusText(text)] as const)
+		.filter(([, text]) => Boolean(text));
+	const sessionName = ctx.sessionManager.getSessionName();
+	if (sessionName) {
+		statusEntries.unshift([NAME_STATUS_KEY, formatNameStatus(sessionName)]);
+	}
+	return statusEntries;
+}
+
+function buildFooterLineParts(
+	theme: FooterTheme,
+	ctx: ExtensionContext,
+	footerData: FooterStatusData,
+	repoName: string | null,
+	hasDirtyChanges: boolean,
+	width: number,
+) {
+	const model = ctx.model?.id || "no-model";
+	const modelLabel = shouldUseCodexFastBadge(ctx.model?.provider, ctx.model?.id) ? `${model} ⚡` : model;
+	const usage = ctx.getContextUsage();
+	const pct = clamp(Math.round(usage?.percent ?? 0), 0, 100);
+	const filled = Math.round((pct / 100) * BAR_WIDTH);
+	const bar = "#".repeat(filled) + "-".repeat(BAR_WIDTH - filled);
+	const statusEntries = buildFooterStatusEntries(ctx, footerData);
+	const statusTexts = statusEntries.map(([, text]) => text);
+	const active = statusTexts.filter((s) => /research(ing)?/i.test(s)).length;
+	const done = statusTexts.filter((s) => /(^|\s)(done|✓)(\s|$)/i.test(s)).length;
+	const folder = getFolderName(ctx.sessionManager.getCwd());
+	const displayName = repoName || folder;
+	const branch = footerData.getGitBranch();
+	const branchText = branch ?? "no-branch";
+	const dirtyMark = branch && hasDirtyChanges ? theme.fg("warning", "*") : "";
+	const left =
+		theme.fg("dim", ` ${modelLabel}`) +
+		theme.fg("muted", " · ") +
+		theme.fg("accent", `${displayName} - `) +
+		dirtyMark +
+		theme.fg("accent", branchText);
+	const mid =
+		active > 0
+			? theme.fg("accent", ` ◉ ${active} researching`)
+			: done > 0
+				? theme.fg("success", ` ✓ ${done} done`)
+				: "";
+	const remaining = 100 - pct;
+	const barColor = remaining <= 15 ? "error" : remaining <= 40 ? "warning" : "dim";
+	const right = theme.fg(barColor, `[${bar}] ${pct}% `);
+	const pad = " ".repeat(Math.max(1, width - visibleWidth(left) - visibleWidth(mid) - visibleWidth(right)));
+	return { statusEntries, left, mid, right, pad };
 }
 
 function installFooter(pi: ExtensionAPI, ctx: ExtensionContext) {
@@ -137,60 +197,20 @@ function installFooter(pi: ExtensionAPI, ctx: ExtensionContext) {
 			},
 			invalidate() {},
 			render(width: number): string[] {
-				const model = ctx.model?.id || "no-model";
-				const modelLabel = shouldUseCodexFastBadge(ctx.model?.provider, ctx.model?.id) ? `${model} ⚡` : model;
-				const usage = ctx.getContextUsage();
-				const pct = clamp(Math.round(usage?.percent ?? 0), 0, 100);
-				const filled = Math.round((pct / 100) * BAR_WIDTH);
-				const bar = "#".repeat(filled) + "-".repeat(BAR_WIDTH - filled);
-
-				const sessionName = ctx.sessionManager.getSessionName();
-				const statusEntries = Array.from(footerData.getExtensionStatuses().entries())
-					.filter(([key]) => key !== NAME_STATUS_KEY)
-					.map(([key, text]) => [key, sanitizeStatusText(text)] as const)
-					.filter(([, text]) => Boolean(text));
-				if (sessionName) {
-					statusEntries.unshift([NAME_STATUS_KEY, formatNameStatus(sessionName)]);
-				}
-				const statusTexts = statusEntries.map(([, text]) => text);
-
-				const active = statusTexts.filter((s) => /research(ing)?/i.test(s)).length;
-				const done = statusTexts.filter((s) => /(^|\s)(done|✓)(\s|$)/i.test(s)).length;
-
-				const folder = getFolderName(ctx.sessionManager.getCwd());
-				const displayName = repoName || folder;
-				const branch = footerData.getGitBranch();
-				const branchText = branch ?? "no-branch";
-				const dirtyMark = branch && hasDirtyChanges ? theme.fg("warning", "*") : "";
-
-				const left =
-					theme.fg("dim", ` ${modelLabel}`) +
-					theme.fg("muted", " · ") +
-					theme.fg("accent", `${displayName} - `) +
-					dirtyMark +
-					theme.fg("accent", branchText);
-
-				const mid =
-					active > 0
-						? theme.fg("accent", ` ◉ ${active} researching`)
-						: done > 0
-							? theme.fg("success", ` ✓ ${done} done`)
-							: "";
-
-				const remaining = 100 - pct;
-				const barColor = remaining <= 15 ? "error" : remaining <= 40 ? "warning" : "dim";
-				const right = theme.fg(barColor, `[${bar}] ${pct}% `);
-				const pad = " ".repeat(Math.max(1, width - visibleWidth(left) - visibleWidth(mid) - visibleWidth(right)));
-
+				const { statusEntries, left, mid, right, pad } = buildFooterLineParts(
+					theme,
+					ctx,
+					footerData,
+					repoName,
+					hasDirtyChanges,
+					width,
+				);
 				const lines = [truncateToWidth(left + mid + pad + right, width)];
-
 				if (statusEntries.length > 0) {
 					const delimiter = theme.fg("dim", " · ");
 					const renderedStatuses = statusEntries.map(([key, text]) => styleStatus(theme, key, text));
-					const statusLine = truncateToWidth(` ${renderedStatuses.join(delimiter)}`, width);
-					lines.push(statusLine);
+					lines.push(truncateToWidth(` ${renderedStatuses.join(delimiter)}`, width));
 				}
-
 				return lines;
 			},
 		};

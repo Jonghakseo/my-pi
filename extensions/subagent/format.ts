@@ -71,6 +71,7 @@ function formatPathValueForPreview(value: unknown): string {
 	return text.startsWith(home) ? `~${text.slice(home.length)}` : text;
 }
 
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: preview formatting intentionally branches by tool to keep user-facing labels stable.
 export function formatToolCall(toolName: string, args: Record<string, unknown>, themeFg: ThemeFg): string {
 	const shortenPath = (value: unknown) => formatPathValueForPreview(value);
 
@@ -134,6 +135,7 @@ export function shortenPathForPreview(p: unknown): string {
 	return formatPathValueForPreview(p);
 }
 
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: plain preview formatting mirrors the themed formatter while preserving exact output strings.
 export function formatToolCallPlain(toolName: string, args: Record<string, unknown>): string {
 	switch (toolName) {
 		case "bash": {

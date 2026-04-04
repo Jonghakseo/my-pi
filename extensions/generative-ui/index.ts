@@ -31,6 +31,37 @@ export function shouldApplyFinalStreamingHTML(finalHTML: string | null, finalHTM
 	return Boolean(finalHTML) && !finalHTMLApplied;
 }
 
+interface StreamingWidget {
+	contentIndex: number;
+	window: GlimpseWindow | null;
+	lastHTML: string;
+	updateTimer: ReturnType<typeof setTimeout> | null;
+	ready: boolean;
+	finalHTML: string | null;
+	finalIsSVG: boolean;
+	finalHTMLApplied: boolean;
+}
+
+function createStreamingWidget(contentIndex: number): StreamingWidget {
+	return {
+		contentIndex,
+		window: null,
+		lastHTML: "",
+		updateTimer: null,
+		ready: false,
+		finalHTML: null,
+		finalIsSVG: false,
+		finalHTMLApplied: false,
+	};
+}
+
+function extractStreamingWidgetCode(
+	block: { type?: string; arguments?: Record<string, unknown> } | undefined,
+): string | undefined {
+	const widgetCode = block?.type === "toolCall" ? block.arguments?.widget_code : undefined;
+	return typeof widgetCode === "string" ? widgetCode : undefined;
+}
+
 export default function (pi: ExtensionAPI) {
 	let activeWindows: GlimpseWindow[] = [];
 	let glimpseModule: GlimpseModule | null = null;
@@ -48,107 +79,96 @@ export default function (pi: ExtensionAPI) {
 
 	// ── Streaming state ─────────────────────────────────────────────────────
 
-	// Tracks in-flight show_widget tool calls being streamed
-	interface StreamingWidget {
-		contentIndex: number;
-		window: GlimpseWindow | null;
-		lastHTML: string;
-		updateTimer: ReturnType<typeof setTimeout> | null;
-		ready: boolean;
-		finalHTML: string | null;
-		finalIsSVG: boolean;
-		finalHTMLApplied: boolean;
-	}
-
 	let streaming: StreamingWidget | null = null;
 
 	// ── message_update: intercept streaming tool calls ────────────────────
 
+	function sendStreamingHTML(currentStreaming: StreamingWidget): void {
+		if (currentStreaming.finalHTMLApplied || !currentStreaming.lastHTML) return;
+		const escaped = escapeJS(currentStreaming.lastHTML);
+		currentStreaming.window?.send(`window._setContent('${escaped}')`);
+	}
+
+	function applyFinalStreamingHTML(currentStreaming: StreamingWidget): boolean {
+		const finalHTML = currentStreaming.finalHTML;
+		if (!finalHTML || !shouldApplyFinalStreamingHTML(finalHTML, currentStreaming.finalHTMLApplied)) {
+			return false;
+		}
+		currentStreaming.finalHTMLApplied = true;
+		currentStreaming.window?.setHTML(wrapHTML(finalHTML, currentStreaming.finalIsSVG));
+		return true;
+	}
+
+	function attachStreamingWindowReadyHandler(currentStreaming: StreamingWidget): void {
+		currentStreaming.window?.on("ready", () => {
+			currentStreaming.ready = true;
+			if (!applyFinalStreamingHTML(currentStreaming)) {
+				sendStreamingHTML(currentStreaming);
+			}
+		});
+	}
+
+	async function ensureStreamingWindow(
+		currentStreaming: StreamingWidget,
+		block: { type?: string; arguments?: Record<string, unknown> } | undefined,
+	): Promise<void> {
+		if (currentStreaming.window) return;
+		const args = block?.type === "toolCall" ? (block.arguments ?? {}) : {};
+		const title = String(args.title ?? "Widget").replace(/_/g, " ");
+		const width = typeof args.width === "number" ? args.width : 800;
+		const height = typeof args.height === "number" ? args.height : 600;
+		const { open } = await getGlimpse();
+		currentStreaming.window = open(shellHTML(), { width, height, title });
+		activeWindows.push(currentStreaming.window);
+		attachStreamingWindowReadyHandler(currentStreaming);
+	}
+
+	function scheduleStreamingUpdate(
+		currentStreaming: StreamingWidget,
+		block: { type?: string; arguments?: Record<string, unknown> } | undefined,
+	): void {
+		if (currentStreaming.updateTimer) return;
+		currentStreaming.updateTimer = setTimeout(async () => {
+			currentStreaming.updateTimer = null;
+			try {
+				await ensureStreamingWindow(currentStreaming, block);
+				if (currentStreaming.ready) {
+					sendStreamingHTML(currentStreaming);
+				}
+			} catch {}
+		}, 150);
+	}
+
+	function finalizeStreamingWidget(widgetCode: string | undefined): void {
+		if (!streaming) return;
+		if (streaming.updateTimer) {
+			clearTimeout(streaming.updateTimer);
+			streaming.updateTimer = null;
+		}
+		if (!widgetCode) return;
+		streaming.finalHTML = widgetCode;
+		streaming.finalIsSVG = widgetCode.trimStart().startsWith("<svg");
+	}
+
 	pi.on("message_update", async (event) => {
 		const raw = event.assistantMessageEvent;
-
-		// Tool call starts streaming
 		if (raw.type === "toolcall_start") {
 			const block = raw.partial.content[raw.contentIndex];
 			if (block?.type === "toolCall" && block?.name === "show_widget") {
-				streaming = {
-					contentIndex: raw.contentIndex,
-					window: null,
-					lastHTML: "",
-					updateTimer: null,
-					ready: false,
-					finalHTML: null,
-					finalIsSVG: false,
-					finalHTMLApplied: false,
-				};
+				streaming = createStreamingWidget(raw.contentIndex);
 			}
 			return;
 		}
-
-		// Tool call input JSON delta — arguments already parsed by pi-ai
 		if (raw.type === "toolcall_delta" && streaming && raw.contentIndex === streaming.contentIndex) {
 			const block = raw.partial.content[raw.contentIndex];
-			const html = block?.type === "toolCall" ? block.arguments?.widget_code : undefined;
+			const html = extractStreamingWidgetCode(block);
 			if (!html || html.length < 20 || html === streaming.lastHTML) return;
-
 			streaming.lastHTML = html;
-
-			// Debounce updates to ~150ms for smooth rendering
-			if (streaming.updateTimer) return;
-			const currentStreaming = streaming;
-			streaming.updateTimer = setTimeout(async () => {
-				currentStreaming.updateTimer = null;
-
-				try {
-					if (!currentStreaming.window) {
-						// Open window with empty shell — content will be injected via JS eval
-						const args = block?.type === "toolCall" ? block.arguments : {};
-						const title = (args.title ?? "Widget").replace(/_/g, " ");
-						const width = args.width ?? 800;
-						const height = args.height ?? 600;
-
-						const { open } = await getGlimpse();
-						currentStreaming.window = open(shellHTML(), { width, height, title });
-						activeWindows.push(currentStreaming.window);
-
-						currentStreaming.window.on("ready", () => {
-							currentStreaming.ready = true;
-
-							const finalHTML = currentStreaming.finalHTML;
-							if (finalHTML && shouldApplyFinalStreamingHTML(finalHTML, currentStreaming.finalHTMLApplied)) {
-								currentStreaming.finalHTMLApplied = true;
-								currentStreaming.window?.setHTML(wrapHTML(finalHTML, currentStreaming.finalIsSVG));
-								return;
-							}
-
-							if (currentStreaming.finalHTMLApplied || !currentStreaming.lastHTML) return;
-							const escaped = escapeJS(currentStreaming.lastHTML);
-							currentStreaming.window?.send(`window._setContent('${escaped}')`);
-						});
-					} else if (currentStreaming.ready) {
-						// Update content via JS — no full page replace
-						const escaped = escapeJS(currentStreaming.lastHTML);
-						currentStreaming.window.send(`window._setContent('${escaped}')`);
-					}
-				} catch {}
-			}, 150);
+			scheduleStreamingUpdate(streaming, block);
 			return;
 		}
-
-		// Tool call complete — keep the final HTML so execute() can replace the shell document.
 		if (raw.type === "toolcall_end" && streaming && raw.contentIndex === streaming.contentIndex) {
-			if (streaming.updateTimer) {
-				clearTimeout(streaming.updateTimer);
-				streaming.updateTimer = null;
-			}
-
-			const toolCall = raw.toolCall;
-			if (toolCall?.arguments?.widget_code) {
-				streaming.finalHTML = toolCall.arguments.widget_code;
-				streaming.finalIsSVG = toolCall.arguments.widget_code.trimStart().startsWith("<svg");
-			}
-			// Don't clear streaming — execute() will pick up the window
-			return;
+			finalizeStreamingWidget(extractStreamingWidgetCode(raw.toolCall));
 		}
 	});
 

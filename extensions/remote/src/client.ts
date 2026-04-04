@@ -43,6 +43,14 @@ interface AuthResponse {
 	error?: string;
 }
 
+function parseServerMessage(raw: WebSocket.RawData): ServerMessage | null {
+	try {
+		return JSON.parse(raw.toString()) as ServerMessage;
+	} catch {
+		return null;
+	}
+}
+
 export async function startClient(server: LockfileData, options: ClientOptions): Promise<() => Promise<void>> {
 	const sessionFileCopy = copySessionFile(options.sessionFile);
 	let authToken: string | undefined;
@@ -189,73 +197,91 @@ export async function startClient(server: LockfileData, options: ClientOptions):
 		}
 	});
 
-	ws.on("message", async (raw) => {
-		let message: ServerMessage;
-		try {
-			message = JSON.parse(raw.toString()) as ServerMessage;
-		} catch {
-			return;
+	const isCurrentSession = (messageSessionId?: string): boolean => messageSessionId === sessionId;
+	const markAttached = (): void => {
+		attached = true;
+	};
+	const sendAuthToken = (): void => {
+		if (authToken) {
+			ws.send(JSON.stringify({ type: "auth_token", token: authToken }));
 		}
-
+	};
+	const sendPong = (): void => {
+		if (ws.readyState === WebSocket.OPEN) {
+			ws.send(JSON.stringify({ type: "pong" }));
+		}
+	};
+	const exitWithSessionError = async (reason: string): Promise<void> => {
+		process.stderr.write(`[pi-remote] Session error: ${reason}\n`);
+		await exitWithCode(1);
+	};
+	const handleCurrentSessionMessage = async (
+		message: Extract<ServerMessage, { sessionId: string }>,
+	): Promise<boolean> => {
+		if (!isCurrentSession(message.sessionId)) {
+			return false;
+		}
+		markAttached();
+		switch (message.type) {
+			case "state":
+				if (!message.running && message.exitCode !== null) {
+					process.stderr.write(`[pi-remote] Session exited with code ${message.exitCode}.\n`);
+				}
+				return true;
+			case "reset":
+				process.stdout.write("\x1b[2J\x1b[H");
+				return true;
+			case "data":
+				process.stdout.write(message.data);
+				return true;
+			case "replay_complete":
+				resizeListener();
+				return true;
+			case "exit":
+				await exitWithCode(message.exitCode ?? 0);
+				return true;
+			default:
+				return false;
+		}
+	};
+	const handleMessage = async (message: ServerMessage): Promise<void> => {
 		switch (message.type) {
 			case "auth_required":
-				if (authToken) {
-					ws.send(JSON.stringify({ type: "auth_token", token: authToken }));
-				}
-				break;
+				sendAuthToken();
+				return;
 			case "auth_ok":
 				resumeSession();
-				break;
+				return;
 			case "auth_fail":
 				process.stderr.write(`[pi-remote] Authentication failed: ${message.reason}\n`);
 				await exitWithCode(1);
-				break;
+				return;
 			case "ping":
-				if (ws.readyState === WebSocket.OPEN) {
-					ws.send(JSON.stringify({ type: "pong" }));
-				}
-				break;
+				sendPong();
+				return;
 			case "session_list":
-				break;
+				return;
 			case "state":
-				if (message.sessionId === sessionId) {
-					attached = true;
-					if (!message.running && message.exitCode !== null) {
-						process.stderr.write(`[pi-remote] Session exited with code ${message.exitCode}.\n`);
-					}
-				}
-				break;
 			case "reset":
-				if (message.sessionId === sessionId) {
-					attached = true;
-					process.stdout.write("\x1b[2J\x1b[H");
-				}
-				break;
 			case "data":
-				if (message.sessionId === sessionId) {
-					attached = true;
-					process.stdout.write(message.data);
-				}
-				break;
 			case "replay_complete":
-				if (message.sessionId === sessionId) {
-					attached = true;
-					resizeListener();
-				}
-				break;
 			case "exit":
-				if (message.sessionId === sessionId) {
-					attached = true;
-					await exitWithCode(message.exitCode ?? 0);
-				}
-				break;
+				await handleCurrentSessionMessage(message);
+				return;
 			case "session_error":
-				if (!message.sessionId || message.sessionId === sessionId) {
-					process.stderr.write(`[pi-remote] Session error: ${message.reason}\n`);
-					await exitWithCode(1);
+				if (!message.sessionId || isCurrentSession(message.sessionId)) {
+					await exitWithSessionError(message.reason);
 				}
-				break;
+				return;
 		}
+	};
+
+	ws.on("message", async (raw) => {
+		const message = parseServerMessage(raw);
+		if (!message) {
+			return;
+		}
+		await handleMessage(message);
 	});
 
 	ws.on("error", (error) => {

@@ -41,7 +41,7 @@ export default function (pi: ExtensionAPI) {
 
 	const remoteHandler = async (variant: { funnel: boolean; lan: boolean }, ctx: any) => {
 		if (!ctx.hasUI) {
-			console.log("/remote is only available in interactive mode.");
+			process.stdout.write("/remote is only available in interactive mode.\n");
 			return;
 		}
 
