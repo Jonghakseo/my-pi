@@ -1,4 +1,10 @@
 {
+	"$schema": "https://biomejs.dev/schemas/2.4.4/schema.json",
+	"vcs": {
+		"enabled": true,
+		"clientKind": "git",
+		"useIgnoreFile": true
+	},
 	"formatter": {
 		"enabled": true,
 		"indentStyle": "tab",
@@ -7,7 +13,43 @@
 	"linter": {
 		"enabled": true,
 		"rules": {
-			"recommended": true
+			"recommended": true,
+			"correctness": {
+				"noUnusedImports": "error",
+				"noUnusedVariables": "error"
+			},
+			"style": {
+				"useConst": "error",
+				"useTemplate": "error",
+				"useExportType": "error",
+				"useImportType": "error",
+				"useNodejsImportProtocol": "error",
+				"noNonNullAssertion": "warn",
+				"noParameterAssign": "error",
+				"useDefaultParameterLast": "error"
+			},
+			"suspicious": {
+				"noExplicitAny": "warn",
+				"noConsole": "warn",
+				"noDoubleEquals": "error",
+				"noAssignInExpressions": "error",
+				"noImplicitAnyLet": "error"
+			},
+			"complexity": {
+				"noExcessiveCognitiveComplexity": {
+					"level": "warn",
+					"options": { "maxAllowedComplexity": 25 }
+				},
+				"noForEach": "warn",
+				"noBannedTypes": "error",
+				"useFlatMap": "error"
+			},
+			"performance": {
+				"noDelete": "warn"
+			},
+			"security": {
+				"noGlobalEval": "error"
+			}
 		}
 	},
 	"assist": {
@@ -27,15 +69,28 @@
 		}
 	},
 	"files": {
-		"includes": [
-			"**",
-			"!**/node_modules",
-			"!**/dist",
-			"!**/dist",
-			"!**/web-dist",
-			"!**/web-dist",
-			"!utils/coverage",
-			"!pi-session-*.html"
-		]
-	}
+		"includes": ["**", "!**/node_modules", "!**/dist", "!**/web-dist", "!utils/coverage", "!pi-session-*.html"]
+	},
+	"overrides": [
+		{
+			"includes": ["interactive-shell/**"],
+			"linter": {
+				"rules": {
+					"suspicious": {
+						"noControlCharactersInRegex": "off"
+					}
+				}
+			}
+		},
+		{
+			"includes": ["**/*.test.ts", "**/*.spec.ts"],
+			"linter": {
+				"rules": {
+					"suspicious": {
+						"noExplicitAny": "off"
+					}
+				}
+			}
+		}
+	]
 }
