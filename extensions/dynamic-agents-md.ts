@@ -205,6 +205,9 @@ export default function (pi: ExtensionAPI) {
 	/** Whether we've already aborted for the current assistant turn. */
 	let abortedThisTurn = false;
 
+	/** Pending message to send after abort completes (agent_end). */
+	let pendingAbortMessage: string | null = null;
+
 	const resetState = (_event: unknown, ctx: { cwd: string }) => {
 		staticDirs = computeStaticCoveredDirs(ctx.cwd);
 		injectedPaths.clear();
@@ -234,6 +237,15 @@ export default function (pi: ExtensionAPI) {
 	pi.on("turn_start", async () => {
 		streamingStates = new Map();
 		abortedThisTurn = false;
+	});
+
+	// After an abort-triggered agent_end, re-send the queued message as a new turn.
+	// At this point the agent is idle, so sendUserMessage will prompt a fresh run.
+	pi.on("agent_end", async (_event, _ctx) => {
+		const msg = pendingAbortMessage;
+		if (!msg) return;
+		pendingAbortMessage = null;
+		pi.sendUserMessage(msg);
 	});
 
 	// ── Streaming early-abort: detect edit/write targeting uncovered dirs ──
@@ -289,21 +301,19 @@ export default function (pi: ExtensionAPI) {
 			abortedThisTurn = true;
 			ctx.abort();
 
-			// Inject a follow-up user message explaining what happened.
-			// Use sendUserMessage to trigger a new turn after the abort.
+			// Queue the message for delivery after abort completes (agent_end).
+			// We can't use sendUserMessage during streaming with deliverAs: "followUp"
+			// because the aborted agent loop skips follow-up drain.
 			const list = missing.map((f) => `- ${f.path}`).join("\n");
-			pi.sendUserMessage(
-				[
-					"[Auto-aborted] edit/write to an uncovered directory scope was detected during streaming.",
-					`Target: ${absPath}`,
-					"",
-					"Unloaded AGENTS context files:",
-					list,
-					"",
-					"Read the above file(s) first, then retry the original edit/write.",
-				].join("\n"),
-				{ deliverAs: "followUp" },
-			);
+			pendingAbortMessage = [
+				"[Auto-aborted] edit/write to an uncovered directory scope was detected during streaming.",
+				`Target: ${absPath}`,
+				"",
+				"Unloaded AGENTS context files:",
+				list,
+				"",
+				"Read the above file(s) first, then retry the original edit/write.",
+			].join("\n");
 			return;
 		}
 	});
