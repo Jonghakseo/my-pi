@@ -8,31 +8,22 @@
  * How it works:
  *   1. On session_start, record static AGENTS coverage
  *      (CWD→root + global agent dir) and mark those as already injected.
- *   2. On message_update(toolcall streaming), detect edit/write targeting
- *      uncovered directories and abort early — before the LLM wastes tokens
- *      generating the full tool call content.
- *   3. On tool_call(edit/write), discover missing scoped AGENTS/CLAUDE files.
+ *   2. On tool_call(edit/write), discover missing scoped AGENTS/CLAUDE files.
  *      If any are missing, block the tool call before modification.
- *      (Fallback for cases the streaming abort didn't catch.)
- *   4. On tool_result(read), discover missing scoped AGENTS/CLAUDE files,
+ *   3. On tool_result(read), discover missing scoped AGENTS/CLAUDE files,
  *      append their content to the read result, and mark them as injected.
+ *   4. On tool_result(grep/find/ls), pre-register AGENTS.md paths so that
+ *      subsequent edit/write calls pass without blocking.
  *   5. Track injected paths to avoid duplicate injection.
  */
 
-import type { AssistantMessageEvent, ImageContent, TextContent, ToolCall } from "@mariozechner/pi-ai";
+import type { ImageContent, TextContent } from "@mariozechner/pi-ai";
 import {
 	type ExtensionAPI,
 	isToolCallEventType,
 	type ToolCallEventResult,
 	type ToolResultEvent,
 } from "@mariozechner/pi-coding-agent";
-
-// MessageUpdateEvent is not re-exported from the top-level package.
-interface MessageUpdateEvent {
-	type: "message_update";
-	message: unknown;
-	assistantMessageEvent: AssistantMessageEvent;
-}
 
 /** Matches pi core's ToolResultEventResult shape (not exported from top-level package). */
 interface ToolResultEventResult {
@@ -158,38 +149,6 @@ function formatBlockReason(targetPath: string, files: ContextFile[]): string {
 	].join("\n");
 }
 
-// --- Streaming abort helpers ---
-const GATED_TOOLS = new Set(["edit", "write"]);
-
-/**
- * Per-tool-call streaming state for partial JSON argument accumulation.
- * We watch `toolcall_delta` events to extract the `path` field as early as
- * possible — typically within the first few hundred bytes, long before the
- * large `content` / `edits` payload is generated.
- */
-interface StreamingToolCallState {
-	/** Index into `partial.content[]` for this tool call. */
-	contentIndex: number;
-	/** Accumulated raw JSON argument string so far. */
-	accumulatedArgs: string;
-	/** Once we've resolved the `path` we stop checking deltas. */
-	resolved: boolean;
-}
-
-/**
- * Try to extract the `"path"` value from a (possibly incomplete) JSON string.
- * Returns the path string if found, or null.
- *
- * We use a lightweight regex rather than JSON.parse() because the JSON is
- * incomplete during streaming. The `path` key appears early in tool calls
- * (edit and write both have it as the first parameter).
- */
-function extractPathFromPartialJson(json: string): string | null {
-	// Match "path":"<value>" or "path": "<value>" with possible escapes
-	const match = json.match(/"path"\s*:\s*"((?:[^"\\]|\\.)*)"/);
-	return match ? match[1].replace(/\\(.)/g, "$1") : null;
-}
-
 // --- Extension ---
 export default function (pi: ExtensionAPI) {
 	/** Directories already covered by pi's static loading. */
@@ -197,9 +156,6 @@ export default function (pi: ExtensionAPI) {
 
 	/** Absolute paths of AGENTS.md files already loaded/injected this session. */
 	const injectedPaths = new Set<string>();
-
-	/** Active streaming tool call states, keyed by contentIndex. */
-	let streamingStates = new Map<number, StreamingToolCallState>();
 
 	const resetState = (_event: unknown, ctx: { cwd: string }) => {
 		staticDirs = computeStaticCoveredDirs(ctx.cwd);
@@ -226,66 +182,7 @@ export default function (pi: ExtensionAPI) {
 		resetState(_event, ctx);
 	});
 
-	// Reset streaming state at each turn start.
-	pi.on("turn_start", async () => {
-		streamingStates = new Map();
-	});
-
-	// ── Streaming early-discovery: pre-register AGENTS.md during streaming ──
-	// Watches toolcall_start/delta to extract the `path` argument as the LLM
-	// streams an edit/write call. If the target directory has an unloaded
-	// AGENTS.md, we eagerly discover and cache the paths so the tool_call
-	// block handler can fire instantly (without redundant filesystem walks).
-	//
-	// NOTE: We intentionally do NOT abort the stream here. Aborting during
-	// toolcall_delta truncates the JSON arguments mid-generation, which causes
-	// JSON parse errors and process hangs. The tool_call block handler is the
-	// safe checkpoint — it fires after the full tool call is generated but
-	// before execution, and blocks cleanly.
-	pi.on("message_update", async (event: MessageUpdateEvent, ctx) => {
-		const streamEvent = event.assistantMessageEvent as AssistantMessageEvent;
-
-		if (streamEvent.type === "toolcall_start") {
-			const partial = streamEvent.partial;
-			const contentItem = partial.content[streamEvent.contentIndex];
-			if (!contentItem || contentItem.type !== "toolCall") return;
-
-			const toolCall = contentItem as ToolCall;
-			if (!GATED_TOOLS.has(toolCall.name)) return;
-
-			streamingStates.set(streamEvent.contentIndex, {
-				contentIndex: streamEvent.contentIndex,
-				accumulatedArgs: "",
-				resolved: false,
-			});
-			return;
-		}
-
-		if (streamEvent.type === "toolcall_delta") {
-			const state = streamingStates.get(streamEvent.contentIndex);
-			if (!state || state.resolved) return;
-
-			state.accumulatedArgs += streamEvent.delta;
-
-			const rawPath = extractPathFromPartialJson(state.accumulatedArgs);
-			if (!rawPath) {
-				if (state.accumulatedArgs.length > 500) state.resolved = true;
-				return;
-			}
-
-			// Found path — eagerly discover AGENTS.md for this directory.
-			// This pre-warms the cache so the tool_call handler doesn't
-			// need to walk the filesystem.
-			state.resolved = true;
-			const absPath = toAbsolute(rawPath, ctx.cwd);
-			discoverNewAgentsMd(dirname(absPath), injectedPaths, staticDirs);
-			return;
-		}
-	});
-
-	// ── Fallback gate: block edit/write if streaming abort didn't fire ──
-	// This catches edge cases where the path wasn't detected during streaming
-	// (e.g. path appeared late in JSON, or tool call was not streamed).
+	// Enforce scope context before first edit/write in a new directory scope.
 	pi.on("tool_call", async (event, ctx): Promise<ToolCallEventResult | undefined> => {
 		if (!(isToolCallEventType("edit", event) || isToolCallEventType("write", event))) return;
 
