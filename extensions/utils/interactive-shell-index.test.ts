@@ -64,7 +64,6 @@ class MockPtyTerminalSession {
 
 class MockHeadlessDispatchMonitor {
 	disposed = false;
-	constructor(..._args: unknown[]) {}
 	getResult() {
 		return undefined;
 	}

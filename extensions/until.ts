@@ -12,12 +12,12 @@
  * done: true → 반복 종료, done: false → 다음 실행 대기
  */
 
-import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
-import { Type } from "@sinclair/typebox";
-import { readdir, readFile } from "node:fs/promises";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { readdir, readFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
+import { Type } from "@sinclair/typebox";
 import { formatClock, formatKoreanDuration } from "./utils/time-utils.ts";
 
 // ─── Constants ───────────────────────────────────────────────────────────────
@@ -162,9 +162,7 @@ function getPresetCompletions(prefix: string): { value: string; label: string }[
 			if (!interval) continue;
 			const desc = meta.description ?? key;
 			items.push({ value: key, label: `${key} — ${desc} (${interval.label})` });
-		} catch {
-			continue;
-		}
+		} catch {}
 	}
 
 	return items.length > 0 ? items : null;
@@ -466,9 +464,7 @@ export default function (pi: ExtensionAPI) {
 				const presetList = Object.entries(presets)
 					.map(([key, p]) => `  ${key} — ${p.description} (기본 ${p.defaultInterval.label})`)
 					.join("\n");
-				const presetHelp = presetList
-					? `\n\n프리셋:\n${presetList}\n예: /until PR  또는  /until 10m PR`
-					: "";
+				const presetHelp = presetList ? `\n\n프리셋:\n${presetList}\n예: /until PR  또는  /until 10m PR` : "";
 				ctx.ui.notify(`사용법: /until <간격> <프롬프트>\n예: /until 5m PR 코멘트 확인해줘${presetHelp}`, "warning");
 				return;
 			}
@@ -624,7 +620,6 @@ export default function (pi: ExtensionAPI) {
 		latestCtx = ctx;
 		clearAllTasks();
 	});
-
 
 	pi.on("session_shutdown", async () => {
 		agentRunning = false;

@@ -3,11 +3,11 @@ import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { activityMonitor } from "./activity.js";
-import { isGeminiWebAvailable, queryWithCookies } from "./gemini-web.js";
+import { type ExtractedContent, extractHeadingTitle, type FrameResult, type VideoFrame } from "./extract.js";
 import { isGeminiApiAvailable, queryGeminiApiWithVideo } from "./gemini-api.js";
+import { isGeminiWebAvailable, queryWithCookies } from "./gemini-web.js";
 import { searchWithPerplexity } from "./perplexity.js";
-import { extractHeadingTitle, type ExtractedContent, type FrameResult, type VideoFrame } from "./extract.js";
-import { formatSeconds, readExecError, isTimeoutError, trimErrorText, mapFfmpegError } from "./utils.js";
+import { formatSeconds, isTimeoutError, mapFfmpegError, readExecError, trimErrorText } from "./utils.js";
 
 const CONFIG_PATH = join(homedir(), ".pi", "web-search.json");
 
@@ -75,8 +75,7 @@ export function isYouTubeURL(url: string): { isYouTube: boolean; videoId: string
 		if (parsed.pathname === "/playlist") {
 			return { isYouTube: false, videoId: null };
 		}
-	} catch {
-	}
+	} catch {}
 
 	const match = url.match(YOUTUBE_REGEX);
 	if (!match) return { isYouTube: false, videoId: null };
@@ -95,17 +94,16 @@ export async function extractYouTube(
 ): Promise<ExtractedContent | null> {
 	const config = loadYouTubeConfig();
 	const { videoId } = isYouTubeURL(url);
-	const canonicalUrl = videoId
-		? `https://www.youtube.com/watch?v=${videoId}`
-		: url;
+	const canonicalUrl = videoId ? `https://www.youtube.com/watch?v=${videoId}` : url;
 	const effectivePrompt = prompt ?? YOUTUBE_PROMPT;
 	const effectiveModel = model ?? config.preferredModel;
 
 	const activityId = activityMonitor.logStart({ type: "fetch", url: `youtube.com/${videoId ?? "video"}` });
 
-	const result = await tryGeminiWeb(canonicalUrl, effectivePrompt, effectiveModel, signal)
-		?? await tryGeminiApi(canonicalUrl, effectivePrompt, effectiveModel, signal)
-		?? await tryPerplexity(url, effectivePrompt, signal);
+	const result =
+		(await tryGeminiWeb(canonicalUrl, effectivePrompt, effectiveModel, signal)) ??
+		(await tryGeminiApi(canonicalUrl, effectivePrompt, effectiveModel, signal)) ??
+		(await tryPerplexity(url, effectivePrompt, signal));
 
 	if (result) {
 		result.url = url;
@@ -144,10 +142,11 @@ function mapYtDlpError(err: unknown): string {
 
 export async function getYouTubeStreamInfo(videoId: string): Promise<StreamResult> {
 	try {
-		const output = execFileSync("yt-dlp", [
-			"--print", "duration",
-			"-g", `https://www.youtube.com/watch?v=${videoId}`,
-		], { timeout: 15000, encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] }).trim();
+		const output = execFileSync("yt-dlp", ["--print", "duration", "-g", `https://www.youtube.com/watch?v=${videoId}`], {
+			timeout: 15000,
+			encoding: "utf-8",
+			stdio: ["pipe", "pipe", "pipe"],
+		}).trim();
 		const lines = output.split(/\r?\n/);
 		const rawDuration = lines[0]?.trim();
 		const streamUrl = lines[1]?.trim();
@@ -162,10 +161,11 @@ export async function getYouTubeStreamInfo(videoId: string): Promise<StreamResul
 
 async function extractFrameFromStream(streamUrl: string, seconds: number): Promise<FrameResult> {
 	try {
-		const buffer = execFileSync("ffmpeg", [
-			"-ss", String(seconds), "-i", streamUrl,
-			"-frames:v", "1", "-f", "image2pipe", "-vcodec", "mjpeg", "pipe:1",
-		], { maxBuffer: 5 * 1024 * 1024, timeout: 30000, stdio: ["pipe", "pipe", "pipe"] });
+		const buffer = execFileSync(
+			"ffmpeg",
+			["-ss", String(seconds), "-i", streamUrl, "-frames:v", "1", "-f", "image2pipe", "-vcodec", "mjpeg", "pipe:1"],
+			{ maxBuffer: 5 * 1024 * 1024, timeout: 30000, stdio: ["pipe", "pipe", "pipe"] },
+		);
 		if (buffer.length === 0) return { error: "ffmpeg failed: empty output" };
 		return { data: buffer.toString("base64"), mimeType: "image/jpeg" };
 	} catch (err) {
@@ -178,7 +178,7 @@ export async function extractYouTubeFrame(
 	seconds: number,
 	streamInfo?: StreamInfo,
 ): Promise<FrameResult> {
-	const info = streamInfo ?? await getYouTubeStreamInfo(videoId);
+	const info = streamInfo ?? (await getYouTubeStreamInfo(videoId));
 	if ("error" in info) return info;
 	return extractFrameFromStream(info.streamUrl, seconds);
 }
@@ -188,13 +188,15 @@ export async function extractYouTubeFrames(
 	timestamps: number[],
 	streamInfo?: StreamInfo,
 ): Promise<{ frames: VideoFrame[]; duration: number | null; error: string | null }> {
-	const info = streamInfo ?? await getYouTubeStreamInfo(videoId);
+	const info = streamInfo ?? (await getYouTubeStreamInfo(videoId));
 	if ("error" in info) return { frames: [], duration: null, error: info.error };
-	const results = await Promise.all(timestamps.map(async (t) => {
-		const frame = await extractFrameFromStream(info.streamUrl, t);
-		if ("error" in frame) return { error: frame.error };
-		return { ...frame, timestamp: formatSeconds(t) };
-	}));
+	const results = await Promise.all(
+		timestamps.map(async (t) => {
+			const frame = await extractFrameFromStream(info.streamUrl, t);
+			if ("error" in frame) return { error: frame.error };
+			return { ...frame, timestamp: formatSeconds(t) };
+		}),
+	);
 	const frames = results.filter((f): f is VideoFrame => "data" in f);
 	const errorResult = results.find((f): f is { error: string } => "error" in f);
 	return { frames, duration: info.duration, error: frames.length === 0 && errorResult ? errorResult.error : null };
@@ -274,22 +276,14 @@ async function tryGeminiApi(
 	}
 }
 
-async function tryPerplexity(
-	url: string,
-	prompt: string,
-	signal?: AbortSignal,
-): Promise<ExtractedContent | null> {
+async function tryPerplexity(url: string, prompt: string, signal?: AbortSignal): Promise<ExtractedContent | null> {
 	try {
 		if (signal?.aborted) return null;
 
-		const perplexityQuery = prompt === YOUTUBE_PROMPT
-			? `Summarize this YouTube video in detail: ${url}`
-			: `${prompt} YouTube video: ${url}`;
+		const perplexityQuery =
+			prompt === YOUTUBE_PROMPT ? `Summarize this YouTube video in detail: ${url}` : `${prompt} YouTube video: ${url}`;
 
-		const { answer } = await searchWithPerplexity(
-			perplexityQuery,
-			{ signal },
-		);
+		const { answer } = await searchWithPerplexity(perplexityQuery, { signal });
 
 		if (!answer) return null;
 

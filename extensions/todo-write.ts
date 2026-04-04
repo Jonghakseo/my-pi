@@ -374,8 +374,15 @@ function setTodoWidgetAgentRunning(ctx: Pick<ExtensionContext, "cwd" | "sessionM
 	todoWidgetAgentRunningStore.set(key, running);
 }
 
+/** When true, the above-editor widget is suppressed (todo-sidebar renders todos instead). */
+const _suppressTodoWidget = true;
+
 async function syncTodoWidget(ctx: ExtensionContext, pi: Pick<ExtensionAPI, "appendEntry">): Promise<void> {
 	if (!ctx.hasUI) return;
+	if (_suppressTodoWidget) {
+		ctx.ui.setWidget(TODO_WIDGET_KEY, undefined);
+		return;
+	}
 
 	const key = getTodoStateKey(ctx);
 	const state = readTodoWriteState(ctx);
@@ -544,7 +551,6 @@ export default function todoWriteExtension(pi: ExtensionAPI): void {
 		restoreTodoWriteState(ctx);
 		await syncTodoWidget(ctx, pi);
 	});
-
 
 	pi.on("session_tree", async (_event, ctx) => {
 		setTodoWidgetAgentRunning(ctx, false);

@@ -150,12 +150,14 @@ export const toolParameters = Type.Object({
 	),
 	drain: Type.Optional(
 		Type.Boolean({
-			description: "If true, return only NEW output since last query (raw stream). More token-efficient for repeated polling.",
+			description:
+				"If true, return only NEW output since last query (raw stream). More token-efficient for repeated polling.",
 		}),
 	),
 	incremental: Type.Optional(
 		Type.Boolean({
-			description: "If true, return next N lines not yet seen. Server tracks position - just keep calling to paginate through output.",
+			description:
+				"If true, return next N lines not yet seen. Server tracks position - just keep calling to paginate through output.",
 		}),
 	),
 	settings: Type.Optional(
@@ -163,27 +165,31 @@ export const toolParameters = Type.Object({
 			updateInterval: Type.Optional(
 				Type.Number({ description: "Change max update interval for existing session (ms)" }),
 			),
-			quietThreshold: Type.Optional(
-				Type.Number({ description: "Change quiet threshold for existing session (ms)" }),
-			),
+			quietThreshold: Type.Optional(Type.Number({ description: "Change quiet threshold for existing session (ms)" })),
 		}),
 	),
 	input: Type.Optional(
-		Type.String({ description: "Raw text/keystrokes to send to the session (requires sessionId). For special keys, use inputKeys instead." }),
+		Type.String({
+			description:
+				"Raw text/keystrokes to send to the session (requires sessionId). For special keys, use inputKeys instead.",
+		}),
 	),
 	inputKeys: Type.Optional(
 		Type.Array(Type.String(), {
-			description: "Named keys with modifier support: up, down, enter, ctrl+c, alt+x, shift+tab, ctrl+alt+delete, etc. (requires sessionId)",
+			description:
+				"Named keys with modifier support: up, down, enter, ctrl+c, alt+x, shift+tab, ctrl+alt+delete, etc. (requires sessionId)",
 		}),
 	),
 	inputHex: Type.Optional(
 		Type.Array(Type.String(), {
-			description: "Hex bytes to send as raw escape sequences (e.g., ['0x1b', '0x5b', '0x41'] for ESC[A). (requires sessionId)",
+			description:
+				"Hex bytes to send as raw escape sequences (e.g., ['0x1b', '0x5b', '0x41'] for ESC[A). (requires sessionId)",
 		}),
 	),
 	inputPaste: Type.Optional(
 		Type.String({
-			description: "Text to paste with bracketed paste mode - prevents shells from auto-executing multiline input. (requires sessionId)",
+			description:
+				"Text to paste with bracketed paste mode - prevents shells from auto-executing multiline input. (requires sessionId)",
 		}),
 	),
 	cwd: Type.Optional(
@@ -198,18 +204,19 @@ export const toolParameters = Type.Object({
 	),
 	reason: Type.Optional(
 		Type.String({
-			description:
-				"Brief explanation shown in the overlay header only (not passed to the subprocess)",
+			description: "Brief explanation shown in the overlay header only (not passed to the subprocess)",
 		}),
 	),
 	mode: Type.Optional(
 		Type.String({
-			description: "Mode: 'interactive' (default, user controls), 'hands-free' (agent monitors, user can take over), or 'dispatch' (agent notified on completion, no polling needed)",
+			description:
+				"Mode: 'interactive' (default, user controls), 'hands-free' (agent monitors, user can take over), or 'dispatch' (agent notified on completion, no polling needed)",
 		}),
 	),
 	background: Type.Optional(
 		Type.Boolean({
-			description: "Run without overlay (with mode='dispatch') or dismiss existing overlay (with sessionId). Process runs in background, user can /attach.",
+			description:
+				"Run without overlay (with mode='dispatch') or dismiss existing overlay (with sessionId). Process runs in background, user can /attach.",
 		}),
 	),
 	attach: Type.Optional(
@@ -224,14 +231,16 @@ export const toolParameters = Type.Object({
 	),
 	dismissBackground: Type.Optional(
 		Type.Union([Type.Boolean(), Type.String()], {
-			description: "Dismiss background sessions. true = all, string = specific session ID. Kills running sessions, removes exited ones.",
+			description:
+				"Dismiss background sessions. true = all, string = specific session ID. Kills running sessions, removes exited ones.",
 		}),
 	),
 	handsFree: Type.Optional(
 		Type.Object({
 			updateMode: Type.Optional(
 				Type.String({
-					description: "Update mode: 'on-quiet' (default, emit when output stops) or 'interval' (emit on fixed schedule)",
+					description:
+						"Update mode: 'on-quiet' (default, emit when output stops) or 'interval' (emit on fixed schedule)",
 				}),
 			),
 			updateInterval: Type.Optional(
@@ -241,17 +250,21 @@ export const toolParameters = Type.Object({
 				Type.Number({ description: "Silence duration before emitting update in on-quiet mode (default: 8000ms)" }),
 			),
 			gracePeriod: Type.Optional(
-				Type.Number({ description: "Startup grace period before autoExitOnQuiet can kill the session (default: 15000ms)" }),
+				Type.Number({
+					description: "Startup grace period before autoExitOnQuiet can kill the session (default: 15000ms)",
+				}),
 			),
-			updateMaxChars: Type.Optional(
-				Type.Number({ description: "Max chars per update (default: 1500)" }),
-			),
+			updateMaxChars: Type.Optional(Type.Number({ description: "Max chars per update (default: 1500)" })),
 			maxTotalChars: Type.Optional(
-				Type.Number({ description: "Total char budget for all updates (default: 100000). Updates stop including content when exhausted." }),
+				Type.Number({
+					description:
+						"Total char budget for all updates (default: 100000). Updates stop including content when exhausted.",
+				}),
 			),
 			autoExitOnQuiet: Type.Optional(
 				Type.Boolean({
-					description: "Auto-kill session when output stops (after quietThreshold). Defaults to false. Set to true for fire-and-forget single-task delegations.",
+					description:
+						"Auto-kill session when output stops (after quietThreshold). Defaults to false. Set to true for fire-and-forget single-task delegations.",
 				}),
 			),
 		}),
@@ -274,7 +287,8 @@ export const toolParameters = Type.Object({
 	),
 	timeout: Type.Optional(
 		Type.Number({
-			description: "Auto-kill process after N milliseconds. Useful for TUI commands that don't exit cleanly (e.g., 'pi --help')",
+			description:
+				"Auto-kill process after N milliseconds. Useful for TUI commands that don't exit cleanly (e.g., 'pi --help')",
 		}),
 	),
 });

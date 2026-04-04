@@ -271,7 +271,6 @@ export default function (pi: ExtensionAPI) {
 		clearAllReminders();
 	});
 
-
 	pi.on("session_shutdown", async () => {
 		agentRunning = false;
 		clearAllReminders();

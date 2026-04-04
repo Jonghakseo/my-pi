@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { createSessionQueryState, getSessionOutput } from "../interactive-shell/session-query.js";
 import type { InteractiveShellConfig } from "../interactive-shell/config.js";
+import { createSessionQueryState, getSessionOutput } from "../interactive-shell/session-query.js";
 
 const config: InteractiveShellConfig = {
 	exitAutoCloseDelay: 10,
@@ -34,8 +34,7 @@ function makeSession() {
 			totalLinesInBuffer: 3,
 			truncatedByChars: Boolean(maxChars && maxChars < 5),
 		}),
-		getRawStream: ({ sinceLast }: { sinceLast?: boolean }) =>
-			sinceLast ? "delta\nepsilon" : "alpha\nbeta\ngamma",
+		getRawStream: ({ sinceLast }: { sinceLast?: boolean }) => (sinceLast ? "delta\nepsilon" : "alpha\nbeta\ngamma"),
 		getLogSlice: ({ offset = 0, limit = 50 }: { offset?: number; limit?: number }) => {
 			const lines = ["zero", "one", "two", "three"];
 			const selected = lines.slice(offset, offset + limit);

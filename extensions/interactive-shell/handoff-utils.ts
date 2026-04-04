@@ -2,8 +2,8 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { getAgentDir } from "@mariozechner/pi-coding-agent";
 import type { InteractiveShellConfig } from "./config.js";
-import type { InteractiveShellOptions, InteractiveShellResult } from "./types.js";
 import type { PtyTerminalSession } from "./pty-session.js";
+import type { InteractiveShellOptions, InteractiveShellResult } from "./types.js";
 
 export function captureCompletionOutput(
 	session: PtyTerminalSession,
@@ -57,7 +57,10 @@ export function maybeWriteHandoffSnapshot(
 	when: "exit" | "detach" | "kill" | "timeout" | "transfer",
 	config: InteractiveShellConfig,
 	context: { command: string; cwd?: string },
-	overrides?: Pick<InteractiveShellOptions, "handoffSnapshotEnabled" | "handoffSnapshotLines" | "handoffSnapshotMaxChars">,
+	overrides?: Pick<
+		InteractiveShellOptions,
+		"handoffSnapshotEnabled" | "handoffSnapshotLines" | "handoffSnapshotMaxChars"
+	>,
 ): InteractiveShellResult["handoff"] | undefined {
 	const enabled = overrides?.handoffSnapshotEnabled ?? config.handoffSnapshotEnabled;
 	if (!enabled) return undefined;
@@ -87,6 +90,6 @@ export function maybeWriteHandoffSnapshot(
 		`lines: ${tailResult.lines.length} (requested ${lines}, maxChars ${maxChars})`,
 		"",
 	].join("\n");
-	writeFileSync(transcriptPath, header + tailResult.lines.join("\n") + "\n", { encoding: "utf-8" });
+	writeFileSync(transcriptPath, `${header + tailResult.lines.join("\n")}\n`, { encoding: "utf-8" });
 	return { type: "snapshot", when, transcriptPath, linesWritten: tailResult.lines.length };
 }

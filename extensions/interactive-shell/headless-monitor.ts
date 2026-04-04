@@ -1,6 +1,6 @@
 import { stripVTControlCharacters } from "node:util";
-import type { PtyTerminalSession } from "./pty-session.js";
 import type { InteractiveShellConfig } from "./config.js";
+import type { PtyTerminalSession } from "./pty-session.js";
 
 /** Runtime options for monitoring a headless dispatch session. */
 export interface HeadlessMonitorOptions {
@@ -35,7 +35,9 @@ export class HeadlessDispatchMonitor {
 	private unsubData: (() => void) | null = null;
 	private unsubExit: (() => void) | null = null;
 
-	get disposed(): boolean { return this._disposed; }
+	get disposed(): boolean {
+		return this._disposed;
+	}
 
 	constructor(
 		private session: PtyTerminalSession,
@@ -133,7 +135,10 @@ export class HeadlessDispatchMonitor {
 		if (this._disposed) return;
 		this._disposed = true;
 		this.stopQuietTimer();
-		if (this.timeoutTimer) { clearTimeout(this.timeoutTimer); this.timeoutTimer = null; }
+		if (this.timeoutTimer) {
+			clearTimeout(this.timeoutTimer);
+			this.timeoutTimer = null;
+		}
 		this.unsubscribe();
 
 		if (timedOut) {
@@ -147,11 +152,18 @@ export class HeadlessDispatchMonitor {
 		this.onComplete(info);
 	}
 
-	handleExternalCompletion(exitCode: number | null, signal?: number, completionOutput?: HeadlessCompletionInfo["completionOutput"]): void {
+	handleExternalCompletion(
+		exitCode: number | null,
+		signal?: number,
+		completionOutput?: HeadlessCompletionInfo["completionOutput"],
+	): void {
 		if (this._disposed) return;
 		this._disposed = true;
 		this.stopQuietTimer();
-		if (this.timeoutTimer) { clearTimeout(this.timeoutTimer); this.timeoutTimer = null; }
+		if (this.timeoutTimer) {
+			clearTimeout(this.timeoutTimer);
+			this.timeoutTimer = null;
+		}
 		this.unsubscribe();
 
 		const output = completionOutput ?? this.captureOutput();
@@ -175,7 +187,11 @@ export class HeadlessDispatchMonitor {
 
 	private triggerCompleteCallbacks(): void {
 		for (const cb of this.completeCallbacks) {
-			try { cb(); } catch { /* ignore */ }
+			try {
+				cb();
+			} catch {
+				/* ignore */
+			}
 		}
 		this.completeCallbacks = [];
 	}
@@ -184,7 +200,10 @@ export class HeadlessDispatchMonitor {
 		if (this._disposed) return;
 		this._disposed = true;
 		this.stopQuietTimer();
-		if (this.timeoutTimer) { clearTimeout(this.timeoutTimer); this.timeoutTimer = null; }
+		if (this.timeoutTimer) {
+			clearTimeout(this.timeoutTimer);
+			this.timeoutTimer = null;
+		}
 		this.unsubscribe();
 	}
 }

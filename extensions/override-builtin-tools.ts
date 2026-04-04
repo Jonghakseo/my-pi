@@ -330,7 +330,7 @@ export default function (pi: ExtensionAPI) {
 			}
 
 			const sharedParams = { ...readParams };
-			delete sharedParams.path;
+			sharedParams.path = undefined;
 
 			const results = await Promise.all(
 				paths.map((path) => builtInRead.execute(toolCallId, { ...sharedParams, path }, signal, onUpdate)),

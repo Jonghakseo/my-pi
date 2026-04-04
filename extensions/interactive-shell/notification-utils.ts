@@ -1,5 +1,5 @@
-import type { InteractiveShellResult, HandsFreeUpdate } from "./types.js";
 import type { HeadlessCompletionInfo } from "./headless-monitor.js";
+import type { HandsFreeUpdate, InteractiveShellResult } from "./types.js";
 import { formatDurationMs } from "./types.js";
 
 const BRIEF_TAIL_LINES = 5;
@@ -20,12 +20,16 @@ export function buildResultNotification(sessionId: string, result: InteractiveSh
 		const truncNote = result.completionOutput.truncated
 			? ` (truncated from ${result.completionOutput.totalLines} total lines)`
 			: "";
-		parts.push(`\nOutput (${result.completionOutput.lines.length} lines${truncNote}):\n\n${result.completionOutput.lines.join("\n")}`);
+		parts.push(
+			`\nOutput (${result.completionOutput.lines.length} lines${truncNote}):\n\n${result.completionOutput.lines.join("\n")}`,
+		);
 	}
 	return parts.join("");
 }
 
-export function buildHandsFreeUpdateMessage(update: HandsFreeUpdate): { content: string; details: HandsFreeUpdate } | null {
+export function buildHandsFreeUpdateMessage(
+	update: HandsFreeUpdate,
+): { content: string; details: HandsFreeUpdate } | null {
 	if (update.status === "running") return null;
 
 	const tail = update.tail.length > 0 ? `\n\n${update.tail.join("\n")}` : "";
@@ -46,7 +50,12 @@ export function buildHandsFreeUpdateMessage(update: HandsFreeUpdate): { content:
 	return { content: statusLine + tail, details: update };
 }
 
-export function summarizeInteractiveResult(command: string, result: InteractiveShellResult, timeout?: number, reason?: string): string {
+export function summarizeInteractiveResult(
+	command: string,
+	result: InteractiveShellResult,
+	timeout?: number,
+	reason?: string,
+): string {
 	let summary = buildInteractiveSummary(result, timeout);
 
 	if (result.userTookOver) {
@@ -68,7 +77,8 @@ export function summarizeInteractiveResult(command: string, result: InteractiveS
 export function buildIdlePromptWarning(command: string, reason: string | undefined): string | null {
 	if (!reason) return null;
 
-	const tasky = /\b(scan|check|review|summariz|analyz|inspect|audit|find|fix|refactor|debug|investigat|explore|enumerat|list)\b/i;
+	const tasky =
+		/\b(scan|check|review|summariz|analyz|inspect|audit|find|fix|refactor|debug|investigat|explore|enumerat|list)\b/i;
 	if (!tasky.test(reason)) return null;
 
 	const trimmed = command.trim();
@@ -107,7 +117,9 @@ function buildResultStatusLine(sessionId: string, result: InteractiveShellResult
 
 function buildInteractiveSummary(result: InteractiveShellResult, timeout?: number): string {
 	if (result.transferred) {
-		const truncatedNote = result.transferred.truncated ? ` (truncated from ${result.transferred.totalLines} total lines)` : "";
+		const truncatedNote = result.transferred.truncated
+			? ` (truncated from ${result.transferred.totalLines} total lines)`
+			: "";
 		return `Session output transferred (${result.transferred.lines.length} lines${truncatedNote}):\n\n${result.transferred.lines.join("\n")}`;
 	}
 	if (result.backgrounded) {

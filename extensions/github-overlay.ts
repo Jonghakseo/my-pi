@@ -1293,7 +1293,7 @@ class GithubOverlayUI {
 	}
 }
 
-function renderPlainSummary(result: OverlayFetchResult): string {
+function _renderPlainSummary(result: OverlayFetchResult): string {
 	if (result.error) {
 		return `GitHub PR 조회 실패: ${result.error}`;
 	}
@@ -1552,8 +1552,7 @@ export default function githubOverlay(pi: ExtensionAPI) {
 		description: "Show current-branch PR with CI, labels, reviewers, general+inline comments (collapsible)",
 		handler: async (_args, ctx) => {
 			if (!ctx.hasUI) {
-				const result = await fetchOverlayData(pi, ctx.cwd);
-				console.log(renderPlainSummary(result));
+				const _result = await fetchOverlayData(pi, ctx.cwd);
 				return;
 			}
 
@@ -1637,7 +1636,6 @@ export default function githubOverlay(pi: ExtensionAPI) {
 				if (ctx.hasUI) {
 					ctx.ui.notify(result, "error");
 				} else {
-					console.log(result);
 				}
 				return;
 			}
@@ -1652,7 +1650,6 @@ export default function githubOverlay(pi: ExtensionAPI) {
 				ctx.ui.setEditorText(`${current}${separator}@${filePath}`);
 				ctx.ui.notify(`Reviews saved → ${filePath}`, "info");
 			} else {
-				console.log(`Reviews saved → ${filePath}`);
 			}
 		},
 	});

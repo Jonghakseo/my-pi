@@ -1,8 +1,9 @@
 import { truncateToWidth, visibleWidth } from "@mariozechner/pi-tui";
-import { formatDuration } from "./types.js";
 import type { ShellSessionManager } from "./session-manager.js";
+import { formatDuration } from "./types.js";
 
 export function setupBackgroundWidget(
+	// biome-ignore lint/complexity/noBannedTypes: overloaded pi API
 	ctx: { ui: { setWidget: Function }; hasUI?: boolean },
 	sessionManager: ShellSessionManager,
 ): (() => void) | null {
@@ -43,7 +44,7 @@ export function setupBackgroundWidget(
 						const dot = exited ? theme.fg("dim", "○") : theme.fg("accent", "●");
 						const id = theme.fg("dim", s.id);
 						const cmd = s.command.replace(/\s+/g, " ").trim();
-						const truncCmd = cmd.length > 60 ? cmd.slice(0, 57) + "..." : cmd;
+						const truncCmd = cmd.length > 60 ? `${cmd.slice(0, 57)}...` : cmd;
 						const reason = s.reason ? theme.fg("dim", ` · ${s.reason}`) : "";
 						const status = exited ? theme.fg("dim", "exited") : theme.fg("success", "running");
 						const duration = theme.fg("dim", formatDuration(Date.now() - s.startedAt.getTime()));

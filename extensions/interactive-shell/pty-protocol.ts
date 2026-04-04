@@ -12,8 +12,8 @@ export function splitAroundDsr(input: string): DsrSplit {
 	let lastIndex = 0;
 	let hasDsr = false;
 	const regex = new RegExp(DSR_PATTERN.source, "g");
-	let match: RegExpExecArray | null;
-	while ((match = regex.exec(input)) !== null) {
+	let match: RegExpExecArray | null = regex.exec(input);
+	while (match !== null) {
 		hasDsr = true;
 		if (match.index > lastIndex) {
 			segments.push({ text: input.slice(lastIndex, match.index), dsrAfter: true });
@@ -21,6 +21,7 @@ export function splitAroundDsr(input: string): DsrSplit {
 			segments.push({ text: "", dsrAfter: true });
 		}
 		lastIndex = match.index + match[0].length;
+		match = regex.exec(input);
 	}
 	if (lastIndex < input.length) {
 		segments.push({ text: input.slice(lastIndex), dsrAfter: false });

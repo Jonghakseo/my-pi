@@ -30,8 +30,6 @@ export function ensureSpawnHelperExec(): void {
 			if ((stats.mode & 0o111) !== 0o111) {
 				chmodSync(target, mode);
 			}
-		} catch {
-			continue;
-		}
+		} catch {}
 	}
 }

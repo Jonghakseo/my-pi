@@ -1,13 +1,13 @@
 import { execFileSync } from "node:child_process";
-import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { readFile } from "node:fs/promises";
-import { resolve, extname, basename, join, dirname } from "node:path";
 import { homedir } from "node:os";
+import { basename, dirname, extname, join, resolve } from "node:path";
 import { activityMonitor } from "./activity.js";
+import { type ExtractedContent, type ExtractOptions, extractHeadingTitle, type FrameResult } from "./extract.js";
+import { API_BASE, getApiKey, queryGeminiApiWithVideo } from "./gemini-api.js";
 import { isGeminiWebAvailable, queryWithCookies } from "./gemini-web.js";
-import { queryGeminiApiWithVideo, getApiKey, API_BASE } from "./gemini-api.js";
-import { extractHeadingTitle, type ExtractedContent, type ExtractOptions, type FrameResult } from "./extract.js";
-import { readExecError, trimErrorText, mapFfmpegError } from "./utils.js";
+import { mapFfmpegError, readExecError, trimErrorText } from "./utils.js";
 
 const CONFIG_PATH = join(homedir(), ".pi", "web-search.json");
 const UPLOAD_BASE = "https://generativelanguage.googleapis.com/upload/v1beta";
@@ -102,7 +102,8 @@ export function isVideoFile(input: string): VideoFileInfo | null {
 	const config = loadVideoConfig();
 	if (!config.enabled) return null;
 
-	const isFilePath = input.startsWith("/") || input.startsWith("./") || input.startsWith("../") || input.startsWith("file://");
+	const isFilePath =
+		input.startsWith("/") || input.startsWith("./") || input.startsWith("../") || input.startsWith("file://");
 	if (!isFilePath) return null;
 
 	let filePath = input;
@@ -145,7 +146,7 @@ function resolveFilePath(filePath: string): string | null {
 
 	try {
 		const normalizedBase = normalizeSpaces(base);
-		const match = readdirSync(dir).find(f => normalizeSpaces(f) === normalizedBase);
+		const match = readdirSync(dir).find((f) => normalizeSpaces(f) === normalizedBase);
 		return match ? join(dir, match) : null;
 	} catch {
 		return null;
@@ -167,8 +168,9 @@ export async function extractVideo(
 	const displayName = basename(info.absolutePath);
 	const activityId = activityMonitor.logStart({ type: "fetch", url: `video:${displayName}` });
 
-	const result = await tryVideoGeminiApi(info, effectivePrompt, effectiveModel, signal)
-		?? await tryVideoGeminiWeb(info, effectivePrompt, effectiveModel, signal);
+	const result =
+		(await tryVideoGeminiApi(info, effectivePrompt, effectiveModel, signal)) ??
+		(await tryVideoGeminiWeb(info, effectivePrompt, effectiveModel, signal));
 
 	if (result) {
 		const thumbnail = await extractVideoFrame(info.absolutePath);
@@ -197,10 +199,11 @@ function mapFfprobeError(err: unknown): string {
 
 export async function extractVideoFrame(filePath: string, seconds: number = 1): Promise<FrameResult> {
 	try {
-		const buffer = execFileSync("ffmpeg", [
-			"-ss", String(seconds), "-i", filePath,
-			"-frames:v", "1", "-f", "image2pipe", "-vcodec", "mjpeg", "pipe:1",
-		], { maxBuffer: 5 * 1024 * 1024, timeout: 10000, stdio: ["pipe", "pipe", "pipe"] });
+		const buffer = execFileSync(
+			"ffmpeg",
+			["-ss", String(seconds), "-i", filePath, "-frames:v", "1", "-f", "image2pipe", "-vcodec", "mjpeg", "pipe:1"],
+			{ maxBuffer: 5 * 1024 * 1024, timeout: 10000, stdio: ["pipe", "pipe", "pipe"] },
+		);
 		if (buffer.length === 0) return { error: "ffmpeg failed: empty output" };
 		return { data: buffer.toString("base64"), mimeType: "image/jpeg" };
 	} catch (err) {
@@ -210,12 +213,11 @@ export async function extractVideoFrame(filePath: string, seconds: number = 1): 
 
 export async function getLocalVideoDuration(filePath: string): Promise<number | { error: string }> {
 	try {
-		const output = execFileSync("ffprobe", [
-			"-v", "quiet",
-			"-show_entries", "format=duration",
-			"-of", "csv=p=0",
-			filePath,
-		], { timeout: 10000, encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] }).trim();
+		const output = execFileSync(
+			"ffprobe",
+			["-v", "quiet", "-show_entries", "format=duration", "-of", "csv=p=0", filePath],
+			{ timeout: 10000, encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] },
+		).trim();
 		const duration = Number.parseFloat(output);
 		if (!Number.isFinite(duration)) return { error: "ffprobe failed: invalid duration output" };
 		return duration;
@@ -338,7 +340,7 @@ async function uploadToFilesApi(
 		throw new Error(`File upload failed: ${uploadRes.status} (${text.slice(0, 200)})`);
 	}
 
-	const result = await uploadRes.json() as { file: { name: string; uri: string } };
+	const result = (await uploadRes.json()) as { file: { name: string; uri: string } };
 	return result.file;
 }
 
@@ -356,11 +358,11 @@ async function pollFileState(
 		const res = await fetch(`${API_BASE}/${fileName}?key=${apiKey}`, { signal });
 		if (!res.ok) throw new Error(`File state check failed: ${res.status}`);
 
-		const data = await res.json() as { state: string };
+		const data = (await res.json()) as { state: string };
 		if (data.state === "ACTIVE") return;
 		if (data.state === "FAILED") throw new Error("File processing failed");
 
-		await new Promise(r => setTimeout(r, 5000));
+		await new Promise((r) => setTimeout(r, 5000));
 	}
 
 	throw new Error("File processing timed out");
@@ -368,8 +370,7 @@ async function pollFileState(
 
 function deleteGeminiFile(fileName: string, apiKey: string): void {
 	fetch(`${API_BASE}/${fileName}?key=${apiKey}`, { method: "DELETE" }).catch((err) => {
-		const message = err instanceof Error ? err.message : String(err);
-		console.error(`Failed to delete Gemini file ${fileName}: ${message}`);
+		const _message = err instanceof Error ? err.message : String(err);
 	});
 }
 

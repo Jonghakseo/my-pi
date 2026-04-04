@@ -58,7 +58,7 @@ export function buildSummaryPrompt(results: QueryResultData[], feedback?: string
 		"- Include key findings and caveats.",
 		"- Do not invent sources or claims.",
 		"- If evidence is weak or conflicting, say so explicitly.",
-		"- End with a short \"Sources\" section listing the most relevant URLs.",
+		'- End with a short "Sources" section listing the most relevant URLs.',
 	];
 
 	if (feedback) {
@@ -98,18 +98,10 @@ function buildDeterministicAnswerPreview(answer: string): string {
 
 function buildDeterministicSummaryLines(results: QueryResultData[]): string[] {
 	if (results.length === 0) {
-		return [
-			"No completed search results were available when the curator session finished.",
-			"",
-			"Sources",
-			"- None",
-		];
+		return ["No completed search results were available when the curator session finished.", "", "Sources", "- None"];
 	}
 
-	const lines: string[] = [
-		"Summary based on the currently selected search results.",
-		"",
-	];
+	const lines: string[] = ["Summary based on the currently selected search results.", ""];
 
 	const sourceUrls: string[] = [];
 	let successful = 0;
@@ -127,7 +119,9 @@ function buildDeterministicSummaryLines(results: QueryResultData[]): string[] {
 		if (preview.length > 0) {
 			lines.push(`- ${result.query}: ${preview}`);
 		} else {
-			lines.push(`- ${result.query}: returned ${result.results.length} source${result.results.length === 1 ? "" : "s"} without answer text.`);
+			lines.push(
+				`- ${result.query}: returned ${result.results.length} source${result.results.length === 1 ? "" : "s"} without answer text.`,
+			);
 		}
 
 		for (const source of result.results) {
@@ -160,9 +154,10 @@ function buildDeterministicSummaryLines(results: QueryResultData[]): string[] {
 
 export function buildDeterministicSummary(results: QueryResultData[]): { summary: string; meta: SummaryMeta } {
 	const summary = buildDeterministicSummaryLines(results).join("\n").trim();
-	const nonEmptySummary = summary.length > 0
-		? summary
-		: "No completed search results were available when the curator session finished.\n\nSources\n- None";
+	const nonEmptySummary =
+		summary.length > 0
+			? summary
+			: "No completed search results were available when the curator session finished.\n\nSources\n- None";
 
 	return {
 		summary: nonEmptySummary,
@@ -207,7 +202,9 @@ async function resolveSummaryModel(
 		if (auth.ok && auth.apiKey) return { model, apiKey: auth.apiKey };
 	}
 
-	throw new Error(`No API key available for summary models: ${PREFERRED_SUMMARY_MODELS.map(c => `${c.provider}/${c.id}`).join(", ")}`);
+	throw new Error(
+		`No API key available for summary models: ${PREFERRED_SUMMARY_MODELS.map((c) => `${c.provider}/${c.id}`).join(", ")}`,
+	);
 }
 
 function getTextFromContentPart(part: unknown): string {
@@ -252,13 +249,13 @@ export async function generateSummaryDraft(
 
 	const contentParts = Array.isArray(response.content) ? response.content : [];
 	const summary = contentParts
-		.map(part => getTextFromContentPart(part))
-		.filter(text => text.trim().length > 0)
+		.map((part) => getTextFromContentPart(part))
+		.filter((text) => text.trim().length > 0)
 		.join("\n")
 		.trim();
 
 	if (summary.length === 0) {
-		const partTypes = contentParts.map(part => getContentPartType(part));
+		const partTypes = contentParts.map((part) => getContentPartType(part));
 		const typesLabel = partTypes.length > 0 ? partTypes.join(", ") : "none";
 		throw new Error(`Summary model returned empty response (content parts: ${typesLabel})`);
 	}

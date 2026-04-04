@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { join, basename } from "node:path";
+import { basename, join } from "node:path";
 import { type CookieMap, getGoogleCookies } from "./chrome-cookies.js";
 
 const GEMINI_APP_URL = "https://gemini.google.com/app";
@@ -84,16 +84,10 @@ export async function getActiveGoogleEmail(cookies: CookieMap): Promise<string |
 	if (!cookieHeader) return null;
 
 	try {
-		const html = await fetchWithCookieRedirects(
-			GEMINI_APP_URL,
-			cookieHeader,
-			10,
-			AbortSignal.timeout(10000),
-		);
+		const html = await fetchWithCookieRedirects(GEMINI_APP_URL, cookieHeader, 10, AbortSignal.timeout(10000));
 		const email = extractEmailFromGeminiHtml(html);
 		if (email) return email;
-	} catch {
-	}
+	} catch {}
 
 	try {
 		const response = await fetchWithCookieRedirects(
@@ -124,7 +118,14 @@ export async function queryWithCookies(
 	const result = await runGeminiWebOnce(fullPrompt, cookieMap, model, options.files, timeoutMs, options.signal);
 
 	if (isModelUnavailable(result.errorCode) && model !== "gemini-2.5-flash") {
-		const fallback = await runGeminiWebOnce(fullPrompt, cookieMap, "gemini-2.5-flash", options.files, timeoutMs, options.signal);
+		const fallback = await runGeminiWebOnce(
+			fullPrompt,
+			cookieMap,
+			"gemini-2.5-flash",
+			options.files,
+			timeoutMs,
+			options.signal,
+		);
 		if (fallback.errorMessage) throw new Error(fallback.errorMessage);
 		if (!fallback.text) throw new Error("Gemini Web returned empty response (fallback model)");
 		return fallback.text;
@@ -194,8 +195,7 @@ async function runGeminiWebOnce(
 		try {
 			const json = JSON.parse(trimJsonEnvelope(rawText));
 			errorCode = extractErrorCode(json);
-		} catch {
-		}
+		} catch {}
 		return {
 			text: "",
 			errorCode,
@@ -204,10 +204,7 @@ async function runGeminiWebOnce(
 	}
 }
 
-async function fetchAccessToken(
-	cookieHeader: string,
-	signal: AbortSignal,
-): Promise<string> {
+async function fetchAccessToken(cookieHeader: string, signal: AbortSignal): Promise<string> {
 	const html = await fetchWithCookieRedirects(GEMINI_APP_URL, cookieHeader, 10, signal);
 
 	for (const key of ["SNlM0e", "thykhd"]) {
@@ -215,7 +212,9 @@ async function fetchAccessToken(
 		if (match?.[1]) return match[1];
 	}
 
-	throw new Error("Unable to authenticate with Gemini. Make sure you're signed into gemini.google.com in a supported Chromium-based browser.");
+	throw new Error(
+		"Unable to authenticate with Gemini. Make sure you're signed into gemini.google.com in a supported Chromium-based browser.",
+	);
 }
 
 async function fetchWithCookieRedirects(
@@ -306,7 +305,7 @@ function decodeEmailEscapes(value: string): string {
 		.replace(/\\x40/gi, "@")
 		.replace(/&#64;/gi, "@")
 		.replace(/&commat;/gi, "@")
-		.replace(/\\"/g, "\"")
+		.replace(/\\"/g, '"')
 		.replace(/\\\\/g, "\\");
 }
 
@@ -317,15 +316,11 @@ async function uploadFile(
 ): Promise<{ id: string; name: string }> {
 	const data = readFileSync(filePath);
 	const fileName = basename(filePath);
-	const boundary = "----FormBoundary" + Math.random().toString(36).slice(2);
+	const boundary = `----FormBoundary${Math.random().toString(36).slice(2)}`;
 	const header = `--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="${fileName}"\r\nContent-Type: application/octet-stream\r\n\r\n`;
 	const footer = `\r\n--${boundary}--\r\n`;
 
-	const body = Buffer.concat([
-		Buffer.from(header, "utf-8"),
-		data,
-		Buffer.from(footer, "utf-8"),
-	]);
+	const body = Buffer.concat([Buffer.from(header, "utf-8"), data, Buffer.from(footer, "utf-8")]);
 
 	const res = await fetch(GEMINI_UPLOAD_URL, {
 		method: "POST",
@@ -347,14 +342,8 @@ async function uploadFile(
 	return { id: await res.text(), name: fileName };
 }
 
-function buildFReqPayload(
-	prompt: string,
-	uploaded: Array<{ id: string; name: string }>,
-): string {
-	const promptPayload =
-		uploaded.length > 0
-			? [prompt, 0, null, uploaded.map((file) => [[file.id, 1]])]
-			: [prompt];
+function buildFReqPayload(prompt: string, uploaded: Array<{ id: string; name: string }>): string {
+	const promptPayload = uploaded.length > 0 ? [prompt, 0, null, uploaded.map((file) => [[file.id, 1]])] : [prompt];
 	const innerList = [promptPayload, null, null];
 	return JSON.stringify([null, JSON.stringify(innerList)]);
 }
@@ -416,8 +405,7 @@ function parseStreamGenerateResponse(rawText: string): GeminiWebResult {
 				body = parsed;
 				break;
 			}
-		} catch {
-		}
+		} catch {}
 	}
 
 	const candidateList = getNestedValue(body, [4]);

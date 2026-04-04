@@ -1,7 +1,7 @@
 import { execFile } from "node:child_process";
-import { pbkdf2Sync, createDecipheriv } from "node:crypto";
+import { createDecipheriv, pbkdf2Sync } from "node:crypto";
 import { copyFileSync, existsSync, mkdtempSync, rmSync } from "node:fs";
-import { tmpdir, homedir, platform } from "node:os";
+import { homedir, platform, tmpdir } from "node:os";
 import { join } from "node:path";
 
 export type CookieMap = Record<string, string>;
@@ -14,11 +14,7 @@ interface BrowserConfig {
 	secretToolApp?: string;
 }
 
-const GOOGLE_ORIGINS = [
-	"https://gemini.google.com",
-	"https://accounts.google.com",
-	"https://www.google.com",
-];
+const GOOGLE_ORIGINS = ["https://gemini.google.com", "https://accounts.google.com", "https://www.google.com"];
 
 const ALL_COOKIE_NAMES = new Set([
 	"__Secure-1PSID",
@@ -67,15 +63,13 @@ const LINUX_BROWSER_CONFIGS: BrowserConfig[] = [
 	{ name: "Chrome", baseDir: ".config/google-chrome", secretToolApp: "chrome" },
 ];
 
-export async function getGoogleCookies(
-	options?: { profile?: string; requiredCookies?: string[] },
-): Promise<{ cookies: CookieMap; warnings: string[] } | null> {
+export async function getGoogleCookies(options?: {
+	profile?: string;
+	requiredCookies?: string[];
+}): Promise<{ cookies: CookieMap; warnings: string[] } | null> {
 	const currentPlatform = platform();
-	const configs = currentPlatform === "darwin"
-		? MACOS_BROWSER_CONFIGS
-		: currentPlatform === "linux"
-			? LINUX_BROWSER_CONFIGS
-			: [];
+	const configs =
+		currentPlatform === "darwin" ? MACOS_BROWSER_CONFIGS : currentPlatform === "linux" ? LINUX_BROWSER_CONFIGS : [];
 	if (configs.length === 0) return null;
 
 	const warnings: string[] = [];
@@ -192,7 +186,10 @@ function readKeychainPassword(account: string, service: string): Promise<string 
 			["find-generic-password", "-w", "-a", account, "-s", service],
 			{ timeout: 5000 },
 			(err, stdout) => {
-				if (err) { resolve(null); return; }
+				if (err) {
+					resolve(null);
+					return;
+				}
 				resolve(stdout.trim() || null);
 			},
 		);
@@ -203,19 +200,14 @@ function readLinuxPassword(secretToolApp: string | undefined): Promise<string> {
 	if (!secretToolApp) return Promise.resolve("peanuts");
 
 	return new Promise((resolve) => {
-		execFile(
-			"secret-tool",
-			["lookup", "application", secretToolApp],
-			{ timeout: 5000 },
-			(err, stdout) => {
-				if (err) {
-					// KDE Wallet users fall through to peanuts intentionally.
-					resolve("peanuts");
-					return;
-				}
-				resolve(stdout.trim() || "peanuts");
-			},
-		);
+		execFile("secret-tool", ["lookup", "application", secretToolApp], { timeout: 5000 }, (err, stdout) => {
+			if (err) {
+				// KDE Wallet users fall through to peanuts intentionally.
+				resolve("peanuts");
+				return;
+			}
+			resolve(stdout.trim() || "peanuts");
+		});
 	});
 }
 
@@ -225,9 +217,9 @@ async function importSqlite(): Promise<typeof import("node:sqlite") | null> {
 	if (sqliteModule) return sqliteModule;
 	const orig = process.emitWarning.bind(process);
 	process.emitWarning = ((warning: string | Error, ...args: unknown[]) => {
-		const msg = typeof warning === "string" ? warning : warning?.message ?? "";
+		const msg = typeof warning === "string" ? warning : (warning?.message ?? "");
 		if (msg.includes("SQLite is an experimental feature")) return;
-		return (orig as Function)(warning, ...args);
+		return (orig as (...a: never) => unknown)(warning, ...args);
 	}) as typeof process.emitWarning;
 	try {
 		sqliteModule = await import("node:sqlite");
@@ -266,10 +258,7 @@ async function readMetaVersion(dbPath: string): Promise<number> {
 	}
 }
 
-async function queryCookieRows(
-	dbPath: string,
-	hosts: string[],
-): Promise<Array<Record<string, unknown>> | null> {
+async function queryCookieRows(dbPath: string, hosts: string[]): Promise<Array<Record<string, unknown>> | null> {
 	const sqlite = await importSqlite();
 	if (!sqlite) return null;
 
@@ -289,9 +278,7 @@ async function queryCookieRows(
 	const db = new sqlite.DatabaseSync(dbPath, opts);
 	try {
 		return db
-			.prepare(
-				`SELECT name, value, host_key, encrypted_value FROM cookies WHERE (${where}) ORDER BY expires_utc DESC`,
-			)
+			.prepare(`SELECT name, value, host_key, encrypted_value FROM cookies WHERE (${where}) ORDER BY expires_utc DESC`)
 			.all() as Array<Record<string, unknown>>;
 	} catch {
 		return null;
@@ -317,6 +304,5 @@ function copySidecar(srcDb: string, targetDb: string, suffix: string): void {
 	if (!existsSync(sidecar)) return;
 	try {
 		copyFileSync(sidecar, `${targetDb}${suffix}`);
-	} catch {
-	}
+	} catch {}
 }

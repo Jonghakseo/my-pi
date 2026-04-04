@@ -1,10 +1,10 @@
 import { stripVTControlCharacters } from "node:util";
-import * as pty from "node-pty";
+import { SerializeAddon } from "@xterm/addon-serialize";
 import type { IBufferCell, Terminal as XtermTerminal } from "@xterm/headless";
 import xterm from "@xterm/headless";
-import { SerializeAddon } from "@xterm/addon-serialize";
+import * as pty from "node-pty";
 import { sliceLogOutput, trimRawOutput } from "./pty-log.js";
-import { splitAroundDsr, buildCursorPositionResponse } from "./pty-protocol.js";
+import { buildCursorPositionResponse, splitAroundDsr } from "./pty-protocol.js";
 import { ensureSpawnHelperExec } from "./spawn-helper.js";
 
 const Terminal = xterm.Terminal;
@@ -16,7 +16,6 @@ const DCS_REGEX = /\x1bP[^\x07\x1b]*(?:\x07|\x1b\\)/g;
 const CSI_REGEX = /\x1b\[[0-9;?]*[A-Za-z]/g;
 const ESC_SINGLE_REGEX = /\x1b[@-_]/g;
 const CONTROL_REGEX = /[\x00-\x08\x0B\x0C\x0E-\x1A\x1C-\x1F\x7F]/g;
-
 
 function sanitizeLine(line: string): string {
 	let out = line;
@@ -95,7 +94,10 @@ function sgrForStyle(style: CellStyle): string {
 	return `\u001b[${parts.join(";")}m`;
 }
 
-function normalizePaletteColor(mode: "default" | "palette" | "rgb", value: number): { mode: "default" | "palette" | "rgb"; value: number } {
+function normalizePaletteColor(
+	mode: "default" | "palette" | "rgb",
+	value: number,
+): { mode: "default" | "palette" | "rgb"; value: number } {
 	if (mode !== "palette") return { mode, value };
 	// xterm uses special palette values (>= 256) to represent defaults/specials; do not emit invalid 38;5;N codes.
 	if (value < 0 || value > 255) {
@@ -125,9 +127,7 @@ class WriteQueue {
 	private queue = Promise.resolve();
 
 	enqueue(fn: () => Promise<void> | void): void {
-		this.queue = this.queue.then(() => fn()).catch((err) => {
-			console.error("WriteQueue error:", err);
-		});
+		this.queue = this.queue.then(() => fn()).catch((_err) => {});
 	}
 
 	async drain(): Promise<void> {
@@ -165,15 +165,7 @@ export class PtyTerminalSession {
 	}
 
 	constructor(options: PtySessionOptions, events: PtySessionEvents = {}) {
-		const {
-			command,
-			cwd = process.cwd(),
-			env,
-			cols = 80,
-			rows = 24,
-			scrollback = 5000,
-			ansiReemit = true,
-		} = options;
+		const { command, cwd = process.cwd(), env, cols = 80, rows = 24, scrollback = 5000, ansiReemit = true } = options;
 
 		this.dataHandler = events.onData;
 		this.exitHandler = events.onExit;
@@ -186,9 +178,7 @@ export class PtyTerminalSession {
 
 		const shell =
 			options.shell ??
-			(process.platform === "win32"
-				? process.env.COMSPEC || "cmd.exe"
-				: process.env.SHELL || "/bin/sh");
+			(process.platform === "win32" ? process.env.COMSPEC || "cmd.exe" : process.env.SHELL || "/bin/sh");
 		const shellArgs = process.platform === "win32" ? ["/c", command] : ["-c", command];
 
 		const mergedEnv = env ? { ...process.env, ...env } : { ...process.env };
@@ -406,7 +396,7 @@ export class PtyTerminalSession {
 			out += cellChars;
 		}
 
-		return out + "\u001b[0m";
+		return `${out}\u001b[0m`;
 	}
 
 	getViewportLines(options: { ansi?: boolean } = {}): string[] {
@@ -431,11 +421,9 @@ export class PtyTerminalSession {
 				// but the buffer line contains text, fall back to plain translation. This prevents
 				// “blank screen” regressions on terminals that use special color encodings.
 				const plain = buffer.getLine(lineIndex)?.translateToString(true) ?? "";
-				const renderedPlain = rendered
-					.replace(/\x1b\[[0-9;]*m/g, "")
-					.replace(/\x1b\][^\x07]*(?:\x07|\x1b\\)/g, "");
+				const renderedPlain = rendered.replace(/\x1b\[[0-9;]*m/g, "").replace(/\x1b\][^\x07]*(?:\x07|\x1b\\)/g, "");
 				if (plain.trim().length > 0 && renderedPlain.trim().length === 0) {
-					lines.push(sanitizeLine(plain) + "\u001b[0m");
+					lines.push(`${sanitizeLine(plain)}\u001b[0m`);
 				} else {
 					lines.push(rendered);
 				}
@@ -463,10 +451,10 @@ export class PtyTerminalSession {
 	} {
 		const requested = Math.max(0, Math.trunc(options.lines));
 		const maxChars = options.maxChars !== undefined ? Math.max(0, Math.trunc(options.maxChars)) : undefined;
-		
+
 		const buffer = this.xterm.buffer.active;
 		const totalLinesInBuffer = buffer.length;
-		
+
 		if (requested === 0) {
 			return { lines: [], totalLinesInBuffer, truncatedByChars: false };
 		}
@@ -478,12 +466,12 @@ export class PtyTerminalSession {
 
 		const useAnsi = options.ansi && this.serializer;
 		if (useAnsi) {
-			const serialized = this.serializer!.serialize();
-			const serializedLines = serialized.split(/\r?\n/);
+			const serialized = this.serializer?.serialize();
+			const serializedLines = (serialized ?? "").split(/\r?\n/);
 			if (serializedLines.length >= totalLinesInBuffer) {
 				for (let i = start; i < totalLinesInBuffer; i++) {
 					const raw = serializedLines[i] ?? "";
-					const line = sanitizeLine(raw) + "\u001b[0m";
+					const line = `${sanitizeLine(raw)}\u001b[0m`;
 					if (remainingChars !== undefined) {
 						if (remainingChars <= 0) {
 							truncatedByChars = true;

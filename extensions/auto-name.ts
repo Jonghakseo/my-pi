@@ -122,7 +122,6 @@ export default function autoSessionName(pi: ExtensionAPI) {
 		updateStatus(ctx);
 	});
 
-
 	pi.on("session_tree", async (_event, ctx) => {
 		updateStatus(ctx);
 	});

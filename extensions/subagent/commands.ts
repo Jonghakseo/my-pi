@@ -2124,5 +2124,4 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 		restoreRunsFromSession(store, ctx, pi);
 		registerTerminalInputRedirect(ctx);
 	});
-
 }
