@@ -12,29 +12,6 @@ import { homedir } from "node:os";
 import { basename, join } from "node:path";
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 
-// --- Synthwave palette ---
-function _bg(s: string): string {
-	return `\x1b[48;2;52;20;58m${s}\x1b[49m`;
-}
-function _pink(s: string): string {
-	return `\x1b[38;2;255;126;219m${s}\x1b[39m`;
-}
-function _cyan(s: string): string {
-	return `\x1b[38;2;54;249;246m${s}\x1b[39m`;
-}
-function _green(s: string): string {
-	return `\x1b[38;2;114;241;184m${s}\x1b[39m`;
-}
-function _yellow(s: string): string {
-	return `\x1b[38;2;254;222;93m${s}\x1b[39m`;
-}
-function _dim(s: string): string {
-	return `\x1b[38;2;120;100;140m${s}\x1b[39m`;
-}
-function _bold(s: string): string {
-	return `\x1b[1m${s}\x1b[22m`;
-}
-
 interface Discovered {
 	name: string;
 	description: string;

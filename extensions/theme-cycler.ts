@@ -20,7 +20,6 @@ import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-age
 import { truncateToWidth } from "@mariozechner/pi-tui";
 
 export default function (pi: ExtensionAPI) {
-	let _currentCtx: ExtensionContext | undefined;
 	let swatchTimer: ReturnType<typeof setTimeout> | null = null;
 
 	function showSwatch(ctx: ExtensionContext) {
@@ -100,7 +99,6 @@ export default function (pi: ExtensionAPI) {
 	pi.registerShortcut("ctrl+x", {
 		description: "Cycle theme forward",
 		handler: async (ctx) => {
-			_currentCtx = ctx;
 			cycleTheme(ctx, 1);
 		},
 	});
@@ -108,7 +106,6 @@ export default function (pi: ExtensionAPI) {
 	pi.registerShortcut("ctrl+q", {
 		description: "Cycle theme backward",
 		handler: async (ctx) => {
-			_currentCtx = ctx;
 			cycleTheme(ctx, -1);
 		},
 	});
@@ -118,7 +115,6 @@ export default function (pi: ExtensionAPI) {
 	pi.registerCommand("theme", {
 		description: "Select a theme: /theme or /theme <name>",
 		handler: async (args, ctx) => {
-			_currentCtx = ctx;
 			if (!ctx.hasUI) return;
 
 			const themes = getThemeList(ctx);
@@ -155,9 +151,7 @@ export default function (pi: ExtensionAPI) {
 
 	// --- Session init ---
 
-	pi.on("session_start", async (_event, ctx) => {
-		_currentCtx = ctx;
-	});
+	pi.on("session_start", async (_event, _ctx) => {});
 
 	pi.on("session_shutdown", async () => {
 		if (swatchTimer) {

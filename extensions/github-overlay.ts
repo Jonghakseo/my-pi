@@ -1296,41 +1296,6 @@ class GithubOverlayUI {
 	}
 }
 
-function _renderPlainSummary(result: OverlayFetchResult): string {
-	if (result.error) {
-		return `GitHub PR 조회 실패: ${result.error}`;
-	}
-	if (!result.data) {
-		return "표시할 GitHub PR 데이터가 없습니다.";
-	}
-
-	const { data } = result;
-	const lines: string[] = [];
-	lines.push(`${data.repo} · PR #${data.pr.number}`);
-	lines.push(`${data.pr.title}`);
-	if (data.pr.url) lines.push(data.pr.url);
-	lines.push(
-		`state=${data.pr.state}${data.pr.isDraft ? " (draft)" : ""} review=${data.pr.reviewDecision} merge=${data.pr.mergeStateStatus}`,
-	);
-	lines.push(`${data.pr.headRefName} -> ${data.pr.baseRefName}`);
-	lines.push(`labels: ${data.pr.labels.join(", ") || "(none)"}`);
-	lines.push(`reviewers: ${data.pr.requestedReviewers.join(", ") || "(none)"}`);
-	lines.push(
-		`checks: total=${data.checkSummary.total} success=${data.checkSummary.success} failed=${data.checkSummary.failed} pending=${data.checkSummary.pending}`,
-	);
-	lines.push(`general comments: ${data.generalComments.length}`);
-	lines.push(`inline threads: ${data.totalThreads}, comments: ${data.totalInlineComments}`);
-
-	if (result.warnings.length > 0) {
-		lines.push("");
-		for (const warning of result.warnings) {
-			lines.push(`warning: ${warning}`);
-		}
-	}
-
-	return lines.join("\n");
-}
-
 // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: review-thread export performs paginated GraphQL fetch and markdown formatting in one linear workflow.
 async function fetchAndFormatReviewThreads(pi: ExtensionAPI, cwd: string): Promise<string> {
 	const repoNameWithOwner = await getRepoNameWithOwner(pi, cwd);
@@ -1556,7 +1521,7 @@ export default function githubOverlay(pi: ExtensionAPI) {
 		description: "Show current-branch PR with CI, labels, reviewers, general+inline comments (collapsible)",
 		handler: async (_args, ctx) => {
 			if (!ctx.hasUI) {
-				const _result = await fetchOverlayData(pi, ctx.cwd);
+				await fetchOverlayData(pi, ctx.cwd);
 				return;
 			}
 

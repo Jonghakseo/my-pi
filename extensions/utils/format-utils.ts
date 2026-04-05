@@ -288,7 +288,6 @@ export function formatTodoMetadataSuffix(todo: TodoFrontMatterLike): string {
 /** Format a full todo heading line with id, title, metadata, tags, assignment. */
 export function formatTodoHeading(todo: TodoFrontMatterLike): string {
 	const title = todo.title || "(untitled)";
-	const _status = todo.status || "open";
 	const metadataText = formatTodoMetadataSuffix(todo);
 	const tagText = todo.tags.length ? ` [${todo.tags.join(", ")}]` : "";
 	const assignmentSuffix = todo.assigned_to_session ? ` (assigned: ${todo.assigned_to_session})` : "";
