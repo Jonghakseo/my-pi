@@ -65,10 +65,6 @@ function getTodoStateKey(ctx: Pick<ExtensionContext, "cwd" | "sessionManager">):
 	return sessionFile ? `session:${sessionFile}` : `cwd:${ctx.cwd}`;
 }
 
-function _isStatus(value: unknown): value is TodoStatus {
-	return value === "pending" || value === "in_progress" || value === "completed";
-}
-
 function cloneTasks(tasks: TodoTask[]): TodoTask[] {
 	return tasks.map((task) => ({ ...task }));
 }
