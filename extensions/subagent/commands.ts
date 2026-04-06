@@ -1264,9 +1264,11 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 										updateCommandRunsWidget(store);
 									},
 									makeDetails,
-									runState.runtime === "claude" && runState.claudeSessionId
-										? runState.claudeSessionId
-										: runState.sessionFile,
+									{
+										sessionFile: runState.sessionFile,
+										resumeSessionId: runState.claudeSessionId,
+										sidecarSessionFile: runState.sessionFile,
+									},
 								),
 							),
 					});

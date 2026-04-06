@@ -26,6 +26,23 @@ import { formatToolCallPlain } from "./format.js";
 import { writePromptToTempFile } from "./session.js";
 import type { AgentAliasMatch, DisplayItem, OnUpdateCallback, SingleResult, SubagentDetails } from "./types.js";
 
+export interface RunSingleAgentSessionConfig {
+	sessionFile?: string;
+	resumeSessionId?: string;
+	sidecarSessionFile?: string;
+}
+
+function isUuidLikeSessionId(value: string | undefined): boolean {
+	return !!value && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
+}
+
+function normalizeRunSessionConfig(config?: string | RunSingleAgentSessionConfig): RunSingleAgentSessionConfig {
+	if (!config) return {};
+	if (typeof config !== "string") return config;
+	if (isUuidLikeSessionId(config)) return { resumeSessionId: config };
+	return { sessionFile: config, sidecarSessionFile: config };
+}
+
 function extractToolNamesFromPrecedingAssistant(state: ClaudeStreamState): string[] {
 	for (let i = state.messages.length - 1; i >= 0; i--) {
 		const msg = state.messages[i];
@@ -150,8 +167,12 @@ export async function runSingleAgent(
 	signal: AbortSignal | undefined,
 	onUpdate: OnUpdateCallback | undefined,
 	makeDetails: (results: SingleResult[]) => SubagentDetails,
-	sessionFile?: string,
+	sessionConfig?: string | RunSingleAgentSessionConfig,
 ): Promise<SingleResult> {
+	const normalizedSessionConfig = normalizeRunSessionConfig(sessionConfig);
+	const sessionFile = normalizedSessionConfig.sessionFile;
+	const resumeSessionId = normalizedSessionConfig.resumeSessionId;
+	const sidecarSessionFile = normalizedSessionConfig.sidecarSessionFile ?? sessionFile;
 	const agent = agents.find((a) => a.name === agentName);
 
 	if (!agent) {
@@ -169,7 +190,17 @@ export async function runSingleAgent(
 	}
 
 	if (agent.runtime === "claude") {
-		return runClaudeAgent(defaultCwd, agent, task, step, signal, onUpdate, makeDetails, sessionFile);
+		return runClaudeAgent(
+			defaultCwd,
+			agent,
+			task,
+			step,
+			signal,
+			onUpdate,
+			makeDetails,
+			resumeSessionId,
+			sidecarSessionFile,
+		);
 	}
 
 	return runPiAgent(defaultCwd, agent, agentName, task, step, signal, onUpdate, makeDetails, sessionFile);
@@ -183,7 +214,8 @@ async function runClaudeAgent(
 	signal: AbortSignal | undefined,
 	onUpdate: OnUpdateCallback | undefined,
 	makeDetails: (results: SingleResult[]) => SubagentDetails,
-	sessionFile?: string,
+	resumeSessionId?: string,
+	sidecarSessionFile?: string,
 ): Promise<SingleResult> {
 	try {
 		validateClaudeRuntimeModel(agent.model);
@@ -222,11 +254,8 @@ async function runClaudeAgent(
 	let tmpPromptDir: string | null = null;
 	let tmpPromptPath: string | null = null;
 
-	const isUuidLike = sessionFile
-		? /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(sessionFile)
-		: false;
-	const resumeId = isUuidLike ? sessionFile : undefined;
-	const sidecarPath = isUuidLike ? undefined : sessionFile;
+	const resumeId = resumeSessionId;
+	const sidecarPath = sidecarSessionFile;
 
 	const streamState = createStreamState();
 	let stderrBuf = "";
@@ -424,7 +453,7 @@ async function runClaudeAgent(
 
 		const finalExitCode = streamState.isError ? 1 : exitCode;
 		const result = stateToSingleResult(streamState, agent.name, agent.source, task, finalExitCode, step, stderrBuf);
-		result.sessionFile = sidecarPath || sessionFile;
+		result.sessionFile = sidecarPath;
 		result.claudeProjectDir = defaultCwd;
 		return result;
 	} finally {

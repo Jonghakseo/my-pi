@@ -45,7 +45,14 @@ export function findProjectMcpConfig(cwd: string): string | undefined {
 }
 
 export function buildClaudeArgs(config: ClaudeArgsConfig): string[] {
-	const args: string[] = ["-p", "--output-format", "stream-json", "--include-partial-messages", "--verbose"];
+	const args: string[] = [
+		"-p",
+		"--output-format",
+		"stream-json",
+		"--include-partial-messages",
+		"--verbose",
+		"--dangerously-skip-permissions",
+	];
 
 	const claudeTools = mapPiToolsToClaude(config.tools);
 
