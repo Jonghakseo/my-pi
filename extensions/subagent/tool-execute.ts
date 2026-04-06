@@ -1001,8 +1001,6 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 		}
 
 		function launchRunInBackground(runState: CommandRunState, taskForAgent: string): Promise<FinalizedRun> {
-			const effectiveSessionFile =
-				runState.runtime === "claude" && runState.claudeSessionId ? runState.claudeSessionId : runState.sessionFile;
 			let claudeCheckpointSent = !!runState.claudeSessionId;
 			return enqueueSubagentInvocation(() =>
 				runSingleAgent(
@@ -1027,7 +1025,11 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 						updateCommandRunsWidget(store);
 					},
 					(results) => makeDetails(mode, results),
-					effectiveSessionFile,
+					{
+						sessionFile: runState.sessionFile,
+						resumeSessionId: runState.claudeSessionId,
+						sidecarSessionFile: runState.sessionFile,
+					},
 				),
 			).then((result) => finalizeRunState(runState, result));
 		}

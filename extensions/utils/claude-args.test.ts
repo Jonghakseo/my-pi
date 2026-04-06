@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 import { buildClaudeArgs, findProjectMcpConfig } from "../subagent/claude-args.ts";
 
 describe("buildClaudeArgs", () => {
-	it("produces base args with --verbose, stream-json, partial messages, and --strict-mcp-config", () => {
+	it("produces base args with --verbose, stream-json, partial messages, dangerous skip permissions, and --strict-mcp-config", () => {
 		const args = buildClaudeArgs({
 			prompt: "say ok",
 			tools: ["read", "bash"],
@@ -16,6 +16,7 @@ describe("buildClaudeArgs", () => {
 		expect(args).toContain("--strict-mcp-config");
 		expect(args).toContain("stream-json");
 		expect(args).toContain("--include-partial-messages");
+		expect(args).toContain("--dangerously-skip-permissions");
 		expect(args.indexOf("--output-format")).toBeLessThan(args.indexOf("stream-json"));
 	});
 

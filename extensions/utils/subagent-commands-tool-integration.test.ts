@@ -302,6 +302,21 @@ describe("T09: command/tool runtime metadata integration", () => {
 
 			expect(result.isError).toBeUndefined();
 			expect(result.content[0]?.text).toContain("Resumed");
+			expect(mockRunSingleAgent).toHaveBeenCalledWith(
+				"/tmp/test-project",
+				expect.any(Array),
+				"claude-worker",
+				expect.any(String),
+				undefined,
+				expect.anything(),
+				expect.any(Function),
+				expect.any(Function),
+				{
+					sessionFile: "/tmp/session-1.jsonl",
+					resumeSessionId: "sess-123",
+					sidecarSessionFile: "/tmp/session-1.jsonl",
+				},
+			);
 		});
 	});
 
