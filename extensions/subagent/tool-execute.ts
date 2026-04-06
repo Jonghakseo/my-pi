@@ -250,6 +250,8 @@ function formatRunDetailOutput(run: CommandRunState): string {
 	const output = runOutput || sessionOutput || lineOutput || "(no output)";
 	const lines: string[] = [formatCommandRunSummary(run), `Prompt: ${run.task}`];
 
+	if (run.runtime) lines.push(`Runtime: ${run.runtime}`);
+	if (run.runtime === "claude" && run.claudeSessionId) lines.push(`Claude Session: ${run.claudeSessionId}`);
 	if (run.sessionFile) lines.push(`Session: ${run.sessionFile}`);
 	if (run.thoughtText) lines.push(`Thought: ${run.thoughtText}`);
 
@@ -352,6 +354,9 @@ function buildRunStartMessage(runState: CommandRunState, status: "started" | "re
 			batchId: runState.batchId,
 			pipelineId: runState.pipelineId,
 			pipelineStepIndex: runState.pipelineStepIndex,
+			runtime: runState.runtime,
+			claudeSessionId: runState.claudeSessionId,
+			claudeProjectDir: runState.claudeProjectDir,
 		},
 	};
 }
@@ -388,6 +393,9 @@ function buildRunCompletionMessage(finalized: FinalizedRun, options?: { display?
 			batchId: runState.batchId,
 			pipelineId: runState.pipelineId,
 			pipelineStepIndex: runState.pipelineStepIndex,
+			runtime: runState.runtime,
+			claudeSessionId: runState.claudeSessionId,
+			claudeProjectDir: runState.claudeProjectDir,
 		},
 	};
 }
@@ -416,6 +424,9 @@ function buildEscalationMessage(runState: CommandRunState, escalationMessage: st
 			batchId: runState.batchId,
 			pipelineId: runState.pipelineId,
 			pipelineStepIndex: runState.pipelineStepIndex,
+			runtime: runState.runtime,
+			claudeSessionId: runState.claudeSessionId,
+			claudeProjectDir: runState.claudeProjectDir,
 		},
 	};
 }
@@ -497,7 +508,7 @@ function toLaunchSummary(
 function buildRunAnalyticsSummary(
 	runState: Pick<
 		CommandRunState,
-		"id" | "agent" | "status" | "elapsedMs" | "model" | "batchId" | "pipelineId" | "pipelineStepIndex"
+		"id" | "agent" | "status" | "elapsedMs" | "model" | "batchId" | "pipelineId" | "pipelineStepIndex" | "runtime"
 	>,
 ): Record<string, unknown> {
 	return {
@@ -509,6 +520,7 @@ function buildRunAnalyticsSummary(
 		batchId: runState.batchId,
 		pipelineId: runState.pipelineId,
 		stepIndex: runState.pipelineStepIndex,
+		runtime: runState.runtime,
 	};
 }
 
@@ -989,6 +1001,9 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 		}
 
 		function launchRunInBackground(runState: CommandRunState, taskForAgent: string): Promise<FinalizedRun> {
+			const effectiveSessionFile =
+				runState.runtime === "claude" && runState.claudeSessionId ? runState.claudeSessionId : runState.sessionFile;
+			let claudeCheckpointSent = !!runState.claudeSessionId;
 			return enqueueSubagentInvocation(() =>
 				runSingleAgent(
 					ctx.cwd,
@@ -1002,10 +1017,17 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 						const current = partial.details?.results?.[0];
 						if (!current) return;
 						updateRunFromResult(runState, current);
+						if (!claudeCheckpointSent && runState.claudeSessionId) {
+							claudeCheckpointSent = true;
+							pi.sendMessage(buildRunStartMessage(runState, "started"), {
+								deliverAs: "followUp",
+								triggerTurn: false,
+							});
+						}
 						updateCommandRunsWidget(store);
 					},
 					(results) => makeDetails(mode, results),
-					runState.sessionFile,
+					effectiveSessionFile,
 				),
 			).then((result) => finalizeRunState(runState, result));
 		}
@@ -1042,6 +1064,33 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 						details: makeDetails("single"),
 						isError: true,
 					};
+				}
+
+				if (continueFromRun.runtime === "claude") {
+					if (!continueFromRun.claudeSessionId) {
+						return {
+							content: [
+								{
+									type: "text",
+									text: `Cannot resume Claude run #${continuationRunId}: no claudeSessionId found. The session metadata was lost or never captured.`,
+								},
+							],
+							details: makeDetails("single"),
+							isError: true,
+						};
+					}
+					if (!continueFromRun.claudeProjectDir || continueFromRun.claudeProjectDir !== ctx.cwd) {
+						return {
+							content: [
+								{
+									type: "text",
+									text: `Cannot resume Claude run #${continuationRunId}: claudeProjectDir mismatch. Expected "${continueFromRun.claudeProjectDir ?? "(none)"}", current cwd is "${ctx.cwd}".`,
+								},
+							],
+							details: makeDetails("single"),
+							isError: true,
+						};
+					}
 				}
 			}
 

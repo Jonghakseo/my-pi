@@ -4,6 +4,7 @@ description: Fast file/code locator — use for exploring codebases, finding fil
 tools: read, grep, find, ls
 model: anthropic/claude-sonnet-4-6
 thinking: low
+runtime: claude
 ---
 
 <system_prompt agent="finder">

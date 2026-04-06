@@ -4,6 +4,7 @@ description: Validation specialist — use for proving changes are correct with 
 tools: read, grep, find, ls, bash
 model: anthropic/claude-opus-4-6
 thinking: xhigh
+runtime: claude
 ---
 
 <system_prompt agent="verifier">

@@ -4,6 +4,7 @@ description: Strategic planning agent — clarifies scope, researches codebase e
 tools: read, grep, find, ls, bash, write
 model: anthropic/claude-opus-4-6
 thinking: high
+runtime: claude
 ---
 
 <system_prompt agent="planner">

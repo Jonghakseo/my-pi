@@ -36,6 +36,39 @@ export const CLAUDE_TOOL_MAP: Record<string, string | undefined> = {
 	skill: undefined,
 };
 
+export const PI_TO_CLAUDE_TOOL_MAP: Record<string, string> = {
+	read: "Read",
+	find: "Glob",
+	grep: "Grep",
+	ls: "LS",
+	bash: "Bash",
+	edit: "Edit",
+	write: "Write",
+};
+
+export function mapPiToolsToClaude(piTools: string[]): string[] {
+	const mapped: string[] = [];
+	for (const tool of piTools) {
+		const claudeTool = PI_TO_CLAUDE_TOOL_MAP[tool];
+		if (!claudeTool) {
+			throw new Error(
+				`Unsupported tool "${tool}" for Claude runtime. Supported tools: ${Object.keys(PI_TO_CLAUDE_TOOL_MAP).join(", ")}`,
+			);
+		}
+		mapped.push(claudeTool);
+	}
+	return Array.from(new Set(mapped));
+}
+
+export function validateClaudeRuntimeModel(model: string | undefined): void {
+	if (!model) return;
+	const lower = model.toLowerCase();
+	if (lower.startsWith("anthropic/claude-") || lower.startsWith("claude-")) return;
+	throw new Error(
+		`Model "${model}" is not supported with Claude runtime. Only Anthropic models (anthropic/claude-* or claude-*) are allowed.`,
+	);
+}
+
 export const CLAUDE_MODEL_ALIAS_MAP: Record<string, string> = {
 	opus: "claude-opus-4-6",
 	sonnet: "claude-sonnet-4-5",
