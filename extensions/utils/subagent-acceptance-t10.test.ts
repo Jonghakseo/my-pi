@@ -148,7 +148,7 @@ describe("T10 Acceptance Matrix", () => {
 		});
 	});
 
-	describe("A05: explicit approval policy (--tools + --allowedTools, no --bare)", () => {
+	describe("A05: explicit approval policy (--tools + --allowedTools, partial messages, no --bare)", () => {
 		it("never includes --bare", () => {
 			const args = buildClaudeArgs({ prompt: "task", tools: ["read", "bash", "edit", "write"] });
 			expect(args).not.toContain("--bare");
@@ -161,6 +161,11 @@ describe("T10 Acceptance Matrix", () => {
 			expect(toolsIdx).toBeGreaterThanOrEqual(0);
 			expect(allowedIdx).toBeGreaterThanOrEqual(0);
 			expect(args[toolsIdx + 1]).toBe(args[allowedIdx + 1]);
+		});
+
+		it("always includes --include-partial-messages", () => {
+			const args = buildClaudeArgs({ prompt: "task", tools: ["read"] });
+			expect(args).toContain("--include-partial-messages");
 		});
 	});
 

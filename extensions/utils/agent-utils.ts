@@ -40,7 +40,6 @@ export const PI_TO_CLAUDE_TOOL_MAP: Record<string, string> = {
 	read: "Read",
 	find: "Glob",
 	grep: "Grep",
-	ls: "LS",
 	bash: "Bash",
 	edit: "Edit",
 	write: "Write",
