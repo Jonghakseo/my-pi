@@ -32,6 +32,7 @@ export interface SingleResult {
 	errorMessage?: string;
 	step?: number;
 	liveText?: string;
+	liveThinking?: string;
 	liveToolCalls?: number;
 	thoughtText?: string;
 	sessionFile?: string;

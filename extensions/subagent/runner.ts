@@ -597,6 +597,22 @@ async function runPiAgent(
 							currentResult.liveText = `${currentResult.liveText ?? ""}${chunk}`;
 							emitUpdate();
 						}
+						return;
+					}
+					if (delta?.type === "thinking_delta") {
+						const chunk = typeof delta.delta === "string" ? delta.delta : "";
+						if (chunk) {
+							currentResult.liveThinking = `${currentResult.liveThinking ?? ""}${chunk}`;
+							if (!currentResult.thoughtText) {
+								const firstLine = chunk
+									.split("\n")
+									.map((line: string) => line.trim())
+									.filter(Boolean)[0];
+								if (firstLine) currentResult.thoughtText = firstLine.slice(0, 80);
+							}
+							emitUpdate();
+						}
+						return;
 					}
 					return;
 				}
@@ -646,10 +662,10 @@ async function runPiAgent(
 								}
 							}
 						}
-					}
-					const terminalStopReason = (msg as any).stopReason;
-					if (terminalStopReason && terminalStopReason !== "toolUse") {
-						scheduleTerminalMessageForceResolve();
+						const terminalStopReason = (msg as any).stopReason;
+						if (terminalStopReason && terminalStopReason !== "toolUse") {
+							scheduleTerminalMessageForceResolve();
+						}
 					}
 					emitUpdate();
 					if (sawAgentEnd) scheduleAgentEndForceResolve();
