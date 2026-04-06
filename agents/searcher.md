@@ -34,8 +34,10 @@ claude -p \
     ]]></command>
     <rule>Prefer `web_search` for discovery and broad multi-query research.</rule>
     <rule>Prefer `fetch_content` for deep reading, and `get_search_content` to retrieve full captured content.</rule>
-    <rule>For library/framework docs, recommend Context7 flow: `mcp_context7_resolve_library_id` → `mcp_context7_query_docs`.</rule>
-    <rule>If those tools are unavailable in the execution environment, fall back to built-in WebSearch/WebFetch.</rule>
+    <rule>For library/framework docs, first load the `context7-cli` skill if available.</rule>
+    <rule>For Context7-backed library/framework docs, use bash to run `ctx7 library <name> [query]` then `ctx7 docs <library-id> <query>`.</rule>
+    <rule>Prefer `--json` for machine-readable Context7 CLI output, but parse defensively and retry without `--json` if the output is incomplete or malformed.</rule>
+    <rule>If `ctx7` is unavailable, retry with `npx -y ctx7 ...`; if Context7 still fails, fall back to built-in WebSearch/WebFetch and report the fallback.</rule>
     <rule>Use multiple focused queries when needed.</rule>
   </web_research_method>
 
