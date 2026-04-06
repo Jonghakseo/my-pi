@@ -157,6 +157,42 @@ describe("updateRunFromResult with liveActivityPreview", () => {
 		expect(run.lastActivityAt).toBeGreaterThan(oldTimestamp);
 	});
 
+	it("updates lastActivityAt when liveThinking is present", () => {
+		const oldTimestamp = Date.now() - 30000;
+		const run = makeRunState({ lastActivityAt: oldTimestamp });
+
+		updateRunFromResult(run, {
+			agent: "test",
+			agentSource: "user",
+			task: "task",
+			exitCode: 0,
+			messages: [],
+			stderr: "",
+			usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0, contextTokens: 0, turns: 0 },
+			liveThinking: "analyzing edge cases",
+		});
+
+		expect(run.lastActivityAt).toBeGreaterThan(oldTimestamp);
+	});
+
+	it("updates lastActivityAt when thoughtText changes", () => {
+		const oldTimestamp = Date.now() - 30000;
+		const run = makeRunState({ lastActivityAt: oldTimestamp, thoughtText: "old thought" });
+
+		updateRunFromResult(run, {
+			agent: "test",
+			agentSource: "user",
+			task: "task",
+			exitCode: 0,
+			messages: [],
+			stderr: "",
+			usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0, contextTokens: 0, turns: 0 },
+			thoughtText: "new thought",
+		});
+
+		expect(run.lastActivityAt).toBeGreaterThan(oldTimestamp);
+	});
+
 	it("does not update lastActivityAt without any live activity or state changes", () => {
 		const oldTimestamp = Date.now() - 30000;
 		const run = makeRunState({ lastActivityAt: oldTimestamp });

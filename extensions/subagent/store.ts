@@ -112,6 +112,7 @@ export function updateRunFromResult(state: CommandRunState, result: SingleResult
 	const prevToolCalls = state.toolCalls;
 	const prevTurnCount = state.turnCount;
 	const prevLastLine = state.lastLine;
+	const prevThoughtText = state.thoughtText;
 
 	state.elapsedMs = Date.now() - state.startedAt;
 	state.toolCalls = Math.max(collectToolCallCount(result.messages), result.liveToolCalls ?? 0);
@@ -131,8 +132,12 @@ export function updateRunFromResult(state: CommandRunState, result: SingleResult
 	if (resolved) state.lastLine = resolved;
 
 	const hasDisplayChange =
-		state.toolCalls !== prevToolCalls || state.turnCount !== prevTurnCount || state.lastLine !== prevLastLine;
-	const hasLiveStreamActivity = result.liveActivityPreview != null || result.liveText != null;
+		state.toolCalls !== prevToolCalls ||
+		state.turnCount !== prevTurnCount ||
+		state.lastLine !== prevLastLine ||
+		state.thoughtText !== prevThoughtText;
+	const hasLiveStreamActivity =
+		result.liveActivityPreview != null || result.liveText != null || result.liveThinking != null;
 	if (hasDisplayChange || hasLiveStreamActivity) {
 		state.lastActivityAt = Date.now();
 	}
