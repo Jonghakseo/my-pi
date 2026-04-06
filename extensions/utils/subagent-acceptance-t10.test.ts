@@ -167,6 +167,11 @@ describe("T10 Acceptance Matrix", () => {
 			const args = buildClaudeArgs({ prompt: "task", tools: ["read"] });
 			expect(args).toContain("--include-partial-messages");
 		});
+
+		it("always includes --dangerously-skip-permissions", () => {
+			const args = buildClaudeArgs({ prompt: "task", tools: ["read"] });
+			expect(args).toContain("--dangerously-skip-permissions");
+		});
 	});
 
 	describe("A06: explicit MCP source policy (--strict-mcp-config)", () => {
