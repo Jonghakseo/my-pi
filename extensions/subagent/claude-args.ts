@@ -35,13 +35,20 @@ function mapThinkingToClaudeEffort(piThinking: string): string | undefined {
 }
 
 export function findProjectMcpConfig(cwd: string): string | undefined {
-	for (const candidate of MCP_CONFIG_CANDIDATES) {
-		const fullPath = path.resolve(cwd, candidate);
-		try {
-			if (fs.statSync(fullPath).isFile()) return fullPath;
-		} catch {}
+	let currentDir = path.resolve(cwd);
+
+	while (true) {
+		for (const candidate of MCP_CONFIG_CANDIDATES) {
+			const fullPath = path.join(currentDir, candidate);
+			try {
+				if (fs.statSync(fullPath).isFile()) return fullPath;
+			} catch {}
+		}
+
+		const parentDir = path.dirname(currentDir);
+		if (parentDir === currentDir) return undefined;
+		currentDir = parentDir;
 	}
-	return undefined;
 }
 
 export function buildClaudeArgs(config: ClaudeArgsConfig): string[] {

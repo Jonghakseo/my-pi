@@ -100,6 +100,19 @@ describe("claude-sidecar-writer", () => {
 		expect(items[1].content).toContain("file contents here");
 	});
 
+	it("preserves full toolResult content without truncation", () => {
+		const writer = createSidecarWriter(sidecarFile);
+		const longContent = "A".repeat(1200);
+
+		writer.writeUserMessage("Do the task");
+		writer.writeToolResult("Read", longContent);
+
+		const items = readSessionReplayItems(sidecarFile);
+		expect(items).toHaveLength(2);
+		expect(items[1].content).toContain(longContent);
+		expect(items[1].content).not.toContain("...");
+	});
+
 	it("prevents duplicate assistant turns", () => {
 		const writer = createSidecarWriter(sidecarFile);
 		writer.writeUserMessage("Do the task");
