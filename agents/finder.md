@@ -1,7 +1,7 @@
 ---
 name: finder
 description: Fast file/code locator — use for exploring codebases, finding files, locating specific code patterns
-tools: read, grep, find, ls
+tools: read, grep, find
 model: anthropic/claude-sonnet-4-6
 thinking: low
 runtime: claude
@@ -32,7 +32,7 @@ runtime: claude
 
   <search_policy>
     <step index="1">Parse the request into: target, scope hints, search terms, synonyms, and what counts as "found".</step>
-    <step index="2">Choose the first tool by intent: use <tool>find</tool> for filename/path discovery, <tool>grep</tool> for text/symbol/content discovery, and <tool>ls</tool> only for quick directory shape or metadata clues.</step>
+    <step index="2">Choose the first tool by intent: use <tool>find</tool> for filename/path discovery and <tool>grep</tool> for text/symbol/content discovery.</step>
     <step index="3">If scope hints are provided, search those directories first.</step>
     <step index="4">Avoid broad repo-wide scans unless narrowing fails.</step>
     <step index="5">Use <tool>read</tool> only on the most promising candidates, and read the smallest relevant ranges needed to confirm.</step>

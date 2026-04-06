@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 import { buildClaudeArgs, findProjectMcpConfig } from "../subagent/claude-args.ts";
 
 describe("buildClaudeArgs", () => {
-	it("produces base args with --verbose, stream-json, and --strict-mcp-config", () => {
+	it("produces base args with --verbose, stream-json, partial messages, and --strict-mcp-config", () => {
 		const args = buildClaudeArgs({
 			prompt: "say ok",
 			tools: ["read", "bash"],
@@ -15,6 +15,7 @@ describe("buildClaudeArgs", () => {
 		expect(args).toContain("--verbose");
 		expect(args).toContain("--strict-mcp-config");
 		expect(args).toContain("stream-json");
+		expect(args).toContain("--include-partial-messages");
 		expect(args.indexOf("--output-format")).toBeLessThan(args.indexOf("stream-json"));
 	});
 
@@ -287,5 +288,10 @@ describe("buildClaudeArgs flag correctness", () => {
 		const args = buildClaudeArgs({ prompt: "task", tools: [] });
 		expect(args).not.toContain("--tools");
 		expect(args).not.toContain("--allowedTools");
+	});
+
+	it("always includes --include-partial-messages for incremental stream events", () => {
+		const args = buildClaudeArgs({ prompt: "task", tools: ["read"] });
+		expect(args).toContain("--include-partial-messages");
 	});
 });
