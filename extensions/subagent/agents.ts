@@ -18,10 +18,6 @@ export const THINKING_LEVELS = AGENT_THINKING_LEVELS;
 
 export type AgentRuntime = "pi" | "claude";
 
-export function isClaudeRuntimeEnabled(): boolean {
-	return process.env.PI_CLAUDE_RUNTIME_DISABLED !== "true";
-}
-
 export interface AgentConfig {
 	name: string;
 	description: string;
@@ -153,8 +149,7 @@ function loadAgentsFromDir(dir: string, source: "user" | "project", options: Loa
 		const tools = normalizeTools(frontmatter.tools, format);
 		const model = normalizeModel(frontmatter.model, format);
 		const thinking = normalizeThinkingLevel(frontmatter.thinking);
-		const declaredRuntime: AgentRuntime = frontmatter.runtime === "claude" ? "claude" : "pi";
-		const runtime: AgentRuntime = declaredRuntime === "claude" && !isClaudeRuntimeEnabled() ? "pi" : declaredRuntime;
+		const runtime: AgentRuntime = frontmatter.runtime === "claude" ? "claude" : "pi";
 
 		agents.push({
 			name: frontmatter.name,

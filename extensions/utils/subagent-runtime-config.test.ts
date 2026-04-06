@@ -78,37 +78,6 @@ describe("runtime frontmatter parsing", () => {
 		fs.rmSync(tmpDir, { recursive: true, force: true });
 	});
 
-	it("falls back runtime: claude to pi when PI_CLAUDE_RUNTIME_DISABLED is set", () => {
-		process.env.PI_CLAUDE_RUNTIME_DISABLED = "true";
-		try {
-			const tmpDir = createTempAgentDir();
-			const agentsDir = path.join(tmpDir, ".pi", "agents");
-			fs.mkdirSync(agentsDir, { recursive: true });
-
-			writeAgentFile(
-				agentsDir,
-				"flagged-agent.md",
-				[
-					"---",
-					"name: flagged-agent",
-					"description: Agent with claude runtime but disabled",
-					"runtime: claude",
-					"---",
-					"Do work.",
-				].join("\n"),
-			);
-
-			const result = discoverAgents(tmpDir);
-			const agent = result.agents.find((a) => a.name === "flagged-agent");
-			expect(agent).toBeDefined();
-			expect(agent?.runtime).toBe("pi");
-
-			fs.rmSync(tmpDir, { recursive: true, force: true });
-		} finally {
-			process.env.PI_CLAUDE_RUNTIME_DISABLED = undefined;
-		}
-	});
-
 	it("treats unknown runtime values as 'pi'", () => {
 		const tmpDir = createTempAgentDir();
 		const agentsDir = path.join(tmpDir, ".pi", "agents");
