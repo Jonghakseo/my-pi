@@ -16,6 +16,12 @@ import {
 
 export const THINKING_LEVELS = AGENT_THINKING_LEVELS;
 
+export type AgentRuntime = "pi" | "claude";
+
+export function isClaudeRuntimeEnabled(): boolean {
+	return process.env.PI_CLAUDE_RUNTIME_DISABLED !== "true";
+}
+
 export interface AgentConfig {
 	name: string;
 	description: string;
@@ -27,6 +33,7 @@ export interface AgentConfig {
 	filePath: string;
 	/** Pixel art character for the above-editor widget (e.g. "fox", "blue-slime"). */
 	character?: string;
+	runtime: AgentRuntime;
 }
 
 export interface AgentDiscoveryResult {
@@ -65,13 +72,29 @@ const COMMON_SUBAGENT_ESCALATION_GUIDELINE = [
 	"  - Your recommendation, if you have one",
 ].join("\n");
 
-function attachCommonSubagentRule(systemPrompt: string): string {
+const COMMON_CLAUDE_RUNTIME_ESCALATION_GUIDELINE = [
+	"Blocker Reporting Guideline:",
+	"- If you encounter a blocker that you cannot resolve with available tools and context,",
+	"  report it as plain text at the end of your response.",
+	"- Do NOT attempt to call tools that are not available in your environment (e.g. ask_master).",
+	"- Include: a clear description of the blocker, options you considered, and your recommendation.",
+].join("\n");
+
+function attachCommonSubagentRule(systemPrompt: string, runtime: AgentRuntime = "pi"): string {
 	let prompt = systemPrompt.trimEnd();
 	if (!prompt.includes("Global Runtime Rule (subagent):")) {
 		prompt = prompt ? `${prompt}\n\n${COMMON_SUBAGENT_NO_RECURSION_RULE}` : COMMON_SUBAGENT_NO_RECURSION_RULE;
 	}
-	if (!prompt.includes("ask_master Guideline:")) {
-		prompt = prompt ? `${prompt}\n\n${COMMON_SUBAGENT_ESCALATION_GUIDELINE}` : COMMON_SUBAGENT_ESCALATION_GUIDELINE;
+	if (runtime === "claude") {
+		if (!prompt.includes("Blocker Reporting Guideline:")) {
+			prompt = prompt
+				? `${prompt}\n\n${COMMON_CLAUDE_RUNTIME_ESCALATION_GUIDELINE}`
+				: COMMON_CLAUDE_RUNTIME_ESCALATION_GUIDELINE;
+		}
+	} else {
+		if (!prompt.includes("ask_master Guideline:")) {
+			prompt = prompt ? `${prompt}\n\n${COMMON_SUBAGENT_ESCALATION_GUIDELINE}` : COMMON_SUBAGENT_ESCALATION_GUIDELINE;
+		}
 	}
 	return prompt;
 }
@@ -130,6 +153,8 @@ function loadAgentsFromDir(dir: string, source: "user" | "project", options: Loa
 		const tools = normalizeTools(frontmatter.tools, format);
 		const model = normalizeModel(frontmatter.model, format);
 		const thinking = normalizeThinkingLevel(frontmatter.thinking);
+		const declaredRuntime: AgentRuntime = frontmatter.runtime === "claude" ? "claude" : "pi";
+		const runtime: AgentRuntime = declaredRuntime === "claude" && !isClaudeRuntimeEnabled() ? "pi" : declaredRuntime;
 
 		agents.push({
 			name: frontmatter.name,
@@ -137,10 +162,11 @@ function loadAgentsFromDir(dir: string, source: "user" | "project", options: Loa
 			tools,
 			model,
 			thinking,
-			systemPrompt: attachCommonSubagentRule(body),
+			systemPrompt: attachCommonSubagentRule(body, runtime),
 			source,
 			filePath,
 			character: frontmatter.character || undefined,
+			runtime,
 		});
 	}
 

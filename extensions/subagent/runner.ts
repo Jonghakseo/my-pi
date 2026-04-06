@@ -9,12 +9,38 @@ import type { Message } from "@mariozechner/pi-ai";
 import {
 	computeAgentAliasHints as computeAgentAliasHintsUtil,
 	getSubCommandAgentCompletions as getSubCommandAgentCompletionsUtil,
+	mapPiToolsToClaude,
 	matchSubCommandAgent as matchSubCommandAgentUtil,
+	validateClaudeRuntimeModel,
 } from "../utils/agent-utils.js";
 import type { AgentConfig } from "./agents.js";
+import { buildClaudeArgs } from "./claude-args.js";
+import { createSidecarWriter } from "./claude-sidecar-writer.js";
+import {
+	type ClaudeStreamState,
+	createStreamState,
+	processClaudeEvent,
+	stateToSingleResult,
+} from "./claude-stream-parser.js";
 import { formatToolCallPlain } from "./format.js";
 import { writePromptToTempFile } from "./session.js";
 import type { AgentAliasMatch, DisplayItem, OnUpdateCallback, SingleResult, SubagentDetails } from "./types.js";
+
+function extractToolNamesFromPrecedingAssistant(state: ClaudeStreamState): string[] {
+	for (let i = state.messages.length - 1; i >= 0; i--) {
+		const msg = state.messages[i];
+		if (msg.role === "assistant") {
+			const names: string[] = [];
+			for (const part of msg.content as any[]) {
+				if (part.type === "toolCall" && typeof part.name === "string") {
+					names.push(part.name);
+				}
+			}
+			return names;
+		}
+	}
+	return [];
+}
 
 function appendStderrDiagnostic(result: SingleResult, message: string): void {
 	const line = `[runner] ${message}`;
@@ -142,6 +168,292 @@ export async function runSingleAgent(
 		};
 	}
 
+	if (agent.runtime === "claude") {
+		return runClaudeAgent(defaultCwd, agent, task, step, signal, onUpdate, makeDetails, sessionFile);
+	}
+
+	return runPiAgent(defaultCwd, agent, agentName, task, step, signal, onUpdate, makeDetails, sessionFile);
+}
+
+async function runClaudeAgent(
+	defaultCwd: string,
+	agent: AgentConfig,
+	task: string,
+	step: number | undefined,
+	signal: AbortSignal | undefined,
+	onUpdate: OnUpdateCallback | undefined,
+	makeDetails: (results: SingleResult[]) => SubagentDetails,
+	sessionFile?: string,
+): Promise<SingleResult> {
+	try {
+		validateClaudeRuntimeModel(agent.model);
+	} catch (err: any) {
+		return {
+			agent: agent.name,
+			agentSource: agent.source,
+			task,
+			exitCode: 1,
+			messages: [],
+			stderr: err.message,
+			usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0, contextTokens: 0, turns: 0 },
+			runtime: "claude",
+			step,
+		};
+	}
+
+	if (agent.tools && agent.tools.length > 0) {
+		try {
+			mapPiToolsToClaude(agent.tools);
+		} catch (err: any) {
+			return {
+				agent: agent.name,
+				agentSource: agent.source,
+				task,
+				exitCode: 1,
+				messages: [],
+				stderr: err.message,
+				usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0, contextTokens: 0, turns: 0 },
+				runtime: "claude",
+				step,
+			};
+		}
+	}
+
+	let tmpPromptDir: string | null = null;
+	let tmpPromptPath: string | null = null;
+
+	const isUuidLike = sessionFile
+		? /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(sessionFile)
+		: false;
+	const resumeId = isUuidLike ? sessionFile : undefined;
+	const sidecarPath = isUuidLike ? undefined : sessionFile;
+
+	const streamState = createStreamState();
+	let stderrBuf = "";
+	const sidecar = sidecarPath ? createSidecarWriter(sidecarPath) : null;
+	let sidecarInitialUserWritten = false;
+
+	const emitUpdate = () => {
+		if (!onUpdate) return;
+		const text = streamState.liveText ?? getFinalOutput(streamState.messages) ?? "(running...)";
+		const partial = stateToSingleResult(streamState, agent.name, agent.source, task, 0, step, stderrBuf);
+		partial.liveText = streamState.liveText;
+		partial.liveToolCalls = streamState.liveToolCalls;
+		partial.thoughtText = streamState.thoughtText;
+		onUpdate({
+			content: [{ type: "text", text }],
+			details: makeDetails([partial]),
+		});
+	};
+
+	try {
+		if (agent.systemPrompt.trim()) {
+			const tmp = writePromptToTempFile(agent.name, agent.systemPrompt);
+			tmpPromptDir = tmp.dir;
+			tmpPromptPath = tmp.filePath;
+		}
+
+		const args = buildClaudeArgs({
+			prompt: normalizeTaskForSubagentPrompt(task),
+			tools: agent.tools ?? [],
+			model: agent.model,
+			thinking: agent.thinking,
+			resumeSessionId: resumeId,
+			cwd: defaultCwd,
+			systemPromptFile: tmpPromptPath ?? undefined,
+		});
+
+		let wasAborted = false;
+
+		const exitCode = await new Promise<number>((resolve) => {
+			const proc = spawn("claude", args, { cwd: defaultCwd, shell: false, stdio: ["ignore", "pipe", "pipe"] });
+			let buffer = "";
+			let procExited = false;
+			let settled = false;
+			let exitFallbackTimer: ReturnType<typeof setTimeout> | undefined;
+			let resultLingerTimer: ReturnType<typeof setTimeout> | undefined;
+			let lastExitCode = 0;
+			let settleReason = "unknown";
+			let unparsedStdoutCount = 0;
+			const unparsedStdoutTail: string[] = [];
+
+			// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: stream line processor with tightly-coupled state; splitting would obscure control flow
+			const processLine = (line: string) => {
+				if (!line.trim()) return;
+				let event: any;
+				try {
+					event = JSON.parse(line);
+				} catch {
+					unparsedStdoutCount++;
+					const snippet = line.trim().slice(0, 300);
+					if (snippet) {
+						unparsedStdoutTail.push(snippet);
+						if (unparsedStdoutTail.length > 3) unparsedStdoutTail.shift();
+					}
+					return;
+				}
+				if (sidecar && !sidecarInitialUserWritten) {
+					sidecarInitialUserWritten = true;
+					sidecar.writeUserMessage(task);
+				}
+
+				const msgCountBefore = streamState.messages.length;
+				const isResult = processClaudeEvent(streamState, event);
+				emitUpdate();
+
+				if (sidecar && streamState.messages.length > msgCountBefore) {
+					for (let i = msgCountBefore; i < streamState.messages.length; i++) {
+						const msg = streamState.messages[i];
+						if (msg.role === "assistant") {
+							sidecar.writeAssistantTurn(streamState);
+						} else if (msg.role === "user") {
+							const toolNames = extractToolNamesFromPrecedingAssistant(streamState);
+							const textParts = (msg.content as any[])
+								.filter((p: any) => p.type === "text" && p.text)
+								.map((p: any) => p.text);
+							const content = textParts.join("\n") || "(no output)";
+							sidecar.writeToolResult(toolNames[0] ?? "tool", content);
+						}
+					}
+				}
+
+				if (isResult) {
+					if (sidecar) sidecar.writeFinalAssistant(streamState);
+					schedulePostResultLinger();
+				}
+			};
+
+			const resolveOnce = (code: number) => {
+				if (settled) return;
+				settled = true;
+				if (exitFallbackTimer) {
+					clearTimeout(exitFallbackTimer);
+					exitFallbackTimer = undefined;
+				}
+				if (resultLingerTimer) {
+					clearTimeout(resultLingerTimer);
+					resultLingerTimer = undefined;
+				}
+				if (buffer.trim()) processLine(buffer);
+
+				if (streamState.messages.length === 0) {
+					const msg = `no assistant/tool messages captured; settleReason=${settleReason}; exitCode=${code}; resultReceived=${streamState.resultReceived}`;
+					appendStderrDiagnostic({ stderr: stderrBuf } as SingleResult, msg);
+					stderrBuf += `[runner] ${msg}\n`;
+					if (unparsedStdoutCount > 0) {
+						const tail = `unparsed stdout lines=${unparsedStdoutCount}; tail=${unparsedStdoutTail.join(" | ") || "(empty)"}`;
+						stderrBuf += `[runner] ${tail}\n`;
+					}
+				}
+				resolve(code);
+			};
+
+			function schedulePostResultLinger() {
+				if (settled || procExited) {
+					settleReason = "result_immediate";
+					resolveOnce(0);
+					return;
+				}
+				if (resultLingerTimer) clearTimeout(resultLingerTimer);
+				resultLingerTimer = setTimeout(() => {
+					if (settled || procExited) return;
+					proc.kill("SIGTERM");
+					setTimeout(() => {
+						if (!procExited && proc.exitCode === null) proc.kill("SIGKILL");
+					}, 5000);
+					settleReason = "result_linger_timeout";
+					resolveOnce(0);
+				}, 3000);
+			}
+
+			proc.stdout.on("data", (data) => {
+				buffer += data.toString();
+				const lines = buffer.split("\n");
+				buffer = lines.pop() || "";
+				for (const line of lines) processLine(line);
+			});
+
+			proc.stderr.on("data", (data) => {
+				stderrBuf += data.toString();
+			});
+
+			proc.on("exit", (code) => {
+				procExited = true;
+				lastExitCode = code ?? 0;
+				if (streamState.resultReceived) {
+					settleReason = "exit_after_result";
+					resolveOnce(0);
+					return;
+				}
+				exitFallbackTimer = setTimeout(() => {
+					settleReason = "exit_fallback_timeout";
+					resolveOnce(lastExitCode);
+				}, 1500);
+			});
+
+			proc.on("close", (code) => {
+				procExited = true;
+				if (!settled) {
+					settleReason = "close";
+					resolveOnce(streamState.resultReceived ? 0 : (code ?? lastExitCode ?? 0));
+				}
+			});
+
+			proc.on("error", (error) => {
+				procExited = true;
+				stderrBuf += `[runner] process error: ${error?.message || String(error)}\n`;
+				settleReason = "process_error";
+				resolveOnce(1);
+			});
+
+			if (signal) {
+				const killProc = () => {
+					wasAborted = true;
+					settleReason = "aborted_by_signal";
+					proc.kill("SIGTERM");
+					setTimeout(() => {
+						if (!procExited && proc.exitCode === null) proc.kill("SIGKILL");
+					}, 5000);
+				};
+				if (signal.aborted) killProc();
+				else signal.addEventListener("abort", killProc, { once: true });
+			}
+		});
+
+		if (wasAborted) throw new Error("Subagent was aborted");
+
+		const finalExitCode = streamState.isError ? 1 : exitCode;
+		const result = stateToSingleResult(streamState, agent.name, agent.source, task, finalExitCode, step, stderrBuf);
+		result.sessionFile = sidecarPath || sessionFile;
+		result.claudeProjectDir = defaultCwd;
+		return result;
+	} finally {
+		if (tmpPromptPath)
+			try {
+				fs.unlinkSync(tmpPromptPath);
+			} catch {
+				/* ignore */
+			}
+		if (tmpPromptDir)
+			try {
+				fs.rmdirSync(tmpPromptDir);
+			} catch {
+				/* ignore */
+			}
+	}
+}
+
+async function runPiAgent(
+	defaultCwd: string,
+	agent: AgentConfig,
+	agentName: string,
+	task: string,
+	step: number | undefined,
+	signal: AbortSignal | undefined,
+	onUpdate: OnUpdateCallback | undefined,
+	makeDetails: (results: SingleResult[]) => SubagentDetails,
+	sessionFile?: string,
+): Promise<SingleResult> {
 	const args: string[] = ["--mode", "json", "-p"];
 	if (sessionFile) args.push("--session", sessionFile);
 	else args.push("--no-session");

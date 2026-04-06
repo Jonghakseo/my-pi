@@ -588,6 +588,9 @@ function restoreRunsFromSession(store: SubagentStore, ctx: any, pi?: ExtensionAP
 					model: d.model ?? existing?.model,
 					thoughtText: d.thoughtText ?? d.progressText ?? existing?.thoughtText,
 					source: restoredSource,
+					runtime: d.runtime ?? existing?.runtime,
+					claudeSessionId: d.claudeSessionId ?? existing?.claudeSessionId,
+					claudeProjectDir: d.claudeProjectDir ?? existing?.claudeProjectDir,
 				};
 				// Extract thought/progress and output from content payload
 				const lines = content.split("\n");
@@ -629,6 +632,9 @@ function restoreRunsFromSession(store: SubagentStore, ctx: any, pi?: ExtensionAP
 					model: existing?.model,
 					thoughtText: d.thoughtText ?? d.progressText ?? existing?.thoughtText,
 					source: restoredSource,
+					runtime: d.runtime ?? existing?.runtime,
+					claudeSessionId: d.claudeSessionId ?? existing?.claudeSessionId,
+					claudeProjectDir: d.claudeProjectDir ?? existing?.claudeProjectDir,
 				});
 			}
 		}
@@ -925,6 +931,23 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 					return;
 				}
 
+				if (targetRun.runtime === "claude") {
+					if (!targetRun.claudeSessionId) {
+						ctx.ui.notify(
+							`Cannot resume Claude run #${targetRunId}: no claudeSessionId found. The session metadata was lost or never captured.`,
+							"error",
+						);
+						return;
+					}
+					if (!targetRun.claudeProjectDir || targetRun.claudeProjectDir !== ctx.cwd) {
+						ctx.ui.notify(
+							`Cannot resume Claude run #${targetRunId}: claudeProjectDir mismatch. Expected "${targetRun.claudeProjectDir ?? "(none)"}", current cwd is "${ctx.cwd}".`,
+							"error",
+						);
+						return;
+					}
+				}
+
 				const nextInstruction = input.slice(firstSpace + 1).trim();
 				if (!nextInstruction) {
 					ctx.ui.notify(usageText, "info");
@@ -1154,6 +1177,9 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 						elapsedMs: runState.elapsedMs,
 						lastActivityAt: runState.lastActivityAt,
 						thoughtText: runState.thoughtText,
+						runtime: runState.runtime,
+						claudeSessionId: runState.claudeSessionId,
+						claudeProjectDir: runState.claudeProjectDir,
 					},
 				},
 				{ deliverAs: "followUp", triggerTurn: false },
@@ -1178,6 +1204,7 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 				updateCommandRunsWidget(store);
 			}, RUN_TICK_INTERVAL_MS);
 
+			let claudeCheckpointSent = !!runState.claudeSessionId;
 			// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: completion flow must preserve retry, pending-delivery, and widget update behavior.
 			void (async () => {
 				try {
@@ -1207,10 +1234,39 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 										const current = partial.details?.results?.[0];
 										if (!current) return;
 										updateRunFromResult(runState, current);
+										if (!claudeCheckpointSent && runState.claudeSessionId) {
+											claudeCheckpointSent = true;
+											pi.sendMessage(
+												{
+													customType: "subagent-command" as const,
+													content: `[subagent:${selectedAgent}#${runId}] checkpoint`,
+													display: false,
+													details: {
+														runId,
+														agent: selectedAgent,
+														task: taskForDisplay,
+														continuedFromRunId,
+														turnCount: runState.turnCount,
+														contextMode: runState.contextMode,
+														sessionFile: runState.sessionFile,
+														status: "started",
+														startedAt: runState.startedAt,
+														elapsedMs: runState.elapsedMs,
+														lastActivityAt: runState.lastActivityAt,
+														runtime: runState.runtime,
+														claudeSessionId: runState.claudeSessionId,
+														claudeProjectDir: runState.claudeProjectDir,
+													},
+												},
+												{ deliverAs: "followUp", triggerTurn: false },
+											);
+										}
 										updateCommandRunsWidget(store);
 									},
 									makeDetails,
-									runState.sessionFile,
+									runState.runtime === "claude" && runState.claudeSessionId
+										? runState.claudeSessionId
+										: runState.sessionFile,
 								),
 							),
 					});
@@ -1264,6 +1320,9 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 							thoughtText: runState.thoughtText,
 							retryCount: runState.retryCount,
 							status: runState.status,
+							runtime: runState.runtime,
+							claudeSessionId: runState.claudeSessionId,
+							claudeProjectDir: runState.claudeProjectDir,
 						},
 					};
 					// Intentionally keep triggerTurn off for subagent status logs.
@@ -1333,6 +1392,9 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 							error: runState.lastLine,
 							thoughtText: runState.thoughtText,
 							status: runState.status,
+							runtime: runState.runtime,
+							claudeSessionId: runState.claudeSessionId,
+							claudeProjectDir: runState.claudeProjectDir,
 						},
 					};
 

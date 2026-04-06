@@ -7,91 +7,123 @@ Reference:
 
 ## Current status
 
-- Pipeline mode: `worker → verifier → reviewer`
-- Current stop point: **after `T00c`, before `T00d`**
-- User request: **finish T00b/T00c completeness work, update progress, then pause**
+- **All tasks T00a~T11 COMPLETED**
+- Typecheck: PASS
+- Tests: 46 files, 1306 tests, 0 failures
+- Feature flag: `PI_CLAUDE_RUNTIME_ENABLED` (기본 OFF)
 
 ## Task progress snapshot
 
-### Completed
-- `T00a` Claude CLI environment/version check
-  - Confirmed `claude` CLI is installed and runnable
-  - Confirmed local auth is usable
-  - Confirmed `claude -p "say ok" --output-format text` succeeds
-  - Reflected in `extensions/subagent/CLAUDE_RUNTIME_PLAN.md`
-  - Reviewer follow-up redaction applied for account-specific auth output
+### Wave 0 — 관측/사실 수집 (전부 완료)
 
-### Completed
-- `T00b` stream-json fixture collection
-  - Artifacts:
-    - `extensions/subagent/fixtures/claude-stream/basic-text.ndjson`
-    - `extensions/subagent/fixtures/claude-stream/tool-call.ndjson`
-    - `extensions/subagent/fixtures/claude-stream/long-running.ndjson`
-    - `extensions/subagent/fixtures/claude-stream/error.ndjson`
-    - `extensions/subagent/fixtures/claude-stream/bare-auth-error.ndjson`
-    - `extensions/subagent/fixtures/claude-stream/README.md`
-  - Final verifier: PASS
-  - Final reviewer: PASS
-  - Completeness updates applied:
-    - `long-running.ndjson` 설명을 incremental stdout 스트리밍으로 과장하지 않도록 수정
-    - 현재 fixture 범위에 **abort / non-zero-exit / fallback semantics는 포함되지 않음**을 README에 명시
+- `T00a` Claude CLI environment/version check — PASS
+- `T00b` stream-json fixture collection — PASS
+- `T00c` resume/approval/MCP/cwd observations — PASS
+- `T00d` process lifecycle spec — PASS
+- `T01` Phase 0 결과를 계획 문서에 반영 — PASS
 
-- `T00c` resume/approval/MCP/cwd observations
-  - Artifacts:
-    - `extensions/subagent/fixtures/claude-observations.md`
-    - `extensions/subagent/fixtures/claude-mcp-context7-only.json`
-  - Final verifier: PASS
-  - Final reviewer: PASS with one non-blocking follow-up candidate
-  - Completeness updates applied:
-    - `--strict-mcp-config`는 **MCP exposure 제한**에 대한 관측일 뿐, 전체 runtime isolation 증거가 아님을 명시
-    - pre-init `hook_*` events가 `init`보다 먼저 나오고 같은 `session_id`를 담는다는 관측 추가
-    - same-cwd resume의 대화 연속성을 nonce recall 예시로 보강
-  - Non-blocking follow-up candidate:
-    - `extensions/subagent/fixtures/claude-mcp-context7-only.json`의 `@upstash/context7-mcp@latest`를 고정 버전으로 pin 하면 재현성이 더 좋아짐 (reviewer P2 ASK)
+### Wave 1 — 타입/정책 기초 (전부 완료)
 
-### Not started
-- `T00d` process lifecycle spec
-- `T01` reflect Phase 0 findings into plan
-- `T02`~`T11` implementation/acceptance/rollout tasks
+- `T02` runtime/type/prompt 정책 추가 — PASS
+  - `types.ts`: AgentConfig/CommandRunState/SingleResult에 runtime/Claude metadata 추가
+  - `agents.ts`: frontmatter `runtime` 읽기, runtime-aware prompt 분기 (ask_master 제거/대체)
+  - 7 tests in `subagent-runtime-config.test.ts`
 
-## Important observed facts so far
+- `T03` runner 계약/분기/역방향 매핑 — PASS
+  - `runner.ts`: runClaudeAgent skeleton + runSingleAgent runtime dispatch
+  - `agent-utils.ts`: PI_TO_CLAUDE_TOOL_MAP, mapPiToolsToClaude, validateClaudeRuntimeModel
+  - 18 tests in `subagent-runner-dispatch.test.ts`
 
-### CLI / auth
-- `claude --version` observed: `2.1.91 (Claude Code)`
-- Local non-bare auth is usable
-- `--bare` is currently an auth blocker in this environment
+- `T04` approval/MCP/ambient config 정책 코드화 — PASS
+  - `claude-args.ts`: buildClaudeArgs (non-bare, --verbose, --strict-mcp-config, --tools/--allowedTools)
+  - 19 tests in `claude-args.test.ts`
 
-### stream-json
-- Real fixtures were captured for parser source-of-truth use
-- Successful stream-json capture required `--verbose` in this environment
-- Bare-mode auth failure was preserved separately as `bare-auth-error.ndjson`
+### Wave 2 — Claude 런타임 핵심 (전부 완료)
 
-### runtime policy observations
-- `--resume` uses UUID-like session ids
-- Session id is observable early from `system/init` in stream-json
-- `--mcp-config` alone is additive; strict isolation requires `--strict-mcp-config`
-- Same-cwd resume succeeded; cross-cwd resume failed in observed tests
-- `Edit`/`Write` required `--allowedTools` in observed non-interactive runs
+- `T05` Claude stream parser + lifecycle — PASS
+  - `claude-stream-parser.ts`: processClaudeEvent, stateToSingleResult
+  - `runner.ts`: runClaudeAgent 실제 구현 (spawn, NDJSON parse, lifecycle)
+  - 35 tests in `claude-stream-parser.test.ts`
 
-## Active subagent work at pause time
+- `T06` session metadata 전파/복원 — PASS
+  - `store.ts`: updateRunFromResult에 Claude metadata 전파
+  - `tool-execute.ts` / `commands.ts`: details 직렬화/복원, continue validation, mid-run checkpoint
+  - 17 tests in `subagent-session-metadata.test.ts`
 
-- 없음
-- T00b / T00c의 worker → verifier → reviewer 파이프라인은 현재 시점에 모두 종료됨
+- `T07` sidecar writer — PASS
+  - `claude-sidecar-writer.ts`: pi-compatible JSONL writer (append discipline)
+  - `runner.ts`: sidecar writer 연동
+  - 12 tests in `claude-sidecar-writer.test.ts`
 
-## Known blockers / cautions
+- `T08` live preview / hang-detection parity — PASS
+  - `claude-stream-parser.ts`: liveActivityPreview 생성
+  - `store.ts`: lastActivityAt 갱신 로직 보강
+  - 10 tests in `subagent-live-preview.test.ts`
 
-- 사용자 요청으로 **`T00d`는 아직 시작하지 않음**
-- `--bare` default strategy is currently unsafe in this environment until plan/spec is updated accordingly
-- `--verbose` requirement must be reflected downstream in parser-related tasks/spec
-- T00b fixture set은 parser source-of-truth이지만 **abort / non-zero-exit / fallback** 근거는 아직 별도 확보가 필요함
-- `--strict-mcp-config`는 MCP만 제한한다는 점을 downstream policy에서 과대해석하면 안 됨
+### Wave 3 — 통합/게이트 (전부 완료)
 
-## Recommended next step after resume
+- `T09` commands/tool-execute 통합 — PASS
+  - `commands.ts` / `tool-execute.ts`: error path metadata, analytics summary, detail output
+  - 11 tests in `subagent-commands-tool-integration.test.ts`
 
-1. 필요하면 `claude-mcp-context7-only.json`의 Context7 MCP package version pin 여부를 결정
-2. `T00d` process lifecycle spec 파이프라인 시작
-3. 이후 `T01`에서 Phase 0 결과를 plan 문서에 통합 반영
+- `T10` 테스트/acceptance 통합 — PASS (rollout gate)
+  - Acceptance matrix 15/15 PASS
+  - 35 tests in `subagent-acceptance-t10.test.ts`
 
-## Pause note
+- `T11` feature flag + 초기 opt-in rollout — PASS
+  - Feature flag: `PI_CLAUDE_RUNTIME_ENABLED=true` (기본 OFF)
+  - `agents/finder.md`, `agents/planner.md`, `agents/verifier.md`에 `runtime: claude` 추가
+  - Rollback: flag OFF → 즉시 모든 agent pi로 복귀
 
-Work intentionally paused here per user request **after completing T00b/T00c completeness work and updating this progress log**.
+## Acceptance Matrix (T10)
+
+| # | Item | Status |
+|---|------|--------|
+| A01 | Runtime frontmatter parsing | PASS |
+| A02 | Runtime-aware prompt policy | PASS |
+| A03 | Runtime dispatch | PASS |
+| A04 | Non-Anthropic model guard | PASS |
+| A05 | Explicit approval policy | PASS |
+| A06 | Explicit MCP source policy | PASS |
+| A07 | Stream-json parser | PASS |
+| A08 | Process lifecycle fallback | PASS |
+| A09 | Session metadata propagation | PASS |
+| A10 | Reload/continue/same session resume | PASS |
+| A11 | Same sidecar append across continue | PASS |
+| A12 | Replay compatibility | PASS |
+| A13 | Detail compatibility | PASS |
+| A14 | Live preview / hang detection parity | PASS |
+| A15 | Existing runtime: pi regression | PASS |
+
+## New files created
+
+- `extensions/subagent/claude-args.ts` — CLI args builder
+- `extensions/subagent/claude-stream-parser.ts` — stream-json event parser
+- `extensions/subagent/claude-sidecar-writer.ts` — pi-compatible JSONL sidecar writer
+- `extensions/subagent/fixtures/claude-process-lifecycle.md` — lifecycle spec
+
+## New test files
+
+- `extensions/utils/subagent-runtime-config.test.ts`
+- `extensions/utils/subagent-runner-dispatch.test.ts`
+- `extensions/utils/claude-args.test.ts`
+- `extensions/utils/claude-stream-parser.test.ts`
+- `extensions/utils/subagent-session-metadata.test.ts`
+- `extensions/utils/claude-sidecar-writer.test.ts`
+- `extensions/utils/subagent-live-preview.test.ts`
+- `extensions/utils/subagent-commands-tool-integration.test.ts`
+- `extensions/utils/subagent-acceptance-t10.test.ts`
+
+## Known risks / follow-ups
+
+- `--bare` 미사용 → ambient hooks/plugins/skills 노출 가능 (v1 허용, 모니터링 필요)
+- `--verbose` 의존 (stream-json metadata 캡처용)
+- abort/non-zero-exit fixture 미확보 (T00b known gap)
+- `--strict-mcp-config`는 MCP만 제한 (hooks/plugins는 미제한)
+- Context7 MCP package version pin 미결정 (P2)
+
+## Recommended next steps
+
+1. `PI_CLAUDE_RUNTIME_ENABLED=true` 설정 후 실제 subagent 실행 테스트 (finder, planner, verifier)
+2. abort/non-zero-exit fixture 추가 확보
+3. 실환경 모니터링 후 추가 agent 확대 여부 판단

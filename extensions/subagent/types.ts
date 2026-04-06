@@ -5,7 +5,7 @@
 import type { AgentToolResult } from "@mariozechner/pi-agent-core";
 import type { Message } from "@mariozechner/pi-ai";
 import { Type } from "@sinclair/typebox";
-import type { AgentConfig } from "./agents.js";
+import type { AgentConfig, AgentRuntime } from "./agents.js";
 
 // ─── Interfaces ──────────────────────────────────────────────────────────────
 
@@ -35,6 +35,10 @@ export interface SingleResult {
 	liveToolCalls?: number;
 	thoughtText?: string;
 	sessionFile?: string;
+	runtime?: AgentRuntime;
+	claudeSessionId?: string;
+	claudeProjectDir?: string;
+	liveActivityPreview?: string;
 }
 
 export interface BatchOrChainItem {
@@ -84,6 +88,9 @@ export interface CommandRunState {
 	retryCount?: number;
 	/** Last transient failure reason that triggered an auto-retry. */
 	lastRetryReason?: string;
+	runtime?: AgentRuntime;
+	claudeSessionId?: string;
+	claudeProjectDir?: string;
 	/** Origin of this run: "tool" = LLM called subagent tool, "command" = user slash-command / >> shorthand. */
 	source?: "tool" | "command";
 	/** Optional batch group id for tool-level grouped parallel launches. */

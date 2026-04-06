@@ -96,6 +96,18 @@ export function collectToolCallCount(messages: Message[]): number {
 	return getDisplayItems(messages).filter((item) => item.type === "toolCall").length;
 }
 
+function resolveLastLine(result: SingleResult, output: string | undefined): string | undefined {
+	if (result.liveActivityPreview) return result.liveActivityPreview;
+	const previewLine = getLatestActivityPreview(result.messages);
+	if (previewLine) return previewLine;
+	if (result.liveText) {
+		const liveLine = getLastNonEmptyLine(result.liveText);
+		if (liveLine) return liveLine;
+	}
+	if (output) return getLastNonEmptyLine(output);
+	return undefined;
+}
+
 export function updateRunFromResult(state: CommandRunState, result: SingleResult): void {
 	const prevToolCalls = state.toolCalls;
 	const prevTurnCount = state.turnCount;
@@ -108,25 +120,20 @@ export function updateRunFromResult(state: CommandRunState, result: SingleResult
 	if (result.usage?.turns != null) state.turnCount = result.usage.turns;
 	if (result.thoughtText) state.thoughtText = result.thoughtText;
 
+	if (result.runtime) state.runtime = result.runtime;
+	if (result.claudeSessionId) state.claudeSessionId = result.claudeSessionId;
+	if (result.claudeProjectDir) state.claudeProjectDir = result.claudeProjectDir;
+
 	const output = getFinalOutput(result.messages);
 	if (output) state.lastOutput = output;
 
-	const previewLine = getLatestActivityPreview(result.messages);
-	if (previewLine) {
-		state.lastLine = previewLine;
-	} else if (result.liveText) {
-		const liveLine = getLastNonEmptyLine(result.liveText);
-		if (liveLine) {
-			state.lastLine = liveLine;
-		} else if (output) {
-			state.lastLine = getLastNonEmptyLine(output);
-		}
-	} else if (output) {
-		state.lastLine = getLastNonEmptyLine(output);
-	}
+	const resolved = resolveLastLine(result, output);
+	if (resolved) state.lastLine = resolved;
 
-	// Update lastActivityAt when observable state changes
-	if (state.toolCalls !== prevToolCalls || state.turnCount !== prevTurnCount || state.lastLine !== prevLastLine) {
+	const hasDisplayChange =
+		state.toolCalls !== prevToolCalls || state.turnCount !== prevTurnCount || state.lastLine !== prevLastLine;
+	const hasLiveStreamActivity = result.liveActivityPreview != null || result.liveText != null;
+	if (hasDisplayChange || hasLiveStreamActivity) {
 		state.lastActivityAt = Date.now();
 	}
 }
