@@ -72,6 +72,10 @@ export default function codexFastMode(pi: ExtensionAPI) {
 					return {
 						...upstreamPayload,
 						service_tier: "priority",
+						text: {
+							...(isRecord(upstreamPayload.text) ? upstreamPayload.text : {}),
+							verbosity: "low",
+						},
 					};
 				},
 			});
