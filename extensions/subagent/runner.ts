@@ -535,6 +535,7 @@ async function runPiAgent(
 			let settled = false;
 			let exitFallbackTimer: ReturnType<typeof setTimeout> | undefined;
 			let agentEndFallbackTimer: ReturnType<typeof setTimeout> | undefined;
+			let terminalMessageFallbackTimer: ReturnType<typeof setTimeout> | undefined;
 			let lastExitCode = 0;
 			let lastEventAt = Date.now();
 			let sawAgentEnd = false;
@@ -561,6 +562,10 @@ async function runPiAgent(
 
 				if (event.type === "agent_start" || event.type === "turn_start") {
 					sawAgentEnd = false;
+					if (terminalMessageFallbackTimer) {
+						clearTimeout(terminalMessageFallbackTimer);
+						terminalMessageFallbackTimer = undefined;
+					}
 					return;
 				}
 
@@ -642,6 +647,10 @@ async function runPiAgent(
 							}
 						}
 					}
+					const terminalStopReason = (msg as any).stopReason;
+					if (terminalStopReason && terminalStopReason !== "toolUse") {
+						scheduleTerminalMessageForceResolve();
+					}
 					emitUpdate();
 					if (sawAgentEnd) scheduleAgentEndForceResolve();
 					return;
@@ -668,6 +677,10 @@ async function runPiAgent(
 					clearTimeout(agentEndFallbackTimer);
 					agentEndFallbackTimer = undefined;
 				}
+				if (terminalMessageFallbackTimer) {
+					clearTimeout(terminalMessageFallbackTimer);
+					terminalMessageFallbackTimer = undefined;
+				}
 				if (buffer.trim()) processLine(buffer);
 
 				if (currentResult.messages.length === 0) {
@@ -684,6 +697,27 @@ async function runPiAgent(
 				}
 				resolve(code);
 			};
+
+			function scheduleTerminalMessageForceResolve() {
+				if (!currentResult.stopReason || currentResult.stopReason === "toolUse" || settled || procExited) return;
+				if (terminalMessageFallbackTimer) clearTimeout(terminalMessageFallbackTimer);
+
+				const marker = lastEventAt;
+				terminalMessageFallbackTimer = setTimeout(() => {
+					if (settled || procExited || wasAborted) return;
+					if (lastEventAt !== marker) return;
+
+					const forcedCode = currentResult.stopReason === "error" || currentResult.stopReason === "aborted" ? 1 : 0;
+
+					proc.kill("SIGTERM");
+					setTimeout(() => {
+						if (!procExited && proc.exitCode === null) proc.kill("SIGKILL");
+					}, 5000);
+
+					settleReason = "terminal_message_fallback_timeout";
+					resolveOnce(forcedCode);
+				}, 3000);
+			}
 
 			// print-mode sometimes keeps the Node process alive after agent_end
 			// (e.g. lingering extension timers/transports). In that case, force
