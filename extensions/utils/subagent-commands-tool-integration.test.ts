@@ -119,7 +119,7 @@ describe("T09: command/tool runtime metadata integration", () => {
 		mockDiscoverAgents.mockReturnValue({
 			agents: [
 				{ name: "worker", source: "user", systemPrompt: "", runtime: "pi" },
-				{ name: "claude-worker", source: "user", systemPrompt: "", runtime: "claude", model: "claude-sonnet-4-5" },
+				{ name: "claude-worker", source: "user", systemPrompt: "", runtime: "claude", model: "claude-sonnet-4-6" },
 				{ name: "reviewer", source: "user", systemPrompt: "", runtime: "pi" },
 			],
 			projectAgentsDir: null,

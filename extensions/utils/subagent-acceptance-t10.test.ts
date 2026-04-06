@@ -110,7 +110,7 @@ describe("T10 Acceptance Matrix", () => {
 					name: "bad",
 					description: "Bad",
 					tools: ["read", "todo"],
-					model: "claude-sonnet-4-5",
+					model: "claude-sonnet-4-6",
 					systemPrompt: "test",
 					source: "user" as const,
 					filePath: "/tmp/test.md",
@@ -139,8 +139,8 @@ describe("T10 Acceptance Matrix", () => {
 			expect(() => validateClaudeRuntimeModel("openai/gpt-4")).toThrow("not supported");
 		});
 
-		it("accepts claude-sonnet-4-5", () => {
-			expect(() => validateClaudeRuntimeModel("claude-sonnet-4-5")).not.toThrow();
+		it("accepts claude-sonnet-4-6", () => {
+			expect(() => validateClaudeRuntimeModel("claude-sonnet-4-6")).not.toThrow();
 		});
 
 		it("accepts undefined model", () => {
@@ -261,7 +261,7 @@ describe("T10 Acceptance Matrix", () => {
 					name: "x",
 					description: "X",
 					tools: ["read"],
-					model: "claude-sonnet-4-5",
+					model: "claude-sonnet-4-6",
 					systemPrompt: "t",
 					source: "user" as const,
 					filePath: "/tmp/t.md",

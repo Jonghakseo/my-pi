@@ -6,11 +6,11 @@
 
 **A personal AI operating system built on [pi](https://github.com/mariozechner/pi-coding-agent)**
 
-*11 specialized agents · 25+ extensions · one developer's opinionated setup*
+*11 specialized agents · 30+ extensions · one developer's opinionated setup*
 
 <br/>
 
-`🤖 11 Agents` &nbsp; `🧩 25+ Extensions` &nbsp; `🎨 7 Themes`
+`🤖 11 Agents` &nbsp; `🧩 30+ Extensions` &nbsp; `🎨 7 Themes`
 
 <br/>
 
@@ -38,7 +38,7 @@ The system is organized in **four layers**:
 | Layer | Purpose |
 |---|---|
 | **User / pi TUI** | Interactive terminal interface |
-| **Extensions** | 25+ TypeScript plugins — subagent management, voice I/O, MCP bridge, UI overlays, safety guards |
+| **Extensions** | 30+ TypeScript plugins — subagent management, MCP bridge, remote access, UI overlays, safety guards |
 | **Agent Orchestra** | 11 specialized agent definitions with distinct roles and models |
 | **Infrastructure** | MCP tool integrations via [claude-mcp-bridge](./extensions/claude-mcp-bridge/) — reuses your existing Claude Code MCP setup (Jira, Slack, Gmail, Calendar, GA4, Figma, DB, etc.) |
 
@@ -81,7 +81,7 @@ The orchestrator (main agent) runs on `anthropic/claude-opus-4-6`, ensuring stro
 
 ## 🧩 Extensions
 
-Here are representative items from the 25+ custom TypeScript extensions, grouped by domain:
+Here are representative items from the 30+ custom TypeScript extensions, grouped by domain:
 
 ### Core System
 
@@ -94,6 +94,7 @@ Here are representative items from the 25+ custom TypeScript extensions, grouped
 | **escalate-tool.ts** | Escalation tool for subagents to signal the master when judgment is needed |
 | **claude-hooks-bridge.ts** | Bridge connecting Claude Code hook events to Pi sessions |
 | **memory-layer/** | Persistent memory system across sessions |
+| **remote/** | `/remote`, `/remote:lan`, `/remote:funnel` — local/LAN/public-URL remote access |
 
 ### UI / UX
 
@@ -129,8 +130,6 @@ Here are representative items from the 25+ custom TypeScript extensions, grouped
 | Extension | Description |
 |---|---|
 | **command-typo-assist.ts** | Detects command typos and offers auto-correction |
-
----
 
 ---
 
@@ -171,7 +170,7 @@ The setup currently ships with 7 themes, hot-swappable with `Ctrl+X`:
 | `Ctrl+Shift+O` | Open file browser |
 | `Ctrl+Shift+F` | Reveal the latest file reference in Finder |
 | `Ctrl+Shift+R` | Quick Look the latest file reference |
-| `Ctrl+O` | Toggle tool output collapse/expand |
+| `Ctrl+O` | Toggle tool output collapse/expand (pi built-in, customized here via `override-builtin-tools.ts`) |
 
 
 ## 🌐 Web Research Extension
@@ -198,7 +197,7 @@ A reviewer that only reviews catches more bugs than a generalist asked to "also 
 Safety mechanisms like typo detection, confirmation prompts, and thinking visibility are not productivity-killing restrictions — they are core product features.
 
 **4. The terminal is the IDE.**
-Voice input, git diffs, GitHub PRs, screensavers — all inside the terminal. No context-switching required.
+Git diffs, GitHub PRs, screensavers, file browsing — all inside the terminal. No context-switching required.
 
 ---
 
@@ -208,7 +207,7 @@ This is not a demo project. It's a **living configuration** used daily for produ
 
 | Metric | Value |
 |---|---|
-| Active extensions | 25+ |
+| Active extensions | 30+ |
 | Agent definitions | 11 |
 | Themes | 7 |
 

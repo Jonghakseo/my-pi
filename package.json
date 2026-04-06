@@ -1,7 +1,7 @@
 {
 	"name": "@jonghakseo/my-pi",
 	"version": "0.1.1",
-	"description": "A personal AI operating system built on pi — 11 agents, 20+ extensions, 5 themes, automated daily retrospectives",
+	"description": "A personal AI operating system built on pi — 11 agents, 30+ extensions, 7 themes",
 	"keywords": [
 		"pi-package"
 	],

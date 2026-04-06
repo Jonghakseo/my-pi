@@ -133,11 +133,11 @@ describe("buildClaudeArgs", () => {
 		const args = buildClaudeArgs({
 			prompt: "task",
 			tools: ["read"],
-			model: "claude-sonnet-4-5",
+			model: "claude-sonnet-4-6",
 		});
 
 		const idx = args.indexOf("--model");
-		expect(args[idx + 1]).toBe("claude-sonnet-4-5");
+		expect(args[idx + 1]).toBe("claude-sonnet-4-6");
 	});
 
 	it("maps pi thinking values to Claude CLI --effort levels", () => {

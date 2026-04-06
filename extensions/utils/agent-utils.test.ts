@@ -69,7 +69,7 @@ describe("normalizeModel", () => {
 	});
 
 	it("should pass through pi models as-is", () => {
-		expect(normalizeModel("claude-sonnet-4-5", "pi")).toBe("claude-sonnet-4-5");
+		expect(normalizeModel("claude-sonnet-4-6", "pi")).toBe("claude-sonnet-4-6");
 	});
 
 	it("should map Claude aliases", () => {
