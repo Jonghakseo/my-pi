@@ -249,6 +249,20 @@ describe("findProjectMcpConfig", () => {
 		}
 	});
 
+	it("walks parent directories to find project .mcp.json", () => {
+		const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "mcp-find-test-"));
+		const nestedDir = path.join(tmpDir, "packages", "nested", "src");
+		const mcpPath = path.join(tmpDir, ".mcp.json");
+		fs.mkdirSync(nestedDir, { recursive: true });
+		fs.writeFileSync(mcpPath, "{}");
+
+		try {
+			expect(findProjectMcpConfig(nestedDir)).toBe(mcpPath);
+		} finally {
+			fs.rmSync(tmpDir, { recursive: true, force: true });
+		}
+	});
+
 	it("returns undefined when no MCP config exists", () => {
 		const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "mcp-find-test-"));
 

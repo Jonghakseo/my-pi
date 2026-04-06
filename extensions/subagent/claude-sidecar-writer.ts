@@ -77,8 +77,7 @@ export function createSidecarWriter(filePath: string): SidecarWriter {
 		},
 
 		writeToolResult(toolName: string, content: string): void {
-			const preview = content.length > 500 ? `${content.slice(0, 500)}...` : content;
-			append(makeEnvelope("toolResult", [{ type: "text", text: preview }], { toolName }));
+			append(makeEnvelope("toolResult", [{ type: "text", text: content }], { toolName }));
 		},
 
 		writeFinalAssistant(state: ClaudeStreamState): void {
