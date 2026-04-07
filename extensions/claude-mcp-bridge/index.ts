@@ -1563,12 +1563,4 @@ export default async function claudeMcpBridge(pi: ExtensionAPI) {
 			await openMcpStatusOverlay(ctx as ReloadableContext, disabledAtCommandStart);
 		},
 	});
-
-	pi.registerCommand("mcp-reload", {
-		description: "Reload MCP config and runtime",
-		handler: async (_args, ctx) => {
-			if (ctx.hasUI) ctx.ui.notify("Reloading runtime to apply MCP changes...", "info");
-			await ctx.reload();
-		},
-	});
 }
