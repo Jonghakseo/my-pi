@@ -30,7 +30,7 @@ Claude Code MCP 설정을 pi에서 재사용하는 전역 브릿지 확장입니
   - footer status: `MCP connected/total`
 - 명령어
   - `/mcp-status` (서버 상태 + Tools 토글)
-  - `/mcp-reload`
+  - `/reload`
 
 ## Install (global)
 
@@ -44,4 +44,4 @@ pi를 어느 프로젝트에서 실행해도 자동 로드됩니다.
 ## Notes
 
 - 설정의 `${ENV_NAME}` 값은 환경변수로 확장됩니다.
-- MCP 설정 변경(서버 추가/삭제/이름 변경) 후에는 `/mcp-reload` 또는 `/reload`를 실행하세요.
+- MCP 설정 변경(서버 추가/삭제/이름 변경) 후에는 `/reload`를 실행하세요.
