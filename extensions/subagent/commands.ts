@@ -1228,8 +1228,9 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 							updateCommandRunsWidget(store);
 							ctx.ui.notify(`subagent #${runId} retry ${retryIndex}/${maxRetries}: ${reason}`, "warning");
 						},
-						invoke: () =>
-							enqueueSubagentInvocation(() =>
+						invoke: () => {
+							runState.persistedSessionBaseOffset = getSessionFileSize(runState.sessionFile);
+							return enqueueSubagentInvocation(() =>
 								runSingleAgent(
 									ctx.cwd,
 									agents,
@@ -1280,7 +1281,8 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 										persistedSessionBaseOffset: runState.persistedSessionBaseOffset,
 									},
 								),
-							),
+							);
+						},
 					});
 					runState.retryCount = retryCount;
 
