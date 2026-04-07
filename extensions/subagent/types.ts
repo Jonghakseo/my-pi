@@ -77,6 +77,7 @@ export interface CommandRunState {
 	continuedFromRunId?: number;
 	turnCount: number;
 	sessionFile?: string;
+	persistedSessionBaseOffset?: number;
 	abortController?: AbortController;
 	usage?: UsageStats;
 	model?: string;

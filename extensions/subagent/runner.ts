@@ -31,6 +31,7 @@ export interface RunSingleAgentSessionConfig {
 	sessionFile?: string;
 	resumeSessionId?: string;
 	sidecarSessionFile?: string;
+	persistedSessionBaseOffset?: number;
 }
 
 function isUuidLikeSessionId(value: string | undefined): boolean {
@@ -191,6 +192,7 @@ export async function runSingleAgent(
 	const sessionFile = normalizedSessionConfig.sessionFile;
 	const resumeSessionId = normalizedSessionConfig.resumeSessionId;
 	const sidecarSessionFile = normalizedSessionConfig.sidecarSessionFile ?? sessionFile;
+	const persistedSessionBaseOffset = normalizedSessionConfig.persistedSessionBaseOffset ?? 0;
 	const agent = agents.find((a) => a.name === agentName);
 
 	if (!agent) {
@@ -221,7 +223,18 @@ export async function runSingleAgent(
 		);
 	}
 
-	return runPiAgent(defaultCwd, agent, agentName, task, step, signal, onUpdate, makeDetails, sessionFile);
+	return runPiAgent(
+		defaultCwd,
+		agent,
+		agentName,
+		task,
+		step,
+		signal,
+		onUpdate,
+		makeDetails,
+		sessionFile,
+		persistedSessionBaseOffset,
+	);
 }
 
 async function runClaudeAgent(
@@ -280,6 +293,7 @@ async function runClaudeAgent(
 	const sidecar = sidecarPath ? createSidecarWriter(sidecarPath) : null;
 	let sidecarInitialUserWritten = false;
 	let completionMarkerWritten = false;
+	let wasAborted = false;
 
 	const emitUpdate = () => {
 		if (!onUpdate) return;
@@ -297,7 +311,9 @@ async function runClaudeAgent(
 	const writeCompletionMarkerOnce = (exitCode: number) => {
 		if (!sidecar || completionMarkerWritten) return;
 		completionMarkerWritten = true;
-		sidecar.writeDone({ exitCode, stopReason: streamState.stopReason, runtime: "claude" });
+		const stopReason = wasAborted ? "aborted" : streamState.stopReason;
+		const normalizedExitCode = stopReason === "error" || stopReason === "aborted" ? 1 : exitCode;
+		sidecar.writeDone({ exitCode: normalizedExitCode, stopReason, runtime: "claude" });
 	};
 
 	try {
@@ -316,8 +332,6 @@ async function runClaudeAgent(
 			cwd: defaultCwd,
 			systemPromptFile: tmpPromptPath ?? undefined,
 		});
-
-		let wasAborted = false;
 
 		const exitCode = await new Promise<number>((resolve) => {
 			const proc = spawn("claude", args, { cwd: defaultCwd, shell: false, stdio: ["ignore", "pipe", "pipe"] });
@@ -509,6 +523,7 @@ async function runPiAgent(
 	onUpdate: OnUpdateCallback | undefined,
 	makeDetails: (results: SingleResult[]) => SubagentDetails,
 	sessionFile?: string,
+	persistedSessionBaseOffset = 0,
 ): Promise<SingleResult> {
 	const args: string[] = ["--mode", "json", "-p"];
 	if (sessionFile) args.push("--session", sessionFile);
@@ -533,6 +548,7 @@ async function runPiAgent(
 		sessionFile,
 	};
 	let completionMarkerWritten = false;
+	let wasAborted = false;
 
 	const emitUpdate = () => {
 		if (onUpdate) {
@@ -548,7 +564,9 @@ async function runPiAgent(
 	const writeCompletionMarkerOnce = (exitCode: number) => {
 		if (!sessionFile || completionMarkerWritten) return;
 		completionMarkerWritten = true;
-		appendCompletionMarker(sessionFile, { exitCode, stopReason: currentResult.stopReason, runtime: "pi" });
+		const stopReason = wasAborted ? "aborted" : currentResult.stopReason;
+		const normalizedExitCode = stopReason === "error" || stopReason === "aborted" ? 1 : exitCode;
+		appendCompletionMarker(sessionFile, { exitCode: normalizedExitCode, stopReason, runtime: "pi" });
 	};
 
 	try {
@@ -560,7 +578,6 @@ async function runPiAgent(
 		}
 
 		args.push(normalizeTaskForSubagentPrompt(task));
-		let wasAborted = false;
 
 		const exitCode = await new Promise<number>((resolve) => {
 			const proc = spawn("pi", args, { cwd: defaultCwd, shell: false, stdio: ["ignore", "pipe", "pipe"] });
@@ -580,7 +597,7 @@ async function runPiAgent(
 
 			const syncFromPersistedSession = (allowResolve: boolean): boolean => {
 				if (!sessionFile) return false;
-				const snapshot = readPersistedSessionSnapshot(sessionFile);
+				const snapshot = readPersistedSessionSnapshot(sessionFile, { startOffset: persistedSessionBaseOffset });
 				if (snapshot.terminalStopReason && !currentResult.stopReason) {
 					currentResult.stopReason = snapshot.terminalStopReason;
 				}

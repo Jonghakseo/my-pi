@@ -32,6 +32,7 @@ import {
 } from "./format.js";
 import { clearPendingGroupCompletion, upsertPendingGroupCompletion } from "./group-pending.js";
 import { enqueueSubagentInvocation } from "./invocation-queue.js";
+import { getSessionFileSize } from "./persisted-session.js";
 import { formatCommandRunSummary, removeRun, trimCommandRunHistory } from "./run-utils.js";
 import { getFinalOutput, getLastNonEmptyLine, runSingleAgent } from "./runner.js";
 import {
@@ -346,6 +347,7 @@ function buildRunStartMessage(runState: CommandRunState, status: "started" | "re
 			turnCount: runState.turnCount,
 			contextMode: runState.contextMode,
 			sessionFile: runState.sessionFile,
+			persistedSessionBaseOffset: runState.persistedSessionBaseOffset,
 			status,
 			startedAt: runState.startedAt,
 			elapsedMs: runState.elapsedMs,
@@ -381,6 +383,7 @@ function buildRunCompletionMessage(finalized: FinalizedRun, options?: { display?
 			turnCount: runState.turnCount,
 			contextMode: runState.contextMode,
 			sessionFile: runState.sessionFile,
+			persistedSessionBaseOffset: runState.persistedSessionBaseOffset,
 			startedAt: runState.startedAt,
 			elapsedMs: runState.elapsedMs,
 			lastActivityAt: runState.lastActivityAt,
@@ -415,6 +418,7 @@ function buildEscalationMessage(runState: CommandRunState, escalationMessage: st
 			agent: runState.agent,
 			task: runState.task,
 			status: "error" as const,
+			persistedSessionBaseOffset: runState.persistedSessionBaseOffset,
 			startedAt: runState.startedAt,
 			elapsedMs: runState.elapsedMs,
 			lastActivityAt: runState.lastActivityAt,
@@ -952,6 +956,7 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 				runState.contextMode = runState.contextMode ?? (config.inheritMainContext ? "main" : "sub");
 				runState.continuedFromRunId = config.continuedFromRunId;
 				runState.sessionFile = runState.sessionFile ?? makeSubagentSessionFile(runState.id);
+				runState.persistedSessionBaseOffset = getSessionFileSize(runState.sessionFile);
 				runState.source = "tool";
 			} else {
 				const runId = store.nextCommandRunId++;
@@ -969,6 +974,7 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 					continuedFromRunId: config.continuedFromRunId,
 					turnCount: DEFAULT_TURN_COUNT,
 					sessionFile: makeSubagentSessionFile(runId),
+					persistedSessionBaseOffset: getSessionFileSize(makeSubagentSessionFile(runId)),
 					removed: false,
 					contextMode: config.inheritMainContext ? "main" : "sub",
 					source: "tool",
@@ -1029,6 +1035,7 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 						sessionFile: runState.sessionFile,
 						resumeSessionId: runState.claudeSessionId,
 						sidecarSessionFile: runState.sessionFile,
+						persistedSessionBaseOffset: runState.persistedSessionBaseOffset,
 					},
 				),
 			).then((result) => finalizeRunState(runState, result));

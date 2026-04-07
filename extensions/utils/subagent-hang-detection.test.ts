@@ -50,6 +50,39 @@ describe("subagent hang detection with persisted session fallback", () => {
 		expect(pi.sendMessage).not.toHaveBeenCalled();
 	});
 
+	it("ignores stale terminal state that predates the current invocation", () => {
+		tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "subagent-hang-"));
+		const sessionFile = path.join(tmpDir, "session.jsonl");
+		fs.writeFileSync(
+			sessionFile,
+			`${JSON.stringify({
+				type: "message",
+				timestamp: Date.now(),
+				message: {
+					role: "assistant",
+					stopReason: "stop",
+					timestamp: Date.now(),
+					content: [{ type: "text", text: "Old done" }],
+				},
+			})}\n${JSON.stringify({ type: "subagent_done", timestamp: Date.now(), exitCode: 0, stopReason: "stop", runtime: "pi" })}\n`,
+			"utf8",
+		);
+
+		const stale = new Date(Date.now() - HANG_TIMEOUT_MS - 5000);
+		fs.utimesSync(sessionFile, stale, stale);
+
+		const store = createStore();
+		const run = makeRun(sessionFile, { persistedSessionBaseOffset: fs.statSync(sessionFile).size });
+		store.commandRuns.set(run.id, run);
+		const pi = { sendMessage: vi.fn() } as any;
+
+		checkForHungRuns(store, pi);
+
+		expect(run.status).toBe("error");
+		expect(run.lastLine).toContain("Auto-aborted");
+		expect(pi.sendMessage).toHaveBeenCalledTimes(1);
+	});
+
 	it("marks the run done from the persisted terminal session state instead of auto-aborting", () => {
 		tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "subagent-hang-"));
 		const sessionFile = path.join(tmpDir, "session.jsonl");
