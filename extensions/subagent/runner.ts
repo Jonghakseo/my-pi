@@ -718,10 +718,8 @@ async function runPiAgent(
 				if (!currentResult.stopReason || currentResult.stopReason === "toolUse" || settled || procExited) return;
 				if (terminalMessageFallbackTimer) clearTimeout(terminalMessageFallbackTimer);
 
-				const marker = lastEventAt;
 				terminalMessageFallbackTimer = setTimeout(() => {
 					if (settled || procExited || wasAborted) return;
-					if (lastEventAt !== marker) return;
 
 					const forcedCode = currentResult.stopReason === "error" || currentResult.stopReason === "aborted" ? 1 : 0;
 

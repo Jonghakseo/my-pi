@@ -51,6 +51,14 @@ function makeHangingProcess(lines: string[]): MockProc {
 	return proc;
 }
 
+function makeHangingProcessWithDelayedEvent(lines: string[], delayedLine: string, delayMs: number): MockProc {
+	const proc = makeHangingProcess(lines);
+	setTimeout(() => {
+		proc.stdout.emit("data", Buffer.from(`${delayedLine}\n`, "utf8"));
+	}, delayMs);
+	return proc;
+}
+
 describe("runSingleAgent pi terminal message fallback", () => {
 	beforeEach(() => {
 		spawnMock.mockReset();
@@ -99,6 +107,50 @@ describe("runSingleAgent pi terminal message fallback", () => {
 		expect(result.messages).toHaveLength(1);
 		expect(result.messages[0]?.role).toBe("assistant");
 		expect(spawnMock).toHaveBeenCalledTimes(1);
+		const proc = spawnMock.mock.results[0]?.value as MockProc;
+		expect(proc.kill).toHaveBeenCalledWith("SIGTERM");
+	});
+
+	it("still force-resolves when cleanup events arrive after the terminal assistant message", async () => {
+		vi.useFakeTimers();
+		const { runSingleAgent } = await import("../subagent/runner.ts");
+		spawnMock.mockImplementationOnce(() =>
+			makeHangingProcessWithDelayedEvent(
+				[
+					JSON.stringify({ type: "agent_start" }),
+					JSON.stringify({
+						type: "message_end",
+						message: {
+							role: "assistant",
+							model: "test-model",
+							content: [{ type: "text", text: "Final answer" }],
+							stopReason: "stop",
+						},
+					}),
+				],
+				JSON.stringify({ type: "cleanup_event" }),
+				1000,
+			),
+		);
+
+		const resultPromise = runSingleAgent(
+			"/tmp/project",
+			[makePiAgent()],
+			"pi-worker",
+			"review task",
+			undefined,
+			undefined,
+			undefined,
+			makeDetails,
+		);
+
+		await vi.runAllTicks();
+		await vi.advanceTimersByTimeAsync(3000);
+		const result = await resultPromise;
+		await vi.runOnlyPendingTimersAsync();
+
+		expect(result.exitCode).toBe(0);
+		expect(result.messages).toHaveLength(1);
 		const proc = spawnMock.mock.results[0]?.value as MockProc;
 		expect(proc.kill).toHaveBeenCalledWith("SIGTERM");
 	});
