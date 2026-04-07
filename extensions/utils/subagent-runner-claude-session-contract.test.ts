@@ -158,6 +158,8 @@ describe("runSingleAgent Claude session contract", () => {
 		expect(replayItems[1]).toMatchObject({ type: "assistant", content: expect.stringContaining("first answer") });
 		expect(replayItems[2]).toMatchObject({ type: "user", content: expect.stringContaining("continue task") });
 		expect(replayItems[3]).toMatchObject({ type: "assistant", content: expect.stringContaining("continued answer") });
+		const raw = fs.readFileSync(sidecarFile, "utf8");
+		expect(raw.match(/"type":"subagent_done"/g)?.length).toBe(2);
 	});
 
 	it("treats legacy string session config as a sidecar file path", async () => {
