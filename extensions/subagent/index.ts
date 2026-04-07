@@ -38,7 +38,9 @@ function reconcileRunWithPersistedSession(run: CommandRunState): void {
 		run.lastActivityAt = mtimeMs;
 	}
 
-	const snapshot = readPersistedSessionSnapshot(run.sessionFile);
+	const snapshot = readPersistedSessionSnapshot(run.sessionFile, {
+		startOffset: run.persistedSessionBaseOffset,
+	});
 	if (snapshot.latestActivityAt && snapshot.latestActivityAt > run.lastActivityAt) {
 		run.lastActivityAt = snapshot.latestActivityAt;
 	}

@@ -62,6 +62,19 @@ function makeHangingProcessWithDelayedEvent(lines: string[], delayedLine: string
 	return proc;
 }
 
+function makeAbortableProcess(lines: string[]): MockProc {
+	const proc = makeHangingProcess(lines);
+	proc.kill = vi.fn((signal?: string) => {
+		proc.exitCode = signal === "SIGKILL" ? 137 : 0;
+		queueMicrotask(() => {
+			proc.emit("exit", proc.exitCode);
+			proc.emit("close", proc.exitCode);
+		});
+		return true;
+	});
+	return proc;
+}
+
 describe("runSingleAgent pi terminal message fallback", () => {
 	let tmpDir: string;
 	let sessionFile: string;
@@ -164,6 +177,67 @@ describe("runSingleAgent pi terminal message fallback", () => {
 		expect(proc.kill).toHaveBeenCalledWith("SIGTERM");
 	});
 
+	it("ignores stale terminal entries that predate the current invocation", async () => {
+		vi.useFakeTimers();
+		const { runSingleAgent } = await import("../subagent/runner.ts");
+		fs.writeFileSync(
+			sessionFile,
+			`${JSON.stringify({
+				type: "message",
+				timestamp: Date.now(),
+				message: {
+					role: "assistant",
+					stopReason: "stop",
+					timestamp: Date.now(),
+					content: [{ type: "text", text: "old answer" }],
+				},
+			})}\n${JSON.stringify({ type: "subagent_done", timestamp: Date.now(), exitCode: 0, stopReason: "stop", runtime: "pi" })}\n`,
+			"utf8",
+		);
+		const baseOffset = fs.statSync(sessionFile).size;
+		spawnMock.mockImplementationOnce(() => makeHangingProcess([JSON.stringify({ type: "agent_start" })]));
+
+		const resultPromise = runSingleAgent(
+			"/tmp/project",
+			[makePiAgent()],
+			"pi-worker",
+			"new task",
+			undefined,
+			undefined,
+			undefined,
+			makeDetails,
+			{ sessionFile, persistedSessionBaseOffset: baseOffset },
+		);
+
+		await vi.runAllTicks();
+		await vi.advanceTimersByTimeAsync(1500);
+		expect(spawnMock).toHaveBeenCalledTimes(1);
+		const proc = spawnMock.mock.results[0]?.value as MockProc;
+		expect(proc.kill).not.toHaveBeenCalled();
+
+		setTimeout(() => {
+			fs.appendFileSync(
+				sessionFile,
+				`${JSON.stringify({
+					type: "message",
+					timestamp: Date.now(),
+					message: {
+						role: "assistant",
+						stopReason: "stop",
+						timestamp: Date.now(),
+						content: [{ type: "text", text: "new answer" }],
+					},
+				})}\n`,
+				"utf8",
+			);
+		}, 100);
+		await vi.advanceTimersByTimeAsync(1200);
+		const result = await resultPromise;
+		await vi.runOnlyPendingTimersAsync();
+
+		expect((result.messages.at(-1)?.content[0] as any)?.text).toContain("new answer");
+	});
+
 	it("recovers completion from the persisted session file when stdout never delivers the final message", async () => {
 		vi.useFakeTimers();
 		const { runSingleAgent } = await import("../subagent/runner.ts");
@@ -211,5 +285,37 @@ describe("runSingleAgent pi terminal message fallback", () => {
 		expect(proc.kill).toHaveBeenCalledWith("SIGTERM");
 		const persisted = fs.readFileSync(sessionFile, "utf8");
 		expect(persisted).toContain('"type":"subagent_done"');
+	});
+
+	it("writes aborted marker with non-zero exitCode on signal abort", async () => {
+		vi.useFakeTimers();
+		const { runSingleAgent } = await import("../subagent/runner.ts");
+		spawnMock.mockImplementationOnce(() => makeAbortableProcess([JSON.stringify({ type: "agent_start" })]));
+		const ac = new AbortController();
+
+		const resultPromise = runSingleAgent(
+			"/tmp/project",
+			[makePiAgent()],
+			"pi-worker",
+			"abort me",
+			undefined,
+			ac.signal,
+			undefined,
+			makeDetails,
+			sessionFile,
+		);
+		const rejection = resultPromise.catch((error) => error);
+
+		await vi.runAllTicks();
+		ac.abort();
+		await vi.runOnlyPendingTimersAsync();
+		const error = await rejection;
+		expect(error).toBeInstanceOf(Error);
+		expect((error as Error).message).toContain("Subagent was aborted");
+
+		const persisted = fs.readFileSync(sessionFile, "utf8");
+		expect(persisted).toContain('"type":"subagent_done"');
+		expect(persisted).toContain('"exitCode":1');
+		expect(persisted).toContain('"stopReason":"aborted"');
 	});
 });

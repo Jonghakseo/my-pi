@@ -9,6 +9,10 @@ export interface CompletionMarker {
 	timestamp?: number;
 }
 
+export interface PersistedSessionReadOptions {
+	startOffset?: number;
+}
+
 export interface PersistedSessionSnapshot {
 	messages: Message[];
 	latestActivityAt?: number;
@@ -54,6 +58,15 @@ export function getSessionFileMtimeMs(sessionFile?: string): number | undefined 
 	}
 }
 
+export function getSessionFileSize(sessionFile?: string): number {
+	if (!sessionFile) return 0;
+	try {
+		return fs.statSync(sessionFile).size;
+	} catch {
+		return 0;
+	}
+}
+
 export function appendCompletionMarker(sessionFile: string | undefined, marker: CompletionMarker): void {
 	if (!sessionFile) return;
 	const entry = {
@@ -71,14 +84,19 @@ export function appendCompletionMarker(sessionFile: string | undefined, marker: 
 }
 
 // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: persisted-session parsing handles mixed legacy/new JSONL entries in one pass.
-export function readPersistedSessionSnapshot(sessionFile?: string): PersistedSessionSnapshot {
+export function readPersistedSessionSnapshot(
+	sessionFile?: string,
+	options: PersistedSessionReadOptions = {},
+): PersistedSessionSnapshot {
 	if (!sessionFile || !fs.existsSync(sessionFile)) {
 		return { messages: [], finalOutput: "", isTerminal: false };
 	}
 
 	let raw = "";
 	try {
-		raw = fs.readFileSync(sessionFile, "utf8");
+		const buffer = fs.readFileSync(sessionFile);
+		const startOffset = Math.max(0, Math.min(options.startOffset ?? 0, buffer.length));
+		raw = buffer.subarray(startOffset).toString("utf8");
 	} catch {
 		return { messages: [], finalOutput: "", isTerminal: false };
 	}

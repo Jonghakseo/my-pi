@@ -315,6 +315,7 @@ describe("T09: command/tool runtime metadata integration", () => {
 					sessionFile: "/tmp/session-1.jsonl",
 					resumeSessionId: "sess-123",
 					sidecarSessionFile: "/tmp/session-1.jsonl",
+					persistedSessionBaseOffset: 0,
 				},
 			);
 		});

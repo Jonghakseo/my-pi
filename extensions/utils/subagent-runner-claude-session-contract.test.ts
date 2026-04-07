@@ -93,6 +93,27 @@ function makeProcess(lines: string[]): MockProc {
 	return proc;
 }
 
+function makeAbortableProcess(lines: string[]): MockProc {
+	const proc = new EventEmitter() as MockProc;
+	proc.stdout = new EventEmitter();
+	proc.stderr = new EventEmitter();
+	proc.exitCode = null;
+	proc.kill = vi.fn((signal?: string) => {
+		proc.exitCode = signal === "SIGKILL" ? 137 : 0;
+		queueMicrotask(() => {
+			proc.emit("exit", proc.exitCode);
+			proc.emit("close", proc.exitCode);
+		});
+		return true;
+	});
+
+	queueMicrotask(() => {
+		proc.stdout.emit("data", Buffer.from(`${lines.join("\n")}\n`, "utf8"));
+	});
+
+	return proc;
+}
+
 describe("runSingleAgent Claude session contract", () => {
 	let tmpDir: string;
 	let sidecarFile: string;
@@ -207,5 +228,40 @@ describe("runSingleAgent Claude session contract", () => {
 		expect(spawnArgs).toContain("--resume");
 		expect(spawnArgs).toContain(resumeId);
 		expect(result.sessionFile).toBeUndefined();
+	});
+
+	it("writes aborted marker with non-zero exitCode on signal abort", async () => {
+		spawnMock.mockImplementationOnce(() =>
+			makeAbortableProcess([
+				JSON.stringify({
+					type: "system",
+					subtype: "init",
+					session_id: "sess-abort",
+					model: "claude-sonnet-4-6",
+					cwd: "/tmp/project",
+				}),
+			]),
+		);
+		const ac = new AbortController();
+
+		const resultPromise = runSingleAgent(
+			"/tmp/project",
+			[makeClaudeAgent()],
+			"claude-worker",
+			"abort me",
+			undefined,
+			ac.signal,
+			undefined,
+			makeDetails,
+			{ sessionFile: sidecarFile, sidecarSessionFile: sidecarFile },
+		);
+
+		ac.abort();
+		await expect(resultPromise).rejects.toThrow("Subagent was aborted");
+
+		const raw = fs.readFileSync(sidecarFile, "utf8");
+		expect(raw).toContain('"type":"subagent_done"');
+		expect(raw).toContain('"exitCode":1');
+		expect(raw).toContain('"stopReason":"aborted"');
 	});
 });

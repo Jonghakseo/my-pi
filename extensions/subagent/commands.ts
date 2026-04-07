@@ -35,6 +35,7 @@ import {
 	upsertPendingGroupCompletion,
 } from "./group-pending.js";
 import { enqueueSubagentInvocation } from "./invocation-queue.js";
+import { getSessionFileSize } from "./persisted-session.js";
 import { readSessionReplayItems, SubagentSessionReplayOverlay } from "./replay.js";
 import { invokeWithAutoRetry, MAX_SUBAGENT_AUTO_RETRIES } from "./retry.js";
 import { getLatestRun, removeRun, trimCommandRunHistory } from "./run-utils.js";
@@ -532,6 +533,8 @@ function restoreRunsFromSession(store: SubagentStore, ctx: any, pi?: ExtensionAP
 			const startedAtFromDetails = toValidTimestampMs(d.startedAt);
 			const elapsedFromDetails = toNonNegativeNumber(d.elapsedMs);
 			const lastActivityAtFromDetails = toValidTimestampMs(d.lastActivityAt);
+			const persistedSessionBaseOffset =
+				toNonNegativeNumber(d.persistedSessionBaseOffset) ?? existing?.persistedSessionBaseOffset;
 
 			// Determine final status primarily from structured metadata.
 			const content = typeof cm.content === "string" ? cm.content : "";
@@ -583,6 +586,7 @@ function restoreRunsFromSession(store: SubagentStore, ctx: any, pi?: ExtensionAP
 					continuedFromRunId: d.continuedFromRunId,
 					turnCount: d.turnCount ?? existing?.turnCount ?? DEFAULT_TURN_COUNT,
 					sessionFile: d.sessionFile ?? existing?.sessionFile,
+					persistedSessionBaseOffset,
 					contextMode: d.contextMode ?? existing?.contextMode,
 					usage: d.usage ?? existing?.usage,
 					model: d.model ?? existing?.model,
@@ -627,6 +631,7 @@ function restoreRunsFromSession(store: SubagentStore, ctx: any, pi?: ExtensionAP
 					continuedFromRunId: d.continuedFromRunId,
 					turnCount: d.turnCount ?? existing?.turnCount ?? DEFAULT_TURN_COUNT,
 					sessionFile: d.sessionFile ?? existing?.sessionFile,
+					persistedSessionBaseOffset,
 					contextMode: d.contextMode ?? existing?.contextMode,
 					usage: existing?.usage,
 					model: existing?.model,
@@ -1075,6 +1080,7 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 				// /sub:main 과 /sub:isolate 간 모드 전환은 기존 run에는 소급 적용하지 않는다.
 				runState.contextMode = runState.contextMode ?? (forceMainContext ? "main" : "sub");
 				runState.sessionFile = runState.sessionFile ?? sessionFileForRun ?? makeSubagentSessionFile(runId);
+				runState.persistedSessionBaseOffset = getSessionFileSize(runState.sessionFile);
 				sessionFileForRun = runState.sessionFile;
 			} else {
 				runId = store.nextCommandRunId++;
@@ -1120,6 +1126,7 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 					continuedFromRunId,
 					turnCount: DEFAULT_TURN_COUNT,
 					sessionFile: sessionFileForRun,
+					persistedSessionBaseOffset: getSessionFileSize(sessionFileForRun),
 					removed: false,
 					contextMode: forceMainContext ? "main" : "sub",
 					retryCount: 0,
@@ -1172,6 +1179,7 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 						turnCount: runState.turnCount,
 						contextMode: runState.contextMode,
 						sessionFile: runState.sessionFile,
+						persistedSessionBaseOffset: runState.persistedSessionBaseOffset,
 						status: startedState,
 						startedAt: runState.startedAt,
 						elapsedMs: runState.elapsedMs,
@@ -1249,6 +1257,7 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 														turnCount: runState.turnCount,
 														contextMode: runState.contextMode,
 														sessionFile: runState.sessionFile,
+														persistedSessionBaseOffset: runState.persistedSessionBaseOffset,
 														status: "started",
 														startedAt: runState.startedAt,
 														elapsedMs: runState.elapsedMs,
@@ -1268,6 +1277,7 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 										sessionFile: runState.sessionFile,
 										resumeSessionId: runState.claudeSessionId,
 										sidecarSessionFile: runState.sessionFile,
+										persistedSessionBaseOffset: runState.persistedSessionBaseOffset,
 									},
 								),
 							),
@@ -1312,6 +1322,7 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 							turnCount: runState.turnCount,
 							contextMode: runState.contextMode,
 							sessionFile: runState.sessionFile,
+							persistedSessionBaseOffset: runState.persistedSessionBaseOffset,
 							startedAt: runState.startedAt,
 							elapsedMs: runState.elapsedMs,
 							lastActivityAt: runState.lastActivityAt,
@@ -1388,6 +1399,7 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 							turnCount: runState.turnCount,
 							contextMode: runState.contextMode,
 							sessionFile: runState.sessionFile,
+							persistedSessionBaseOffset: runState.persistedSessionBaseOffset,
 							startedAt: runState.startedAt,
 							elapsedMs: runState.elapsedMs,
 							lastActivityAt: runState.lastActivityAt,
