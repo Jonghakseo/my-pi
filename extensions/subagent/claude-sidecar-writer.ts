@@ -7,6 +7,7 @@ export interface SidecarWriter {
 	writeAssistantTurn(state: ClaudeStreamState): void;
 	writeToolResult(toolName: string, content: string): void;
 	writeFinalAssistant(state: ClaudeStreamState): void;
+	writeDone(meta: { exitCode: number; stopReason?: string; runtime?: string }): void;
 	readonly filePath: string;
 }
 
@@ -89,6 +90,18 @@ export function createSidecarWriter(filePath: string): SidecarWriter {
 
 			lastAssistantTurnIndex = turnIndex;
 			append(makeEnvelope("assistant", content));
+		},
+
+		writeDone(meta: { exitCode: number; stopReason?: string; runtime?: string }): void {
+			append(
+				JSON.stringify({
+					type: "subagent_done",
+					timestamp: Date.now(),
+					exitCode: meta.exitCode,
+					stopReason: meta.stopReason,
+					runtime: meta.runtime,
+				}),
+			);
 		},
 	};
 }

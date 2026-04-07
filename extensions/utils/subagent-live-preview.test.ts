@@ -175,6 +175,31 @@ describe("updateRunFromResult with liveActivityPreview", () => {
 		expect(run.lastActivityAt).toBeGreaterThan(oldTimestamp);
 	});
 
+	it("treats persisted toolResult output as activity even without assistant text changes", () => {
+		const oldTimestamp = Date.now() - 30000;
+		const run = makeRunState({ lastActivityAt: oldTimestamp, lastLine: "working..." });
+
+		updateRunFromResult(run, {
+			agent: "test",
+			agentSource: "user",
+			task: "task",
+			exitCode: 0,
+			messages: [
+				{
+					role: "toolResult",
+					toolName: "Bash",
+					content: [{ type: "text", text: "command finished successfully" }],
+				} as any,
+			],
+			stderr: "",
+			usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0, contextTokens: 0, turns: 0 },
+		});
+
+		expect(run.lastLine).toContain("Bash");
+		expect(run.lastLine).toContain("command finished successfully");
+		expect(run.lastActivityAt).toBeGreaterThan(oldTimestamp);
+	});
+
 	it("updates lastActivityAt when thoughtText changes", () => {
 		const oldTimestamp = Date.now() - 30000;
 		const run = makeRunState({ lastActivityAt: oldTimestamp, thoughtText: "old thought" });

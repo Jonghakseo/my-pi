@@ -23,6 +23,7 @@ import {
 	stateToSingleResult,
 } from "./claude-stream-parser.js";
 import { formatToolCallPlain } from "./format.js";
+import { appendCompletionMarker, readPersistedSessionSnapshot } from "./persisted-session.js";
 import { writePromptToTempFile } from "./session.js";
 import type { AgentAliasMatch, DisplayItem, OnUpdateCallback, SingleResult, SubagentDetails } from "./types.js";
 
@@ -124,15 +125,32 @@ export function getDisplayItems(messages: Message[]): DisplayItem[] {
 	return items;
 }
 
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: reverse scan over assistant/toolResult content is intentional for latest-activity resolution.
 export function getLatestActivityPreview(messages: Message[]): string | undefined {
-	const items = getDisplayItems(messages);
-	if (items.length === 0) return undefined;
-
-	const lastItem = items[items.length - 1];
-	if (lastItem.type === "toolCall") return `→ ${formatToolCallPlain(lastItem.name, lastItem.args)}`;
-
-	const line = getLastNonEmptyLine(lastItem.text);
-	return line || undefined;
+	for (let i = messages.length - 1; i >= 0; i--) {
+		const msg = messages[i] as Message & { toolName?: string };
+		if (msg.role === "toolResult") {
+			const text = (msg.content as Array<{ type?: string; text?: string }>)
+				.filter((part) => part.type === "text" && part.text)
+				.map((part) => part.text ?? "")
+				.join("\n");
+			const line = getLastNonEmptyLine(text);
+			if (!line) continue;
+			const toolName = typeof msg.toolName === "string" ? msg.toolName : undefined;
+			return toolName ? `← ${toolName}: ${line}` : line;
+		}
+		if (msg.role === "assistant") {
+			for (let j = msg.content.length - 1; j >= 0; j--) {
+				const part = msg.content[j];
+				if (part.type === "toolCall") return `→ ${formatToolCallPlain(part.name, part.arguments)}`;
+				if (part.type === "text") {
+					const line = getLastNonEmptyLine(part.text);
+					if (line) return line;
+				}
+			}
+		}
+	}
+	return undefined;
 }
 
 // ─── Agent Matching ──────────────────────────────────────────────────────────
@@ -261,6 +279,7 @@ async function runClaudeAgent(
 	let stderrBuf = "";
 	const sidecar = sidecarPath ? createSidecarWriter(sidecarPath) : null;
 	let sidecarInitialUserWritten = false;
+	let completionMarkerWritten = false;
 
 	const emitUpdate = () => {
 		if (!onUpdate) return;
@@ -273,6 +292,12 @@ async function runClaudeAgent(
 			content: [{ type: "text", text }],
 			details: makeDetails([partial]),
 		});
+	};
+
+	const writeCompletionMarkerOnce = (exitCode: number) => {
+		if (!sidecar || completionMarkerWritten) return;
+		completionMarkerWritten = true;
+		sidecar.writeDone({ exitCode, stopReason: streamState.stopReason, runtime: "claude" });
 	};
 
 	try {
@@ -348,6 +373,7 @@ async function runClaudeAgent(
 
 				if (isResult) {
 					if (sidecar) sidecar.writeFinalAssistant(streamState);
+					writeCompletionMarkerOnce(streamState.isError ? 1 : 0);
 					schedulePostResultLinger();
 				}
 			};
@@ -355,6 +381,7 @@ async function runClaudeAgent(
 			const resolveOnce = (code: number) => {
 				if (settled) return;
 				settled = true;
+				writeCompletionMarkerOnce(code);
 				if (exitFallbackTimer) {
 					clearTimeout(exitFallbackTimer);
 					exitFallbackTimer = undefined;
@@ -505,6 +532,7 @@ async function runPiAgent(
 		step,
 		sessionFile,
 	};
+	let completionMarkerWritten = false;
 
 	const emitUpdate = () => {
 		if (onUpdate) {
@@ -515,6 +543,12 @@ async function runPiAgent(
 				details: makeDetails([currentResult]),
 			});
 		}
+	};
+
+	const writeCompletionMarkerOnce = (exitCode: number) => {
+		if (!sessionFile || completionMarkerWritten) return;
+		completionMarkerWritten = true;
+		appendCompletionMarker(sessionFile, { exitCode, stopReason: currentResult.stopReason, runtime: "pi" });
 	};
 
 	try {
@@ -536,12 +570,39 @@ async function runPiAgent(
 			let exitFallbackTimer: ReturnType<typeof setTimeout> | undefined;
 			let agentEndFallbackTimer: ReturnType<typeof setTimeout> | undefined;
 			let terminalMessageFallbackTimer: ReturnType<typeof setTimeout> | undefined;
+			let sessionPollTimer: ReturnType<typeof setInterval> | undefined;
 			let lastExitCode = 0;
 			let lastEventAt = Date.now();
 			let sawAgentEnd = false;
 			let settleReason = "unknown";
 			let unparsedStdoutCount = 0;
 			const unparsedStdoutTail: string[] = [];
+
+			const syncFromPersistedSession = (allowResolve: boolean): boolean => {
+				if (!sessionFile) return false;
+				const snapshot = readPersistedSessionSnapshot(sessionFile);
+				if (snapshot.terminalStopReason && !currentResult.stopReason) {
+					currentResult.stopReason = snapshot.terminalStopReason;
+				}
+				if (snapshot.messages.length > currentResult.messages.length) {
+					currentResult.messages = snapshot.messages;
+					currentResult.liveText = undefined;
+					emitUpdate();
+				}
+				if (!allowResolve || !snapshot.isTerminal || settled || procExited || wasAborted) return false;
+
+				const forcedCode =
+					snapshot.completionMarker?.exitCode ??
+					(snapshot.terminalStopReason === "error" || snapshot.terminalStopReason === "aborted" ? 1 : 0);
+				writeCompletionMarkerOnce(forcedCode);
+				proc.kill("SIGTERM");
+				setTimeout(() => {
+					if (!procExited && proc.exitCode === null) proc.kill("SIGKILL");
+				}, 5000);
+				settleReason = snapshot.completionMarker ? "session_done_marker_fallback" : "session_terminal_message_fallback";
+				resolveOnce(forcedCode);
+				return true;
+			};
 
 			// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: event-stream parsing intentionally handles every runtime event in one ordered state machine.
 			const processLine = (line: string) => {
@@ -583,6 +644,11 @@ async function runPiAgent(
 							currentResult.stopReason = (msg as any).stopReason;
 							if ((msg as any).errorMessage) currentResult.errorMessage = (msg as any).errorMessage;
 						}
+					}
+					if (currentResult.stopReason && currentResult.stopReason !== "toolUse") {
+						writeCompletionMarkerOnce(
+							currentResult.stopReason === "error" || currentResult.stopReason === "aborted" ? 1 : 0,
+						);
 					}
 					sawAgentEnd = true;
 					scheduleAgentEndForceResolve();
@@ -664,6 +730,7 @@ async function runPiAgent(
 						}
 						const terminalStopReason = (msg as any).stopReason;
 						if (terminalStopReason && terminalStopReason !== "toolUse") {
+							writeCompletionMarkerOnce(terminalStopReason === "error" || terminalStopReason === "aborted" ? 1 : 0);
 							scheduleTerminalMessageForceResolve();
 						}
 					}
@@ -682,9 +749,11 @@ async function runPiAgent(
 				if (sawAgentEnd) scheduleAgentEndForceResolve();
 			};
 
+			// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: cleanup/settle path intentionally centralizes timers, buffer flush, and persisted-session sync.
 			const resolveOnce = (code: number) => {
 				if (settled) return;
 				settled = true;
+				writeCompletionMarkerOnce(code);
 				if (exitFallbackTimer) {
 					clearTimeout(exitFallbackTimer);
 					exitFallbackTimer = undefined;
@@ -697,7 +766,12 @@ async function runPiAgent(
 					clearTimeout(terminalMessageFallbackTimer);
 					terminalMessageFallbackTimer = undefined;
 				}
+				if (sessionPollTimer) {
+					clearInterval(sessionPollTimer);
+					sessionPollTimer = undefined;
+				}
 				if (buffer.trim()) processLine(buffer);
+				syncFromPersistedSession(false);
 
 				if (currentResult.messages.length === 0) {
 					appendStderrDiagnostic(
@@ -755,6 +829,12 @@ async function runPiAgent(
 					settleReason = "agent_end_fallback_timeout";
 					resolveOnce(forcedCode);
 				}, 1500);
+			}
+
+			if (sessionFile) {
+				sessionPollTimer = setInterval(() => {
+					syncFromPersistedSession(true);
+				}, 1000);
 			}
 
 			proc.stdout.on("data", (data) => {

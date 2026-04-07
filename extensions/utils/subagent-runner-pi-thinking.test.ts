@@ -1,4 +1,7 @@
 import { EventEmitter } from "node:events";
+import * as fs from "node:fs";
+import * as os from "node:os";
+import * as path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const spawnMock = vi.hoisted(() => vi.fn());
@@ -60,13 +63,19 @@ function makeHangingProcessWithDelayedEvent(lines: string[], delayedLine: string
 }
 
 describe("runSingleAgent pi terminal message fallback", () => {
+	let tmpDir: string;
+	let sessionFile: string;
+
 	beforeEach(() => {
 		spawnMock.mockReset();
+		tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "pi-runner-session-"));
+		sessionFile = path.join(tmpDir, "session.jsonl");
 	});
 
 	afterEach(() => {
 		vi.useRealTimers();
 		vi.clearAllMocks();
+		fs.rmSync(tmpDir, { recursive: true, force: true });
 	});
 
 	it("force-resolves after a terminal assistant message even if the pi child never exits", async () => {
@@ -153,5 +162,54 @@ describe("runSingleAgent pi terminal message fallback", () => {
 		expect(result.messages).toHaveLength(1);
 		const proc = spawnMock.mock.results[0]?.value as MockProc;
 		expect(proc.kill).toHaveBeenCalledWith("SIGTERM");
+	});
+
+	it("recovers completion from the persisted session file when stdout never delivers the final message", async () => {
+		vi.useFakeTimers();
+		const { runSingleAgent } = await import("../subagent/runner.ts");
+		spawnMock.mockImplementationOnce(() => makeHangingProcess([JSON.stringify({ type: "agent_start" })]));
+
+		const resultPromise = runSingleAgent(
+			"/tmp/project",
+			[makePiAgent()],
+			"pi-worker",
+			"review task",
+			undefined,
+			undefined,
+			undefined,
+			makeDetails,
+			sessionFile,
+		);
+
+		await vi.runAllTicks();
+		setTimeout(() => {
+			fs.writeFileSync(
+				sessionFile,
+				`${JSON.stringify({
+					type: "message",
+					timestamp: Date.now(),
+					message: {
+						role: "assistant",
+						stopReason: "stop",
+						timestamp: Date.now(),
+						content: [{ type: "text", text: "Recovered from session file" }],
+					},
+				})}\n`,
+				"utf8",
+			);
+		}, 500);
+
+		await vi.advanceTimersByTimeAsync(1200);
+		const result = await resultPromise;
+		await vi.runOnlyPendingTimersAsync();
+
+		expect(result.exitCode).toBe(0);
+		expect(result.stopReason).toBe("stop");
+		expect(result.messages.at(-1)?.role).toBe("assistant");
+		expect((result.messages.at(-1)?.content[0] as any)?.text).toContain("Recovered from session file");
+		const proc = spawnMock.mock.results[0]?.value as MockProc;
+		expect(proc.kill).toHaveBeenCalledWith("SIGTERM");
+		const persisted = fs.readFileSync(sessionFile, "utf8");
+		expect(persisted).toContain('"type":"subagent_done"');
 	});
 });

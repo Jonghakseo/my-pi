@@ -24,21 +24,51 @@ import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import { cleanupPixelTimer } from "./above-widget.js";
 import { registerAll } from "./commands.js";
 import { HANG_CHECK_INTERVAL_MS, HANG_TIMEOUT_MS } from "./constants.js";
+import { getSessionFileMtimeMs, readPersistedSessionSnapshot } from "./persisted-session.js";
+import { getLastNonEmptyLine } from "./runner.js";
 import { createStore, type SubagentStore } from "./store.js";
 import type { CommandRunState } from "./types.js";
 import { updateCommandRunsWidget } from "./widget.js";
+
+function reconcileRunWithPersistedSession(run: CommandRunState): void {
+	if (!run.sessionFile) return;
+
+	const mtimeMs = getSessionFileMtimeMs(run.sessionFile);
+	if (mtimeMs && mtimeMs > run.lastActivityAt) {
+		run.lastActivityAt = mtimeMs;
+	}
+
+	const snapshot = readPersistedSessionSnapshot(run.sessionFile);
+	if (snapshot.latestActivityAt && snapshot.latestActivityAt > run.lastActivityAt) {
+		run.lastActivityAt = snapshot.latestActivityAt;
+	}
+	if (!snapshot.isTerminal) return;
+
+	const exitCode =
+		snapshot.completionMarker?.exitCode ??
+		(snapshot.terminalStopReason === "error" || snapshot.terminalStopReason === "aborted" ? 1 : 0);
+	run.status = exitCode === 0 ? "done" : "error";
+	if (snapshot.finalOutput) {
+		run.lastOutput = snapshot.finalOutput;
+		run.lastLine = getLastNonEmptyLine(snapshot.finalOutput) || run.lastLine;
+	}
+	if (snapshot.latestActivityAt) {
+		run.elapsedMs = Math.max(run.elapsedMs, snapshot.latestActivityAt - run.startedAt);
+	}
+}
 
 /**
  * Sweep all running subagent runs for hang detection.
  * If a run has had no activity for HANG_TIMEOUT_MS, auto-abort it
  * and notify the main session via a followUp message.
  */
-function checkForHungRuns(store: SubagentStore, pi: ExtensionAPI): void {
+export function checkForHungRuns(store: SubagentStore, pi: ExtensionAPI): void {
 	const now = Date.now();
 	const processed = new Set<number>();
 
 	function tryAbort(runId: number, run: CommandRunState): void {
-		// Skip if already aborted or not running
+		reconcileRunWithPersistedSession(run);
+		// Skip if already completed/aborted or not running
 		if (run.status !== "running") return;
 		if (!run.lastActivityAt) return;
 		// Guard: skip runs already auto-aborted (prevents duplicate abort/followUp)
