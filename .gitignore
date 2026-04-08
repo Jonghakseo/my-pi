@@ -10,6 +10,7 @@ sessions/
 
 # Local data (session-rag SQLite index, etc.)
 .data/
+extensions/local_cache/
 
 # Generated / logs
 daily-analysis/
