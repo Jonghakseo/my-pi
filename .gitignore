@@ -8,6 +8,9 @@ extensions/.env
 # Session data (large)
 sessions/
 
+# Local data (session-rag SQLite index, etc.)
+.data/
+
 # Generated / logs
 daily-analysis/
 daily-retrospective*.log
