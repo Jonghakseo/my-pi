@@ -9,21 +9,6 @@ import { SSEClientTransport } from "@modelcontextprotocol/sdk/client/sse.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { Type } from "@sinclair/typebox";
-import {
-	type CacheableServerConfig,
-	type CachedToolMetadata,
-	cloneMetadataProfile,
-	createConfigScopeKey,
-	getMetadataProfile,
-	hashCacheableConfig,
-	hashCacheableServer,
-	loadMetadataCache,
-	METADATA_CACHE_TTL_MS,
-	type MetadataCacheProfile,
-	resolveStartupCache,
-	writeMetadataProfileAtomic,
-} from "./metadata-cache.js";
-import { runBoundedTasks } from "./warmup.js";
 
 type RawMcpServer = {
 	type?: string;
@@ -80,8 +65,6 @@ class McpConnection {
 	public status: ServerStatus = "disconnected";
 	public error?: string;
 	public tools: DiscoveredTool[] = [];
-	public toolDiscoveryState: "idle" | "ok" | "error" = "idle";
-	public toolDiscoveryError?: string;
 
 	constructor(public readonly server: NormalizedMcpServer) {}
 
@@ -108,16 +91,10 @@ class McpConnection {
 			this.error = undefined;
 		}
 		this.tools = [];
-		this.toolDiscoveryState = "idle";
-		this.toolDiscoveryError = undefined;
 	}
 
-	async refreshTools(): Promise<boolean> {
-		if (!this.client) {
-			this.toolDiscoveryState = "error";
-			this.toolDiscoveryError = "MCP client not connected";
-			return false;
-		}
+	async refreshTools(): Promise<void> {
+		if (!this.client) return;
 		try {
 			const result = await this.client.listTools();
 			this.tools = result.tools.map((tool) => ({
@@ -125,14 +102,8 @@ class McpConnection {
 				description: tool.description,
 				inputSchema: (tool.inputSchema ?? {}) as Record<string, unknown>,
 			}));
-			this.toolDiscoveryState = "ok";
-			this.toolDiscoveryError = undefined;
-			return true;
-		} catch (error) {
+		} catch {
 			this.tools = [];
-			this.toolDiscoveryState = "error";
-			this.toolDiscoveryError = error instanceof Error ? error.message : String(error);
-			return false;
 		}
 	}
 
@@ -179,8 +150,6 @@ class McpConnection {
 		this.status = "connecting";
 		this.error = undefined;
 		this.tools = [];
-		this.toolDiscoveryState = "idle";
-		this.toolDiscoveryError = undefined;
 
 		try {
 			this.client = new Client({ name: "pi-claude-mcp-bridge", version: "0.1.0" }, { capabilities: {} });
@@ -248,8 +217,6 @@ class McpConnection {
 
 			this.status = "error";
 			this.error = message;
-			this.toolDiscoveryState = "idle";
-			this.toolDiscoveryError = undefined;
 		}
 	}
 
@@ -351,14 +318,21 @@ class McpManager {
 		}));
 	}
 
+	getAllTools(): Array<{ serverName: string; tool: DiscoveredTool }> {
+		const tools: Array<{ serverName: string; tool: DiscoveredTool }> = [];
+		for (const conn of this.connections.values()) {
+			if (conn.status !== "connected") continue;
+			for (const tool of conn.tools) {
+				tools.push({ serverName: conn.server.name, tool });
+			}
+		}
+		return tools;
+	}
+
 	async callTool(serverName: string, toolName: string, args: Record<string, unknown>): Promise<unknown> {
 		const conn = this.connections.get(serverName);
 		if (!conn) {
 			throw new Error(`MCP server '${serverName}' not found`);
-		}
-		await conn.ensureConnected();
-		if (conn.toolDiscoveryState === "ok" && !conn.tools.some((tool) => tool.name === toolName)) {
-			throw new Error("MCP tool no longer exists on server. Run /reload to refresh tool registry.");
 		}
 		return conn.callTool(toolName, args);
 	}
@@ -375,24 +349,11 @@ class McpManager {
 		if (!conn) return [];
 		return [...conn.tools];
 	}
-
-	getConnection(name: string): McpConnection | undefined {
-		return this.connections.get(name);
-	}
-
-	getConnections(): McpConnection[] {
-		return Array.from(this.connections.values());
-	}
 }
 
 type LoadedConfig = {
 	sourcePath: string | null;
-	sourcePaths: string[];
-	configScopeKey: string;
-	configHash: string;
-	serverHashes: Record<string, string>;
 	servers: NormalizedMcpServer[];
-	cacheableServers: CacheableServerConfig[];
 	warnings: string[];
 };
 
@@ -403,30 +364,6 @@ type ToolVisibilitySettingsFile = {
 type LoadedToolVisibilitySettings = {
 	disabledToolKeys: Set<string>;
 	warning?: string;
-};
-
-type SessionToolRegistration = {
-	serverName: string;
-	tool: DiscoveredTool;
-	cachedSchema: boolean;
-};
-
-type SharedToolCatalogEntry = {
-	serverName: string;
-	tool: DiscoveredTool;
-	source: "cache" | "live";
-	cachedSchema: boolean;
-	disabled: boolean;
-};
-
-type DerivedServerStatus = ServerStatus | "cached_only" | "warming" | "disabled";
-
-type DerivedServerState = {
-	name: string;
-	status: DerivedServerStatus;
-	type: NormalizedMcpServer["type"];
-	toolCount: number;
-	error?: string;
 };
 
 const TOOL_VISIBILITY_SETTINGS_PATH = path.join(os.homedir(), ".pi", "agent", "claude-mcp-bridge-tools.json");
@@ -600,19 +537,25 @@ function extractRawServers(data: unknown): Record<string, RawMcpServer> | null {
 	return null;
 }
 
-function normalizeCacheableServer(name: string, raw: RawMcpServer): CacheableServerConfig | null {
+function normalizeServer(name: string, raw: RawMcpServer): NormalizedMcpServer | null {
 	if (raw.enabled === false) return null;
 	const type = raw.type?.toLowerCase();
 
 	if (raw.command || type === "stdio") {
 		if (!raw.command) return null;
+
+		const envFromProcess: Record<string, string> = {};
+		for (const [k, v] of Object.entries(process.env)) {
+			if (typeof v === "string") envFromProcess[k] = v;
+		}
+
 		return {
 			name,
 			type: "stdio",
 			enabled: true,
 			command: expandEnvVars(raw.command),
 			args: (raw.args ?? []).map(expandEnvVars),
-			env: expandRecord(raw.env),
+			env: { ...envFromProcess, ...expandRecord(raw.env) },
 			cwd: raw.cwd ? expandEnvVars(raw.cwd) : undefined,
 		};
 	}
@@ -633,25 +576,6 @@ function normalizeCacheableServer(name: string, raw: RawMcpServer): CacheableSer
 	}
 
 	return null;
-}
-
-function normalizeServer(name: string, raw: RawMcpServer): NormalizedMcpServer | null {
-	const cacheable = normalizeCacheableServer(name, raw);
-	if (!cacheable) return null;
-
-	if (cacheable.type === "stdio") {
-		const envFromProcess: Record<string, string> = {};
-		for (const [k, v] of Object.entries(process.env)) {
-			if (typeof v === "string") envFromProcess[k] = v;
-		}
-
-		return {
-			...cacheable,
-			env: { ...envFromProcess, ...cacheable.env },
-		};
-	}
-
-	return cacheable;
 }
 
 function collectScopedConfigCandidates(cwd: string): string[] {
@@ -695,7 +619,6 @@ function loadConfig(cwd: string): LoadedConfig {
 
 	const loadedSources: string[] = [];
 	const serversByName = new Map<string, NormalizedMcpServer>();
-	const cacheableByName = new Map<string, CacheableServerConfig>();
 
 	for (const candidate of candidates) {
 		const parsed = safeReadJson(candidate);
@@ -712,29 +635,14 @@ function loadConfig(cwd: string): LoadedConfig {
 			}
 
 			const normalized = normalizeServer(name, raw);
-			const cacheable = normalizeCacheableServer(name, raw);
-			if (normalized && cacheable) {
-				serversByName.set(name, normalized);
-				cacheableByName.set(name, cacheable);
-			} else {
-				warnings.push(`Skipped invalid MCP server config: ${name}`);
-			}
+			if (normalized) serversByName.set(name, normalized);
+			else warnings.push(`Skipped invalid MCP server config: ${name}`);
 		}
 	}
 
-	const cacheableServers = Array.from(cacheableByName.values());
-	const configScopeKey = createConfigScopeKey({ sourcePaths: loadedSources, servers: cacheableServers });
-	const configHash = hashCacheableConfig(cacheableServers);
-	const serverHashes = Object.fromEntries(cacheableServers.map((server) => [server.name, hashCacheableServer(server)]));
-
 	return {
 		sourcePath: loadedSources.length > 0 ? loadedSources.join(", ") : null,
-		sourcePaths: loadedSources,
-		configScopeKey,
-		configHash,
-		serverHashes,
 		servers: Array.from(serversByName.values()),
-		cacheableServers,
 		warnings,
 	};
 }
@@ -751,44 +659,6 @@ function buildPiToolName(serverName: string, toolName: string): string {
 	const safeServer = sanitizeName(serverName) || "server";
 	const safeTool = sanitizeName(toolName) || "tool";
 	return `mcp_${safeServer}_${safeTool}`;
-}
-
-function cloneDiscoveredTool(tool: DiscoveredTool): DiscoveredTool {
-	return {
-		name: tool.name,
-		description: tool.description,
-		inputSchema: structuredClone(tool.inputSchema),
-	};
-}
-
-function cachedToolToDiscoveredTool(tool: CachedToolMetadata): DiscoveredTool {
-	return {
-		name: tool.name,
-		description: tool.description,
-		inputSchema: structuredClone(tool.inputSchema),
-	};
-}
-
-function snapshotToolsForCache(tools: DiscoveredTool[]): CachedToolMetadata[] {
-	return tools.map((tool) => ({
-		name: tool.name,
-		description: tool.description,
-		inputSchema: structuredClone(tool.inputSchema),
-	}));
-}
-
-function areToolSetsDifferent(previous: CachedToolMetadata[], next: CachedToolMetadata[]): boolean {
-	const normalize = (tools: CachedToolMetadata[]) =>
-		JSON.stringify(
-			tools
-				.map((tool) => ({
-					name: tool.name,
-					description: tool.description,
-					inputSchema: tool.inputSchema,
-				}))
-				.sort((a, b) => a.name.localeCompare(b.name)),
-		);
-	return normalize(previous) !== normalize(next);
 }
 
 function mimeToExt(mimeType: string): string {
@@ -1053,35 +923,35 @@ async function executeMcpToolCall(args: {
 
 // ── Overlay shared helpers ────────────────────────────────────
 
-type McpServerState = DerivedServerState;
+type McpServerState = {
+	name: string;
+	status: ServerStatus;
+	type: string;
+	toolCount: number;
+	error?: string;
+};
 
 type ServerAction = "tools" | "reconnect";
 
-function sColor(status: DerivedServerStatus): "success" | "error" | "warning" | "muted" {
+function sColor(status: ServerStatus): "success" | "error" | "warning" | "muted" {
 	switch (status) {
 		case "connected":
 			return "success";
 		case "error":
 			return "error";
 		case "disconnected":
-		case "cached_only":
-		case "disabled":
 			return "warning";
 		default:
 			return "muted";
 	}
 }
 
-function sIcon(status: DerivedServerStatus): string {
+function sIcon(status: ServerStatus): string {
 	switch (status) {
 		case "connected":
 			return "●";
 		case "error":
 			return "✗";
-		case "cached_only":
-			return "◌";
-		case "disabled":
-			return "⊘";
 		case "disconnected":
 			return "○";
 		default:
@@ -1376,22 +1246,7 @@ class McpToolListOverlay {
 export default async function claudeMcpBridge(pi: ExtensionAPI) {
 	const manager = new McpManager();
 	const registeredTools = new Set<string>();
-	let loadedAt: LoadedConfig = {
-		sourcePath: null,
-		sourcePaths: [],
-		configScopeKey: "",
-		configHash: "",
-		serverHashes: {},
-		servers: [],
-		cacheableServers: [],
-		warnings: [],
-	};
-	let latestUiContext: ExtensionContext | null = null;
-	let currentGeneration = 0;
-	let pendingDriftNotification = false;
-	let metadataProfile: MetadataCacheProfile | undefined;
-	const warmingServers = new Set<string>();
-	const startupRegistrations = new Map<string, SessionToolRegistration>();
+	let loadedAt: LoadedConfig = { sourcePath: null, servers: [], warnings: [] };
 	const loadedToolVisibility = loadToolVisibilitySettings();
 	const disabledToolKeys = loadedToolVisibility.disabledToolKeys;
 	let toolVisibilityWarning = loadedToolVisibility.warning;
@@ -1399,96 +1254,23 @@ export default async function claudeMcpBridge(pi: ExtensionAPI) {
 	function getOverlayWarnings(): string[] {
 		const warnings = [...loadedAt.warnings];
 		if (toolVisibilityWarning) warnings.push(toolVisibilityWarning);
-		if (pendingDriftNotification) {
-			warnings.push("새 MCP 툴이 발견됐어요. /reload 하면 사용 가능해집니다.");
-		}
 		return warnings;
-	}
-
-	function getStartupCacheState() {
-		return resolveStartupCache({
-			profile: metadataProfile,
-			serverHashes: loadedAt.serverHashes,
-			ttlMs: METADATA_CACHE_TTL_MS,
-		});
 	}
 
 	function updateStatus(ctx: ExtensionContext): void {
 		if (!ctx.hasUI) return;
-		const total = loadedAt.servers.length;
+		const states = manager.getStates();
+		const total = states.length;
 		if (total === 0) {
 			ctx.ui.setStatus("mcp", undefined);
 			return;
 		}
-		const connected = manager.getStates().filter((s) => s.status === "connected").length;
+		const connected = states.filter((s) => s.status === "connected").length;
 		ctx.ui.setStatus("mcp", `MCP ${connected}/${total}`);
 	}
 
 	function isToolDisabled(serverName: string, toolName: string): boolean {
 		return disabledToolKeys.has(buildToolVisibilityKey(serverName, toolName));
-	}
-
-	function buildSharedToolCatalog(): SharedToolCatalogEntry[] {
-		const startupCache = getStartupCacheState();
-		const entries: SharedToolCatalogEntry[] = [];
-
-		for (const server of loadedAt.servers) {
-			const conn = manager.getConnection(server.name);
-			const liveTools = conn && conn.status === "connected" && conn.toolDiscoveryState === "ok" ? conn.tools : null;
-			const source = liveTools ? "live" : "cache";
-			const tools = liveTools
-				? liveTools.map(cloneDiscoveredTool)
-				: (startupCache.usableEntries[server.name]?.entry.tools ?? []).map(cachedToolToDiscoveredTool);
-
-			for (const tool of tools) {
-				entries.push({
-					serverName: server.name,
-					tool,
-					source,
-					cachedSchema: source === "cache",
-					disabled: isToolDisabled(server.name, tool.name),
-				});
-			}
-		}
-
-		return entries.sort((a, b) => {
-			if (a.serverName !== b.serverName) return a.serverName.localeCompare(b.serverName);
-			return a.tool.name.localeCompare(b.tool.name);
-		});
-	}
-
-	function getDerivedServerStates(): DerivedServerState[] {
-		const catalog = buildSharedToolCatalog();
-		return loadedAt.servers.map((server) => {
-			const conn = manager.getConnection(server.name);
-			const serverEntries = catalog.filter((entry) => entry.serverName === server.name);
-			const allDisabled = serverEntries.length > 0 && serverEntries.every((entry) => entry.disabled);
-			const hasCache = Boolean(getStartupCacheState().usableEntries[server.name]);
-			const discoveryError = conn?.toolDiscoveryState === "error" ? conn.toolDiscoveryError : undefined;
-
-			let status: DerivedServerStatus;
-			if (conn?.status === "connected") {
-				status = "connected";
-			} else if (warmingServers.has(server.name)) {
-				status = "warming";
-			} else if (conn?.status === "error") {
-				status = "error";
-			} else if (allDisabled) {
-				status = "disabled";
-			} else if (hasCache) {
-				status = "cached_only";
-			} else {
-				status = conn?.status ?? "disconnected";
-			}
-
-			return {
-				name: server.name,
-				status,
-				type: server.type,
-				toolCount: serverEntries.length,
-				error: conn?.error ?? discoveryError,
-			};
-		});
 	}
 
 	function removeDisabledToolsFromActiveSet(): void {
@@ -1501,9 +1283,9 @@ export default async function claudeMcpBridge(pi: ExtensionAPI) {
 
 		let changed = false;
 
-		for (const entry of buildSharedToolCatalog()) {
-			if (!entry.disabled) continue;
-			const piToolName = buildPiToolName(entry.serverName, entry.tool.name);
+		for (const { serverName, tool } of manager.getAllTools()) {
+			if (!isToolDisabled(serverName, tool.name)) continue;
+			const piToolName = buildPiToolName(serverName, tool.name);
 			if (activeTools.delete(piToolName)) changed = true;
 		}
 
@@ -1563,93 +1345,15 @@ export default async function claudeMcpBridge(pi: ExtensionAPI) {
 		return { ok: true, disabled: nextDisabled };
 	}
 
-	function notifyDriftIfPossible(): void {
-		if (!pendingDriftNotification || !latestUiContext?.hasUI) return;
-		latestUiContext.ui.notify("새 MCP 툴이 발견됐어요. /reload 하면 사용 가능해집니다.", "info");
-		pendingDriftNotification = false;
-	}
-
 	function notifyStatusSummary(ctx: ExtensionContext): void {
-		const states = getDerivedServerStates();
+		const states = manager.getStates();
 		const summary = states.map((s) => `${s.name}=${s.status}${s.toolCount > 0 ? `(${s.toolCount})` : ""}`).join(", ");
 		const sourceText = manager.sourcePath ? ` | source: ${manager.sourcePath}` : "";
-		const disabledCount = buildSharedToolCatalog().filter((entry) => entry.disabled).length;
+		const disabledCount = manager
+			.getAllTools()
+			.filter(({ serverName, tool }) => isToolDisabled(serverName, tool.name)).length;
 		const disabledText = disabledCount > 0 ? ` | disabled tools: ${disabledCount}` : "";
 		ctx.ui.notify(`MCP: ${summary}${sourceText}${disabledText}`, "info");
-	}
-
-	function registerToolDefinition(serverName: string, tool: DiscoveredTool, cachedSchema: boolean): void {
-		const piToolName = buildPiToolName(serverName, tool.name);
-		if (registeredTools.has(piToolName)) return;
-
-		pi.registerTool({
-			name: piToolName,
-			label: `MCP ${serverName}/${tool.name}`,
-			description: tool.description ?? `MCP tool ${serverName}/${tool.name}`,
-			parameters: createParameterSchema(tool.inputSchema),
-
-			renderCall(args, theme) {
-				return renderMcpToolCall(serverName, tool.name, args, theme);
-			},
-
-			renderResult(result, { expanded }, theme) {
-				const tc = result.content.find((c) => c.type === "text");
-				if (!expanded) {
-					if (tc?.type === "text") {
-						const count = tc.text.trim().split("\n").filter(Boolean).length;
-						if (count > 0) return new Text(theme.fg("muted", ` → ${count} lines`), 0, 0);
-					}
-					return new Text("", 0, 0);
-				}
-				if (!tc || tc.type !== "text") return new Text("", 0, 0);
-				const output = tc.text
-					.trim()
-					.split("\n")
-					.map((line) => theme.fg("toolOutput", line))
-					.join("\n");
-				return output ? new Text(`\n${output}`, 0, 0) : new Text("", 0, 0);
-			},
-
-			async execute(_toolCallId, params, signal, onUpdate, _ctx) {
-				onUpdate?.({
-					content: [{ type: "text" as const, text: `Calling MCP ${serverName}/${tool.name}...` }],
-					details: { server: serverName, tool: tool.name, status: "running", cachedSchema },
-				});
-				return executeMcpToolCall({
-					manager,
-					serverName,
-					tool,
-					params: params as Record<string, unknown>,
-					signal,
-					isToolDisabled,
-				});
-			},
-		});
-
-		registeredTools.add(piToolName);
-	}
-
-	function rebuildStartupRegistrationsFromCache(): void {
-		startupRegistrations.clear();
-		const startupCache = getStartupCacheState();
-		for (const { serverName, entry } of Object.values(startupCache.usableEntries)) {
-			for (const tool of entry.tools) {
-				const piToolName = buildPiToolName(serverName, tool.name);
-				startupRegistrations.set(piToolName, {
-					serverName,
-					tool: cachedToolToDiscoveredTool(tool),
-					cachedSchema: true,
-				});
-			}
-		}
-	}
-
-	function registerSessionTools(): void {
-		for (const [piToolName, registration] of startupRegistrations) {
-			if (registeredTools.has(piToolName)) continue;
-			if (isToolDisabled(registration.serverName, registration.tool.name)) continue;
-			registerToolDefinition(registration.serverName, registration.tool, registration.cachedSchema);
-		}
 	}
 
 	function handleToolToggle(
@@ -1664,7 +1368,7 @@ export default async function claudeMcpBridge(pi: ExtensionAPI) {
 			return;
 		}
 
-		registerSessionTools();
+		registerDiscoveredTools();
 		removeDisabledToolsFromActiveSet();
 
 		const piToolName = buildPiToolName(serverName, toolName);
@@ -1682,13 +1386,7 @@ export default async function claudeMcpBridge(pi: ExtensionAPI) {
 			ctx.ui.notify(`${piToolName}: enabled`, "info");
 			return;
 		}
-		ctx.ui.notify(`${piToolName}: enabled (reload to register)`, "warning");
-	}
-
-	function getToolsForOverlay(serverName: string): DiscoveredTool[] {
-		return buildSharedToolCatalog()
-			.filter((entry) => entry.serverName === serverName)
-			.map((entry) => cloneDiscoveredTool(entry.tool));
+		ctx.ui.notify(`${piToolName}: enabled (connect or reload to register)`, "warning");
 	}
 
 	async function showToolOverlay(
@@ -1696,7 +1394,7 @@ export default async function claudeMcpBridge(pi: ExtensionAPI) {
 		serverName: string,
 		setReloadNeeded: (value: boolean) => void,
 	): Promise<void> {
-		const tools = getToolsForOverlay(serverName);
+		const tools = manager.getServerTools(serverName);
 		await ctx.ui.custom<null>(
 			(tui, theme, _kb, done) =>
 				new McpToolListOverlay(
@@ -1713,16 +1411,11 @@ export default async function claudeMcpBridge(pi: ExtensionAPI) {
 	}
 
 	async function reconnectSelectedServer(ctx: ExtensionContext, serverName: string): Promise<void> {
-		warmingServers.add(serverName);
-		updateStatus(ctx);
-		try {
-			await manager.reconnectServer(serverName);
-		} finally {
-			warmingServers.delete(serverName);
-		}
+		await manager.reconnectServer(serverName);
+		registerDiscoveredTools();
 		removeDisabledToolsFromActiveSet();
 		updateStatus(ctx);
-		const updated = getDerivedServerStates().find((s) => s.name === serverName);
+		const updated = manager.getStates().find((s) => s.name === serverName);
 		if (updated?.status === "connected") {
 			ctx.ui.notify(`${serverName}: reconnected (${updated.toolCount} tools)`, "info");
 			return;
@@ -1740,7 +1433,7 @@ export default async function claudeMcpBridge(pi: ExtensionAPI) {
 		};
 
 		serverList: while (true) {
-			const freshStates = getDerivedServerStates();
+			const freshStates = manager.getStates();
 			const serverName = await ctx.ui.custom<string | null>(
 				(tui, theme, _kb, done) =>
 					new McpStatusOverlay(tui, theme, done, freshStates, manager.sourcePath, getOverlayWarnings()),
@@ -1749,7 +1442,7 @@ export default async function claudeMcpBridge(pi: ExtensionAPI) {
 			if (!serverName) break;
 
 			while (true) {
-				const serverState = getDerivedServerStates().find((s) => s.name === serverName);
+				const serverState = manager.getStates().find((s) => s.name === serverName);
 				if (!serverState) break;
 
 				const action = await ctx.ui.custom<ServerAction | null>(
@@ -1774,118 +1467,83 @@ export default async function claudeMcpBridge(pi: ExtensionAPI) {
 		}
 	}
 
-	async function loadAndRegisterFromCache(cwd: string): Promise<LoadedConfig> {
-		currentGeneration += 1;
+	function registerDiscoveredTools(): void {
+		for (const { serverName, tool } of manager.getAllTools()) {
+			if (isToolDisabled(serverName, tool.name)) continue;
+
+			const piToolName = buildPiToolName(serverName, tool.name);
+			if (registeredTools.has(piToolName)) continue;
+
+			pi.registerTool({
+				name: piToolName,
+				label: `MCP ${serverName}/${tool.name}`,
+				description: tool.description ?? `MCP tool ${serverName}/${tool.name}`,
+				parameters: createParameterSchema(tool.inputSchema),
+
+				renderCall(args, theme) {
+					return renderMcpToolCall(serverName, tool.name, args, theme);
+				},
+
+				renderResult(result, { expanded }, theme) {
+					const tc = result.content.find((c) => c.type === "text");
+					if (!expanded) {
+						if (tc?.type === "text") {
+							const count = tc.text.trim().split("\n").filter(Boolean).length;
+							if (count > 0) return new Text(theme.fg("muted", ` → ${count} lines`), 0, 0);
+						}
+						return new Text("", 0, 0);
+					}
+					if (!tc || tc.type !== "text") return new Text("", 0, 0);
+					const output = tc.text
+						.trim()
+						.split("\n")
+						.map((line) => theme.fg("toolOutput", line))
+						.join("\n");
+					return output ? new Text(`\n${output}`, 0, 0) : new Text("", 0, 0);
+				},
+
+				async execute(_toolCallId, params, signal, onUpdate, _ctx) {
+					onUpdate?.({
+						content: [{ type: "text" as const, text: `Calling MCP ${serverName}/${tool.name}...` }],
+						details: { server: serverName, tool: tool.name, status: "running" },
+					});
+					return executeMcpToolCall({
+						manager,
+						serverName,
+						tool,
+						params: params as Record<string, unknown>,
+						signal,
+						isToolDisabled,
+					});
+				},
+			});
+
+			registeredTools.add(piToolName);
+		}
+	}
+
+	async function loadAndConnect(cwd: string): Promise<LoadedConfig> {
 		const loaded = loadConfig(cwd);
 		await manager.replaceServers(loaded.servers, loaded.sourcePath);
-		metadataProfile = getMetadataProfile(loadMetadataCache(), loaded.configScopeKey);
+		await manager.connectAll();
+		registerDiscoveredTools();
 		loadedAt = loaded;
-		rebuildStartupRegistrationsFromCache();
-		registerSessionTools();
 		return loaded;
 	}
 
-	async function warmSingleServer(
-		conn: McpConnection,
-		generation: number,
-		nextProfile: MetadataCacheProfile,
-	): Promise<boolean> {
-		const serverName = conn.server.name;
-		try {
-			await conn.connect();
-			if (generation !== currentGeneration) {
-				if (conn.status === "connected") {
-					await conn.disconnect();
-				}
-				return false;
-			}
-			if (conn.status !== "connected" || conn.toolDiscoveryState !== "ok") {
-				return false;
-			}
-
-			const serverHash = loadedAt.serverHashes[serverName];
-			if (!serverHash) return false;
-			const snapshot = snapshotToolsForCache(conn.tools);
-			const previous = nextProfile.servers[serverName];
-			const driftDetected = !previous || areToolSetsDifferent(previous.tools, snapshot);
-			nextProfile.servers[serverName] = {
-				savedAt: Date.now(),
-				serverHash,
-				tools: snapshot,
-			};
-			return driftDetected;
-		} finally {
-			if (generation === currentGeneration) {
-				warmingServers.delete(serverName);
-				if (latestUiContext) updateStatus(latestUiContext);
-			}
-		}
-	}
-
-	function startBackgroundWarmup(): void {
-		const generation = currentGeneration;
-		const compatibleCache = getStartupCacheState();
-		const nextProfile = cloneMetadataProfile(metadataProfile);
-		nextProfile.configHash = loadedAt.configHash;
-		nextProfile.servers = Object.fromEntries(
-			Object.entries(compatibleCache.usableEntries).map(([serverName, usable]) => [serverName, usable.entry]),
-		);
-
-		for (const conn of manager.getConnections()) {
-			warmingServers.add(conn.server.name);
-		}
-		if (latestUiContext) updateStatus(latestUiContext);
-
-		void (async () => {
-			try {
-				const results = await runBoundedTasks({
-					items: manager.getConnections(),
-					maxConcurrency: 3,
-					worker: (conn) => warmSingleServer(conn, generation, nextProfile),
-				});
-
-				if (generation !== currentGeneration) return;
-
-				const driftDetected = results.some((result) => result.status === "fulfilled" && result.value);
-				writeMetadataProfileAtomic({
-					scopeKey: loadedAt.configScopeKey,
-					profile: nextProfile,
-				});
-				metadataProfile = cloneMetadataProfile(nextProfile);
-				if (driftDetected) {
-					pendingDriftNotification = true;
-					notifyDriftIfPossible();
-				}
-				removeDisabledToolsFromActiveSet();
-				if (latestUiContext) updateStatus(latestUiContext);
-			} catch (error) {
-				if (generation !== currentGeneration) return;
-				const message = error instanceof Error ? error.message : String(error);
-				if (latestUiContext?.hasUI) {
-					latestUiContext.ui.notify(`Failed to update MCP metadata cache: ${message}`, "warning");
-				}
-			}
-		})();
-	}
-
 	// IMPORTANT: register MCP tools during extension load so pi includes them in tool registry.
-	await loadAndRegisterFromCache(process.cwd());
-	startBackgroundWarmup();
+	// NOTE(user-approved): 초기 연결 실패 시 재시도/도구 재등록 강화는 현재 동작을 유지한다.
+	await loadAndConnect(process.cwd());
 
 	pi.on("session_start", async (_event, ctx) => {
-		latestUiContext = ctx;
 		updateStatus(ctx);
 		removeDisabledToolsFromActiveSet();
 		if (toolVisibilityWarning && ctx.hasUI) {
 			ctx.ui.notify(`[claude-mcp-bridge] ${toolVisibilityWarning}`, "warning");
 		}
-		notifyDriftIfPossible();
 	});
 
 	pi.on("session_shutdown", async () => {
-		currentGeneration += 1;
-		latestUiContext = null;
-		warmingServers.clear();
 		await manager.disconnectAll();
 	});
 
