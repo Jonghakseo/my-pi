@@ -3,6 +3,7 @@ name: searcher
 description: Research & search specialist — use for web research, documentation lookup, codebase-wide exploration, and gathering external information
 tools: bash, read, grep, find, ls
 model: anthropic/claude-sonnet-4-6
+runtime: claude
 thinking: medium
 ---
 

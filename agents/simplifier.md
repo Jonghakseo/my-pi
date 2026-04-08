@@ -3,6 +3,7 @@ name: simplifier
 description: Code simplification specialist — refines recently modified code for clarity, consistency, and maintainability without changing behavior
 tools: read, grep, find, ls, bash, edit, write
 model: anthropic/claude-sonnet-4-6
+runtime: claude
 thinking: medium
 ---
 
