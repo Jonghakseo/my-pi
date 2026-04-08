@@ -2,6 +2,7 @@ import type { Theme } from "@mariozechner/pi-coding-agent";
 import type { TUI } from "@mariozechner/pi-tui";
 import { truncateToWidth, visibleWidth } from "@mariozechner/pi-tui";
 import type { ShellSessionManager } from "./session-manager.js";
+import { STATUS_EXITED, STATUS_RUNNING } from "./strings.js";
 import { formatDuration } from "./types.js";
 
 function renderSessionLines(sessions: ReturnType<ShellSessionManager["list"]>, cols: number, theme: Theme): string[] {
@@ -13,7 +14,7 @@ function renderSessionLines(sessions: ReturnType<ShellSessionManager["list"]>, c
 		const cmd = s.command.replace(/\s+/g, " ").trim();
 		const truncCmd = cmd.length > 60 ? `${cmd.slice(0, 57)}...` : cmd;
 		const reason = s.reason ? theme.fg("dim", ` · ${s.reason}`) : "";
-		const status = exited ? theme.fg("dim", "exited") : theme.fg("success", "running");
+		const status = exited ? theme.fg("dim", STATUS_EXITED) : theme.fg("success", STATUS_RUNNING);
 		const duration = theme.fg("dim", formatDuration(Date.now() - s.startedAt.getTime()));
 		const oneLine = ` ${dot} ${id}  ${truncCmd}${reason}  ${status} ${duration}`;
 		if (visibleWidth(oneLine) <= cols) {

@@ -13,6 +13,20 @@ import { PtyTerminalSession } from "./pty-session.js";
 import { generateSessionId, sessionManager } from "./session-manager.js";
 import { createSessionQueryState, getSessionOutput } from "./session-query.js";
 import {
+	closingCountdown,
+	DIALOG_HINT,
+	DIALOG_OPTIONS,
+	DIALOG_TITLE,
+	defaultHint,
+	exitSuccess,
+	exitWithCode,
+	FOOTER_HANDS_FREE,
+	FOOTER_RUNNING,
+	handsFreeHint,
+	SCROLL_HINT,
+	tookOverHint,
+} from "./strings.js";
+import {
 	type DialogChoice,
 	FOOTER_LINES_COMPACT,
 	FOOTER_LINES_DIALOG,
@@ -897,7 +911,6 @@ export class InteractiveShellOverlay implements Component, Focusable {
 		}
 	}
 
-	// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: overlay rendering combines layout, session viewport, and state-specific footer contracts
 	render(width: number): string[] {
 		// biome-ignore lint/style/noParameterAssign: width clamping
 		width = Math.max(4, width);
@@ -928,13 +941,11 @@ export class InteractiveShellOverlay implements Component, Focusable {
 		const sanitizedReason = this.options.reason?.replace(/\s+/g, " ").trim();
 		if (this.state === "hands-free") {
 			const elapsed = formatDuration(Date.now() - this.startTime);
-			hint = `🤖 Hands-free (${elapsed}) • Type anything to take over`;
+			hint = handsFreeHint(elapsed);
 		} else if (this.userTookOver) {
-			hint = sanitizedReason
-				? `You took over • ${sanitizedReason} • Ctrl+B background`
-				: "You took over • Ctrl+B background";
+			hint = tookOverHint(sanitizedReason);
 		} else {
-			hint = sanitizedReason ? `Ctrl+B background • ${sanitizedReason}` : "Ctrl+B background";
+			hint = defaultHint(sanitizedReason);
 		}
 		lines.push(row(dim(truncateToWidth(hint, innerWidth, "..."))));
 		lines.push(border(`├${"─".repeat(width - 2)}┤`));
@@ -958,7 +969,7 @@ export class InteractiveShellOverlay implements Component, Focusable {
 		}
 
 		if (this.session.isScrolledUp()) {
-			const hintText = "── ↑ scrolled (Shift+Down) ──";
+			const hintText = SCROLL_HINT;
 			const padLen = Math.max(0, Math.floor((width - 2 - visibleWidth(hintText)) / 2));
 			lines.push(
 				border("├") +
@@ -972,29 +983,27 @@ export class InteractiveShellOverlay implements Component, Focusable {
 		const footerLines: string[] = [];
 
 		if (this.state === "detach-dialog") {
-			footerLines.push(row(accent("Session actions:")));
+			footerLines.push(row(accent(DIALOG_TITLE)));
 			const opts: Array<{ key: DialogChoice; label: string }> = [
-				{ key: "transfer", label: "Transfer output to agent" },
-				{ key: "background", label: "Run in background" },
-				{ key: "kill", label: "Kill process" },
-				{ key: "cancel", label: "Cancel (return to session)" },
+				{ key: "transfer", label: DIALOG_OPTIONS.transfer },
+				{ key: "background", label: DIALOG_OPTIONS.background },
+				{ key: "kill", label: DIALOG_OPTIONS.kill },
+				{ key: "cancel", label: DIALOG_OPTIONS.cancel },
 			];
 			for (const opt of opts) {
 				const sel = this.dialogSelection === opt.key;
 				footerLines.push(row((sel ? accent("▶ ") : "  ") + (sel ? accent(opt.label) : opt.label)));
 			}
-			footerLines.push(row(dim("↑↓ select • Enter confirm • Esc cancel")));
+			footerLines.push(row(dim(DIALOG_HINT)));
 		} else if (this.state === "exited") {
 			const exitMsg =
-				this.session.exitCode === 0
-					? th.fg("success", "✓ Exited successfully")
-					: warning(`✗ Exited with code ${this.session.exitCode}`);
+				this.session.exitCode === 0 ? th.fg("success", exitSuccess()) : warning(exitWithCode(this.session.exitCode));
 			footerLines.push(row(exitMsg));
-			footerLines.push(row(dim(`Closing in ${this.exitCountdown}s... (any key to close)`)));
+			footerLines.push(row(dim(closingCountdown(this.exitCountdown))));
 		} else if (this.state === "hands-free") {
-			footerLines.push(row(dim("🤖 Agent controlling • Type to take over • Ctrl+T transfer • Ctrl+B background")));
+			footerLines.push(row(dim(FOOTER_HANDS_FREE)));
 		} else {
-			footerLines.push(row(dim("Ctrl+T transfer • Ctrl+B background • Ctrl+Q menu • Shift+Up/Down scroll")));
+			footerLines.push(row(dim(FOOTER_RUNNING)));
 		}
 
 		while (footerLines.length < footerHeight) {

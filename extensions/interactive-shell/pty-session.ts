@@ -239,7 +239,7 @@ export class PtyTerminalSession {
 			this._signal = signal;
 
 			// Append exit message to terminal buffer, then notify handler after queue drains
-			const exitMsg = `\n[Process exited with code ${exitCode}${signal ? ` (signal: ${signal})` : ""}]\n`;
+			const exitMsg = `\n[프로세스 종료: 코드 ${exitCode}${signal ? ` (시그널: ${signal})` : ""}]\n`;
 			this.writeQueue.enqueue(async () => {
 				this.rawOutput += exitMsg;
 				await new Promise<void>((resolve) => {
