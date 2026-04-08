@@ -1,1 +1,4 @@
-onlyBuiltDependencies: glimpseui
+onlyBuiltDependencies:
+  - glimpseui
+  - better-sqlite3
+  - onnxruntime-node
