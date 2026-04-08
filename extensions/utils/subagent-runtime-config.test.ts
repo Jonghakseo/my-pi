@@ -98,6 +98,62 @@ describe("runtime frontmatter parsing", () => {
 
 		fs.rmSync(tmpDir, { recursive: true, force: true });
 	});
+
+	it("defaults project .claude agents to 'claude' when runtime is not specified", () => {
+		const tmpDir = createTempAgentDir();
+		const agentsDir = path.join(tmpDir, ".claude", "agents");
+		fs.mkdirSync(agentsDir, { recursive: true });
+
+		writeAgentFile(
+			agentsDir,
+			"gemini-self-reviewer.md",
+			[
+				"---",
+				"name: gemini-self-reviewer",
+				"description: Claude-format project agent",
+				"tools: Bash, Read, Glob, Grep",
+				"model: haiku",
+				"---",
+				"Review the code.",
+			].join("\n"),
+		);
+
+		const result = discoverAgents(tmpDir);
+		const agent = result.agents.find((a) => a.name === "gemini-self-reviewer");
+		expect(agent).toBeDefined();
+		expect(agent?.runtime).toBe("claude");
+		expect(agent?.model).toBe("claude-haiku-4-5");
+
+		fs.rmSync(tmpDir, { recursive: true, force: true });
+	});
+
+	it("respects explicit runtime: pi even for project .claude agents", () => {
+		const tmpDir = createTempAgentDir();
+		const agentsDir = path.join(tmpDir, ".claude", "agents");
+		fs.mkdirSync(agentsDir, { recursive: true });
+
+		writeAgentFile(
+			agentsDir,
+			"pi-in-claude-dir.md",
+			[
+				"---",
+				"name: pi-in-claude-dir",
+				"description: Claude-format project agent overridden to Pi runtime",
+				"runtime: pi",
+				"model: haiku",
+				"---",
+				"Do work.",
+			].join("\n"),
+		);
+
+		const result = discoverAgents(tmpDir);
+		const agent = result.agents.find((a) => a.name === "pi-in-claude-dir");
+		expect(agent).toBeDefined();
+		expect(agent?.runtime).toBe("pi");
+		expect(agent?.model).toBe("claude-haiku-4-5");
+
+		fs.rmSync(tmpDir, { recursive: true, force: true });
+	});
 });
 
 describe("runtime-aware prompt injection", () => {
