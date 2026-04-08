@@ -1,7 +1,7 @@
 ---
 name: ship
 description: "변경사항을 remote에 올리기 전에 의도 단위 커밋 정리, 사전 검증, push가 필요할 때 사용."
-argument-hint: "ship | 커밋해서 푸시해줘 | 올리기 전에 검증해줘 | push 준비해줘"
+argument-hint: "ship | ship <branch-name> | 커밋해서 푸시해줘 | 올리기 전에 검증해줘 | push 준비해줘"
 disable-model-invocation: false
 ---
 
@@ -45,7 +45,6 @@ PR 생성은 **조건부 후처리**다.
 
 ## 확인이 필요한 경우
 
-- 현재 브랜치가 base 브랜치이면: 새 브랜치 생성 vs 현재 브랜치 진행
 - 검증 명령 자동 감지 실패
 - 어떤 검증이 필수인지 불명확함
 
@@ -55,17 +54,32 @@ PR 생성은 **조건부 후처리**다.
 
 ### 브랜치 확인
 
+`/ship`은 **브랜치 이름 인자를 옵션으로 받을 수 있다.**
+
+- 인자가 있으면: 그 브랜치로 checkout/switch 해서 진행한다.
+  - 없으면 새 브랜치를 만든다.
+  - 있으면 그 브랜치를 그대로 사용한다.
+- 인자가 없으면: **현재 브랜치에서 그대로** commit + push 한다.
+- 현재 브랜치가 `main`/base여도 **묻지 않는다.** 그대로 진행한다.
+
 ```bash
+TARGET_BRANCH="$ARGUMENTS"
 CURRENT=$(git branch --show-current 2>/dev/null)
 BASE=$(git remote show origin 2>/dev/null | sed -n '/HEAD branch/s/.*: //p' | head -1)
 [ -n "$BASE" ] || BASE=main
+
+if [ -n "$TARGET_BRANCH" ]; then
+  if git show-ref --verify --quiet "refs/heads/$TARGET_BRANCH"; then
+    git switch "$TARGET_BRANCH"
+  else
+    git switch -c "$TARGET_BRANCH"
+  fi
+fi
+
+CURRENT=$(git branch --show-current 2>/dev/null)
 echo "BRANCH: $CURRENT"
 echo "BASE: $BASE"
 ```
-
-현재 브랜치가 base면 한 번만 묻는다.
-- 추천 브랜치 생성 후 진행
-- 현재 브랜치에 그대로 commit + push
 
 ### 변경사항 / remote 확인
 
@@ -231,6 +245,8 @@ push 전 최종 게이트:
 
 ## Step 5: Push
 
+브랜치 인자를 받았다면 그 브랜치로 push한다. 없으면 현재 브랜치를 그대로 push한다.
+
 ```bash
 git push -u origin "$(git branch --show-current)"
 ```
@@ -290,6 +306,7 @@ PR: <url | skipped (already exists)>
 - "CI가 잡아주니 로컬 build는 안 해도 된다"
 - "lint는 나중에 보자"
 - "파일 기준으로만 나누면 된다"
+- "main 브랜치면 무조건 물어봐야 한다"
 
 ---
 
