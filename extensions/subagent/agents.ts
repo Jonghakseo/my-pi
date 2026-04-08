@@ -149,7 +149,9 @@ function loadAgentsFromDir(dir: string, source: "user" | "project", options: Loa
 		const tools = normalizeTools(frontmatter.tools, format);
 		const model = normalizeModel(frontmatter.model, format);
 		const thinking = normalizeThinkingLevel(frontmatter.thinking);
-		const runtime: AgentRuntime = frontmatter.runtime === "claude" ? "claude" : "pi";
+		const defaultRuntime: AgentRuntime = format === "claude" ? "claude" : "pi";
+		const runtime: AgentRuntime =
+			frontmatter.runtime === "claude" ? "claude" : frontmatter.runtime === "pi" ? "pi" : defaultRuntime;
 
 		agents.push({
 			name: frontmatter.name,
