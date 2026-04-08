@@ -8,9 +8,9 @@ extensions/.env
 # Session data (large)
 sessions/
 
-# Local data (session-rag SQLite index, etc.)
+# Local data (session-rag SQLite index, fastembed model cache)
 .data/
-extensions/local_cache/
+local_cache/
 
 # Generated / logs
 daily-analysis/
