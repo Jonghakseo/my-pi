@@ -11,6 +11,17 @@ import {
 import type { PtyTerminalSession } from "./pty-session.js";
 import { sessionManager } from "./session-manager.js";
 import {
+	closingCountdown,
+	DIALOG_HINT,
+	DIALOG_OPTIONS,
+	DIALOG_TITLE,
+	exitSuccess,
+	exitWithCode,
+	FOOTER_RUNNING,
+	reattachedHint,
+	SCROLL_HINT_SHORT,
+} from "./strings.js";
+import {
 	type DialogChoice,
 	FOOTER_LINES_COMPACT,
 	FOOTER_LINES_DIALOG,
@@ -334,9 +345,7 @@ export class ReattachOverlay implements Component, Focusable {
 		);
 		// Sanitize reason: collapse newlines and whitespace to single spaces for display
 		const sanitizedReason = this.bgSession.reason?.replace(/\s+/g, " ").trim();
-		const hint = sanitizedReason
-			? `Reattached • ${sanitizedReason} • Ctrl+B background`
-			: "Reattached • Ctrl+B background";
+		const hint = reattachedHint(sanitizedReason);
 		lines.push(row(dim(truncateToWidth(hint, innerWidth, "..."))));
 		lines.push(border(`├${"─".repeat(width - 2)}┤`));
 
@@ -359,7 +368,7 @@ export class ReattachOverlay implements Component, Focusable {
 		}
 
 		if (this.session.isScrolledUp()) {
-			const hintText = "── ↑ scrolled ──";
+			const hintText = SCROLL_HINT_SHORT;
 			const padLen = Math.max(0, Math.floor((width - 2 - visibleWidth(hintText)) / 2));
 			lines.push(
 				border("├") +
@@ -373,27 +382,25 @@ export class ReattachOverlay implements Component, Focusable {
 		const footerLines: string[] = [];
 
 		if (this.state === "detach-dialog") {
-			footerLines.push(row(accent("Session actions:")));
+			footerLines.push(row(accent(DIALOG_TITLE)));
 			const opts: Array<{ key: DialogChoice; label: string }> = [
-				{ key: "transfer", label: "Transfer output to agent" },
-				{ key: "background", label: "Run in background" },
-				{ key: "kill", label: "Kill process" },
-				{ key: "cancel", label: "Cancel (return to session)" },
+				{ key: "transfer", label: DIALOG_OPTIONS.transfer },
+				{ key: "background", label: DIALOG_OPTIONS.background },
+				{ key: "kill", label: DIALOG_OPTIONS.kill },
+				{ key: "cancel", label: DIALOG_OPTIONS.cancel },
 			];
 			for (const opt of opts) {
 				const sel = this.dialogSelection === opt.key;
 				footerLines.push(row((sel ? accent("▶ ") : "  ") + (sel ? accent(opt.label) : opt.label)));
 			}
-			footerLines.push(row(dim("↑↓ select • Enter confirm • Esc cancel")));
+			footerLines.push(row(dim(DIALOG_HINT)));
 		} else if (this.state === "exited") {
 			const exitMsg =
-				this.session.exitCode === 0
-					? th.fg("success", "✓ Exited successfully")
-					: warning(`✗ Exited with code ${this.session.exitCode}`);
+				this.session.exitCode === 0 ? th.fg("success", exitSuccess()) : warning(exitWithCode(this.session.exitCode));
 			footerLines.push(row(exitMsg));
-			footerLines.push(row(dim(`Closing in ${this.exitCountdown}s... (any key to close)`)));
+			footerLines.push(row(dim(closingCountdown(this.exitCountdown))));
 		} else {
-			footerLines.push(row(dim("Ctrl+T transfer • Ctrl+B background • Ctrl+Q menu • Shift+Up/Down scroll")));
+			footerLines.push(row(dim(FOOTER_RUNNING)));
 		}
 
 		while (footerLines.length < footerHeight) {
