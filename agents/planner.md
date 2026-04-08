@@ -3,6 +3,7 @@ name: planner
 description: Strategic planning agent — clarifies scope, researches codebase evidence, produces executable implementation plans, and returns the saved plan file path
 tools: read, grep, find, bash, write
 model: anthropic/claude-opus-4-6
+runtime: claude
 thinking: high
 ---
 
