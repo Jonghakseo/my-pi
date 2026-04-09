@@ -16,14 +16,15 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { readdir, readFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
+import { type ExtensionAPI, type ExtensionContext, getMarkdownTheme } from "@mariozechner/pi-coding-agent";
+import { Box, Markdown, Spacer, Text } from "@mariozechner/pi-tui";
 import { Type } from "@sinclair/typebox";
 import { formatClock, formatKoreanDuration } from "./utils/time-utils.ts";
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
 const CUSTOM_TYPE = "until";
-const PROMPT_CONTEXT_TYPE = "until-prompt-context";
+const PROMPT_MESSAGE_TYPE = "until-prompt";
 const STATUS_KEY = "until-footer";
 
 const MAX_TASKS = 3;
@@ -186,17 +187,18 @@ interface UntilTask {
 	timer: ReturnType<typeof setTimeout>;
 }
 
-interface PendingPromptInjection {
-	visiblePrompt: string;
-	hiddenPrompt: string;
+interface UntilPromptMessageDetails {
 	taskId: number;
+	runCount: number;
+	intervalLabel: string;
+	elapsed: string;
+	displayPrompt: string;
 }
 
 // ─── Extension ───────────────────────────────────────────────────────────────
 
 export default function (pi: ExtensionAPI) {
 	const tasks = new Map<number, UntilTask>();
-	const pendingPromptInjections: PendingPromptInjection[] = [];
 	let nextTaskId = 1;
 	let agentRunning = false;
 	let latestCtx: ExtensionContext | undefined;
@@ -275,14 +277,9 @@ export default function (pi: ExtensionAPI) {
 		task.runCount++;
 
 		const elapsed = formatKoreanDuration(now - task.createdAt);
-		const visiblePrompt = [
+		const wrappedPrompt = [
 			`[until #${task.id} — 실행 ${task.runCount}회차, 경과 ${elapsed}, 간격 ${task.intervalLabel}]`,
-			`Task: ${task.displayPrompt}`,
 			"",
-			"상세 지침은 내부 컨텍스트로 주입된다. 작업 후 반드시 until_report를 호출하세요.",
-			`- taskId: ${task.id} (이 값을 그대로 전달)`,
-		].join("\n");
-		const hiddenPrompt = [
 			task.prompt,
 			"",
 			"작업을 수행한 뒤, 반드시 until_report 도구를 호출하여 결과를 보고하세요.",
@@ -296,17 +293,25 @@ export default function (pi: ExtensionAPI) {
 		}
 
 		task.inFlight = true;
-		pendingPromptInjections.push({ visiblePrompt, hiddenPrompt, taskId: task.id });
 
 		try {
-			if (agentRunning) {
-				pi.sendUserMessage(visiblePrompt, { deliverAs: "followUp" });
-			} else {
-				pi.sendUserMessage(visiblePrompt);
-			}
+			pi.sendMessage(
+				{
+					customType: PROMPT_MESSAGE_TYPE,
+					content: wrappedPrompt,
+					display: true,
+					details: {
+						taskId: task.id,
+						runCount: task.runCount,
+						intervalLabel: task.intervalLabel,
+						elapsed,
+						displayPrompt: task.displayPrompt,
+					} satisfies UntilPromptMessageDetails,
+				},
+				agentRunning ? { deliverAs: "followUp", triggerTurn: true } : { triggerTurn: true },
+			);
 		} catch {
-			// sendUserMessage 실패 시 inFlight 고착 방지
-			pendingPromptInjections.pop();
+			// sendMessage 실패 시 inFlight 고착 방지
 			task.inFlight = false;
 		}
 
@@ -631,19 +636,41 @@ export default function (pi: ExtensionAPI) {
 
 	// ── Events ────────────────────────────────────────────────────────────
 
-	pi.on("before_agent_start", async (event) => {
-		const pending = pendingPromptInjections[0];
-		if (!pending || event.prompt !== pending.visiblePrompt) return;
+	pi.registerMessageRenderer<UntilPromptMessageDetails>(PROMPT_MESSAGE_TYPE, (message, { expanded }, theme) => {
+		const details = message.details;
+		const header = theme.fg(
+			"accent",
+			`[until #${details?.taskId ?? "?"} — 실행 ${details?.runCount ?? "?"}회차, 경과 ${details?.elapsed ?? "?"}, 간격 ${details?.intervalLabel ?? "?"}]`,
+		);
 
-		pendingPromptInjections.shift();
-		return {
-			message: {
-				customType: PROMPT_CONTEXT_TYPE,
-				content: pending.hiddenPrompt,
-				display: false,
-				details: { taskId: pending.taskId },
-			},
-		};
+		const box = new Box(1, 1, (text) => theme.bg("customMessageBg", text));
+		box.addChild(new Text(header, 0, 0));
+		box.addChild(new Spacer(1));
+
+		if (!expanded) {
+			const summary = details?.displayPrompt ? `Task: ${details.displayPrompt}` : "Task: (unknown)";
+			box.addChild(new Text(theme.fg("customMessageText", summary), 0, 0));
+			box.addChild(new Spacer(1));
+			box.addChild(new Text(theme.fg("dim", "전체 프롬프트는 접혀 있음 · 확장해서 확인 가능"), 0, 0));
+			return box;
+		}
+
+		let text = "";
+		if (typeof message.content === "string") {
+			text = message.content;
+		} else {
+			text = message.content
+				.filter((c) => c.type === "text")
+				.map((c) => c.text)
+				.join("\n");
+		}
+
+		box.addChild(
+			new Markdown(text, 0, 0, getMarkdownTheme(), {
+				color: (value) => theme.fg("customMessageText", value),
+			}),
+		);
+		return box;
 	});
 
 	pi.on("agent_start", async (_event, ctx) => {
@@ -656,14 +683,10 @@ export default function (pi: ExtensionAPI) {
 		latestCtx = ctx;
 	});
 
-	// context 이벤트: until 로그 메시지를 LLM 컨텍스트에서 제거
+	// context 이벤트: until 로그 메시지만 LLM 컨텍스트에서 제거
 	pi.on("context", async (event, _ctx) => {
 		const filtered = event.messages.filter(
-			(m) =>
-				!(
-					m.role === "custom" &&
-					([CUSTOM_TYPE, PROMPT_CONTEXT_TYPE] as string[]).includes((m as { customType?: string }).customType ?? "")
-				),
+			(m) => !(m.role === "custom" && (m as { customType?: string }).customType === CUSTOM_TYPE),
 		);
 		if (filtered.length === event.messages.length) return;
 		return { messages: filtered };
@@ -671,14 +694,12 @@ export default function (pi: ExtensionAPI) {
 
 	pi.on("session_start", async (_event, ctx) => {
 		agentRunning = false;
-		pendingPromptInjections.length = 0;
 		latestCtx = ctx;
 		clearAllTasks();
 	});
 
 	pi.on("session_shutdown", async () => {
 		agentRunning = false;
-		pendingPromptInjections.length = 0;
 		clearAllTasks();
 	});
 }
