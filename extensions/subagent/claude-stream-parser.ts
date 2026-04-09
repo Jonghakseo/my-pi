@@ -93,6 +93,14 @@ function processStreamEvent(state: ClaudeStreamState, ev: any): boolean {
 	if (ev.type === "message_start") {
 		const msg = ev.message;
 		if (msg?.model && !state.model) state.model = msg.model;
+		const usage = msg?.usage;
+		if (usage) {
+			state.usage.input += usage.input_tokens || 0;
+			state.usage.output += usage.output_tokens || 0;
+			state.usage.cacheRead += usage.cache_read_input_tokens || 0;
+			state.usage.cacheWrite += usage.cache_creation_input_tokens || 0;
+			state.usage.contextTokens = state.usage.input + state.usage.output + state.usage.cacheRead;
+		}
 		state.liveThinking = undefined;
 		state.thoughtText = undefined;
 		return false;
@@ -150,6 +158,7 @@ function processStreamEvent(state: ClaudeStreamState, ev: any): boolean {
 			state.usage.output += usage.output_tokens || 0;
 			state.usage.cacheRead += usage.cache_read_input_tokens || 0;
 			state.usage.cacheWrite += usage.cache_creation_input_tokens || 0;
+			state.usage.contextTokens = state.usage.input + state.usage.output + state.usage.cacheRead;
 		}
 		if (ev.delta?.stop_reason) {
 			state.stopReason = ev.delta.stop_reason;
