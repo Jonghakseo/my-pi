@@ -602,12 +602,14 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 			.map((run) => run.id);
 		const parsedCommand = parseSubagentToolCommand(params.command, { knownRunIds });
 
-		const shouldAutoClearFinishedRuns =
+		const hasRunningRuns = Array.from(store.commandRuns.values()).some((r) => !r.removed && r.status === "running");
+		const isLaunchAction =
 			parsedCommand.type === "params" &&
 			(parsedCommand.params.asyncAction === "run" ||
 				parsedCommand.params.asyncAction === "batch" ||
 				parsedCommand.params.asyncAction === "chain" ||
 				parsedCommand.params.asyncAction === "list");
+		const shouldAutoClearFinishedRuns = isLaunchAction || !hasRunningRuns;
 
 		if (shouldAutoClearFinishedRuns) {
 			const clearedRunIds = clearFinishedRuns(store, {

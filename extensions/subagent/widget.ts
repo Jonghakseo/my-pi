@@ -8,7 +8,6 @@ import { HANG_WARNING_IDLE_MS, PARENT_HINT } from "./constants.js";
 import {
 	AGENT_NAME_PALETTE,
 	agentBgIndex,
-	formatContextUsageBar,
 	getContextBarColorByRemaining,
 	getRemainingContextPercent,
 	getUsedContextPercent,
@@ -23,7 +22,7 @@ const SPINNER_REFRESH_MS = 150;
 const MAX_VISIBLE_RUNS = 3;
 const MAX_TASK_LABEL_CHARS = 36;
 const MIN_LEFT_LABEL_WIDTH = 24;
-const MIN_CONTEXT_BAR_WIDTH = 8;
+const MIN_CONTEXT_BAR_WIDTH = 5;
 
 import { type SubagentStore, truncateText } from "./store.js";
 import type { CommandRunState } from "./types.js";
@@ -100,12 +99,20 @@ function getIdleLabel(run: CommandRunState, theme: WidgetTheme): string {
 	return theme.fg(idleColor, `idle:${formatCompactDuration(idleMs)}`);
 }
 
+const WIDGET_BAR_WIDTH = 5;
+
+function formatCompactContextBar(percent: number): string {
+	const clamped = Math.max(0, Math.min(100, Math.round(percent)));
+	const filled = Math.round((clamped / 100) * WIDGET_BAR_WIDTH);
+	return `[${"■".repeat(filled)}${"□".repeat(WIDGET_BAR_WIDTH - filled)}]`;
+}
+
 function getContextShort(run: CommandRunState, ctx: WidgetRenderCtx, theme: WidgetTheme): string {
 	const contextWindow = resolveContextWindow(ctx, run.model);
 	const usedContextPercent = getUsedContextPercent(run.usage?.contextTokens, contextWindow);
 	const remainingContextPercent = getRemainingContextPercent(usedContextPercent);
-	const contextBar = usedContextPercent !== undefined ? formatContextUsageBar(usedContextPercent) : undefined;
-	if (!contextBar) return "";
+	if (usedContextPercent === undefined) return "";
+	const contextBar = formatCompactContextBar(usedContextPercent);
 	const contextBarColor =
 		remainingContextPercent !== undefined ? getContextBarColorByRemaining(remainingContextPercent) : undefined;
 	return contextBarColor ? theme.fg(contextBarColor, contextBar) : theme.fg("dim", contextBar);
@@ -128,12 +135,13 @@ function buildStatusLeft(run: CommandRunState, theme: WidgetTheme): string {
 	const primaryLabel = buildPrimaryLabel(run);
 	const taskLabel = primaryLabel ? theme.fg("dim", primaryLabel) : "";
 	const delimiter = theme.fg("muted", " · ");
+	const mainBadge = run.contextMode === "main" ? `${theme.fg("warning", "[M]")} ` : "";
+	const agentLabel = `${mainBadge}\x1b[38;5;${AGENT_NAME_PALETTE[agentBgIndex(run.agent)]}m${run.agent}\x1b[39m`;
 	const leftParts = [
 		theme.fg(statusColor, `${statusIcon} #${run.id}`),
-		run.contextMode === "main" ? theme.fg("warning", "[M]") : "",
-		`\x1b[38;5;${AGENT_NAME_PALETTE[agentBgIndex(run.agent)]}m${run.agent}\x1b[39m`,
-		theme.fg("dim", elapsedLabel),
+		agentLabel,
 		taskLabel,
+		theme.fg("dim", elapsedLabel),
 		getIdleLabel(run, theme),
 	].filter(Boolean);
 	return leftParts.join(delimiter);
