@@ -82,13 +82,22 @@ function getStatusVisual(run: CommandRunState): { statusColor: ThemeColor; statu
 	return { statusColor, statusIcon };
 }
 
+function formatCompactDuration(ms: number): string {
+	const totalSeconds = Math.max(0, Math.round(ms / 1000));
+	const hours = Math.floor(totalSeconds / 3600);
+	const minutes = Math.floor((totalSeconds % 3600) / 60);
+	const seconds = totalSeconds % 60;
+	if (hours > 0) return `${hours}h${minutes}m${seconds}s`;
+	if (minutes > 0) return `${minutes}m${seconds}s`;
+	return `${seconds}s`;
+}
+
 function getIdleLabel(run: CommandRunState, theme: WidgetTheme): string {
 	if (run.status !== "running" || !run.lastActivityAt) return "";
 	const idleMs = Date.now() - run.lastActivityAt;
-	const idleSec = Math.round(idleMs / 1000);
-	if (idleSec < 5) return "";
+	if (idleMs < 60_000) return "";
 	const idleColor: ThemeColor = idleMs >= HANG_WARNING_IDLE_MS ? "error" : "dim";
-	return theme.fg(idleColor, `idle:${idleSec}s`);
+	return theme.fg(idleColor, `idle:${formatCompactDuration(idleMs)}`);
 }
 
 function getContextShort(run: CommandRunState, ctx: WidgetRenderCtx, theme: WidgetTheme): string {
@@ -102,19 +111,28 @@ function getContextShort(run: CommandRunState, ctx: WidgetRenderCtx, theme: Widg
 	return contextBarColor ? theme.fg(contextBarColor, contextBar) : theme.fg("dim", contextBar);
 }
 
+function buildPrimaryLabel(run: CommandRunState): string {
+	const lastLine = run.lastLine
+		?.replace(/\s*\n+\s*/g, " ")
+		.replace(/\s{2,}/g, " ")
+		.trim();
+	if (lastLine) return truncateText(lastLine, MAX_TASK_LABEL_CHARS);
+
+	const displayTask = run.displayTask ?? run.task;
+	return truncateText(displayTask.replace(/\s+/g, " ").trim(), MAX_TASK_LABEL_CHARS);
+}
+
 function buildStatusLeft(run: CommandRunState, theme: WidgetTheme): string {
 	const { statusColor, statusIcon } = getStatusVisual(run);
-	const elapsedSec = Math.max(0, Math.round(run.elapsedMs / 1000));
-	const displayTask = run.displayTask ?? run.task;
-	const taskLabel = displayTask
-		? theme.fg("dim", truncateText(displayTask.replace(/\s+/g, " ").trim(), MAX_TASK_LABEL_CHARS))
-		: "";
+	const elapsedLabel = formatCompactDuration(run.elapsedMs);
+	const primaryLabel = buildPrimaryLabel(run);
+	const taskLabel = primaryLabel ? theme.fg("dim", primaryLabel) : "";
 	const delimiter = theme.fg("muted", " · ");
 	const leftParts = [
 		theme.fg(statusColor, `${statusIcon} #${run.id}`),
-		run.contextMode === "main" ? theme.fg("warning", "Main") : "",
+		run.contextMode === "main" ? theme.fg("warning", "[M]") : "",
 		`\x1b[38;5;${AGENT_NAME_PALETTE[agentBgIndex(run.agent)]}m${run.agent}\x1b[39m`,
-		theme.fg("dim", `${elapsedSec}s`),
+		theme.fg("dim", elapsedLabel),
 		taskLabel,
 		getIdleLabel(run, theme),
 	].filter(Boolean);

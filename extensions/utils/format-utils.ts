@@ -155,13 +155,13 @@ export function getRemainingContextPercent(usedPercent?: number): number | undef
 
 /**
  * Render a text-based context usage bar.
- * Example: `[#####-----] 50%`
+ * Example: `[■■■■■□□□□□] 50%`
  */
 export function formatContextUsageBar(percent: number, width = 10): string {
 	const clamped = Math.max(0, Math.min(100, Math.round(percent)));
 	const barWidth = Math.max(4, width);
 	const filled = Math.round((clamped / 100) * barWidth);
-	return `[${"#".repeat(filled)}${"-".repeat(barWidth - filled)}] ${clamped}%`;
+	return `[${"■".repeat(filled)}${"□".repeat(barWidth - filled)}] ${clamped}%`;
 }
 
 /** Map remaining context percentage to a color severity. */
