@@ -27,6 +27,13 @@ import {
 	SUBVIEW_OVERLAY_MAX_HEIGHT,
 	SUBVIEW_OVERLAY_WIDTH,
 } from "./constants.js";
+import {
+	buildSubagentDisplayTaskFallback,
+	createDisplayTaskRefreshToken,
+	isDisplayTaskRefreshTokenCurrent,
+	shouldSummarizeSubagentTask,
+	summarizeSubagentDisplayTask,
+} from "./display-task.js";
 import { AGENT_NAME_PALETTE, agentBgIndex, formatUsageStats, truncateLines } from "./format.js";
 import {
 	clearPendingGroupCompletion,
@@ -35,7 +42,7 @@ import {
 	upsertPendingGroupCompletion,
 } from "./group-pending.js";
 import { enqueueSubagentInvocation } from "./invocation-queue.js";
-import { getSessionFileSize } from "./persisted-session.js";
+import { appendDisplayTaskUpdate, getSessionFileSize } from "./persisted-session.js";
 import { readSessionReplayItems, SubagentSessionReplayOverlay } from "./replay.js";
 import { invokeWithAutoRetry, MAX_SUBAGENT_AUTO_RETRIES } from "./retry.js";
 import { getLatestRun, removeRun, trimCommandRunHistory } from "./run-utils.js";
@@ -64,6 +71,41 @@ function captureSwitchSession(store: SubagentStore, ctx: any): void {
 	if (typeof ctx?.switchSession === "function" && !store.switchSessionFn) {
 		store.switchSessionFn = ctx.switchSession.bind(ctx);
 	}
+}
+
+function refreshDisplayTaskInBackground(
+	store: SubagentStore,
+	runState: CommandRunState,
+	rawTask: string,
+	ctx: any,
+): void {
+	if (!shouldSummarizeSubagentTask(rawTask, runState.displayTask ?? "")) return;
+	if (!ctx?.model || typeof ctx?.modelRegistry?.getApiKeyAndHeaders !== "function") return;
+
+	const refreshToken = createDisplayTaskRefreshToken(runState);
+	void summarizeSubagentDisplayTask(rawTask, {
+		model: ctx.model,
+		modelRegistry: {
+			getApiKeyAndHeaders: ctx.modelRegistry.getApiKeyAndHeaders.bind(ctx.modelRegistry),
+		},
+	})
+		.then((displayTask) => {
+			if (!displayTask || runState.removed) return;
+			if (!isDisplayTaskRefreshTokenCurrent(runState, refreshToken)) return;
+			if (displayTask === runState.displayTask) return;
+			runState.displayTask = displayTask;
+			const originSessionFile = store.globalLiveRuns.get(runState.id)?.originSessionFile;
+			appendDisplayTaskUpdate(originSessionFile, {
+				runId: runState.id,
+				task: runState.task,
+				displayTask,
+				startedAt: runState.startedAt,
+			});
+			updateCommandRunsWidget(store);
+		})
+		.catch(() => {
+			// Ignore background summary failures.
+		});
 }
 
 /**
@@ -486,6 +528,7 @@ function restoreRunsFromSession(store: SubagentStore, ctx: any, pi?: ExtensionAP
 		const entries = ctx.sessionManager.getEntries();
 		const restoredRuns = new Map<number, CommandRunState>();
 		const removedRunIds = new Set<number>();
+		const displayTaskUpdates = new Map<number, { task?: string; displayTask?: string; startedAt?: number }>();
 		let maxRunId = 0;
 
 		// Restore parent link from latest subagent-parent entry (if any).
@@ -504,7 +547,7 @@ function restoreRunsFromSession(store: SubagentStore, ctx: any, pi?: ExtensionAP
 		}
 		store.currentParentSessionFile = latestParentSessionFile;
 
-		// First pass: collect removed run IDs
+		// First pass: collect removed run IDs and persisted displayTask updates
 		for (const entry of entries) {
 			if (entry.type === "custom") {
 				const ce = entry as any;
@@ -513,6 +556,15 @@ function restoreRunsFromSession(store: SubagentStore, ctx: any, pi?: ExtensionAP
 					if (ce.data?.runId != null) {
 						removedRunIds.add(ce.data.runId);
 					}
+					continue;
+				}
+				if (ce.customType === "subagent-display-task" && typeof ce.data?.runId === "number") {
+					sawSubagentMarkers = true;
+					displayTaskUpdates.set(ce.data.runId, {
+						task: typeof ce.data?.task === "string" ? ce.data.task : undefined,
+						displayTask: typeof ce.data?.displayTask === "string" ? ce.data.displayTask : undefined,
+						startedAt: toValidTimestampMs(ce.data?.startedAt),
+					});
 				}
 			}
 		}
@@ -529,6 +581,7 @@ function restoreRunsFromSession(store: SubagentStore, ctx: any, pi?: ExtensionAP
 			if (runId > maxRunId) maxRunId = runId;
 
 			const existing = restoredRuns.get(runId);
+			const displayTaskUpdate = displayTaskUpdates.get(runId);
 			const entryTimestampMs = toValidTimestampMs((entry as any).timestamp);
 			const startedAtFromDetails = toValidTimestampMs(d.startedAt);
 			const elapsedFromDetails = toNonNegativeNumber(d.elapsedMs);
@@ -572,10 +625,22 @@ function restoreRunsFromSession(store: SubagentStore, ctx: any, pi?: ExtensionAP
 				const lastActivityAt =
 					lastActivityAtFromDetails ?? entryTimestampMs ?? existing?.lastActivityAt ?? startedAt + elapsedMs;
 
+				const persistedDisplayTask =
+					displayTaskUpdate?.startedAt === startedAt ? displayTaskUpdate.displayTask : undefined;
+				const persistedDisplayTaskFallbackTask =
+					displayTaskUpdate?.startedAt === startedAt ? displayTaskUpdate.task : undefined;
 				const run: CommandRunState = {
 					id: runId,
 					agent: d.agent ?? existing?.agent ?? "unknown",
 					task: d.task ?? existing?.task ?? "",
+					displayTask:
+						persistedDisplayTask ??
+						d.displayTask ??
+						existing?.displayTask ??
+						persistedDisplayTaskFallbackTask ??
+						d.task ??
+						existing?.task ??
+						"",
 					status: finalStatus,
 					startedAt,
 					lastActivityAt,
@@ -617,10 +682,22 @@ function restoreRunsFromSession(store: SubagentStore, ctx: any, pi?: ExtensionAP
 				const startedAt = startedAtFromDetails ?? entryTimestampMs ?? existing?.startedAt ?? Date.now();
 				const lastActivityAt = lastActivityAtFromDetails ?? entryTimestampMs ?? existing?.lastActivityAt ?? startedAt;
 
+				const persistedDisplayTask =
+					displayTaskUpdate?.startedAt === startedAt ? displayTaskUpdate.displayTask : undefined;
+				const persistedDisplayTaskFallbackTask =
+					displayTaskUpdate?.startedAt === startedAt ? displayTaskUpdate.task : undefined;
 				restoredRuns.set(runId, {
 					id: runId,
 					agent: d.agent ?? existing?.agent ?? "unknown",
 					task: d.task ?? existing?.task ?? "",
+					displayTask:
+						persistedDisplayTask ??
+						d.displayTask ??
+						existing?.displayTask ??
+						persistedDisplayTaskFallbackTask ??
+						d.task ??
+						existing?.task ??
+						"",
 					status: "error",
 					startedAt,
 					lastActivityAt,
@@ -1062,6 +1139,7 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 				runState = existingRun;
 				runState.agent = selectedAgent;
 				runState.task = taskForDisplay;
+				runState.displayTask = buildSubagentDisplayTaskFallback(taskForDisplay);
 				runState.status = "running";
 				runState.startedAt = Date.now();
 				runState.lastActivityAt = Date.now();
@@ -1116,6 +1194,7 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 					id: runId,
 					agent: selectedAgent,
 					task: taskForDisplay,
+					displayTask: buildSubagentDisplayTaskFallback(taskForDisplay),
 					status: "running",
 					startedAt: Date.now(),
 					lastActivityAt: Date.now(),
@@ -1152,6 +1231,7 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 
 			store.commandWidgetCtx = ctx as unknown as WidgetRenderCtx;
 			updateCommandRunsWidget(store, ctx as unknown as WidgetRenderCtx);
+			refreshDisplayTaskInBackground(store, runState, taskForDisplay, ctx);
 
 			const makeDetails = (results: SingleResult[]): SubagentDetails => ({
 				mode: "single",
@@ -1175,6 +1255,7 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 						runId,
 						agent: selectedAgent,
 						task: taskForDisplay,
+						displayTask: runState.displayTask,
 						continuedFromRunId,
 						turnCount: runState.turnCount,
 						contextMode: runState.contextMode,
@@ -1254,6 +1335,7 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 														runId,
 														agent: selectedAgent,
 														task: taskForDisplay,
+														displayTask: runState.displayTask,
 														continuedFromRunId,
 														turnCount: runState.turnCount,
 														contextMode: runState.contextMode,
@@ -1320,6 +1402,7 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 							runId,
 							agent: selectedAgent,
 							task: taskForDisplay,
+							displayTask: runState.displayTask,
 							continuedFromRunId,
 							turnCount: runState.turnCount,
 							contextMode: runState.contextMode,
@@ -1397,6 +1480,7 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 							runId,
 							agent: selectedAgent,
 							task: taskForDisplay,
+							displayTask: runState.displayTask,
 							continuedFromRunId,
 							turnCount: runState.turnCount,
 							contextMode: runState.contextMode,

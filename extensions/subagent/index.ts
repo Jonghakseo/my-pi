@@ -102,6 +102,7 @@ export function checkForHungRuns(store: SubagentStore, pi: ExtensionAPI): void {
 					runId,
 					agent: run.agent,
 					task: run.task,
+					displayTask: run.displayTask,
 					status: "auto-aborted",
 					idleMs,
 				},

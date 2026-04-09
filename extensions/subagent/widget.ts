@@ -21,8 +21,12 @@ const SPINNER_INTERVAL_MS = 120;
 const SPINNER_REFRESH_MS = 150;
 
 const MAX_VISIBLE_RUNS = 3;
+const MAX_TASK_LABEL_CHARS = 36;
+const MIN_LEFT_LABEL_WIDTH = 24;
+const MIN_CONTEXT_BAR_WIDTH = 8;
 
 import { type SubagentStore, truncateText } from "./store.js";
+import type { CommandRunState } from "./types.js";
 
 type ThemeBg = Parameters<Theme["bg"]>[0];
 type WidgetTheme = {
@@ -69,6 +73,69 @@ function manageSpinnerTimer(store: SubagentStore): void {
 		clearInterval(spinnerTimer);
 		spinnerTimer = undefined;
 	}
+}
+
+function getStatusVisual(run: CommandRunState): { statusColor: ThemeColor; statusIcon: string } {
+	const statusColor: ThemeColor = run.status === "running" ? "warning" : run.status === "done" ? "success" : "error";
+	const spinnerFrame = SPINNER_FRAMES[Math.floor(Date.now() / SPINNER_INTERVAL_MS) % SPINNER_FRAMES.length];
+	const statusIcon = run.status === "running" ? spinnerFrame : run.status === "done" ? "✓" : "✗";
+	return { statusColor, statusIcon };
+}
+
+function getIdleLabel(run: CommandRunState, theme: WidgetTheme): string {
+	if (run.status !== "running" || !run.lastActivityAt) return "";
+	const idleMs = Date.now() - run.lastActivityAt;
+	const idleSec = Math.round(idleMs / 1000);
+	if (idleSec < 5) return "";
+	const idleColor: ThemeColor = idleMs >= HANG_WARNING_IDLE_MS ? "error" : "dim";
+	return theme.fg(idleColor, `idle:${idleSec}s`);
+}
+
+function getContextShort(run: CommandRunState, ctx: WidgetRenderCtx, theme: WidgetTheme): string {
+	const contextWindow = resolveContextWindow(ctx, run.model);
+	const usedContextPercent = getUsedContextPercent(run.usage?.contextTokens, contextWindow);
+	const remainingContextPercent = getRemainingContextPercent(usedContextPercent);
+	const contextBar = usedContextPercent !== undefined ? formatContextUsageBar(usedContextPercent) : undefined;
+	if (!contextBar) return "";
+	const contextBarColor =
+		remainingContextPercent !== undefined ? getContextBarColorByRemaining(remainingContextPercent) : undefined;
+	return contextBarColor ? theme.fg(contextBarColor, contextBar) : theme.fg("dim", contextBar);
+}
+
+function buildStatusLeft(run: CommandRunState, theme: WidgetTheme): string {
+	const { statusColor, statusIcon } = getStatusVisual(run);
+	const elapsedSec = Math.max(0, Math.round(run.elapsedMs / 1000));
+	const displayTask = run.displayTask ?? run.task;
+	const taskLabel = displayTask
+		? theme.fg("dim", truncateText(displayTask.replace(/\s+/g, " ").trim(), MAX_TASK_LABEL_CHARS))
+		: "";
+	const delimiter = theme.fg("muted", " · ");
+	const leftParts = [
+		theme.fg(statusColor, `${statusIcon} #${run.id}`),
+		run.contextMode === "main" ? theme.fg("warning", "Main") : "",
+		`\x1b[38;5;${AGENT_NAME_PALETTE[agentBgIndex(run.agent)]}m${run.agent}\x1b[39m`,
+		theme.fg("dim", `${elapsedSec}s`),
+		taskLabel,
+		getIdleLabel(run, theme),
+	].filter(Boolean);
+	return leftParts.join(delimiter);
+}
+
+function composeRunLine(left: string, right: string, innerWidth: number): string {
+	if (!right || innerWidth <= MIN_LEFT_LABEL_WIDTH) {
+		return truncateToWidthWithEllipsis(left, innerWidth);
+	}
+
+	const allowedRightWidth = Math.min(visibleWidth(right), Math.max(0, innerWidth - MIN_LEFT_LABEL_WIDTH - 1));
+	if (allowedRightWidth < MIN_CONTEXT_BAR_WIDTH) {
+		return truncateToWidthWithEllipsis(left, innerWidth);
+	}
+
+	const fittedRight = truncateToWidth(right, allowedRightWidth);
+	const maxLeftWidth = Math.max(1, innerWidth - visibleWidth(fittedRight) - 1);
+	const fittedLeft = truncateToWidthWithEllipsis(left, maxLeftWidth);
+	const gapWidth = Math.max(1, innerWidth - visibleWidth(fittedLeft) - visibleWidth(fittedRight));
+	return `${fittedLeft}${" ".repeat(gapWidth)}${fittedRight}`;
 }
 
 export function updateCommandRunsWidget(store: SubagentStore, ctx?: WidgetRenderCtx): void {
@@ -132,9 +199,7 @@ export function updateCommandRunsWidget(store: SubagentStore, ctx?: WidgetRender
 
 	ui.setWidget("subagent-runs", undefined);
 
-	for (const [runIndex, run] of runs.entries()) {
-		const showSeparator = runIndex > 0;
-		const showBottomSeparator = runIndex === runs.length - 1;
+	for (const run of runs) {
 		store.renderedRunWidgetIds.add(run.id);
 		ui.setWidget(
 			`sub-${run.id}`,
@@ -144,84 +209,11 @@ export function updateCommandRunsWidget(store: SubagentStore, ctx?: WidgetRender
 				box.addChild(content);
 
 				return {
-					// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: widget rendering combines status, usage bar, idle state, and separators in one pass.
 					render(width: number): string[] {
-						const lines: string[] = [];
 						const innerWidth = Math.max(1, width - 2);
-						if (showSeparator) lines.push(theme.fg("muted", "─".repeat(innerWidth)));
-
-						const statusColor = run.status === "running" ? "warning" : run.status === "done" ? "success" : "error";
-						const spinnerFrame = SPINNER_FRAMES[Math.floor(Date.now() / SPINNER_INTERVAL_MS) % SPINNER_FRAMES.length];
-						const statusIcon = run.status === "running" ? spinnerFrame : run.status === "done" ? "✓" : "✗";
-						const elapsedSec = Math.max(0, Math.round(run.elapsedMs / 1000));
-						const contextWindow = resolveContextWindow(activeCtx, run.model);
-						const usedContextPercent = getUsedContextPercent(run.usage?.contextTokens, contextWindow);
-						const remainingContextPercent = getRemainingContextPercent(usedContextPercent);
-						const contextBar = usedContextPercent !== undefined ? formatContextUsageBar(usedContextPercent) : undefined;
-						const contextBarColor =
-							remainingContextPercent !== undefined
-								? getContextBarColorByRemaining(remainingContextPercent)
-								: undefined;
-						const contextShort = contextBar
-							? contextBarColor
-								? theme.fg(contextBarColor, contextBar)
-								: theme.fg("dim", contextBar)
-							: "";
-						const modeLabel = run.contextMode === "main" ? theme.fg("warning", " · Main") : "";
-
-						// Idle indicator for running runs
-						let idleLabel = "";
-						if (run.status === "running" && run.lastActivityAt) {
-							const idleMs = Date.now() - run.lastActivityAt;
-							const idleSec = Math.round(idleMs / 1000);
-							if (idleSec >= 5) {
-								const idleColor = idleMs >= HANG_WARNING_IDLE_MS ? "error" : "dim";
-								idleLabel = theme.fg(idleColor, ` idle:${idleSec}s`);
-							}
-						}
-
-						const taskSnippet = run.task
-							? theme.fg("dim", ` · ${truncateText(run.task.replace(/\s+/g, " ").trim(), 60)}`)
-							: "";
-						const statusLeft =
-							theme.fg(statusColor, `${statusIcon} #${run.id}`) +
-							modeLabel +
-							`\x1b[38;5;${AGENT_NAME_PALETTE[agentBgIndex(run.agent)]}m ${run.agent}\x1b[39m` +
-							theme.fg("dim", `  (${elapsedSec}s)`) +
-							taskSnippet +
-							idleLabel;
-
-						if (contextShort) {
-							const contextWidth = visibleWidth(contextShort);
-							if (contextWidth >= innerWidth) {
-								lines.push(truncateToWidth(contextShort, innerWidth));
-							} else {
-								const maxLeftWidth = Math.max(1, innerWidth - contextWidth - 1);
-								const fittedLeft = truncateToWidthWithEllipsis(statusLeft, maxLeftWidth);
-								const gapWidth = Math.max(1, innerWidth - visibleWidth(fittedLeft) - contextWidth);
-								lines.push(`${fittedLeft}${" ".repeat(gapWidth)}${contextShort}`);
-							}
-						} else {
-							lines.push(truncateToWidthWithEllipsis(statusLeft, innerWidth));
-						}
-
-						if (run.thoughtText && run.status !== "done") {
-							const thoughtLine = truncateText(run.thoughtText, Math.max(1, innerWidth - 4));
-							lines.push(theme.fg("accent", `  💭 ${thoughtLine}`));
-						}
-
-						if (!run.thoughtText && run.status !== "done" && run.lastLine) {
-							const normalized = run.lastLine
-								.replace(/\s*\n+\s*/g, " ")
-								.replace(/\s{2,}/g, " ")
-								.trim();
-							const outputLine = truncateText(normalized, Math.max(1, innerWidth - 4));
-							lines.push(theme.fg("muted", `  ↳ ${outputLine}`));
-						}
-
-						if (showBottomSeparator) lines.push(theme.fg("muted", "─".repeat(innerWidth)));
-
-						content.setText(lines.join("\n"));
+						const statusLeft = buildStatusLeft(run, theme);
+						const contextShort = getContextShort(run, activeCtx, theme);
+						content.setText(composeRunLine(statusLeft, contextShort, innerWidth));
 						return box.render(width);
 					},
 					invalidate() {

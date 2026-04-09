@@ -68,6 +68,7 @@ export interface CommandRunState {
 	id: number;
 	agent: string;
 	task: string;
+	displayTask?: string;
 	status: "running" | "done" | "error";
 	startedAt: number;
 	elapsedMs: number;
