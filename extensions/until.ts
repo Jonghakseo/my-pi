@@ -173,6 +173,7 @@ function getPresetCompletions(prefix: string): { value: string; label: string }[
 interface UntilTask {
 	id: number;
 	prompt: string;
+	displayPrompt: string;
 	intervalMs: number;
 	intervalLabel: string;
 	createdAt: number;
@@ -311,7 +312,13 @@ export default function (pi: ExtensionAPI) {
 
 	// ── Register until task ───────────────────────────────────────────────
 
-	const registerTask = (intervalMs: number, intervalLabel: string, prompt: string, ctx: ExtensionContext): boolean => {
+	const registerTask = (
+		intervalMs: number,
+		intervalLabel: string,
+		prompt: string,
+		ctx: ExtensionContext,
+		displayPrompt = prompt,
+	): boolean => {
 		if (tasks.size >= MAX_TASKS) {
 			ctx.ui.notify(`최대 ${MAX_TASKS}개까지만 등록할 수 있어. /until-cancel로 정리해줘.`, "error");
 			return false;
@@ -328,6 +335,7 @@ export default function (pi: ExtensionAPI) {
 		const task: UntilTask = {
 			id,
 			prompt,
+			displayPrompt,
 			intervalMs,
 			intervalLabel,
 			createdAt: now,
@@ -342,9 +350,9 @@ export default function (pi: ExtensionAPI) {
 
 		pi.sendMessage({
 			customType: CUSTOM_TYPE,
-			content: `[until #${id}] 등록됨: ${intervalLabel}마다 반복\n만료: ${formatClock(task.expiresAt)}\nTask: ${prompt}`,
+			content: `[until #${id}] 등록됨: ${intervalLabel}마다 반복\n만료: ${formatClock(task.expiresAt)}\nTask: ${displayPrompt}`,
 			display: true,
-			details: { id, prompt, intervalMs, intervalLabel },
+			details: { id, prompt, displayPrompt, intervalMs, intervalLabel },
 		});
 
 		if (ctx.hasUI) {
@@ -473,7 +481,13 @@ export default function (pi: ExtensionAPI) {
 			const rawUpper = raw.toUpperCase();
 			const directPreset = presets[rawUpper];
 			if (directPreset) {
-				registerTask(directPreset.defaultInterval.ms, directPreset.defaultInterval.label, directPreset.prompt, ctx);
+				registerTask(
+					directPreset.defaultInterval.ms,
+					directPreset.defaultInterval.label,
+					directPreset.prompt,
+					ctx,
+					`[preset ${rawUpper}] ${directPreset.description}`,
+				);
 				return;
 			}
 
@@ -509,7 +523,13 @@ export default function (pi: ExtensionAPI) {
 			const restUpper = rest.toUpperCase();
 			const restPreset = presets[restUpper];
 			if (restPreset) {
-				registerTask(parsed.ms, parsed.label, restPreset.prompt, ctx);
+				registerTask(
+					parsed.ms,
+					parsed.label,
+					restPreset.prompt,
+					ctx,
+					`[preset ${restUpper}] ${restPreset.description}`,
+				);
 				return;
 			}
 
@@ -548,7 +568,7 @@ export default function (pi: ExtensionAPI) {
 					const remain = formatKoreanDuration(Math.max(0, t.nextRunAt - now));
 					const elapsed = formatKoreanDuration(now - t.createdAt);
 					const summary = t.lastSummary ? `\n     최근: ${t.lastSummary}` : "";
-					return `  #${t.id} · ${t.intervalLabel}마다 · 실행 ${t.runCount}회 · 경과 ${elapsed} · 다음 ${remain} 후${summary}\n     ${t.prompt}`;
+					return `  #${t.id} · ${t.intervalLabel}마다 · 실행 ${t.runCount}회 · 경과 ${elapsed} · 다음 ${remain} 후${summary}\n     ${t.displayPrompt}`;
 				});
 
 			pi.sendMessage({
