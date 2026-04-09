@@ -9,7 +9,6 @@
  */
 
 import * as path from "node:path";
-import { completeSimple } from "@mariozechner/pi-ai";
 import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
 import {
 	buildNameContext,
@@ -17,9 +16,9 @@ import {
 	extractSessionFilePath,
 	formatNameStatus,
 	isSubagentSessionPath,
-	isSuccessfulResult,
 	NAME_SYSTEM_PROMPT,
 } from "./utils/auto-name-utils.ts";
+import { generateShortLabel } from "./utils/short-label.js";
 import { NAME_STATUS_KEY } from "./utils/status-keys.ts";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -30,38 +29,11 @@ function isSubagentSession(ctx: ExtensionContext): boolean {
 }
 
 async function detectNameFromMessage(userMessage: string, ctx: ExtensionContext): Promise<string> {
-	const model = ctx.model;
-	if (!model) return "";
-
-	const auth = await ctx.modelRegistry.getApiKeyAndHeaders(model);
-	if (!auth.ok) return "";
-
-	const controller = new AbortController();
-	const timer = setTimeout(() => controller.abort(), 10000);
-
-	try {
-		const result = await completeSimple(
-			model,
-			{
-				systemPrompt: NAME_SYSTEM_PROMPT,
-				messages: [
-					{
-						role: "user",
-						content: [{ type: "text", text: buildNameContext(userMessage) }],
-						timestamp: Date.now(),
-					},
-				],
-			},
-			{ apiKey: auth.apiKey, headers: auth.headers, signal: controller.signal, reasoning: "minimal", maxTokens: 60 },
-		);
-
-		if (!isSuccessfulResult(result.stopReason)) return "";
-		return extractNameFromResult(result.content);
-	} catch {
-		return "";
-	} finally {
-		clearTimeout(timer);
-	}
+	return generateShortLabel(ctx, {
+		systemPrompt: NAME_SYSTEM_PROMPT,
+		prompt: buildNameContext(userMessage),
+		extractText: extractNameFromResult,
+	});
 }
 
 // ── Extension ────────────────────────────────────────────────────────────────
