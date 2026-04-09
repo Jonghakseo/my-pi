@@ -22,6 +22,14 @@ export interface PersistedSessionSnapshot {
 	isTerminal: boolean;
 }
 
+export interface DisplayTaskUpdateEntry {
+	runId: number;
+	task: string;
+	displayTask: string;
+	startedAt: number;
+	updatedAt?: number;
+}
+
 function parseTimestamp(raw: unknown): number | undefined {
 	if (typeof raw === "number" && Number.isFinite(raw)) return raw;
 	if (typeof raw === "string") {
@@ -75,6 +83,29 @@ export function appendCompletionMarker(sessionFile: string | undefined, marker: 
 		exitCode: marker.exitCode,
 		stopReason: marker.stopReason,
 		runtime: marker.runtime,
+	};
+	try {
+		fs.appendFileSync(sessionFile, `${JSON.stringify(entry)}\n`, "utf8");
+	} catch {
+		// best effort only
+	}
+}
+
+export function appendDisplayTaskUpdate(sessionFile: string | undefined, update: DisplayTaskUpdateEntry): void {
+	if (!sessionFile) return;
+	const timestamp = new Date(update.updatedAt ?? Date.now()).toISOString();
+	const entry = {
+		type: "custom",
+		customType: "subagent-display-task",
+		data: {
+			runId: update.runId,
+			task: update.task,
+			displayTask: update.displayTask,
+			startedAt: update.startedAt,
+			updatedAt: update.updatedAt ?? Date.now(),
+		},
+		id: `subagent-display-task-${update.runId}-${Math.random().toString(16).slice(2, 10)}`,
+		timestamp,
 	};
 	try {
 		fs.appendFileSync(sessionFile, `${JSON.stringify(entry)}\n`, "utf8");

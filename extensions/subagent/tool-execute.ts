@@ -9,6 +9,7 @@
 
 import * as fs from "node:fs";
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
+import type { ShortLabelContext } from "../utils/short-label.js";
 import { discoverAgents } from "./agents.js";
 import { parseSubagentToolCommand, SUBAGENT_CLI_HELP_TEXT } from "./cli.js";
 import {
@@ -22,6 +23,13 @@ import {
 	SUBAGENT_POLL_COOLDOWN_MS,
 	SUBAGENT_STRONG_WAIT_MESSAGE,
 } from "./constants.js";
+import {
+	buildSubagentDisplayTaskFallback,
+	createDisplayTaskRefreshToken,
+	isDisplayTaskRefreshTokenCurrent,
+	shouldSummarizeSubagentTask,
+	summarizeSubagentDisplayTask,
+} from "./display-task.js";
 import { ESCALATION_EXIT_CODE, readAndConsumeEscalation } from "./escalation.js";
 import {
 	formatContextUsageBar,
@@ -32,7 +40,7 @@ import {
 } from "./format.js";
 import { clearPendingGroupCompletion, upsertPendingGroupCompletion } from "./group-pending.js";
 import { enqueueSubagentInvocation } from "./invocation-queue.js";
-import { getSessionFileSize } from "./persisted-session.js";
+import { appendDisplayTaskUpdate, getSessionFileSize } from "./persisted-session.js";
 import { formatCommandRunSummary, removeRun, trimCommandRunHistory } from "./run-utils.js";
 import { getFinalOutput, getLastNonEmptyLine, runSingleAgent } from "./runner.js";
 import {
@@ -113,9 +121,14 @@ type SubagentExecuteResult = {
 type SubagentToolExecuteContext = {
 	cwd: string;
 	hasUI?: boolean;
-	model?: { id?: string; contextWindow?: number };
+	model?: ShortLabelContext["model"];
 	modelRegistry?: {
 		getAll: () => Array<{ provider: string; id: string; contextWindow?: number }>;
+		getApiKeyAndHeaders?: (model: NonNullable<ShortLabelContext["model"]>) => Promise<{
+			ok: boolean;
+			apiKey?: string;
+			headers?: Record<string, string>;
+		}>;
 	};
 	sessionManager: {
 		getSessionFile?: () => string | undefined;
@@ -127,6 +140,41 @@ type SubagentToolExecuteContext = {
 		notify?: (message: string, type?: "info" | "warning" | "error") => void;
 	};
 };
+
+function refreshDisplayTaskInBackground(
+	runState: CommandRunState,
+	rawTask: string,
+	ctx: SubagentToolExecuteContext,
+	store: SubagentStore,
+): void {
+	if (!shouldSummarizeSubagentTask(rawTask, runState.displayTask ?? "")) return;
+	if (!ctx.model || !ctx.modelRegistry?.getApiKeyAndHeaders) return;
+
+	const refreshToken = createDisplayTaskRefreshToken(runState);
+	void summarizeSubagentDisplayTask(rawTask, {
+		model: ctx.model,
+		modelRegistry: {
+			getApiKeyAndHeaders: ctx.modelRegistry.getApiKeyAndHeaders,
+		},
+	})
+		.then((displayTask) => {
+			if (!displayTask || runState.removed) return;
+			if (!isDisplayTaskRefreshTokenCurrent(runState, refreshToken)) return;
+			if (displayTask === runState.displayTask) return;
+			runState.displayTask = displayTask;
+			const originSessionFile = store.globalLiveRuns.get(runState.id)?.originSessionFile;
+			appendDisplayTaskUpdate(originSessionFile, {
+				runId: runState.id,
+				task: runState.task,
+				displayTask,
+				startedAt: runState.startedAt,
+			});
+			updateCommandRunsWidget(store);
+		})
+		.catch(() => {
+			// Ignore background summary failures.
+		});
+}
 
 function stringifyToolCallArguments(args: unknown): string {
 	if (args === undefined || args === null) return "";
@@ -343,6 +391,7 @@ function buildRunStartMessage(runState: CommandRunState, status: "started" | "re
 			runId: runState.id,
 			agent: runState.agent,
 			task: runState.task,
+			displayTask: runState.displayTask,
 			continuedFromRunId: runState.continuedFromRunId,
 			turnCount: runState.turnCount,
 			contextMode: runState.contextMode,
@@ -379,6 +428,7 @@ function buildRunCompletionMessage(finalized: FinalizedRun, options?: { display?
 			runId: runState.id,
 			agent: runState.agent,
 			task: runState.task,
+			displayTask: runState.displayTask,
 			continuedFromRunId: runState.continuedFromRunId,
 			turnCount: runState.turnCount,
 			contextMode: runState.contextMode,
@@ -417,6 +467,7 @@ function buildEscalationMessage(runState: CommandRunState, escalationMessage: st
 			runId: runState.id,
 			agent: runState.agent,
 			task: runState.task,
+			displayTask: runState.displayTask,
 			status: "error" as const,
 			persistedSessionBaseOffset: runState.persistedSessionBaseOffset,
 			startedAt: runState.startedAt,
@@ -937,11 +988,13 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 		}
 
 		function registerRunLaunch(config: RunLaunchConfig): CommandRunState {
+			const initialDisplayTask = buildSubagentDisplayTaskFallback(config.taskForDisplay);
 			let runState: CommandRunState;
 			if (config.existingRunState) {
 				runState = config.existingRunState;
 				runState.agent = config.agent;
 				runState.task = config.taskForDisplay;
+				runState.displayTask = initialDisplayTask;
 				runState.status = "running";
 				runState.startedAt = Date.now();
 				runState.lastActivityAt = Date.now();
@@ -964,6 +1017,7 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 					id: runId,
 					agent: config.agent,
 					task: config.taskForDisplay,
+					displayTask: initialDisplayTask,
 					status: "running",
 					startedAt: Date.now(),
 					lastActivityAt: Date.now(),
@@ -998,6 +1052,7 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 			store.recentLaunchTimestamps.set(runState.id, runState.startedAt);
 			store.commandWidgetCtx = ctx as WidgetRenderCtx;
 			updateCommandRunsWidget(store, ctx as WidgetRenderCtx);
+			refreshDisplayTaskInBackground(runState, config.taskForDisplay, ctx, store);
 			return runState;
 		}
 
