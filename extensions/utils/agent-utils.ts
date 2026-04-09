@@ -43,6 +43,7 @@ export const PI_TO_CLAUDE_TOOL_MAP: Record<string, string> = {
 	bash: "Bash",
 	edit: "Edit",
 	write: "Write",
+	ls: "LS",
 };
 
 export function mapPiToolsToClaude(piTools: string[]): string[] {

@@ -9,10 +9,11 @@ describe("PI_TO_CLAUDE_TOOL_MAP", () => {
 		expect(PI_TO_CLAUDE_TOOL_MAP.bash).toBe("Bash");
 		expect(PI_TO_CLAUDE_TOOL_MAP.edit).toBe("Edit");
 		expect(PI_TO_CLAUDE_TOOL_MAP.write).toBe("Write");
+		expect(PI_TO_CLAUDE_TOOL_MAP.ls).toBe("LS");
 	});
 
-	it("has exactly 6 entries", () => {
-		expect(Object.keys(PI_TO_CLAUDE_TOOL_MAP)).toHaveLength(6);
+	it("has exactly 7 entries", () => {
+		expect(Object.keys(PI_TO_CLAUDE_TOOL_MAP)).toHaveLength(7);
 	});
 });
 
@@ -34,12 +35,12 @@ describe("mapPiToolsToClaude", () => {
 	});
 
 	it("maps all supported tools correctly", () => {
-		const result = mapPiToolsToClaude(["read", "find", "grep", "bash", "edit", "write"]);
-		expect(result).toEqual(["Read", "Glob", "Grep", "Bash", "Edit", "Write"]);
+		const result = mapPiToolsToClaude(["read", "find", "grep", "bash", "edit", "write", "ls"]);
+		expect(result).toEqual(["Read", "Glob", "Grep", "Bash", "Edit", "Write", "LS"]);
 	});
 
-	it("fails fast for unsupported ls tool", () => {
-		expect(() => mapPiToolsToClaude(["ls"])).toThrow('Unsupported tool "ls" for Claude runtime');
+	it("maps ls tool for Claude runtime", () => {
+		expect(mapPiToolsToClaude(["ls"])).toEqual(["LS"]);
 	});
 });
 
