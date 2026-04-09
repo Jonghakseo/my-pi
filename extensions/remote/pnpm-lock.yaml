@@ -22,8 +22,8 @@ importers:
         version: 8.19.0
     devDependencies:
       '@mariozechner/pi-coding-agent':
-        specifier: latest
-        version: 0.58.4(ws@8.19.0)(zod@4.3.6)
+        specifier: ^0.66.1
+        version: 0.66.1(ws@8.19.0)(zod@4.3.6)
       '@types/node':
         specifier: ^22.0.0
         version: 22.19.15
@@ -265,22 +265,22 @@ packages:
     resolution: {integrity: sha512-faGUlTcXka5l7rv0lP3K3vGW/ejRuOS24RR2aSFWREUQqzjgdsuWNo/IiPqL3kWRGt6Ahl2+qcDAwtdeWeuGUw==}
     hasBin: true
 
-  '@mariozechner/pi-agent-core@0.58.4':
-    resolution: {integrity: sha512-I2tVUcFzxGAS7dRpmZHKqetIAAz4Q/loupgUBQ9RxOMldUsBoQf5Pj9WWu7cGrGEFztPQ27QKPKbU1jSd2scjw==}
+  '@mariozechner/pi-agent-core@0.66.1':
+    resolution: {integrity: sha512-Nj54A7SuB/EQi8r3Gs+glFOr9wz/a9uxYFf0pCLf2DE7VmzA9O7WSejrvArna17K6auftLSdNyRRe2bIO0qezg==}
     engines: {node: '>=20.0.0'}
 
-  '@mariozechner/pi-ai@0.58.4':
-    resolution: {integrity: sha512-yQT8H3nTHHw925DDLatQ/F5xx0ThK9wF+JTUHlzfXvrfclKDBp1+e8bvxdGK3AbbWuvWNlwZ3qbWgsZQ8/YZtQ==}
+  '@mariozechner/pi-ai@0.66.1':
+    resolution: {integrity: sha512-7IZHvpsFdKEBkTmjNrdVL7JLUJVIpha6bwTr12cZ5XyDrxij06wP6Ncpnf4HT5BXAzD5w2JnoqTOSbMEIZj3dg==}
     engines: {node: '>=20.0.0'}
     hasBin: true
 
-  '@mariozechner/pi-coding-agent@0.58.4':
-    resolution: {integrity: sha512-hMU/LX9lFPoCpLYnL3yjWU4t26wkPIlDIlMRyjMihxKNqqEtW9slAc520OdARkAU3wmGgvA1sMVFER1ff+fuAA==}
+  '@mariozechner/pi-coding-agent@0.66.1':
+    resolution: {integrity: sha512-cNmatT+5HvYzQ78cRhRih00wCeUTH/fFx9ecJh5AbN7axgWU+bwiZYy0cjrTsGVgMGF4xMYlPRn/Nze9JEB+/w==}
     engines: {node: '>=20.6.0'}
     hasBin: true
 
-  '@mariozechner/pi-tui@0.58.4':
-    resolution: {integrity: sha512-EVju7Baj8H7F8dOx3pTKHvQ7i1FW2cR8v9DhSfOdELrdDepkl7v20ufO5lBkuJm+nkRJHbplN861lAI7cwM7gw==}
+  '@mariozechner/pi-tui@0.66.1':
+    resolution: {integrity: sha512-hNFN42ebjwtfGooqoUwM+QaPR1XCyqPuueuP3aLOWS1bZ2nZP/jq8MBuGNrmMw1cgiDcotvOlSNj3BatzEOGsw==}
     engines: {node: '>=20.0.0'}
 
   '@mistralai/mistralai@1.14.1':
@@ -583,6 +583,7 @@ packages:
   basic-ftp@5.2.0:
     resolution: {integrity: sha512-VoMINM2rqJwJgfdHq6RiUudKt2BV+FY5ZFezP/ypmwayk68+NzzAQy4XXLlqsGD4MCzq3DrmNFD/uUmBJuGoXw==}
     engines: {node: '>=10.0.0'}
+    deprecated: Security vulnerability fixed in 5.2.1, please upgrade
 
   bignumber.js@9.3.1:
     resolution: {integrity: sha512-Ko0uX15oIUS7wJ3Rb30Fs6SkVbLmPBAKdlm7q9+ak9bbIeFf0MwuBsQV6z7+X768/cHsfg+WlysDWJcmthjsjQ==}
@@ -1554,9 +1555,9 @@ snapshots:
       std-env: 3.10.0
       yoctocolors: 2.1.2
 
-  '@mariozechner/pi-agent-core@0.58.4(ws@8.19.0)(zod@4.3.6)':
+  '@mariozechner/pi-agent-core@0.66.1(ws@8.19.0)(zod@4.3.6)':
     dependencies:
-      '@mariozechner/pi-ai': 0.58.4(ws@8.19.0)(zod@4.3.6)
+      '@mariozechner/pi-ai': 0.66.1(ws@8.19.0)(zod@4.3.6)
     transitivePeerDependencies:
       - '@modelcontextprotocol/sdk'
       - aws-crt
@@ -1566,7 +1567,7 @@ snapshots:
       - ws
       - zod
 
-  '@mariozechner/pi-ai@0.58.4(ws@8.19.0)(zod@4.3.6)':
+  '@mariozechner/pi-ai@0.66.1(ws@8.19.0)(zod@4.3.6)':
     dependencies:
       '@anthropic-ai/sdk': 0.73.0(zod@4.3.6)
       '@aws-sdk/client-bedrock-runtime': 3.1010.0
@@ -1590,13 +1591,14 @@ snapshots:
       - ws
       - zod
 
-  '@mariozechner/pi-coding-agent@0.58.4(ws@8.19.0)(zod@4.3.6)':
+  '@mariozechner/pi-coding-agent@0.66.1(ws@8.19.0)(zod@4.3.6)':
     dependencies:
       '@mariozechner/jiti': 2.6.5
-      '@mariozechner/pi-agent-core': 0.58.4(ws@8.19.0)(zod@4.3.6)
-      '@mariozechner/pi-ai': 0.58.4(ws@8.19.0)(zod@4.3.6)
-      '@mariozechner/pi-tui': 0.58.4
+      '@mariozechner/pi-agent-core': 0.66.1(ws@8.19.0)(zod@4.3.6)
+      '@mariozechner/pi-ai': 0.66.1(ws@8.19.0)(zod@4.3.6)
+      '@mariozechner/pi-tui': 0.66.1
       '@silvia-odwyer/photon-node': 0.3.4
+      ajv: 8.18.0
       chalk: 5.6.2
       cli-highlight: 2.1.11
       diff: 8.0.3
@@ -1622,7 +1624,7 @@ snapshots:
       - ws
       - zod
 
-  '@mariozechner/pi-tui@0.58.4':
+  '@mariozechner/pi-tui@0.66.1':
     dependencies:
       '@types/mime-types': 2.1.4
       chalk: 5.6.2
