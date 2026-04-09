@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { createStreamState, processClaudeEvent, stateToSingleResult } from "../subagent/claude-stream-parser.ts";
+import {
+	extractActivityPreviewFromTextDelta,
+	extractThoughtText,
+	formatPiToolExecutionPreview,
+} from "../subagent/live-preview.ts";
 import { updateRunFromResult } from "../subagent/store.ts";
 import type { CommandRunState } from "../subagent/types.ts";
 
@@ -18,6 +23,22 @@ function makeRunState(overrides: Partial<CommandRunState> = {}): CommandRunState
 		...overrides,
 	};
 }
+
+describe("live preview helpers", () => {
+	it("extractThoughtText strips markdown like Claude thought previews", () => {
+		expect(extractThoughtText("## **Searching** `payment` details\nNext line")).toBe("Searching payment details");
+	});
+
+	it("extractActivityPreviewFromTextDelta uses the last non-empty line", () => {
+		expect(extractActivityPreviewFromTextDelta("First line\n\nSecond line\n")).toBe("Second line");
+	});
+
+	it("formatPiToolExecutionPreview formats Pi tool calls with readable args", () => {
+		expect(formatPiToolExecutionPreview("read", { path: "/tmp/a.txt", offset: 2, limit: 3 })).toBe(
+			"→ read /tmp/a.txt:2-4",
+		);
+	});
+});
 
 describe("liveActivityPreview generation", () => {
 	it("sets preview on tool_use content_block_start", () => {
@@ -66,6 +87,20 @@ describe("liveActivityPreview generation", () => {
 		expect(state.liveActivityPreview).toContain('"command":');
 	});
 
+	it("extracts sanitized thought text during thinking_delta", () => {
+		const state = createStreamState();
+		processClaudeEvent(state, {
+			type: "stream_event",
+			event: {
+				type: "content_block_delta",
+				index: 0,
+				delta: { type: "thinking_delta", thinking: "## **Searching** `payment` details\nNext line" },
+			},
+		});
+
+		expect(state.thoughtText).toBe("Searching payment details");
+	});
+
 	it("updates preview with text during text_delta", () => {
 		const state = createStreamState();
 		processClaudeEvent(state, {
@@ -82,6 +117,97 @@ describe("liveActivityPreview generation", () => {
 		});
 
 		expect(state.liveActivityPreview).toBe("Second line");
+	});
+
+	it("uses accumulated text for previews across split text_delta chunks", () => {
+		const state = createStreamState();
+		processClaudeEvent(state, {
+			type: "stream_event",
+			event: { type: "content_block_start", index: 0, content_block: { type: "text", text: "" } },
+		});
+		processClaudeEvent(state, {
+			type: "stream_event",
+			event: { type: "content_block_delta", index: 0, delta: { type: "text_delta", text: "Hello " } },
+		});
+		processClaudeEvent(state, {
+			type: "stream_event",
+			event: { type: "content_block_delta", index: 0, delta: { type: "text_delta", text: "world" } },
+		});
+
+		expect(state.liveActivityPreview).toBe("Hello world");
+	});
+
+	it("updates thoughtText from accumulated split thinking_delta chunks", () => {
+		const state = createStreamState();
+		processClaudeEvent(state, {
+			type: "stream_event",
+			event: { type: "content_block_start", index: 0, content_block: { type: "thinking" } },
+		});
+		processClaudeEvent(state, {
+			type: "stream_event",
+			event: { type: "content_block_delta", index: 0, delta: { type: "thinking_delta", thinking: "## **Sear" } },
+		});
+		processClaudeEvent(state, {
+			type: "stream_event",
+			event: {
+				type: "content_block_delta",
+				index: 0,
+				delta: { type: "thinking_delta", thinking: "ching** `payment` details" },
+			},
+		});
+
+		expect(state.thoughtText).toBe("Searching payment details");
+	});
+
+	it("resets thought accumulation between assistant turns", () => {
+		const state = createStreamState();
+		processClaudeEvent(state, {
+			type: "stream_event",
+			event: { type: "message_start", message: { model: "claude" } },
+		});
+		processClaudeEvent(state, {
+			type: "stream_event",
+			event: { type: "content_block_start", index: 0, content_block: { type: "thinking" } },
+		});
+		processClaudeEvent(state, {
+			type: "stream_event",
+			event: { type: "content_block_delta", index: 0, delta: { type: "thinking_delta", thinking: "First turn" } },
+		});
+		processClaudeEvent(state, {
+			type: "assistant",
+			message: { role: "assistant", model: "claude", content: [{ type: "text", text: "done" }] },
+		});
+		processClaudeEvent(state, {
+			type: "stream_event",
+			event: { type: "message_start", message: { model: "claude" } },
+		});
+		processClaudeEvent(state, {
+			type: "stream_event",
+			event: { type: "content_block_start", index: 0, content_block: { type: "thinking" } },
+		});
+		processClaudeEvent(state, {
+			type: "stream_event",
+			event: { type: "content_block_delta", index: 0, delta: { type: "thinking_delta", thinking: "Second turn" } },
+		});
+
+		expect(state.thoughtText).toBe("Second turn");
+		expect(state.liveThinking).toBe("Second turn");
+	});
+
+	it("preserves thoughtText from assistant snapshots with thinking blocks", () => {
+		const state = createStreamState();
+		processClaudeEvent(state, {
+			type: "assistant",
+			message: {
+				role: "assistant",
+				model: "claude",
+				content: [{ type: "thinking", thinking: "## **Snapshot** `thought`" }],
+			},
+		});
+
+		const result = stateToSingleResult(state, "test", "user", "task", 0, undefined, "");
+		expect(state.thoughtText).toBe("Snapshot thought");
+		expect(result.thoughtText).toBe("Snapshot thought");
 	});
 });
 
