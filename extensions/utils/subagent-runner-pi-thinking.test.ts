@@ -54,6 +54,16 @@ function makeHangingProcess(lines: string[]): MockProc {
 	return proc;
 }
 
+function makeCompletedProcess(lines: string[]): MockProc {
+	const proc = makeHangingProcess(lines);
+	queueMicrotask(() => {
+		proc.exitCode = 0;
+		proc.emit("exit", 0);
+		proc.emit("close", 0);
+	});
+	return proc;
+}
+
 function makeHangingProcessWithDelayedEvent(lines: string[], delayedLine: string, delayMs: number): MockProc {
 	const proc = makeHangingProcess(lines);
 	setTimeout(() => {
@@ -74,6 +84,256 @@ function makeAbortableProcess(lines: string[]): MockProc {
 	});
 	return proc;
 }
+
+describe("runSingleAgent pi live preview parity", () => {
+	it("surfaces tool execution previews using Claude-style liveActivityPreview flow", async () => {
+		const { runSingleAgent } = await import("../subagent/runner.ts");
+		const updates: any[] = [];
+		spawnMock.mockImplementationOnce(() =>
+			makeCompletedProcess([
+				JSON.stringify({ type: "agent_start" }),
+				JSON.stringify({
+					type: "tool_execution_start",
+					toolName: "read",
+					args: { path: "/tmp/payment-details.md", offset: 3, limit: 5 },
+				}),
+				JSON.stringify({
+					type: "message_end",
+					message: {
+						role: "assistant",
+						model: "test-model",
+						content: [{ type: "text", text: "Done" }],
+						stopReason: "stop",
+					},
+				}),
+			]),
+		);
+
+		await runSingleAgent(
+			"/tmp/project",
+			[makePiAgent()],
+			"pi-worker",
+			"review task",
+			undefined,
+			undefined,
+			(partial) => updates.push(partial.details.results[0]),
+			makeDetails,
+		);
+
+		expect(updates.some((result) => result.liveActivityPreview === "→ read /tmp/payment-details.md:3-7")).toBe(true);
+	});
+
+	it("sanitizes thinking deltas like Claude runtime before showing thoughtText", async () => {
+		const { runSingleAgent } = await import("../subagent/runner.ts");
+		const updates: any[] = [];
+		spawnMock.mockImplementationOnce(() =>
+			makeCompletedProcess([
+				JSON.stringify({ type: "agent_start" }),
+				JSON.stringify({
+					type: "message_update",
+					assistantMessageEvent: {
+						type: "thinking_delta",
+						delta: "## **Searching** `payment` details\nMore context",
+					},
+				}),
+				JSON.stringify({
+					type: "message_end",
+					message: {
+						role: "assistant",
+						model: "test-model",
+						content: [{ type: "text", text: "Done" }],
+						stopReason: "stop",
+					},
+				}),
+			]),
+		);
+
+		const result = await runSingleAgent(
+			"/tmp/project",
+			[makePiAgent()],
+			"pi-worker",
+			"review task",
+			undefined,
+			undefined,
+			(partial) => updates.push(partial.details.results[0]),
+			makeDetails,
+		);
+
+		expect(updates.some((partial) => partial.thoughtText === "Searching payment details")).toBe(true);
+		expect(result.thoughtText).toBe("Searching payment details");
+	});
+
+	it("updates liveActivityPreview from streaming text deltas", async () => {
+		const { runSingleAgent } = await import("../subagent/runner.ts");
+		const updates: any[] = [];
+		spawnMock.mockImplementationOnce(() =>
+			makeCompletedProcess([
+				JSON.stringify({ type: "agent_start" }),
+				JSON.stringify({
+					type: "message_update",
+					assistantMessageEvent: {
+						type: "text_delta",
+						delta: "Line 1\nLine 2",
+					},
+				}),
+				JSON.stringify({
+					type: "message_end",
+					message: {
+						role: "assistant",
+						model: "test-model",
+						content: [{ type: "text", text: "Done" }],
+						stopReason: "stop",
+					},
+				}),
+			]),
+		);
+
+		await runSingleAgent(
+			"/tmp/project",
+			[makePiAgent()],
+			"pi-worker",
+			"review task",
+			undefined,
+			undefined,
+			(partial) => updates.push(partial.details.results[0]),
+			makeDetails,
+		);
+
+		expect(updates.some((partial) => partial.liveActivityPreview === "Line 2")).toBe(true);
+	});
+
+	it("uses accumulated text when a single live line arrives across multiple text_delta chunks", async () => {
+		const { runSingleAgent } = await import("../subagent/runner.ts");
+		const updates: any[] = [];
+		spawnMock.mockImplementationOnce(() =>
+			makeCompletedProcess([
+				JSON.stringify({ type: "agent_start" }),
+				JSON.stringify({
+					type: "message_update",
+					assistantMessageEvent: { type: "text_delta", delta: "Hello " },
+				}),
+				JSON.stringify({
+					type: "message_update",
+					assistantMessageEvent: { type: "text_delta", delta: "world" },
+				}),
+				JSON.stringify({
+					type: "message_end",
+					message: {
+						role: "assistant",
+						model: "test-model",
+						content: [{ type: "text", text: "Done" }],
+						stopReason: "stop",
+					},
+				}),
+			]),
+		);
+
+		await runSingleAgent(
+			"/tmp/project",
+			[makePiAgent()],
+			"pi-worker",
+			"review task",
+			undefined,
+			undefined,
+			(partial) => updates.push(partial.details.results[0]),
+			makeDetails,
+		);
+
+		expect(updates.some((partial) => partial.liveActivityPreview === "Hello world")).toBe(true);
+	});
+
+	it("updates thoughtText from accumulated thinking chunks instead of keeping the first partial chunk", async () => {
+		const { runSingleAgent } = await import("../subagent/runner.ts");
+		const updates: any[] = [];
+		spawnMock.mockImplementationOnce(() =>
+			makeCompletedProcess([
+				JSON.stringify({ type: "agent_start" }),
+				JSON.stringify({
+					type: "message_update",
+					assistantMessageEvent: { type: "thinking_delta", delta: "## **Sear" },
+				}),
+				JSON.stringify({
+					type: "message_update",
+					assistantMessageEvent: { type: "thinking_delta", delta: "ching** `payment` details" },
+				}),
+				JSON.stringify({
+					type: "message_end",
+					message: {
+						role: "assistant",
+						model: "test-model",
+						content: [{ type: "text", text: "Done" }],
+						stopReason: "stop",
+					},
+				}),
+			]),
+		);
+
+		const result = await runSingleAgent(
+			"/tmp/project",
+			[makePiAgent()],
+			"pi-worker",
+			"review task",
+			undefined,
+			undefined,
+			(partial) => updates.push(partial.details.results[0]),
+			makeDetails,
+		);
+
+		expect(updates.some((partial) => partial.thoughtText === "Searching payment details")).toBe(true);
+		expect(result.thoughtText).toBe("Searching payment details");
+	});
+
+	it("resets thought accumulation at turn boundaries", async () => {
+		const { runSingleAgent } = await import("../subagent/runner.ts");
+		const updates: any[] = [];
+		spawnMock.mockImplementationOnce(() =>
+			makeCompletedProcess([
+				JSON.stringify({ type: "agent_start" }),
+				JSON.stringify({
+					type: "message_update",
+					assistantMessageEvent: { type: "thinking_delta", delta: "First turn thought" },
+				}),
+				JSON.stringify({
+					type: "message_end",
+					message: {
+						role: "assistant",
+						model: "test-model",
+						content: [{ type: "text", text: "intermediate" }],
+						stopReason: "toolUse",
+					},
+				}),
+				JSON.stringify({ type: "turn_start" }),
+				JSON.stringify({
+					type: "message_update",
+					assistantMessageEvent: { type: "thinking_delta", delta: "Second turn thought" },
+				}),
+				JSON.stringify({
+					type: "message_end",
+					message: {
+						role: "assistant",
+						model: "test-model",
+						content: [{ type: "text", text: "Done" }],
+						stopReason: "stop",
+					},
+				}),
+			]),
+		);
+
+		const result = await runSingleAgent(
+			"/tmp/project",
+			[makePiAgent()],
+			"pi-worker",
+			"review task",
+			undefined,
+			undefined,
+			(partial) => updates.push(partial.details.results[0]),
+			makeDetails,
+		);
+
+		expect(updates.some((partial) => partial.thoughtText === "Second turn thought")).toBe(true);
+		expect(result.thoughtText).toBe("Second turn thought");
+	});
+});
 
 describe("runSingleAgent pi terminal message fallback", () => {
 	let tmpDir: string;

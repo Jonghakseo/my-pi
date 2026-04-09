@@ -1,5 +1,6 @@
 /** biome-ignore-all lint/suspicious/noExplicitAny: Claude stream events are dynamic runtime data. */
 import type { Message } from "@mariozechner/pi-ai";
+import { extractActivityPreviewFromTextDelta, extractThoughtText } from "./live-preview.js";
 import type { SingleResult } from "./types.js";
 
 export interface ClaudeStreamState {
@@ -7,6 +8,7 @@ export interface ClaudeStreamState {
 	model: string | undefined;
 	messages: Message[];
 	liveText: string | undefined;
+	liveThinking: string | undefined;
 	liveToolCalls: number;
 	thoughtText: string | undefined;
 	stopReason: string | undefined;
@@ -35,6 +37,7 @@ export function createStreamState(): ClaudeStreamState {
 		model: undefined,
 		messages: [],
 		liveText: undefined,
+		liveThinking: undefined,
 		liveToolCalls: 0,
 		thoughtText: undefined,
 		stopReason: undefined,
@@ -90,6 +93,8 @@ function processStreamEvent(state: ClaudeStreamState, ev: any): boolean {
 	if (ev.type === "message_start") {
 		const msg = ev.message;
 		if (msg?.model && !state.model) state.model = msg.model;
+		state.liveThinking = undefined;
+		state.thoughtText = undefined;
 		return false;
 	}
 
@@ -103,7 +108,7 @@ function processStreamEvent(state: ClaudeStreamState, ev: any): boolean {
 			state.currentToolInput = "";
 			state.liveActivityPreview = `\u2192 ${block.name}`;
 		} else if (block?.type === "thinking") {
-			// thinking block start
+			state.liveThinking = undefined;
 		}
 		return false;
 	}
@@ -113,8 +118,8 @@ function processStreamEvent(state: ClaudeStreamState, ev: any): boolean {
 		if (delta?.type === "text_delta") {
 			const chunk = delta.text ?? "";
 			state.liveText = `${state.liveText ?? ""}${chunk}`;
-			const lastLine = chunk.split("\n").filter(Boolean).pop();
-			if (lastLine) state.liveActivityPreview = lastLine.trim().slice(0, 120);
+			const preview = extractActivityPreviewFromTextDelta(state.liveText);
+			if (preview) state.liveActivityPreview = preview;
 		} else if (delta?.type === "input_json_delta") {
 			state.currentToolInput += delta.partial_json ?? "";
 			if (state.currentToolName) {
@@ -123,19 +128,10 @@ function processStreamEvent(state: ClaudeStreamState, ev: any): boolean {
 			}
 		} else if (delta?.type === "thinking_delta") {
 			const raw = delta.thinking ?? "";
-			if (raw && !state.thoughtText) {
-				const firstLine = raw
-					.split("\n")
-					.map((l: string) => l.trim())
-					.filter(Boolean)[0];
-				if (firstLine) {
-					const clean = firstLine
-						.replace(/^#+\s*/, "")
-						.replace(/\*{1,3}([^*]+)\*{1,3}/g, "$1")
-						.replace(/`([^`]+)`/g, "$1")
-						.trim();
-					if (clean) state.thoughtText = clean.slice(0, 80);
-				}
+			if (raw) {
+				state.liveThinking = `${state.liveThinking ?? ""}${raw}`;
+				const thoughtText = extractThoughtText(state.liveThinking);
+				if (thoughtText) state.thoughtText = thoughtText;
 			}
 		}
 		return false;
@@ -164,6 +160,15 @@ function processStreamEvent(state: ClaudeStreamState, ev: any): boolean {
 	return false;
 }
 
+function extractThoughtTextFromClaudeMessage(msg: any): string | undefined {
+	for (const block of msg.content ?? []) {
+		if (block.type !== "thinking") continue;
+		const thoughtText = extractThoughtText(block.thinking ?? "");
+		if (thoughtText) return thoughtText;
+	}
+	return undefined;
+}
+
 function processAssistantSnapshot(state: ClaudeStreamState, event: any): boolean {
 	const msg = event.message;
 	if (!msg) return false;
@@ -178,7 +183,11 @@ function processAssistantSnapshot(state: ClaudeStreamState, event: any): boolean
 	state.messages.push(piMessage);
 	state.usage.turns++;
 
+	const thoughtText = extractThoughtTextFromClaudeMessage(msg);
+	if (thoughtText) state.thoughtText = thoughtText;
+
 	state.liveText = undefined;
+	state.liveThinking = undefined;
 	state.currentToolName = undefined;
 	state.currentToolInput = "";
 
@@ -292,6 +301,12 @@ export function stateToSingleResult(
 		claudeSessionId: state.sessionId,
 	};
 
+	if (state.liveThinking) {
+		result.liveThinking = state.liveThinking;
+	}
+	if (state.thoughtText) {
+		result.thoughtText = state.thoughtText;
+	}
 	if (state.liveActivityPreview) {
 		result.liveActivityPreview = state.liveActivityPreview;
 	}

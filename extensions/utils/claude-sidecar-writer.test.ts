@@ -27,6 +27,7 @@ function makeStreamState(messages: any[] = []) {
 		model: undefined,
 		messages,
 		liveText: undefined,
+		liveThinking: undefined,
 		liveToolCalls: 0,
 		thoughtText: undefined,
 		stopReason: undefined,

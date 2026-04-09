@@ -23,6 +23,11 @@ import {
 	stateToSingleResult,
 } from "./claude-stream-parser.js";
 import { formatToolCallPlain } from "./format.js";
+import {
+	extractActivityPreviewFromTextDelta,
+	extractThoughtText,
+	formatPiToolExecutionPreview,
+} from "./live-preview.js";
 import { appendCompletionMarker, readPersistedSessionSnapshot } from "./persisted-session.js";
 import { writePromptToTempFile } from "./session.js";
 import type { AgentAliasMatch, DisplayItem, OnUpdateCallback, SingleResult, SubagentDetails } from "./types.js";
@@ -300,6 +305,7 @@ async function runClaudeAgent(
 		const text = streamState.liveText ?? getFinalOutput(streamState.messages) ?? "(running...)";
 		const partial = stateToSingleResult(streamState, agent.name, agent.source, task, 0, step, stderrBuf);
 		partial.liveText = streamState.liveText;
+		partial.liveThinking = streamState.liveThinking;
 		partial.liveToolCalls = streamState.liveToolCalls;
 		partial.thoughtText = streamState.thoughtText;
 		onUpdate({
@@ -640,6 +646,8 @@ async function runPiAgent(
 
 				if (event.type === "agent_start" || event.type === "turn_start") {
 					sawAgentEnd = false;
+					currentResult.liveThinking = undefined;
+					currentResult.thoughtText = undefined;
 					if (terminalMessageFallbackTimer) {
 						clearTimeout(terminalMessageFallbackTimer);
 						terminalMessageFallbackTimer = undefined;
@@ -678,6 +686,8 @@ async function runPiAgent(
 						const chunk = typeof delta.delta === "string" ? delta.delta : "";
 						if (chunk) {
 							currentResult.liveText = `${currentResult.liveText ?? ""}${chunk}`;
+							const preview = extractActivityPreviewFromTextDelta(currentResult.liveText);
+							if (preview) currentResult.liveActivityPreview = preview;
 							emitUpdate();
 						}
 						return;
@@ -686,13 +696,8 @@ async function runPiAgent(
 						const chunk = typeof delta.delta === "string" ? delta.delta : "";
 						if (chunk) {
 							currentResult.liveThinking = `${currentResult.liveThinking ?? ""}${chunk}`;
-							if (!currentResult.thoughtText) {
-								const firstLine = chunk
-									.split("\n")
-									.map((line: string) => line.trim())
-									.filter(Boolean)[0];
-								if (firstLine) currentResult.thoughtText = firstLine.slice(0, 80);
-							}
+							const thoughtText = extractThoughtText(currentResult.liveThinking);
+							if (thoughtText) currentResult.thoughtText = thoughtText;
 							emitUpdate();
 						}
 						return;
@@ -702,6 +707,9 @@ async function runPiAgent(
 
 				if (event.type === "tool_execution_start") {
 					currentResult.liveToolCalls = (currentResult.liveToolCalls ?? 0) + 1;
+					if (typeof event.toolName === "string") {
+						currentResult.liveActivityPreview = formatPiToolExecutionPreview(event.toolName, event.args);
+					}
 					emitUpdate();
 					return;
 				}
@@ -725,24 +733,14 @@ async function runPiAgent(
 						if (!currentResult.model && msg.model) currentResult.model = msg.model;
 						if (msg.stopReason) currentResult.stopReason = msg.stopReason;
 						if (msg.errorMessage) currentResult.errorMessage = msg.errorMessage;
+						currentResult.liveThinking = undefined;
 
 						// Extract thoughtText from thinking block first line only
 						for (const part of msg.content) {
 							if (part.type === "thinking") {
 								const raw = typeof (part as any).thinking === "string" ? (part as any).thinking : "";
-								const firstLine = raw
-									.split("\n")
-									.map((l: string) => l.trim())
-									.filter(Boolean)[0];
-								if (firstLine) {
-									// Strip markdown: **bold**, *italic*, `code`, # headers
-									const clean = firstLine
-										.replace(/^#+\s*/, "")
-										.replace(/\*{1,3}([^*]+)\*{1,3}/g, "$1")
-										.replace(/`([^`]+)`/g, "$1")
-										.trim();
-									if (clean) currentResult.thoughtText = clean.slice(0, 80);
-								}
+								const thoughtText = extractThoughtText(raw);
+								if (thoughtText) currentResult.thoughtText = thoughtText;
 							}
 						}
 						const terminalStopReason = (msg as any).stopReason;
