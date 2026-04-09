@@ -67,15 +67,20 @@ export default function codexFastMode(pi: ExtensionAPI) {
 					if (!isRecord(upstreamPayload)) return upstreamPayload;
 					if (innerModel.provider !== "openai-codex") return upstreamPayload;
 					if (!isFastSupportedModel(innerModel.id)) return upstreamPayload;
-					if (!isCodexFastModeEnabled()) return upstreamPayload;
 
-					return {
+					const nextPayload = {
 						...upstreamPayload,
-						service_tier: "priority",
 						text: {
 							...(isRecord(upstreamPayload.text) ? upstreamPayload.text : {}),
 							verbosity: "low",
 						},
+					};
+
+					if (!isCodexFastModeEnabled()) return nextPayload;
+
+					return {
+						...nextPayload,
+						service_tier: "priority",
 					};
 				},
 			});
@@ -83,7 +88,7 @@ export default function codexFastMode(pi: ExtensionAPI) {
 	});
 
 	pi.registerCommand("codex-fast", {
-		description: "Toggle Codex Fast Mode injection for openai-codex/gpt-5.4",
+		description: "Toggle Codex Fast Mode service tier injection for openai-codex/gpt-5.4",
 		getArgumentCompletions: (prefix) => {
 			const options = ["on", "off", "status"];
 			const filtered = options.filter((o) => o.startsWith(prefix.trim().toLowerCase()));
@@ -102,7 +107,7 @@ export default function codexFastMode(pi: ExtensionAPI) {
 			if (action === "status") {
 				if (ctx.hasUI) {
 					ctx.ui.notify(
-						`Codex Fast Mode: ${isCodexFastModeEnabled() ? "ON" : "OFF"} (inject service_tier=priority for openai-codex/${SUPPORTED_MODEL_ID})`,
+						`Codex Fast Mode: ${isCodexFastModeEnabled() ? "ON" : "OFF"} (always force text.verbosity=low; inject service_tier=priority when ON for openai-codex/${SUPPORTED_MODEL_ID})`,
 						"info",
 					);
 				}
@@ -115,8 +120,8 @@ export default function codexFastMode(pi: ExtensionAPI) {
 			if (ctx.hasUI) {
 				ctx.ui.notify(
 					nextState.enabled
-						? `Codex Fast Mode enabled (openai-codex/${SUPPORTED_MODEL_ID} → service_tier=priority)`
-						: "Codex Fast Mode disabled",
+						? `Codex Fast Mode enabled (openai-codex/${SUPPORTED_MODEL_ID} → text.verbosity=low + service_tier=priority)`
+						: `Codex Fast Mode disabled (text.verbosity=low still applies for openai-codex/${SUPPORTED_MODEL_ID})`,
 					"info",
 				);
 			}
