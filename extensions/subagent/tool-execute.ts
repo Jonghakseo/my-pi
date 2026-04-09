@@ -41,7 +41,7 @@ import {
 import { clearPendingGroupCompletion, upsertPendingGroupCompletion } from "./group-pending.js";
 import { enqueueSubagentInvocation } from "./invocation-queue.js";
 import { appendDisplayTaskUpdate, getSessionFileSize } from "./persisted-session.js";
-import { formatCommandRunSummary, removeRun, trimCommandRunHistory } from "./run-utils.js";
+import { clearFinishedRuns, formatCommandRunSummary, removeRun, trimCommandRunHistory } from "./run-utils.js";
 import { getFinalOutput, getLastNonEmptyLine, runSingleAgent } from "./runner.js";
 import {
 	buildMainContextText,
@@ -601,6 +601,25 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 			.filter((run) => !run.removed)
 			.map((run) => run.id);
 		const parsedCommand = parseSubagentToolCommand(params.command, { knownRunIds });
+
+		const shouldAutoClearFinishedRuns =
+			parsedCommand.type === "params" &&
+			(parsedCommand.params.asyncAction === "run" ||
+				parsedCommand.params.asyncAction === "batch" ||
+				parsedCommand.params.asyncAction === "chain" ||
+				parsedCommand.params.asyncAction === "list");
+
+		if (shouldAutoClearFinishedRuns) {
+			const clearedRunIds = clearFinishedRuns(store, {
+				ctx,
+				pi,
+				updateWidget: true,
+				removalReason: "tool-auto-clear",
+			});
+			for (const runId of clearedRunIds) {
+				store.recentLaunchTimestamps.delete(runId);
+			}
+		}
 
 		if (parsedCommand.type === "error") {
 			return {

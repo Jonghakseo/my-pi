@@ -10,6 +10,7 @@ import type { ExtensionAPI, ExtensionContext, Theme, ThemeColor } from "@marioze
 import { truncateToWidth, visibleWidth } from "@mariozechner/pi-tui";
 import { shouldUseCodexFastBadge } from "./codex-fast-mode.ts";
 import { formatNameStatus } from "./utils/auto-name-utils.ts";
+import { formatContextUsageBar } from "./utils/format-utils.ts";
 import { ELAPSED_STATUS_KEY, NAME_STATUS_KEY } from "./utils/status-keys.ts";
 
 const BAR_WIDTH = 10;
@@ -99,8 +100,7 @@ function buildFooterLineParts(
 	const modelLabel = shouldUseCodexFastBadge(ctx.model?.provider, ctx.model?.id) ? `${model} ⚡` : model;
 	const usage = ctx.getContextUsage();
 	const pct = clamp(Math.round(usage?.percent ?? 0), 0, 100);
-	const filled = Math.round((pct / 100) * BAR_WIDTH);
-	const bar = "#".repeat(filled) + "-".repeat(BAR_WIDTH - filled);
+	const bar = formatContextUsageBar(pct, BAR_WIDTH);
 	const statusEntries = buildFooterStatusEntries(ctx, footerData);
 	const statusTexts = statusEntries.map(([, text]) => text);
 	const active = statusTexts.filter((s) => /research(ing)?/i.test(s)).length;
@@ -124,7 +124,7 @@ function buildFooterLineParts(
 				: "";
 	const remaining = 100 - pct;
 	const barColor = remaining <= 15 ? "error" : remaining <= 40 ? "warning" : "dim";
-	const right = theme.fg(barColor, `[${bar}] ${pct}% `);
+	const right = theme.fg(barColor, `${bar} `);
 	const pad = " ".repeat(Math.max(1, width - visibleWidth(left) - visibleWidth(mid) - visibleWidth(right)));
 	return { statusEntries, left, mid, right, pad };
 }

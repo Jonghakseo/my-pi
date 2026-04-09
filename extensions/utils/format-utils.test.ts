@@ -266,23 +266,23 @@ describe("getRemainingContextPercent", () => {
 
 describe("formatContextUsageBar", () => {
 	it("renders 0%", () => {
-		expect(formatContextUsageBar(0, 10)).toBe("[----------] 0%");
+		expect(formatContextUsageBar(0, 10)).toBe("[□□□□□□□□□□] 0%");
 	});
 
 	it("renders 100%", () => {
-		expect(formatContextUsageBar(100, 10)).toBe("[##########] 100%");
+		expect(formatContextUsageBar(100, 10)).toBe("[■■■■■■■■■■] 100%");
 	});
 
 	it("renders 50%", () => {
-		expect(formatContextUsageBar(50, 10)).toBe("[#####-----] 50%");
+		expect(formatContextUsageBar(50, 10)).toBe("[■■■■■□□□□□] 50%");
 	});
 
 	it("clamps overflow", () => {
-		expect(formatContextUsageBar(200, 10)).toBe("[##########] 100%");
+		expect(formatContextUsageBar(200, 10)).toBe("[■■■■■■■■■■] 100%");
 	});
 
 	it("clamps negative", () => {
-		expect(formatContextUsageBar(-50, 10)).toBe("[----------] 0%");
+		expect(formatContextUsageBar(-50, 10)).toBe("[□□□□□□□□□□] 0%");
 	});
 });
 

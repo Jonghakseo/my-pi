@@ -34,6 +34,14 @@ export interface TrimCommandRunHistoryOptions {
 	removalReason?: string;
 }
 
+export interface ClearFinishedRunsOptions {
+	ctx?: unknown;
+	pi?: ExtensionAPI;
+	updateWidget?: boolean;
+	persistRemovedEntry?: boolean;
+	removalReason?: string;
+}
+
 /**
  * One-line summary of a command run.
  *
@@ -119,6 +127,32 @@ export function removeRun(store: SubagentStore, runId: number, options: RemoveRu
  *
  * Returns the run IDs that were evicted.
  */
+export function clearFinishedRuns(store: SubagentStore, options: ClearFinishedRunsOptions = {}): number[] {
+	const removedRunIds: number[] = [];
+
+	for (const run of Array.from(store.commandRuns.values())) {
+		if (run.removed || run.status === "running") continue;
+		const globalEntry = store.globalLiveRuns.get(run.id);
+		if (globalEntry?.pendingCompletion) continue;
+
+		const result = removeRun(store, run.id, {
+			ctx: options.ctx,
+			pi: options.pi,
+			abortIfRunning: false,
+			updateWidget: false,
+			persistRemovedEntry: options.persistRemovedEntry,
+			removalReason: options.removalReason,
+		});
+		if (result.removed) removedRunIds.push(run.id);
+	}
+
+	if ((options.updateWidget ?? false) && removedRunIds.length > 0) {
+		updateCommandRunsWidget(store, options.ctx as WidgetRenderCtx | undefined);
+	}
+
+	return removedRunIds;
+}
+
 export function trimCommandRunHistory(
 	store: SubagentStore,
 	options: number | TrimCommandRunHistoryOptions = 10,
