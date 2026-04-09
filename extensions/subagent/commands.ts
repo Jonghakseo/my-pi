@@ -873,6 +873,42 @@ function restoreRunsFromSession(store: SubagentStore, ctx: any, pi?: ExtensionAP
 	updateCommandRunsWidget(store, ctx as unknown as WidgetRenderCtx);
 }
 
+function deliverOrQueueCompletion(
+	store: SubagentStore,
+	pi: ExtensionAPI,
+	ctx: ExtensionContext,
+	runId: number,
+	runState: CommandRunState,
+	message: { customType: string; content: string; display: boolean; details: Record<string, unknown> },
+): void {
+	const options = { deliverAs: "followUp" as const };
+	const globalEntry = store.globalLiveRuns.get(runId);
+	let currentSessionFile: string | null = null;
+	try {
+		currentSessionFile = normalizePath(ctx.sessionManager.getSessionFile());
+	} catch {
+		/* ignore */
+	}
+
+	const inOriginSession =
+		!globalEntry ||
+		!currentSessionFile ||
+		!globalEntry.originSessionFile ||
+		currentSessionFile === globalEntry.originSessionFile;
+
+	if (inOriginSession) {
+		pi.sendMessage(message, options);
+		store.globalLiveRuns.delete(runId);
+	} else {
+		globalEntry.pendingCompletion = {
+			message,
+			options,
+			createdAt: Date.now(),
+		};
+		store.commandRuns.set(runId, runState);
+	}
+}
+
 // biome-ignore lint/complexity/noExcessiveLinesPerFunction: registration stays consolidated so commands, shortcuts, and event handlers share one store lifecycle.
 export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 	pi.registerTool({
@@ -1423,38 +1459,7 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 							claudeProjectDir: runState.claudeProjectDir,
 						},
 					};
-					// Intentionally keep triggerTurn off for subagent status logs.
-					// These are telemetry follow-ups, not user-facing turn triggers.
-					const completionOptions = { deliverAs: "followUp" as const };
-
-					// Check if the user is still in the origin session.
-					const globalEntry = store.globalLiveRuns.get(runId);
-					let currentSessionFile: string | null = null;
-					try {
-						currentSessionFile = normalizePath(ctx.sessionManager.getSessionFile());
-					} catch {
-						/* ignore */
-					}
-
-					const inOriginSession =
-						!globalEntry ||
-						!currentSessionFile ||
-						!globalEntry.originSessionFile ||
-						currentSessionFile === globalEntry.originSessionFile;
-
-					if (inOriginSession) {
-						pi.sendMessage(completionMessage, completionOptions);
-						store.globalLiveRuns.delete(runId);
-					} else {
-						// User is in a different session — queue for later delivery.
-						globalEntry.pendingCompletion = {
-							message: completionMessage,
-							options: completionOptions,
-							createdAt: Date.now(),
-						};
-						// Re-insert into commandRuns so the widget shows completion.
-						store.commandRuns.set(runId, runState);
-					}
+					deliverOrQueueCompletion(store, pi, ctx, runId, runState, completionMessage);
 
 					ctx.ui.notify(
 						isError
@@ -1497,33 +1502,7 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 							claudeProjectDir: runState.claudeProjectDir,
 						},
 					};
-
-					const cmdErrGlobalEntry = store.globalLiveRuns.get(runId);
-					let cmdErrCurrentSession: string | null = null;
-					try {
-						cmdErrCurrentSession = normalizePath(ctx.sessionManager.getSessionFile());
-					} catch {
-						/* ignore */
-					}
-
-					const cmdErrInOrigin =
-						!cmdErrGlobalEntry ||
-						!cmdErrCurrentSession ||
-						!cmdErrGlobalEntry.originSessionFile ||
-						cmdErrCurrentSession === cmdErrGlobalEntry.originSessionFile;
-
-					// Keep triggerTurn disabled for error telemetry as well.
-					if (cmdErrInOrigin) {
-						pi.sendMessage(cmdErrorMessage, { deliverAs: "followUp" });
-						store.globalLiveRuns.delete(runId);
-					} else {
-						cmdErrGlobalEntry.pendingCompletion = {
-							message: cmdErrorMessage,
-							options: { deliverAs: "followUp" },
-							createdAt: Date.now(),
-						};
-						store.commandRuns.set(runId, runState);
-					}
+					deliverOrQueueCompletion(store, pi, ctx, runId, runState, cmdErrorMessage);
 
 					ctx.ui.notify(`subagent #${runId} failed: ${runState.lastLine}`, "error");
 				} finally {
