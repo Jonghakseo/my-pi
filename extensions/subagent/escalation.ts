@@ -15,6 +15,23 @@ function isSubagentSession(sessionFile: string | undefined): boolean {
 	);
 }
 
+export function writeEscalationRecord(sessionFile: string, message: string, context?: string): void {
+	if (!fs.existsSync(ESCALATIONS_DIR)) {
+		fs.mkdirSync(ESCALATIONS_DIR, { recursive: true });
+	}
+
+	const record = {
+		sessionFile,
+		message,
+		context,
+		timestamp: new Date().toISOString(),
+	};
+
+	const sessionBasename = path.basename(sessionFile, ".jsonl");
+	const escalationFile = path.join(ESCALATIONS_DIR, `${sessionBasename}.yaml`);
+	fs.writeFileSync(escalationFile, stringifyYaml(record), "utf-8");
+}
+
 /**
  * ask_master Tool — registered only when the current session is a subagent session.
  *
@@ -70,21 +87,7 @@ export function registerAskMasterTool(pi: ExtensionAPI): void {
 				}
 
 				try {
-					if (!fs.existsSync(ESCALATIONS_DIR)) {
-						fs.mkdirSync(ESCALATIONS_DIR, { recursive: true });
-					}
-
-					const record = {
-						sessionFile: activeSessionFile,
-						message: params.message,
-						context: params.context,
-						timestamp: new Date().toISOString(),
-					};
-
-					const sessionBasename = path.basename(activeSessionFile, ".jsonl");
-					const escalationFile = path.join(ESCALATIONS_DIR, `${sessionBasename}.yaml`);
-
-					fs.writeFileSync(escalationFile, stringifyYaml(record), "utf-8");
+					writeEscalationRecord(activeSessionFile, params.message, params.context);
 				} catch (err) {
 					process.stderr.write(`[ask_master] Failed to write escalation file: ${err}\n`);
 				}

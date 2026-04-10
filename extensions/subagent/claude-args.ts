@@ -15,7 +15,7 @@ export interface ClaudeArgsConfig {
 
 const MCP_CONFIG_CANDIDATES = [".mcp.json"] as const;
 
-function mapThinkingToClaudeEffort(piThinking: string): string | undefined {
+export function mapThinkingToClaudeEffort(piThinking: string): "low" | "medium" | "high" | "max" | undefined {
 	switch (piThinking) {
 		case "off":
 		case "minimal":
