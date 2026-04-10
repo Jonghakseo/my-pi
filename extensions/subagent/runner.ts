@@ -22,6 +22,7 @@ import {
 	processClaudeEvent,
 	stateToSingleResult,
 } from "./claude-stream-parser.js";
+import { resolveClaudeRuntimeMode } from "./config.js";
 import { formatToolCallPlain } from "./format.js";
 import {
 	extractActivityPreviewFromTextDelta,
@@ -215,7 +216,7 @@ export async function runSingleAgent(
 	}
 
 	if (agent.runtime === "claude") {
-		if (process.env.PI_CLAUDE_RUNTIME === "sdk") {
+		if (resolveClaudeRuntimeMode(defaultCwd) === "sdk") {
 			const { runClaudeAgentViaSdk } = await import("./claude-sdk-runner.js");
 			return runClaudeAgentViaSdk(
 				defaultCwd,
