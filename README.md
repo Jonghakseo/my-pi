@@ -102,7 +102,6 @@
 |---|---|
 | **footer.ts** | 모델, git 브랜치, 컨텍스트 사용량을 보여주는 커스텀 푸터 |
 | **working-text.ts** | 처리 중 경과 시간과 함께 팁 중심 스피너 텍스트 |
-| **idle-screensaver.ts** | 유휴 시 터미널 스크린세이버 |
 | **theme-cycler.ts** | `Ctrl+X`로 테마 실시간 순환 |
 | **diff-overlay.ts** | `/diff` — 분할 화면 git diff 뷰어 오버레이 |
 | **github-overlay.ts** | 터미널에서 바로 GitHub PR 확인 |
@@ -115,10 +114,7 @@
 
 | 확장 | 설명 |
 |---|---|
-| **todo-write.ts** | 할 일 관리 — `todo_write` 도구, 영속 저장소, TUI 렌더링 |
-| **auto-name.ts** | 첫 사용자 메시지로 세션 이름 자동 감지 |
 | **upload-image-url.ts** | GitHub CDN으로 이미지 업로드 후 임베딩 |
-| **delayed-action.ts** | 지연 실행 예약 |
 | **until.ts** | `/until`, `until_report` — 조건 충족까지 반복 실행 |
 | **usage-analytics.ts** | `/analytics` — 서브에이전트·스킬 사용 통계 오버레이 |
 | **archive-to-html.ts** | to-html 스킬로 생성된 HTML 파일을 `~/Documents`에 자동 아카이브 |
@@ -139,6 +135,10 @@
 | `@ryan_nookpi/pi-extension-codex-fast-mode` | Codex Fast Mode 상태 저장/토글 및 footer의 `⚡` 표시 연동 |
 | `@ryan_nookpi/pi-extension-clipboard` | 클립보드 복사 도구 |
 | `@ryan_nookpi/pi-extension-ask-user-question` | 옵션 선택 + 자유 입력 질문 도구 |
+| `@ryan_nookpi/pi-extension-auto-name` | 첫 사용자 메시지 기반 세션 이름 자동 감지 |
+| `@ryan_nookpi/pi-extension-delayed-action` | 지연 실행 예약 |
+| `@ryan_nookpi/pi-extension-idle-screensaver` | 유휴 스크린세이버 |
+| `@ryan_nookpi/pi-extension-todo-write` | `todo_write` 도구와 TUI 기반 할 일 관리 |
 
 ---
 

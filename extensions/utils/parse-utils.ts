@@ -241,7 +241,7 @@ export function toBlockReason(reason: string | undefined, fallback: string): str
 	return `${text.slice(0, 2000)}...`;
 }
 
-// ─── Reminder parsing (from delayed-action.ts) ─────────────────────────────
+// ─── Reminder parsing (from former delayed-action extension) ───────────────
 // Note: this function could also live in time-utils; placed here due to its parsing nature.
 
 function toDelayMs(amount: number, unit: "초" | "분" | "시간"): number {

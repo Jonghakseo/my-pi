@@ -228,10 +228,11 @@ export function extensionName(fileUrl: string): string {
  * Normalize whitespace in a string: collapse consecutive spaces/tabs/newlines
  * into a single space and trim.
  *
- * Unifies normalizeLine (idle-screensaver.ts) and normalizePurpose (auto-name.ts)
- * under the same whitespace-normalization logic.
+ * Unifies normalizeLine (former idle-screensaver extension) and
+ * normalizePurpose (former auto-name extension) under the same
+ * whitespace-normalization logic.
  *
- * Source: idle-screensaver.ts / auto-name.ts
+ * Source: former idle-screensaver / auto-name extensions
  */
 export function normalizeWhitespace(raw: unknown): string {
 	if (typeof raw !== "string") return "";
@@ -256,7 +257,7 @@ export function sanitizeStatusText(text: string): string {
  * Check if a string looks like an auto-generated session ID
  * (hex-based or "session-NNN" pattern).
  *
- * Source: idle-screensaver.ts
+ * Source: former idle-screensaver extension
  */
 export function isLikelySessionId(text: string): boolean {
 	const s = normalizeWhitespace(text);
