@@ -38,17 +38,14 @@ Custom extensions for the pi coding agent. All extensions are written in TypeScr
 ├── command-typo-assist.ts # Slash command typo detection → suggest + editor prefill
 ├── context.ts             # /context — context window usage & session stats overlay
 ├── cross-agent.ts         # Load commands/skills from .claude/.gemini/.codex dirs
-├── delayed-action.ts      # Delayed action scheduling ("do this later" style)
 ├── diff-overlay.ts        # /diff — Git diff split-pane overlay (file list + diff viewer)
 ├── dynamic-agents-md.ts   # Dynamic AGENTS.md loading per directory scope
 ├── files.ts               # File picker / diff viewer UI
 ├── github-overlay.ts      # GitHub PR view overlay (gh CLI integration)
-├── idle-screensaver.ts    # Idle screensaver — session context display after inactivity
 ├── interactive-shell/     # Interactive shell overlay (interactive/hands-free/dispatch)
 ├── override-builtin-tools.ts # Compact tool output rendering (collapsed/expanded toggle)
 ├── footer.ts              # Custom footer UI (model, branch, context bar)
 ├── working-text.ts              # Spinner working message (tip text + elapsed time)
-├── auto-name.ts           # Auto session name detection from first user message
 ├── theme-cycler.ts        # Ctrl+X to cycle through themes
 └── upload-image-url.ts    # Upload images to GitHub storage and return URLs
 ```
