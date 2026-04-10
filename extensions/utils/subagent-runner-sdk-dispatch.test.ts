@@ -3,9 +3,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const sdkRunnerMock = vi.hoisted(() => vi.fn());
 const spawnMock = vi.hoisted(() => vi.fn());
+const resolveClaudeRuntimeModeMock = vi.hoisted(() => vi.fn());
 
 vi.mock("../subagent/claude-sdk-runner.js", () => ({
 	runClaudeAgentViaSdk: sdkRunnerMock,
+}));
+
+vi.mock("../subagent/config.js", () => ({
+	resolveClaudeRuntimeMode: (...args: unknown[]) => resolveClaudeRuntimeModeMock(...args),
 }));
 
 vi.mock("node:child_process", () => ({
@@ -68,21 +73,19 @@ function makeClaudeLines(sessionId: string, text: string): string[] {
 }
 
 describe("runSingleAgent SDK dispatch", () => {
-	const originalRuntime = process.env.PI_CLAUDE_RUNTIME;
-
 	beforeEach(() => {
 		sdkRunnerMock.mockReset();
 		spawnMock.mockReset();
+		resolveClaudeRuntimeModeMock.mockReset();
+		resolveClaudeRuntimeModeMock.mockReturnValue("sdk");
 		vi.resetModules();
 	});
 
 	afterEach(() => {
-		if (originalRuntime === undefined) process.env.PI_CLAUDE_RUNTIME = undefined;
-		else process.env.PI_CLAUDE_RUNTIME = originalRuntime;
+		vi.clearAllMocks();
 	});
 
-	it("uses runClaudeAgentViaSdk when PI_CLAUDE_RUNTIME=sdk", async () => {
-		process.env.PI_CLAUDE_RUNTIME = "sdk";
+	it("uses runClaudeAgentViaSdk when config resolves to sdk", async () => {
 		sdkRunnerMock.mockResolvedValue({
 			agent: "worker",
 			agentSource: "project",
@@ -123,8 +126,8 @@ describe("runSingleAgent SDK dispatch", () => {
 		expect(spawnMock).not.toHaveBeenCalled();
 	});
 
-	it("falls back to Claude CLI when PI_CLAUDE_RUNTIME is unset", async () => {
-		process.env.PI_CLAUDE_RUNTIME = undefined;
+	it("falls back to Claude CLI when config resolves to cli", async () => {
+		resolveClaudeRuntimeModeMock.mockReturnValue("cli");
 		spawnMock.mockImplementationOnce(() => makeClaudeProcess(makeClaudeLines("sess-cli", "cli answer")));
 
 		const { runSingleAgent } = await import("../subagent/runner.ts");
