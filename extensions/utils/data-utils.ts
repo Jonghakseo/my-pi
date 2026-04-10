@@ -32,7 +32,7 @@ export function sameStringArray(a: string[], b: string[]): boolean {
 /**
  * Normalize an array of option values: deduplicate, trim, skip empties.
  *
- * Source: ask-user-question.ts
+ * Source: former ask-user-question extension
  */
 export function normalizeOptions(raw: unknown): string[] {
 	if (!Array.isArray(raw)) return [];

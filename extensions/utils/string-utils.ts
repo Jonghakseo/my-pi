@@ -124,7 +124,7 @@ export function splitNullSeparated(value: string): string[] {
 /**
  * Encode text to base64 (UTF-8).
  *
- * Source: clipboard.ts
+ * Source: former clipboard extension
  */
 export function toBase64(text: string): string {
 	return Buffer.from(text, "utf-8").toString("base64");

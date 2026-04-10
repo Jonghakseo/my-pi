@@ -118,8 +118,6 @@ Here are representative items from the 30+ custom TypeScript extensions, grouped
 | **todo-write.ts** | Task management — `todo_write` tool, persistent storage, TUI rendering |
 | **auto-name.ts** | Auto-detect session name from first user message |
 | **upload-image-url.ts** | Upload images to GitHub CDN for embedding |
-| **clipboard.ts** | Copy text to clipboard via OSC52 escape sequences |
-| **ask-user-question.ts** | Interactive question tool with predefined options |
 | **delayed-action.ts** | Schedule deferred actions |
 | **until.ts** | `/until`, `until_report` — repeat work until a condition is met |
 | **usage-analytics.ts** | `/analytics` — subagent and skill usage analytics overlay |
@@ -130,6 +128,17 @@ Here are representative items from the 30+ custom TypeScript extensions, grouped
 | Extension | Description |
 |---|---|
 | **command-typo-assist.ts** | Detects command typos and offers auto-correction |
+
+### Installed npm extension packages
+
+Some extensions are now used as **installed npm packages** instead of local files under `extensions/`.
+The plan is to gradually package more of the current custom extensions and migrate them the same way.
+
+| Package | Role |
+|---|---|
+| `@ryan_nookpi/pi-extension-codex-fast-mode` | Codex Fast Mode state/toggle plus footer `⚡` badge integration |
+| `@ryan_nookpi/pi-extension-clipboard` | Clipboard copy tool |
+| `@ryan_nookpi/pi-extension-ask-user-question` | Interactive question tool with options + free-text input |
 
 ---
 

@@ -118,8 +118,6 @@
 | **todo-write.ts** | 할 일 관리 — `todo_write` 도구, 영속 저장소, TUI 렌더링 |
 | **auto-name.ts** | 첫 사용자 메시지로 세션 이름 자동 감지 |
 | **upload-image-url.ts** | GitHub CDN으로 이미지 업로드 후 임베딩 |
-| **clipboard.ts** | OSC52 이스케이프 시퀀스로 클립보드에 텍스트 복사 |
-| **ask-user-question.ts** | 사전 정의 옵션을 갖춘 인터랙티브 질문 도구 |
 | **delayed-action.ts** | 지연 실행 예약 |
 | **until.ts** | `/until`, `until_report` — 조건 충족까지 반복 실행 |
 | **usage-analytics.ts** | `/analytics` — 서브에이전트·스킬 사용 통계 오버레이 |
@@ -130,6 +128,17 @@
 | 확장 | 설명 |
 |---|---|
 | **command-typo-assist.ts** | 명령어 오타를 감지하고 자동 수정 제안 |
+
+### 설치형 npm 확장 패키지
+
+현재 일부 확장은 로컬 `extensions/` 디렉토리 대신 **설치형 npm 패키지**로 사용한다.
+또한 나머지 커스텀 확장들도 점진적으로 패키지화해서 이 방식으로 옮겨갈 예정이다.
+
+| 패키지 | 역할 |
+|---|---|
+| `@ryan_nookpi/pi-extension-codex-fast-mode` | Codex Fast Mode 상태 저장/토글 및 footer의 `⚡` 표시 연동 |
+| `@ryan_nookpi/pi-extension-clipboard` | 클립보드 복사 도구 |
+| `@ryan_nookpi/pi-extension-ask-user-question` | 옵션 선택 + 자유 입력 질문 도구 |
 
 ---
 
