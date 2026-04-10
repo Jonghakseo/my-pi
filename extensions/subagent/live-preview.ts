@@ -1,7 +1,7 @@
 import { formatToolCallPlain } from "./format.js";
 
 const THOUGHT_PREVIEW_MAX_CHARS = 80;
-const ACTIVITY_PREVIEW_MAX_CHARS = 120;
+const ACTIVITY_PREVIEW_MAX_CHARS = 240;
 
 function getFirstNonEmptyLine(raw: string): string | undefined {
 	return raw
