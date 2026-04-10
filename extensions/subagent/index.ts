@@ -24,6 +24,7 @@ import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import { cleanupPixelTimer } from "./above-widget.js";
 import { registerAll } from "./commands.js";
 import { HANG_CHECK_INTERVAL_MS, HANG_TIMEOUT_MS } from "./constants.js";
+import { registerAskMasterTool } from "./escalation.js";
 import { getSessionFileMtimeMs, readPersistedSessionSnapshot } from "./persisted-session.js";
 import { getLastNonEmptyLine } from "./runner.js";
 import { createStore, type SubagentStore } from "./store.js";
@@ -128,6 +129,7 @@ export function checkForHungRuns(store: SubagentStore, pi: ExtensionAPI): void {
 
 export default function (pi: ExtensionAPI) {
 	const store = createStore();
+	registerAskMasterTool(pi);
 	registerAll(pi, store);
 
 	// Periodic hang detection — auto-abort subagents with no activity
