@@ -4,7 +4,7 @@ description: Code simplification specialist — refines recently modified code f
 tools: read, grep, find, ls, bash, edit, write
 model: anthropic/claude-sonnet-4-6
 runtime: claude
-thinking: medium
+thinking: high
 ---
 
 <system_prompt agent="simplifier">
