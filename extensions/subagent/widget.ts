@@ -12,7 +12,6 @@ import {
 	getRemainingContextPercent,
 	getUsedContextPercent,
 	resolveContextWindow,
-	truncateToWidthWithEllipsis,
 } from "./format.js";
 
 const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"] as const;
@@ -20,9 +19,7 @@ const SPINNER_INTERVAL_MS = 120;
 const SPINNER_REFRESH_MS = 150;
 
 const MAX_VISIBLE_RUNS = 3;
-const MAX_TASK_LABEL_CHARS = 36;
-const MIN_LEFT_LABEL_WIDTH = 24;
-const MIN_CONTEXT_BAR_WIDTH = 5;
+const MAX_TASK_LABEL_CHARS = 72;
 
 import { type SubagentStore, truncateText } from "./store.js";
 import type { CommandRunState } from "./types.js";
@@ -118,7 +115,7 @@ function getContextShort(run: CommandRunState, ctx: WidgetRenderCtx, theme: Widg
 	return contextBarColor ? theme.fg(contextBarColor, contextBar) : theme.fg("dim", contextBar);
 }
 
-function buildPrimaryLabel(run: CommandRunState): string {
+function buildPrimaryLabelText(run: CommandRunState): string {
 	const lastLine = run.lastLine
 		?.replace(/\s*\n+\s*/g, " ")
 		.replace(/\s{2,}/g, " ")
@@ -129,39 +126,74 @@ function buildPrimaryLabel(run: CommandRunState): string {
 	return truncateText(displayTask.replace(/\s+/g, " ").trim(), MAX_TASK_LABEL_CHARS);
 }
 
-function buildStatusLeft(run: CommandRunState, theme: WidgetTheme): string {
-	const { statusColor, statusIcon } = getStatusVisual(run);
-	const elapsedLabel = formatCompactDuration(run.elapsedMs);
-	const primaryLabel = buildPrimaryLabel(run);
-	const taskLabel = primaryLabel ? theme.fg("dim", primaryLabel) : "";
-	const delimiter = theme.fg("muted", " · ");
-	const mainBadge = run.contextMode === "main" ? `${theme.fg("warning", "[M]")} ` : "";
-	const agentLabel = `${mainBadge}\x1b[38;5;${AGENT_NAME_PALETTE[agentBgIndex(run.agent)]}m${run.agent}\x1b[39m`;
-	const leftParts = [
-		theme.fg(statusColor, `${statusIcon} #${run.id}`),
-		agentLabel,
-		taskLabel,
-		theme.fg("dim", elapsedLabel),
-		getIdleLabel(run, theme),
-	].filter(Boolean);
-	return leftParts.join(delimiter);
+function joinParts(parts: string[], delimiter: string): string {
+	return parts.filter(Boolean).join(delimiter);
 }
 
-function composeRunLine(left: string, right: string, innerWidth: number): string {
-	if (!right || innerWidth <= MIN_LEFT_LABEL_WIDTH) {
-		return truncateToWidthWithEllipsis(left, innerWidth);
+function getPartsWidth(parts: Array<{ width: number }>, delimiterWidth: number): number {
+	if (parts.length === 0) return 0;
+	return parts.reduce((sum, part) => sum + part.width, 0) + delimiterWidth * (parts.length - 1);
+}
+
+function buildStatusLeft(run: CommandRunState, theme: WidgetTheme, maxWidth: number): string {
+	if (maxWidth <= 0) return "";
+
+	const { statusColor, statusIcon } = getStatusVisual(run);
+	const delimiter = theme.fg("muted", " · ");
+	const delimiterWidth = visibleWidth(" · ");
+	const taskText = buildPrimaryLabelText(run);
+	const idleLabel = getIdleLabel(run, theme);
+	const statusLabel = theme.fg(statusColor, `${statusIcon} #${run.id}`);
+	const mainBadge = run.contextMode === "main" ? `${theme.fg("warning", "[M]")} ` : "";
+	const agentLabel = `${mainBadge}\x1b[38;5;${AGENT_NAME_PALETTE[agentBgIndex(run.agent)]}m${run.agent}\x1b[39m`;
+	const elapsedLabel = theme.fg("dim", formatCompactDuration(run.elapsedMs));
+
+	const statusPart = { text: statusLabel, width: visibleWidth(statusLabel) };
+	const agentPart = { text: agentLabel, width: visibleWidth(agentLabel) };
+	const elapsedPart = { text: elapsedLabel, width: visibleWidth(elapsedLabel) };
+	const idlePart = idleLabel ? { text: idleLabel, width: visibleWidth(idleLabel) } : undefined;
+
+	const fixedLayouts = [
+		[statusPart, agentPart, elapsedPart, idlePart].filter(Boolean),
+		[statusPart, agentPart, elapsedPart],
+		[statusPart, agentPart],
+		[statusPart],
+	] as Array<Array<{ text: string; width: number }>>;
+
+	for (const fixedParts of fixedLayouts) {
+		const baseWidth = getPartsWidth(fixedParts, delimiterWidth);
+		if (!taskText) {
+			if (baseWidth <= maxWidth)
+				return joinParts(
+					fixedParts.map((part) => part.text),
+					delimiter,
+				);
+			continue;
+		}
+
+		const taskBudget = maxWidth - baseWidth - (fixedParts.length > 0 ? delimiterWidth : 0);
+		if (taskBudget <= 0) continue;
+		const truncatedTask = truncateText(taskText, Math.min(MAX_TASK_LABEL_CHARS, taskBudget));
+		if (!truncatedTask) continue;
+		return joinParts([...fixedParts.map((part) => part.text), theme.fg("dim", truncatedTask)], delimiter);
 	}
 
-	const allowedRightWidth = Math.min(visibleWidth(right), Math.max(0, innerWidth - MIN_LEFT_LABEL_WIDTH - 1));
-	if (allowedRightWidth < MIN_CONTEXT_BAR_WIDTH) {
-		return truncateToWidthWithEllipsis(left, innerWidth);
-	}
+	if (taskText) return theme.fg("dim", truncateText(taskText, maxWidth));
+	return theme.fg(statusColor, truncateText(`${statusIcon} #${run.id}`, maxWidth));
+}
 
-	const fittedRight = truncateToWidth(right, allowedRightWidth);
-	const maxLeftWidth = Math.max(1, innerWidth - visibleWidth(fittedRight) - 1);
-	const fittedLeft = truncateToWidthWithEllipsis(left, maxLeftWidth);
-	const gapWidth = Math.max(1, innerWidth - visibleWidth(fittedLeft) - visibleWidth(fittedRight));
-	return `${fittedLeft}${" ".repeat(gapWidth)}${fittedRight}`;
+function composeRunLine(run: CommandRunState, ctx: WidgetRenderCtx, theme: WidgetTheme, innerWidth: number): string {
+	const right = getContextShort(run, ctx, theme);
+	if (!right) return buildStatusLeft(run, theme, innerWidth);
+
+	const fittedRight = truncateToWidth(right, innerWidth);
+	const rightWidth = visibleWidth(fittedRight);
+	const leftBudget = Math.max(0, innerWidth - rightWidth - (innerWidth > rightWidth ? 1 : 0));
+	const left = buildStatusLeft(run, theme, leftBudget);
+	if (!left) return `${" ".repeat(Math.max(0, innerWidth - rightWidth))}${fittedRight}`;
+
+	const gapWidth = Math.max(1, innerWidth - visibleWidth(left) - rightWidth);
+	return `${left}${" ".repeat(gapWidth)}${fittedRight}`;
 }
 
 export function updateCommandRunsWidget(store: SubagentStore, ctx?: WidgetRenderCtx): void {
@@ -237,9 +269,7 @@ export function updateCommandRunsWidget(store: SubagentStore, ctx?: WidgetRender
 				return {
 					render(width: number): string[] {
 						const innerWidth = Math.max(1, width - 2);
-						const statusLeft = buildStatusLeft(run, theme);
-						const contextShort = getContextShort(run, activeCtx, theme);
-						content.setText(composeRunLine(statusLeft, contextShort, innerWidth));
+						content.setText(composeRunLine(run, activeCtx, theme, innerWidth));
 						return box.render(width);
 					},
 					invalidate() {
