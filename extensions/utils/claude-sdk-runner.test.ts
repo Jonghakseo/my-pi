@@ -35,7 +35,7 @@ describe("runClaudeAgentViaSdk", () => {
 		fs.rmSync(sidecarDir, { recursive: true, force: true });
 	});
 
-	it("returns Claude-style SingleResult for successful SDK runs", async () => {
+	it("returns Claude-style SingleResult for successful SDK runs and writes sidecar entries", async () => {
 		queryMock.mockReturnValue(
 			makeQuery([
 				{
@@ -103,6 +103,16 @@ describe("runClaudeAgentViaSdk", () => {
 			}),
 		);
 		expect(fs.existsSync(sidecarFile)).toBe(true);
+
+		const lines = fs
+			.readFileSync(sidecarFile, "utf8")
+			.trim()
+			.split("\n")
+			.map((line) => JSON.parse(line));
+		expect(lines).toHaveLength(3);
+		expect(lines[0]).toMatchObject({ type: "message", message: { role: "user" } });
+		expect(lines[1]).toMatchObject({ type: "message", message: { role: "assistant" } });
+		expect(lines[2]).toMatchObject({ type: "subagent_done", exitCode: 0, runtime: "claude" });
 	});
 
 	it("disables non-built-in tools for Claude SDK runtime", async () => {
@@ -140,5 +150,66 @@ describe("runClaudeAgentViaSdk", () => {
 				}),
 			}),
 		);
+	});
+
+	it("returns an error result when the SDK query throws", async () => {
+		queryMock.mockImplementation(() => {
+			throw new Error("sdk boom");
+		});
+
+		const { runClaudeAgentViaSdk } = await import("../subagent/claude-sdk-runner.ts");
+		const result = await runClaudeAgentViaSdk(
+			"/tmp/project",
+			{
+				name: "worker",
+				description: "Worker",
+				tools: ["read"],
+				model: "claude-sonnet-4-6",
+				systemPrompt: "Follow instructions.",
+				source: "project",
+				filePath: "/tmp/worker.md",
+				runtime: "claude",
+			},
+			"do work",
+			undefined,
+			undefined,
+			undefined,
+			(results) => ({ mode: "single", inheritMainContext: false, projectAgentsDir: null, results }),
+			undefined,
+			sidecarFile,
+		);
+
+		expect(result.exitCode).toBe(1);
+		expect(result.stderr).toContain("claude-sdk error: sdk boom");
+	});
+
+	it("throws when the outer abort signal is triggered before execution completes", async () => {
+		queryMock.mockReturnValue(makeQuery([]));
+		const abortController = new AbortController();
+		abortController.abort();
+
+		const { runClaudeAgentViaSdk } = await import("../subagent/claude-sdk-runner.ts");
+		await expect(
+			runClaudeAgentViaSdk(
+				"/tmp/project",
+				{
+					name: "worker",
+					description: "Worker",
+					tools: ["read"],
+					model: "claude-sonnet-4-6",
+					systemPrompt: "Follow instructions.",
+					source: "project",
+					filePath: "/tmp/worker.md",
+					runtime: "claude",
+				},
+				"do work",
+				undefined,
+				abortController.signal,
+				undefined,
+				(results) => ({ mode: "single", inheritMainContext: false, projectAgentsDir: null, results }),
+				undefined,
+				sidecarFile,
+			),
+		).rejects.toThrow("Subagent was aborted");
 	});
 });

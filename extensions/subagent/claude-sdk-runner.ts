@@ -125,26 +125,39 @@ export async function runClaudeAgentViaSdk(
 	if (signal?.aborted) forwardAbort();
 	else signal?.addEventListener("abort", forwardAbort, { once: true });
 
-	const sdkQuery = query({
-		prompt: normalizeTaskForSubagentPrompt(task),
-		options: {
-			abortController,
-			cwd: defaultCwd,
-			model,
-			effort,
-			systemPrompt: agent.systemPrompt.trim() || undefined,
-			permissionMode: "bypassPermissions",
-			allowDangerouslySkipPermissions: true,
-			settingSources: [],
-			includePartialMessages: true,
-			persistSession: true,
-			...(enabledTools ? { tools: enabledTools, allowedTools: enabledTools } : {}),
-			resume: resumeSessionId,
-			stderr: (data) => {
-				stderrBuf += data;
+	let sdkQuery: ReturnType<typeof query>;
+	try {
+		sdkQuery = query({
+			prompt: normalizeTaskForSubagentPrompt(task),
+			options: {
+				abortController,
+				cwd: defaultCwd,
+				model,
+				effort,
+				systemPrompt: agent.systemPrompt.trim() || undefined,
+				permissionMode: "bypassPermissions",
+				allowDangerouslySkipPermissions: true,
+				settingSources: [],
+				includePartialMessages: true,
+				persistSession: true,
+				...(enabledTools ? { tools: enabledTools, allowedTools: enabledTools } : {}),
+				resume: resumeSessionId,
+				stderr: (data) => {
+					stderrBuf += data;
+				},
 			},
-		},
-	});
+		});
+	} catch (error) {
+		sdkFailed = true;
+		stderrBuf = appendStderrDiagnostic(
+			stderrBuf,
+			`claude-sdk error: ${error instanceof Error ? error.message : String(error)}`,
+		);
+		const result = adapter.toSingleResult(agent.name, agent.source, task, 1, step, stderrBuf);
+		result.sessionFile = sidecarSessionFile;
+		result.claudeProjectDir = defaultCwd;
+		return result;
+	}
 
 	try {
 		for await (const message of sdkQuery) {
