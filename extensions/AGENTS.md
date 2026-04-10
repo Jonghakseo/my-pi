@@ -35,8 +35,6 @@ Custom extensions for the pi coding agent. All extensions are written in TypeScr
 │   ├── time-utils.ts      #   Time/duration formatting helpers
 │   └── status-keys.ts     #   Shared footer status key constants
 ├── archive-to-html.ts     # Auto-archive to-html skill output HTML to ~/Documents
-├── ask-user-question.ts   # AskUserQuestion tool with options & free-text input
-├── clipboard.ts           # OSC52-based clipboard copy tool for LLM
 ├── command-typo-assist.ts # Slash command typo detection → suggest + editor prefill
 ├── context.ts             # /context — context window usage & session stats overlay
 ├── cross-agent.ts         # Load commands/skills from .claude/.gemini/.codex dirs

@@ -2,6 +2,8 @@
 
 [pi 코딩 에이전트](https://github.com/mariozechner/pi-coding-agent)용 커스텀 확장 모음.
 
+> 참고: 일부 확장(`codex-fast-mode`, `clipboard`, `ask-user-question`)은 이제 로컬 파일이 아니라 설치형 npm 패키지로 사용한다. 나머지 커스텀 확장들도 점진적으로 패키지화해 옮길 계획이다.
+
 ## 대표 확장
 
 | 확장 | 설명 |
@@ -11,10 +13,8 @@
 | [`memory-layer/`](./memory-layer/index.ts) | 장기 기억 관리 (remember/recall/forget 도구 & UI) |
 | [`generative-ui/`](./generative-ui/index.ts) | `visualize_read_me`, `show_widget` 기반 네이티브 위젯 렌더링 |
 | [`archive-to-html.ts`](./archive-to-html.ts) | to-html 스킬 출력 HTML 자동 아카이브 |
-| [`ask-user-question.ts`](./ask-user-question.ts) | 옵션 선택 + 자유 입력 질문 도구 |
 | [`auto-name.ts`](./auto-name.ts) | 첫 사용자 메시지로 세션 이름 자동 감지 |
 | [`claude-hooks-bridge.ts`](./claude-hooks-bridge.ts) | Claude Code 훅을 pi에서 실행하는 브릿지 |
-| [`clipboard.ts`](./clipboard.ts) | OSC52 기반 클립보드 복사 도구 |
 | [`command-typo-assist.ts`](./command-typo-assist.ts) | 슬래시 커맨드 오타 감지 → 제안 + 에디터 프리필 |
 | [`context.ts`](./context.ts) | 컨텍스트 윈도우 사용량 & 세션 통계 오버레이 |
 | [`cross-agent.ts`](./cross-agent.ts) | .claude/.gemini/.codex 디렉토리에서 커맨드/스킬 로드 |
