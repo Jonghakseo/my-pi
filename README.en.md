@@ -87,11 +87,10 @@ Here are representative items from the 30+ custom TypeScript extensions, grouped
 
 | Extension | Description |
 |---|---|
-| **subagent/** | Multi-agent delegation engine — spawns sub-`pi` processes, manages runs with a below-editor status widget, and handles follow-up/cleanup |
+| **subagent/** | Multi-agent delegation engine — spawns sub-`pi` processes, manages runs with a below-editor status widget, handles follow-up/cleanup, and includes sub-session-only `ask_master` escalation |
 | **claude-mcp-bridge/** | Reuses Claude Code's MCP server configurations — zero-duplication setup |
 | **cross-agent.ts** | Load agent definitions from `.claude/`, `.gemini/`, `.codex/` directories |
 | **dynamic-agents-md.ts** | Dynamically loads AGENTS.md at runtime to enforce edit/write scope restrictions |
-| **escalate-tool.ts** | Escalation tool for subagents to signal the master when judgment is needed |
 | **claude-hooks-bridge.ts** | Bridge connecting Claude Code hook events to Pi sessions |
 | **memory-layer/** | Persistent memory system across sessions |
 | **remote/** | `/remote`, `/remote:lan`, `/remote:funnel` — local/LAN/public-URL remote access |

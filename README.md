@@ -87,11 +87,10 @@
 
 | 확장 | 설명 |
 |---|---|
-| **subagent/** | 멀티 에이전트 위임 엔진 — 서브 `pi` 프로세스 생성, below-editor 상태 위젯으로 실행 관리, 자동 follow-up/정리 |
+| **subagent/** | 멀티 에이전트 위임 엔진 — 서브 `pi` 프로세스 생성, below-editor 상태 위젯으로 실행 관리, 자동 follow-up/정리, 서브세션 전용 `ask_master` 에스컬레이션 포함 |
 | **claude-mcp-bridge/** | Claude Code의 MCP 서버 설정을 그대로 재사용 — 중복 설정 제로 |
 | **cross-agent.ts** | `.claude/`, `.gemini/`, `.codex/` 디렉터리에서 에이전트 정의 로드 |
 | **dynamic-agents-md.ts** | 런타임에 AGENTS.md를 동적 로드하여 편집·쓰기 범위 제한 강제 |
-| **escalate-tool.ts** | 서브에이전트가 마스터에게 에스컬레이션 신호를 보내는 도구 |
 | **claude-hooks-bridge.ts** | Claude Code의 훅(hook) 이벤트를 Pi 세션에 연결하는 브릿지 |
 | **memory-layer/** | 세션 간 영속 메모리 시스템 |
 | **remote/** | `/remote`, `/remote:lan`, `/remote:funnel` — 로컬/LAN/공개 URL 기반 원격 접속 |

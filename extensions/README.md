@@ -8,7 +8,7 @@
 
 | 확장 | 설명 |
 |------|------|
-| [`subagent/`](./subagent/index.ts) | 서브에이전트 위임 시스템 (프로세스 실행, 세션 관리, 상태 위젯) |
+| [`subagent/`](./subagent/index.ts) | 서브에이전트 위임 시스템 (프로세스 실행, 세션 관리, 상태 위젯, 서브세션 전용 `ask_master`) |
 | [`claude-mcp-bridge/`](./claude-mcp-bridge/index.ts) | Claude Code MCP 설정을 pi에서 재활용 |
 | [`memory-layer/`](./memory-layer/index.ts) | 장기 기억 관리 (remember/recall/forget 도구 & UI) |
 | [`generative-ui/`](./generative-ui/index.ts) | `visualize_read_me`, `show_widget` 기반 네이티브 위젯 렌더링 |
@@ -19,7 +19,6 @@
 | [`cross-agent.ts`](./cross-agent.ts) | .claude/.gemini/.codex 디렉토리에서 커맨드/스킬 로드 |
 | [`diff-overlay.ts`](./diff-overlay.ts) | Diff 뷰어 오버레이 |
 | [`dynamic-agents-md.ts`](./dynamic-agents-md.ts) | 디렉토리 스코프별 동적 AGENTS.md 로딩 |
-| [`escalate-tool.ts`](./escalate-tool.ts) | 서브에이전트 → 마스터 에스컬레이션 도구 |
 | [`files.ts`](./files.ts) | 파일 피커 / Diff 뷰어 UI |
 | [`fork-panel.ts`](./fork-panel.ts) | 현재 세션을 Ghostty split panel로 포크 |
 | [`github-overlay.ts`](./github-overlay.ts) | GitHub PR 뷰 (gh CLI 연동) |
