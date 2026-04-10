@@ -215,6 +215,20 @@ export async function runSingleAgent(
 	}
 
 	if (agent.runtime === "claude") {
+		if (process.env.PI_CLAUDE_RUNTIME === "sdk") {
+			const { runClaudeAgentViaSdk } = await import("./claude-sdk-runner.js");
+			return runClaudeAgentViaSdk(
+				defaultCwd,
+				agent,
+				task,
+				step,
+				signal,
+				onUpdate,
+				makeDetails,
+				resumeSessionId,
+				sidecarSessionFile,
+			);
+		}
 		return runClaudeAgent(
 			defaultCwd,
 			agent,
