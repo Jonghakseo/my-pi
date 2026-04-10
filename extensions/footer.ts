@@ -6,15 +6,20 @@
  * - Second line (optional) shows extension statuses from ctx.ui.setStatus()
  */
 
+import { readFileSync } from "node:fs";
+import { homedir } from "node:os";
+import { join } from "node:path";
 import type { ExtensionAPI, ExtensionContext, Theme, ThemeColor } from "@mariozechner/pi-coding-agent";
 import { truncateToWidth, visibleWidth } from "@mariozechner/pi-tui";
-import { shouldUseCodexFastBadge } from "./codex-fast-mode.ts";
 import { formatNameStatus } from "./utils/auto-name-utils.ts";
 import { formatContextUsageBar } from "./utils/format-utils.ts";
 import { ELAPSED_STATUS_KEY, NAME_STATUS_KEY } from "./utils/status-keys.ts";
 
 const BAR_WIDTH = 10;
 const DIRTY_CHECK_INTERVAL_MS = 3000;
+const CODEX_FAST_STATE_FILE = join(homedir(), ".pi", "agent", "state", "codex-fast-mode.json");
+const CODEX_FAST_SUPPORTED_PROVIDER = "openai-codex";
+const CODEX_FAST_SUPPORTED_MODEL_ID = "gpt-5.4";
 
 type ThemeBg = Parameters<Theme["bg"]>[0];
 type FooterTheme = {
@@ -24,6 +29,10 @@ type FooterTheme = {
 };
 
 type StatusStyler = (theme: FooterTheme, text: string) => string;
+
+type FastModeState = {
+	enabled: boolean;
+};
 
 type FooterStatusData = {
 	getExtensionStatuses: () => ReadonlyMap<string, string>;
@@ -38,6 +47,31 @@ const STATUS_STYLE_MAP: Record<string, StatusStyler> = {
 	},
 	[ELAPSED_STATUS_KEY]: (theme, text) => theme.fg("success", text),
 };
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+	return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function loadCodexFastModeState(): FastModeState {
+	try {
+		const parsed = JSON.parse(readFileSync(CODEX_FAST_STATE_FILE, "utf8"));
+		if (isRecord(parsed) && typeof parsed.enabled === "boolean") {
+			return { enabled: parsed.enabled };
+		}
+	} catch {
+		// Ignore missing/corrupt state and fall back to default.
+	}
+
+	return { enabled: false };
+}
+
+function shouldUseCodexFastBadge(
+	provider: string | undefined,
+	modelId: string | undefined,
+	isFastModeEnabled: boolean,
+): boolean {
+	return isFastModeEnabled && provider === CODEX_FAST_SUPPORTED_PROVIDER && modelId === CODEX_FAST_SUPPORTED_MODEL_ID;
+}
 
 function clamp(n: number, min: number, max: number): number {
 	return Math.max(min, Math.min(max, n));
@@ -94,10 +128,13 @@ function buildFooterLineParts(
 	footerData: FooterStatusData,
 	repoName: string | null,
 	hasDirtyChanges: boolean,
+	isCodexFastModeEnabled: boolean,
 	width: number,
 ) {
 	const model = ctx.model?.id || "no-model";
-	const modelLabel = shouldUseCodexFastBadge(ctx.model?.provider, ctx.model?.id) ? `${model} ⚡` : model;
+	const modelLabel = shouldUseCodexFastBadge(ctx.model?.provider, ctx.model?.id, isCodexFastModeEnabled)
+		? `${model} ⚡`
+		: model;
 	const usage = ctx.getContextUsage();
 	const pct = clamp(Math.round(usage?.percent ?? 0), 0, 100);
 	const bar = formatContextUsageBar(pct, BAR_WIDTH);
@@ -139,11 +176,21 @@ function installFooter(pi: ExtensionAPI, ctx: ExtensionContext) {
 		let disposed = false;
 		let dirtyTimer: ReturnType<typeof setInterval> | undefined;
 		let repoName: string | null = null;
+		let isCodexFastModeEnabled = loadCodexFastModeState().enabled;
 
 		const fetchRepoName = async () => {
 			if (disposed) return;
 			repoName = await getRepoName(pi, ctx.sessionManager.getCwd());
 			if (!disposed) tui.requestRender();
+		};
+
+		const refreshCodexFastModeState = () => {
+			if (disposed) return;
+			const nextIsCodexFastModeEnabled = loadCodexFastModeState().enabled;
+			if (nextIsCodexFastModeEnabled !== isCodexFastModeEnabled) {
+				isCodexFastModeEnabled = nextIsCodexFastModeEnabled;
+				tui.requestRender();
+			}
 		};
 
 		const refreshDirtyState = async () => {
@@ -176,12 +223,15 @@ function installFooter(pi: ExtensionAPI, ctx: ExtensionContext) {
 		};
 
 		void fetchRepoName();
+		refreshCodexFastModeState();
 		void refreshDirtyState();
 		dirtyTimer = setInterval(() => {
+			refreshCodexFastModeState();
 			void refreshDirtyState();
 		}, DIRTY_CHECK_INTERVAL_MS);
 
 		const unsubscribeBranch = footerData.onBranchChange(() => {
+			refreshCodexFastModeState();
 			tui.requestRender();
 			void refreshDirtyState();
 		});
@@ -203,6 +253,7 @@ function installFooter(pi: ExtensionAPI, ctx: ExtensionContext) {
 					footerData,
 					repoName,
 					hasDirtyChanges,
+					isCodexFastModeEnabled,
 					width,
 				);
 				const lines = [truncateToWidth(left + mid + pad + right, width)];
