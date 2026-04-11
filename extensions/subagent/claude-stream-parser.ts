@@ -3,6 +3,13 @@ import type { Message } from "@mariozechner/pi-ai";
 import { extractActivityPreviewFromTextDelta, extractThoughtText } from "./live-preview.js";
 import type { SingleResult } from "./types.js";
 
+type ClaudeUsageTotals = {
+	input: number;
+	output: number;
+	cacheRead: number;
+	cacheWrite: number;
+};
+
 export interface ClaudeStreamState {
 	sessionId: string | undefined;
 	model: string | undefined;
@@ -22,6 +29,9 @@ export interface ClaudeStreamState {
 		contextTokens: number;
 		turns: number;
 	};
+	completedUsage?: ClaudeUsageTotals;
+	currentMessageUsage?: ClaudeUsageTotals;
+	lastTurnContextTokens?: number;
 	resultReceived: boolean;
 	resultEvent: any | undefined;
 	isError: boolean;
@@ -43,6 +53,9 @@ export function createStreamState(): ClaudeStreamState {
 		stopReason: undefined,
 		errorMessage: undefined,
 		usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0, contextTokens: 0, turns: 0 },
+		completedUsage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+		currentMessageUsage: undefined,
+		lastTurnContextTokens: 0,
 		resultReceived: false,
 		resultEvent: undefined,
 		isError: false,
@@ -53,7 +66,57 @@ export function createStreamState(): ClaudeStreamState {
 	};
 }
 
+function toClaudeUsageTotals(usage: any): ClaudeUsageTotals {
+	return {
+		input: usage?.input_tokens || 0,
+		output: usage?.output_tokens || 0,
+		cacheRead: usage?.cache_read_input_tokens || 0,
+		cacheWrite: usage?.cache_creation_input_tokens || 0,
+	};
+}
+
+function getContextTokensFromUsage(usage: ClaudeUsageTotals | undefined): number {
+	if (!usage) return 0;
+	return usage.input + usage.cacheRead + usage.cacheWrite;
+}
+
+function ensureUsageTrackingState(state: ClaudeStreamState): void {
+	state.completedUsage ??= { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 };
+	state.lastTurnContextTokens ??= state.usage.contextTokens || 0;
+}
+
+function getCompletedUsage(state: ClaudeStreamState): ClaudeUsageTotals {
+	state.completedUsage ??= { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 };
+	return state.completedUsage;
+}
+
+function syncUsageTotals(state: ClaudeStreamState): void {
+	ensureUsageTrackingState(state);
+	const current = state.currentMessageUsage;
+	const completed = getCompletedUsage(state);
+	state.usage.input = completed.input + (current?.input || 0);
+	state.usage.output = completed.output + (current?.output || 0);
+	state.usage.cacheRead = completed.cacheRead + (current?.cacheRead || 0);
+	state.usage.cacheWrite = completed.cacheWrite + (current?.cacheWrite || 0);
+	state.usage.contextTokens = current ? getContextTokensFromUsage(current) : (state.lastTurnContextTokens ?? 0);
+}
+
+function finalizeCurrentMessageUsage(state: ClaudeStreamState): void {
+	ensureUsageTrackingState(state);
+	if (!state.currentMessageUsage) return;
+	const completed = getCompletedUsage(state);
+	completed.input += state.currentMessageUsage.input;
+	completed.output += state.currentMessageUsage.output;
+	completed.cacheRead += state.currentMessageUsage.cacheRead;
+	completed.cacheWrite += state.currentMessageUsage.cacheWrite;
+	state.lastTurnContextTokens = getContextTokensFromUsage(state.currentMessageUsage);
+	state.currentMessageUsage = undefined;
+	syncUsageTotals(state);
+}
+
 export function processClaudeEvent(state: ClaudeStreamState, event: any): boolean {
+	ensureUsageTrackingState(state);
+
 	if (event.session_id && !state.sessionId) {
 		state.sessionId = event.session_id;
 	}
@@ -91,15 +154,13 @@ function processStreamEvent(state: ClaudeStreamState, ev: any): boolean {
 	if (!ev || !ev.type) return false;
 
 	if (ev.type === "message_start") {
+		finalizeCurrentMessageUsage(state);
 		const msg = ev.message;
 		if (msg?.model && !state.model) state.model = msg.model;
 		const usage = msg?.usage;
 		if (usage) {
-			state.usage.input += usage.input_tokens || 0;
-			state.usage.output += usage.output_tokens || 0;
-			state.usage.cacheRead += usage.cache_read_input_tokens || 0;
-			state.usage.cacheWrite += usage.cache_creation_input_tokens || 0;
-			state.usage.contextTokens = state.usage.input + state.usage.output + state.usage.cacheRead;
+			state.currentMessageUsage = toClaudeUsageTotals(usage);
+			syncUsageTotals(state);
 		}
 		state.liveThinking = undefined;
 		state.thoughtText = undefined;
@@ -154,11 +215,9 @@ function processStreamEvent(state: ClaudeStreamState, ev: any): boolean {
 	if (ev.type === "message_delta") {
 		const usage = ev.usage;
 		if (usage) {
-			state.usage.input += usage.input_tokens || 0;
-			state.usage.output += usage.output_tokens || 0;
-			state.usage.cacheRead += usage.cache_read_input_tokens || 0;
-			state.usage.cacheWrite += usage.cache_creation_input_tokens || 0;
-			state.usage.contextTokens = state.usage.input + state.usage.output + state.usage.cacheRead;
+			state.currentMessageUsage = toClaudeUsageTotals(usage);
+			syncUsageTotals(state);
+			finalizeCurrentMessageUsage(state);
 		}
 		if (ev.delta?.stop_reason) {
 			state.stopReason = ev.delta.stop_reason;
@@ -186,6 +245,12 @@ function processAssistantSnapshot(state: ClaudeStreamState, event: any): boolean
 
 	if (event.error) {
 		state.errorMessage = event.error;
+	}
+
+	if (msg.usage) {
+		state.currentMessageUsage = toClaudeUsageTotals(msg.usage);
+		state.lastTurnContextTokens = getContextTokensFromUsage(state.currentMessageUsage);
+		syncUsageTotals(state);
 	}
 
 	const piMessage = claudeMessageToPi(msg);
@@ -238,14 +303,17 @@ function processResultEvent(state: ClaudeStreamState, event: any): void {
 	}
 
 	if (event.usage) {
-		const u = event.usage;
+		const totals = toClaudeUsageTotals(event.usage);
+		state.completedUsage = totals;
+		state.currentMessageUsage = undefined;
 		state.usage = {
-			input: u.input_tokens || 0,
-			output: u.output_tokens || 0,
-			cacheRead: u.cache_read_input_tokens || 0,
-			cacheWrite: u.cache_creation_input_tokens || 0,
+			input: totals.input,
+			output: totals.output,
+			cacheRead: totals.cacheRead,
+			cacheWrite: totals.cacheWrite,
 			cost: event.total_cost_usd || 0,
-			contextTokens: (u.input_tokens || 0) + (u.output_tokens || 0) + (u.cache_read_input_tokens || 0),
+			contextTokens:
+				(state.lastTurnContextTokens ?? 0) > 0 ? (state.lastTurnContextTokens ?? 0) : getContextTokensFromUsage(totals),
 			turns: event.num_turns || state.usage.turns,
 		};
 	}
