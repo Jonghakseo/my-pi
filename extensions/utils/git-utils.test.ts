@@ -5,10 +5,72 @@ import {
 	mapCheckStateFromCheckRun,
 	mapCheckStateFromStatusContext,
 	mapDiffStatusCode,
+	parseGitStatusPorcelainV2,
 	parseStatus,
 	renderPlainSummary,
 	summarizeChecks,
 } from "./git-utils.js";
+
+// ─── parseGitStatusPorcelainV2 ───────────────────────────────────────────
+
+describe("parseGitStatusPorcelainV2", () => {
+	it("parses ahead/behind tracking metadata from porcelain v2 branch headers", () => {
+		const result = parseGitStatusPorcelainV2(
+			[
+				"# branch.oid 0123456789abcdef",
+				"# branch.head main",
+				"# branch.upstream origin/main",
+				"# branch.ab +2 -3",
+			].join("\n"),
+		);
+
+		expect(result).toEqual({
+			head: "main",
+			upstream: "origin/main",
+			ahead: 2,
+			behind: 3,
+			isDetached: false,
+			isDirty: false,
+		});
+	});
+
+	it("marks tracked and untracked entries as dirty", () => {
+		const result = parseGitStatusPorcelainV2(
+			[
+				"# branch.oid fedcba9876543210",
+				"# branch.head feature/footer",
+				"# branch.upstream origin/feature/footer",
+				"# branch.ab +1 -0",
+				"1 .M N... 100644 100644 100644 1234567 1234567 footer.ts",
+				"? new-file.ts",
+			].join("\n"),
+		);
+
+		expect(result).toEqual({
+			head: "feature/footer",
+			upstream: "origin/feature/footer",
+			ahead: 1,
+			behind: 0,
+			isDetached: false,
+			isDirty: true,
+		});
+	});
+
+	it("handles detached heads without upstream tracking", () => {
+		const result = parseGitStatusPorcelainV2(
+			["# branch.oid 89abcdef01234567", "# branch.head (detached)", "! node_modules/"].join("\n"),
+		);
+
+		expect(result).toEqual({
+			head: null,
+			upstream: null,
+			ahead: 0,
+			behind: 0,
+			isDetached: true,
+			isDirty: false,
+		});
+	});
+});
 
 // ─── mapDiffStatusCode ──────────────────────────────────────────────────
 

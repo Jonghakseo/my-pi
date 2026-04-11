@@ -13,10 +13,11 @@ import type { ExtensionAPI, ExtensionContext, Theme, ThemeColor } from "@marioze
 import { truncateToWidth, visibleWidth } from "@mariozechner/pi-tui";
 import { formatNameStatus } from "./utils/auto-name-utils.ts";
 import { formatContextUsageBar } from "./utils/format-utils.ts";
+import { createRepoStatusTracker, type RepoStatusSnapshot } from "./utils/repo-status.ts";
 import { ELAPSED_STATUS_KEY, NAME_STATUS_KEY } from "./utils/status-keys.ts";
 
 const BAR_WIDTH = 10;
-const DIRTY_CHECK_INTERVAL_MS = 3000;
+const FOOTER_STATE_REFRESH_INTERVAL_MS = 3000;
 const CODEX_FAST_STATE_FILE = join(homedir(), ".pi", "agent", "state", "codex-fast-mode.json");
 const CODEX_FAST_SUPPORTED_PROVIDER = "openai-codex";
 const CODEX_FAST_SUPPORTED_MODEL_ID = "gpt-5.4";
@@ -38,6 +39,15 @@ type FooterStatusData = {
 	getExtensionStatuses: () => ReadonlyMap<string, string>;
 	getGitBranch: () => string | null;
 	onBranchChange: (listener: () => void) => () => void;
+};
+
+type BranchTokenKey = "dirty" | "ahead" | "behind" | "pr";
+
+type BranchToken = {
+	key: BranchTokenKey;
+	plain: string;
+	styled: string;
+	position: "prefix" | "suffix";
 };
 
 const STATUS_STYLE_MAP: Record<string, StatusStyler> = {
@@ -102,14 +112,6 @@ function styleStatus(theme: FooterTheme, key: string, text: string): string {
 	return style ? style(theme, text) : text;
 }
 
-async function hasUncommittedChanges(pi: ExtensionAPI, cwd: string): Promise<boolean> {
-	const result = await pi.exec("git", ["status", "--porcelain=1", "--untracked-files=normal"], { cwd });
-	if (result.code !== 0) {
-		return false;
-	}
-	return result.stdout.trim().length > 0;
-}
-
 function buildFooterStatusEntries(ctx: ExtensionContext, footerData: FooterStatusData) {
 	const statusEntries = Array.from(footerData.getExtensionStatuses().entries())
 		.filter(([key]) => key !== NAME_STATUS_KEY)
@@ -122,12 +124,96 @@ function buildFooterStatusEntries(ctx: ExtensionContext, footerData: FooterStatu
 	return statusEntries;
 }
 
+function buildBranchTokens(theme: FooterTheme, repoStatus: RepoStatusSnapshot): BranchToken[] {
+	const tokens: BranchToken[] = [];
+
+	if (repoStatus.isDirty) {
+		tokens.push({
+			key: "dirty",
+			plain: "*",
+			styled: theme.fg("warning", "*"),
+			position: "prefix",
+		});
+	}
+
+	if (repoStatus.ahead > 0) {
+		tokens.push({
+			key: "ahead",
+			plain: ` ↑${repoStatus.ahead}`,
+			styled: theme.fg("accent", ` ↑${repoStatus.ahead}`),
+			position: "suffix",
+		});
+	}
+
+	if (repoStatus.behind > 0) {
+		tokens.push({
+			key: "behind",
+			plain: ` ↓${repoStatus.behind}`,
+			styled: theme.fg("accent", ` ↓${repoStatus.behind}`),
+			position: "suffix",
+		});
+	}
+
+	if (repoStatus.prNumber !== null) {
+		tokens.push({
+			key: "pr",
+			plain: ` #${repoStatus.prNumber}`,
+			styled: theme.fg("accent", ` #${repoStatus.prNumber}`),
+			position: "suffix",
+		});
+	}
+
+	return tokens;
+}
+
+function buildBranchDisplay(
+	theme: FooterTheme,
+	branchText: string,
+	repoStatus: RepoStatusSnapshot,
+	maxWidth: number,
+	showBranchTokens: boolean,
+): string {
+	if (!showBranchTokens) {
+		return theme.fg("accent", branchText);
+	}
+
+	const tokens = buildBranchTokens(theme, repoStatus);
+	const includedKeys = new Set(tokens.map((token) => token.key));
+	const dropOrder: BranchTokenKey[] = ["pr", "behind", "ahead", "dirty"];
+
+	const compose = () => {
+		const prefixTokens = tokens.filter((token) => token.position === "prefix" && includedKeys.has(token.key));
+		const suffixTokens = tokens.filter((token) => token.position === "suffix" && includedKeys.has(token.key));
+		const plain = `${prefixTokens.map((token) => token.plain).join("")}${branchText}${suffixTokens
+			.map((token) => token.plain)
+			.join("")}`;
+		const styled = `${prefixTokens.map((token) => token.styled).join("")}${theme.fg("accent", branchText)}${suffixTokens
+			.map((token) => token.styled)
+			.join("")}`;
+		return {
+			plain,
+			styled,
+			width: visibleWidth(plain),
+		};
+	};
+
+	let rendered = compose();
+	while (rendered.width > maxWidth) {
+		const nextKey = dropOrder.find((key) => includedKeys.has(key));
+		if (!nextKey) break;
+		includedKeys.delete(nextKey);
+		rendered = compose();
+	}
+
+	return rendered.styled;
+}
+
 function buildFooterLineParts(
 	theme: FooterTheme,
 	ctx: ExtensionContext,
 	footerData: FooterStatusData,
 	repoName: string | null,
-	hasDirtyChanges: boolean,
+	repoStatus: RepoStatusSnapshot,
 	isCodexFastModeEnabled: boolean,
 	width: number,
 ) {
@@ -146,13 +232,8 @@ function buildFooterLineParts(
 	const displayName = repoName || folder;
 	const branch = footerData.getGitBranch();
 	const branchText = branch ?? "no-branch";
-	const dirtyMark = branch && hasDirtyChanges ? theme.fg("warning", "*") : "";
-	const left =
-		theme.fg("dim", ` ${modelLabel}`) +
-		theme.fg("muted", " · ") +
-		theme.fg("accent", `${displayName} - `) +
-		dirtyMark +
-		theme.fg("accent", branchText);
+	const leftPrefix =
+		theme.fg("dim", ` ${modelLabel}`) + theme.fg("muted", " · ") + theme.fg("accent", `${displayName} - `);
 	const mid =
 		active > 0
 			? theme.fg("accent", ` ◉ ${active} researching`)
@@ -162,6 +243,15 @@ function buildFooterLineParts(
 	const remaining = 100 - pct;
 	const barColor = remaining <= 15 ? "error" : remaining <= 40 ? "warning" : "dim";
 	const right = theme.fg(barColor, `${bar} `);
+	const maxLeftWidth = Math.max(0, width - visibleWidth(mid) - visibleWidth(right) - 1);
+	const branchDisplay = buildBranchDisplay(
+		theme,
+		branchText,
+		repoStatus,
+		Math.max(0, maxLeftWidth - visibleWidth(leftPrefix)),
+		branch !== null,
+	);
+	const left = leftPrefix + branchDisplay;
 	const pad = " ".repeat(Math.max(1, width - visibleWidth(left) - visibleWidth(mid) - visibleWidth(right)));
 	return { statusEntries, left, mid, right, pad };
 }
@@ -170,13 +260,11 @@ function installFooter(pi: ExtensionAPI, ctx: ExtensionContext) {
 	if (!ctx.hasUI) return;
 
 	ctx.ui.setFooter((tui, theme, footerData) => {
-		let hasDirtyChanges = false;
-		let dirtyCheckInitialized = false;
-		let dirtyCheckRunning = false;
 		let disposed = false;
-		let dirtyTimer: ReturnType<typeof setInterval> | undefined;
+		let footerStateTimer: ReturnType<typeof setInterval> | undefined;
 		let repoName: string | null = null;
 		let isCodexFastModeEnabled = loadCodexFastModeState().enabled;
+		const repoStatusTracker = createRepoStatusTracker(pi, ctx.sessionManager.getCwd());
 
 		const fetchRepoName = async () => {
 			if (disposed) return;
@@ -193,56 +281,32 @@ function installFooter(pi: ExtensionAPI, ctx: ExtensionContext) {
 			}
 		};
 
-		const refreshDirtyState = async () => {
-			if (disposed || dirtyCheckRunning) return;
-
-			const branch = footerData.getGitBranch();
-			if (branch === null) {
-				if (hasDirtyChanges || !dirtyCheckInitialized) {
-					hasDirtyChanges = false;
-					dirtyCheckInitialized = true;
-					tui.requestRender();
-				}
-				return;
+		const unsubscribeRepoStatus = repoStatusTracker.subscribe(() => {
+			if (!disposed) {
+				tui.requestRender();
 			}
-
-			dirtyCheckRunning = true;
-			try {
-				const nextHasDirtyChanges = await hasUncommittedChanges(pi, ctx.sessionManager.getCwd());
-				if (disposed) return;
-				if (!dirtyCheckInitialized || nextHasDirtyChanges !== hasDirtyChanges) {
-					hasDirtyChanges = nextHasDirtyChanges;
-					dirtyCheckInitialized = true;
-					tui.requestRender();
-				}
-			} catch {
-				// Ignore git status errors in footer rendering path.
-			} finally {
-				dirtyCheckRunning = false;
-			}
-		};
+		});
 
 		void fetchRepoName();
 		refreshCodexFastModeState();
-		void refreshDirtyState();
-		dirtyTimer = setInterval(() => {
+		footerStateTimer = setInterval(() => {
 			refreshCodexFastModeState();
-			void refreshDirtyState();
-		}, DIRTY_CHECK_INTERVAL_MS);
+		}, FOOTER_STATE_REFRESH_INTERVAL_MS);
 
 		const unsubscribeBranch = footerData.onBranchChange(() => {
 			refreshCodexFastModeState();
-			tui.requestRender();
-			void refreshDirtyState();
+			repoStatusTracker.refreshNow();
 		});
 
 		return {
 			dispose() {
 				disposed = true;
 				unsubscribeBranch();
-				if (dirtyTimer) {
-					clearInterval(dirtyTimer);
-					dirtyTimer = undefined;
+				unsubscribeRepoStatus();
+				repoStatusTracker.dispose();
+				if (footerStateTimer) {
+					clearInterval(footerStateTimer);
+					footerStateTimer = undefined;
 				}
 			},
 			invalidate() {},
@@ -252,7 +316,7 @@ function installFooter(pi: ExtensionAPI, ctx: ExtensionContext) {
 					ctx,
 					footerData,
 					repoName,
-					hasDirtyChanges,
+					repoStatusTracker.getSnapshot(),
 					isCodexFastModeEnabled,
 					width,
 				);

@@ -10,6 +10,15 @@ export type DiffFileStatus = "added" | "deleted" | "renamed" | "copied" | "modif
 
 export type CheckState = "success" | "failed" | "pending" | "neutral";
 
+export interface GitStatusPorcelainV2Summary {
+	head: string | null;
+	upstream: string | null;
+	ahead: number;
+	behind: number;
+	isDetached: boolean;
+	isDirty: boolean;
+}
+
 export interface CheckInfo {
 	name: string;
 	kind: "check-run" | "status-context";
@@ -30,6 +39,72 @@ export interface OverlayFetchResult {
 	data: { pr: { number: number }; repo: string } | null;
 	error: string | null;
 	warnings: string[];
+}
+
+// ─── Git status parsing ────────────────────────────────────────────────────
+
+const BRANCH_HEAD_PREFIX = "# branch.head ";
+const BRANCH_UPSTREAM_PREFIX = "# branch.upstream ";
+const BRANCH_AB_PREFIX = "# branch.ab ";
+
+/** Parse `git status --porcelain=v2 --branch` output into a footer-friendly summary. */
+export function parseGitStatusPorcelainV2(output: string): GitStatusPorcelainV2Summary {
+	let head: string | null = null;
+	let upstream: string | null = null;
+	let ahead = 0;
+	let behind = 0;
+	let isDetached = false;
+	let isDirty = false;
+
+	for (const rawLine of output.split(/\r?\n/u)) {
+		const line = rawLine.trimEnd();
+		if (!line) continue;
+
+		if (line.startsWith(BRANCH_HEAD_PREFIX)) {
+			const value = line.slice(BRANCH_HEAD_PREFIX.length).trim();
+			if (!value || value === "(detached)" || value === "(unknown)") {
+				head = null;
+				isDetached = value === "(detached)";
+			} else {
+				head = value;
+				isDetached = false;
+			}
+			continue;
+		}
+
+		if (line.startsWith(BRANCH_UPSTREAM_PREFIX)) {
+			const value = line.slice(BRANCH_UPSTREAM_PREFIX.length).trim();
+			upstream = value || null;
+			continue;
+		}
+
+		if (line.startsWith(BRANCH_AB_PREFIX)) {
+			const match = line
+				.slice(BRANCH_AB_PREFIX.length)
+				.trim()
+				.match(/^\+(\d+)\s+-(\d+)$/u);
+			if (match) {
+				ahead = Number(match[1]);
+				behind = Number(match[2]);
+			}
+			continue;
+		}
+
+		if (line.startsWith("# ") || line.startsWith("! ")) {
+			continue;
+		}
+
+		isDirty = true;
+	}
+
+	return {
+		head,
+		upstream,
+		ahead,
+		behind,
+		isDetached,
+		isDirty,
+	};
 }
 
 // ─── Diff status mapping (from diff-overlay.ts) ───────────────────────────
