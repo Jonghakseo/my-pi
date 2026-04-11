@@ -1,7 +1,7 @@
 /** biome-ignore-all lint/suspicious/noExplicitAny: SDK stream payloads and tool bridge results are dynamic runtime data. */
 /** biome-ignore-all lint/complexity/noExcessiveCognitiveComplexity: SDK runner control flow mirrors the existing CLI runner lifecycle. */
 import { AbortError, query } from "@anthropic-ai/claude-agent-sdk";
-import { PI_TO_CLAUDE_TOOL_MAP, validateClaudeRuntimeModel } from "../utils/agent-utils.js";
+import { mapPiToolsToClaude, validateClaudeRuntimeModel } from "../utils/agent-utils.js";
 import type { AgentConfig } from "./agents.js";
 import { mapThinkingToClaudeEffort } from "./claude-args.js";
 import { createClaudeSdkStreamAdapter } from "./claude-sdk-stream-adapter.js";
@@ -32,21 +32,9 @@ function normalizeTaskForSubagentPrompt(task: string): string {
 	return task;
 }
 
-function resolveClaudeSdkBuiltInTools(requestedTools?: string[]): { enabledTools?: string[]; disabledTools: string[] } {
-	if (!requestedTools || requestedTools.length === 0) {
-		return { enabledTools: undefined, disabledTools: [] };
-	}
-
-	const enabledTools: string[] = [];
-	const disabledTools: string[] = [];
-
-	for (const toolName of new Set(requestedTools)) {
-		const claudeToolName = PI_TO_CLAUDE_TOOL_MAP[toolName];
-		if (claudeToolName) enabledTools.push(claudeToolName);
-		else disabledTools.push(toolName);
-	}
-
-	return { enabledTools, disabledTools };
+function resolveClaudeSdkBuiltInTools(requestedTools?: string[]): string[] | undefined {
+	if (!requestedTools || requestedTools.length === 0) return undefined;
+	return mapPiToolsToClaude(requestedTools);
 }
 
 export async function runClaudeAgentViaSdk(
@@ -85,12 +73,21 @@ export async function runClaudeAgentViaSdk(
 	let externalAbortRequested = false;
 	let sdkFailed = false;
 
-	const { enabledTools, disabledTools } = resolveClaudeSdkBuiltInTools(agent.tools);
-	if (disabledTools.length > 0) {
-		stderrBuf = appendStderrDiagnostic(
-			stderrBuf,
-			`disabled non-built-in tools for Claude SDK runtime: ${disabledTools.join(", ")}`,
-		);
+	let enabledTools: string[] | undefined;
+	try {
+		enabledTools = resolveClaudeSdkBuiltInTools(agent.tools);
+	} catch (error: any) {
+		return {
+			agent: agent.name,
+			agentSource: agent.source,
+			task,
+			exitCode: 1,
+			messages: [],
+			stderr: error.message,
+			usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0, contextTokens: 0, turns: 0 },
+			runtime: "claude",
+			step,
+		};
 	}
 
 	const model = agent.model?.replace(/^anthropic\//, "");
@@ -122,8 +119,12 @@ export async function runClaudeAgentViaSdk(
 		abortController.abort();
 	};
 
-	if (signal?.aborted) forwardAbort();
-	else signal?.addEventListener("abort", forwardAbort, { once: true });
+	if (signal?.aborted) {
+		forwardAbort();
+		writeCompletionMarkerOnce(1, "aborted");
+		throw new Error("Subagent was aborted");
+	}
+	signal?.addEventListener("abort", forwardAbort, { once: true });
 
 	let sdkQuery: ReturnType<typeof query>;
 	try {
@@ -148,6 +149,10 @@ export async function runClaudeAgentViaSdk(
 			},
 		});
 	} catch (error) {
+		if (externalAbortRequested) {
+			writeCompletionMarkerOnce(1, "aborted");
+			throw new Error("Subagent was aborted");
+		}
 		sdkFailed = true;
 		stderrBuf = appendStderrDiagnostic(
 			stderrBuf,
@@ -193,7 +198,7 @@ export async function runClaudeAgentViaSdk(
 			}
 		}
 	} catch (error) {
-		if (!(error instanceof AbortError) || !abortController.signal.aborted) {
+		if (!externalAbortRequested && (!(error instanceof AbortError) || !abortController.signal.aborted)) {
 			sdkFailed = true;
 			stderrBuf = appendStderrDiagnostic(
 				stderrBuf,

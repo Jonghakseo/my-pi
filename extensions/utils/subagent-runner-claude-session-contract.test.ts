@@ -7,6 +7,11 @@ import { readSessionReplayItems } from "../subagent/replay.ts";
 import { runSingleAgent } from "../subagent/runner.ts";
 
 const spawnMock = vi.hoisted(() => vi.fn());
+const resolveClaudeRuntimeModeMock = vi.hoisted(() => vi.fn());
+
+vi.mock("../subagent/config.js", () => ({
+	resolveClaudeRuntimeMode: (...args: unknown[]) => resolveClaudeRuntimeModeMock(...args),
+}));
 
 vi.mock("node:child_process", () => ({
 	spawn: (...args: unknown[]) => spawnMock(...args),
@@ -120,11 +125,14 @@ describe("runSingleAgent Claude session contract", () => {
 
 	beforeEach(() => {
 		spawnMock.mockReset();
+		resolveClaudeRuntimeModeMock.mockReset();
+		resolveClaudeRuntimeModeMock.mockReturnValue("cli");
 		tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "claude-runner-session-"));
 		sidecarFile = path.join(tmpDir, "sidecar.jsonl");
 	});
 
 	afterEach(() => {
+		vi.clearAllMocks();
 		fs.rmSync(tmpDir, { recursive: true, force: true });
 	});
 

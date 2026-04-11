@@ -1,7 +1,8 @@
+import { EventEmitter } from "node:events";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { discoverAgents } from "../subagent/agents.ts";
 import { buildClaudeArgs } from "../subagent/claude-args.ts";
 import { createSidecarWriter } from "../subagent/claude-sidecar-writer.ts";
@@ -10,6 +11,50 @@ import { readSessionReplayItems } from "../subagent/replay.ts";
 import { updateRunFromResult } from "../subagent/store.ts";
 import type { CommandRunState, SingleResult } from "../subagent/types.ts";
 import { mapPiToolsToClaude, validateClaudeRuntimeModel } from "./agent-utils.ts";
+
+const spawnMock = vi.hoisted(() => vi.fn());
+const resolveClaudeRuntimeModeMock = vi.hoisted(() => vi.fn());
+
+vi.mock("../subagent/config.js", () => ({
+	resolveClaudeRuntimeMode: (...args: unknown[]) => resolveClaudeRuntimeModeMock(...args),
+}));
+
+vi.mock("node:child_process", () => ({
+	spawn: (...args: unknown[]) => spawnMock(...args),
+}));
+
+type MockProc = EventEmitter & {
+	stdout: EventEmitter;
+	stderr: EventEmitter;
+	exitCode: number | null;
+	kill: ReturnType<typeof vi.fn>;
+};
+
+function makeAbortableProcess(): MockProc {
+	const proc = new EventEmitter() as MockProc;
+	proc.stdout = new EventEmitter();
+	proc.stderr = new EventEmitter();
+	proc.exitCode = null;
+	proc.kill = vi.fn((signal?: string) => {
+		proc.exitCode = signal === "SIGKILL" ? 137 : 0;
+		queueMicrotask(() => {
+			proc.emit("exit", proc.exitCode);
+			proc.emit("close", proc.exitCode);
+		});
+		return true;
+	});
+	return proc;
+}
+
+beforeEach(() => {
+	spawnMock.mockReset();
+	resolveClaudeRuntimeModeMock.mockReset();
+	resolveClaudeRuntimeModeMock.mockReturnValue("cli");
+});
+
+afterEach(() => {
+	vi.clearAllMocks();
+});
 
 function createTempAgentDir(): string {
 	const dir = fs.mkdtempSync(path.join(os.tmpdir(), "t10-acceptance-"));
@@ -255,6 +300,7 @@ describe("T10 Acceptance Matrix", () => {
 		});
 
 		it("abort signal causes runSingleAgent to throw", async () => {
+			spawnMock.mockImplementationOnce(() => makeAbortableProcess());
 			const { runSingleAgent } = await import("../subagent/runner.ts");
 			const agents = [
 				{
