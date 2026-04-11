@@ -1,5 +1,40 @@
-import { describe, expect, it } from "vitest";
+import { EventEmitter } from "node:events";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { mapPiToolsToClaude, PI_TO_CLAUDE_TOOL_MAP, validateClaudeRuntimeModel } from "./agent-utils.ts";
+
+const spawnMock = vi.hoisted(() => vi.fn());
+const resolveClaudeRuntimeModeMock = vi.hoisted(() => vi.fn());
+
+vi.mock("../subagent/config.js", () => ({
+	resolveClaudeRuntimeMode: (...args: unknown[]) => resolveClaudeRuntimeModeMock(...args),
+}));
+
+vi.mock("node:child_process", () => ({
+	spawn: (...args: unknown[]) => spawnMock(...args),
+}));
+
+type MockProc = EventEmitter & {
+	stdout: EventEmitter;
+	stderr: EventEmitter;
+	exitCode: number | null;
+	kill: ReturnType<typeof vi.fn>;
+};
+
+function makeAbortableProcess(): MockProc {
+	const proc = new EventEmitter() as MockProc;
+	proc.stdout = new EventEmitter();
+	proc.stderr = new EventEmitter();
+	proc.exitCode = null;
+	proc.kill = vi.fn((signal?: string) => {
+		proc.exitCode = signal === "SIGKILL" ? 137 : 0;
+		queueMicrotask(() => {
+			proc.emit("exit", proc.exitCode);
+			proc.emit("close", proc.exitCode);
+		});
+		return true;
+	});
+	return proc;
+}
 
 describe("PI_TO_CLAUDE_TOOL_MAP", () => {
 	it("maps all expected pi tools to Claude equivalents", () => {
@@ -81,7 +116,19 @@ describe("validateClaudeRuntimeModel", () => {
 });
 
 describe("runSingleAgent runtime dispatch", () => {
+	beforeEach(() => {
+		spawnMock.mockReset();
+		resolveClaudeRuntimeModeMock.mockReset();
+		resolveClaudeRuntimeModeMock.mockReturnValue("cli");
+		vi.resetModules();
+	});
+
+	afterEach(() => {
+		vi.clearAllMocks();
+	});
+
 	it("runClaudeAgent respects abort signal and throws", async () => {
+		spawnMock.mockImplementationOnce(() => makeAbortableProcess());
 		const { runSingleAgent } = await import("../subagent/runner.ts");
 		const agents = [
 			{

@@ -115,9 +115,7 @@ describe("runClaudeAgentViaSdk", () => {
 		expect(lines[2]).toMatchObject({ type: "subagent_done", exitCode: 0, runtime: "claude" });
 	});
 
-	it("disables non-built-in tools for Claude SDK runtime", async () => {
-		queryMock.mockReturnValue(makeQuery([]));
-
+	it("returns an error result for unsupported Claude runtime tools", async () => {
 		const { runClaudeAgentViaSdk } = await import("../subagent/claude-sdk-runner.ts");
 		const result = await runClaudeAgentViaSdk(
 			"/tmp/project",
@@ -140,16 +138,9 @@ describe("runClaudeAgentViaSdk", () => {
 			sidecarFile,
 		);
 
-		expect(result.exitCode).toBe(0);
-		expect(result.stderr).toContain("disabled non-built-in tools for Claude SDK runtime: ask_master, memory_list");
-		expect(queryMock).toHaveBeenCalledWith(
-			expect.objectContaining({
-				options: expect.objectContaining({
-					tools: ["Read"],
-					allowedTools: ["Read"],
-				}),
-			}),
-		);
+		expect(result.exitCode).toBe(1);
+		expect(result.stderr).toContain('Unsupported tool "ask_master" for Claude runtime');
+		expect(queryMock).not.toHaveBeenCalled();
 	});
 
 	it("returns an error result when the SDK query throws", async () => {
@@ -211,5 +202,6 @@ describe("runClaudeAgentViaSdk", () => {
 				sidecarFile,
 			),
 		).rejects.toThrow("Subagent was aborted");
+		expect(queryMock).not.toHaveBeenCalled();
 	});
 });
