@@ -13,7 +13,7 @@ const TIP_MESSAGES = [
 	"tips: /until 로 반복 점검 작업을 예약할 수 있습니다",
 	"tips: /memory 로 저장된 메모리를 찾아볼 수 있습니다",
 	"tips: /remember 로 자주 반복하는 요청을 저장할 수 있습니다",
-	"tips: /github 로 현재 브랜치 PR 상태를 확인할 수 있습니다",
+	"tips: /open-pr 로 현재 브랜치 PR을 브라우저에서 열 수 있습니다",
 	"tips: /theme 로 테마를 바꿀 수 있습니다",
 	"tips: /fork-panel 로 현재 세션을 새 패널로 분기할 수 있습니다",
 ] as const;

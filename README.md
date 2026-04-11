@@ -103,7 +103,7 @@
 | **working-text.ts** | 처리 중 경과 시간과 함께 팁 중심 스피너 텍스트 |
 | **theme-cycler.ts** | `Ctrl+X`로 테마 실시간 순환 |
 | **diff-overlay.ts** | `/diff` — 분할 화면 git diff 뷰어 오버레이 |
-| **github-overlay.ts** | 터미널에서 바로 GitHub PR 확인 |
+| **open-pr.ts** | 현재 브랜치 PR을 브라우저에서 바로 열기 |
 | **files.ts** | `/files` — git 트리 파일 브라우저 + 열기/편집/diff 빠른 액션 |
 | **fork-panel.ts** | `/fork-panel` — 현재 세션을 새 Ghostty split panel로 포크 |
 | **generative-ui/** | `visualize_read_me`, `show_widget` — 네이티브 시각화/위젯 렌더링 |
