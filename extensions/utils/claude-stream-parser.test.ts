@@ -25,6 +25,25 @@ function replayFixture(name: string) {
 	return { state, gotResult };
 }
 
+function replayFixtureWithSnapshots(name: string) {
+	const lines = loadFixture(name);
+	const state = createStreamState();
+	const snapshots: Array<{ eventType: string; usage: typeof state.usage }> = [];
+
+	for (const line of lines) {
+		const event = JSON.parse(line);
+		processClaudeEvent(state, event);
+		if (
+			event.type === "stream_event" &&
+			(event.event?.type === "message_start" || event.event?.type === "message_delta")
+		) {
+			snapshots.push({ eventType: event.event.type, usage: { ...state.usage } });
+		}
+	}
+
+	return { state, snapshots };
+}
+
 describe("claude-stream-parser: basic-text fixture", () => {
 	it("extracts session_id from the first event", () => {
 		const { state } = replayFixture("basic-text.ndjson");
@@ -142,6 +161,178 @@ describe("claude-stream-parser: long-running fixture", () => {
 	it("duration is captured from result event", () => {
 		const { state } = replayFixture("long-running.ndjson");
 		expect(state.resultEvent.duration_ms).toBe(12450);
+	});
+});
+
+describe("claude-stream-parser: usage tracking regression", () => {
+	it("does not double-count streaming usage for a single-turn response", () => {
+		const { state, snapshots } = replayFixtureWithSnapshots("basic-text.ndjson");
+		expect(snapshots[0]?.eventType).toBe("message_start");
+		expect(snapshots[0]?.usage).toMatchObject({
+			input: 3,
+			output: 1,
+			cacheRead: 11362,
+			cacheWrite: 10269,
+			contextTokens: 21634,
+		});
+		expect(snapshots[1]?.eventType).toBe("message_delta");
+		expect(snapshots[1]?.usage).toMatchObject({
+			input: 3,
+			output: 25,
+			cacheRead: 11362,
+			cacheWrite: 10269,
+			contextTokens: 21634,
+		});
+		expect(state.usage).toMatchObject({
+			input: 3,
+			output: 25,
+			cacheRead: 11362,
+			cacheWrite: 10269,
+			contextTokens: 21634,
+		});
+	});
+
+	it("keeps aggregate totals while tracking only the latest turn context window", () => {
+		const { state, snapshots } = replayFixtureWithSnapshots("tool-call.ndjson");
+		expect(snapshots.map((snapshot) => snapshot.usage.contextTokens)).toEqual([24785, 24785, 24856, 24856]);
+		expect(state.usage).toMatchObject({
+			input: 4,
+			output: 62,
+			cacheRead: 44204,
+			cacheWrite: 5433,
+			contextTokens: 24856,
+			turns: 2,
+		});
+	});
+
+	it("preserves the last-turn context window after the final result event", () => {
+		const { state } = replayFixture("long-running.ndjson");
+		expect(state.usage).toMatchObject({
+			input: 4,
+			output: 153,
+			cacheRead: 46909,
+			cacheWrite: 2842,
+			contextTokens: 24945,
+			turns: 2,
+		});
+	});
+
+	it("uses assistant snapshot usage as a fallback when message_delta is missing", () => {
+		const state = createStreamState();
+		processClaudeEvent(state, {
+			type: "stream_event",
+			event: {
+				type: "message_start",
+				message: {
+					model: "claude-opus-4-6",
+					usage: {
+						input_tokens: 2,
+						cache_read_input_tokens: 100,
+						cache_creation_input_tokens: 50,
+						output_tokens: 1,
+					},
+				},
+			},
+		});
+		processClaudeEvent(state, {
+			type: "assistant",
+			message: {
+				model: "claude-opus-4-6",
+				role: "assistant",
+				content: [{ type: "text", text: "partial" }],
+				usage: {
+					input_tokens: 2,
+					cache_read_input_tokens: 100,
+					cache_creation_input_tokens: 50,
+					output_tokens: 1,
+				},
+			},
+		});
+		processClaudeEvent(state, {
+			type: "result",
+			is_error: false,
+			stop_reason: "end_turn",
+			num_turns: 1,
+			total_cost_usd: 0,
+			usage: {
+				input_tokens: 20,
+				cache_read_input_tokens: 1000,
+				cache_creation_input_tokens: 500,
+				output_tokens: 10,
+			},
+			permission_denials: [],
+		});
+		expect(state.usage).toMatchObject({
+			input: 20,
+			output: 10,
+			cacheRead: 1000,
+			cacheWrite: 500,
+			contextTokens: 152,
+			turns: 1,
+		});
+	});
+
+	it("finalizes fallback usage before the next turn starts", () => {
+		const state = createStreamState();
+		processClaudeEvent(state, {
+			type: "stream_event",
+			event: {
+				type: "message_start",
+				message: {
+					model: "claude-opus-4-6",
+					usage: {
+						input_tokens: 2,
+						cache_read_input_tokens: 100,
+						cache_creation_input_tokens: 50,
+						output_tokens: 1,
+					},
+				},
+			},
+		});
+		processClaudeEvent(state, {
+			type: "assistant",
+			message: {
+				model: "claude-opus-4-6",
+				role: "assistant",
+				content: [{ type: "text", text: "first turn" }],
+				usage: {
+					input_tokens: 2,
+					cache_read_input_tokens: 100,
+					cache_creation_input_tokens: 50,
+					output_tokens: 1,
+				},
+			},
+		});
+		processClaudeEvent(state, {
+			type: "user",
+			message: {
+				role: "user",
+				content: [{ type: "tool_result", content: "ok", is_error: false }],
+			},
+		});
+		processClaudeEvent(state, {
+			type: "stream_event",
+			event: {
+				type: "message_start",
+				message: {
+					model: "claude-opus-4-6",
+					usage: {
+						input_tokens: 3,
+						cache_read_input_tokens: 200,
+						cache_creation_input_tokens: 70,
+						output_tokens: 1,
+					},
+				},
+			},
+		});
+		expect(state.usage).toMatchObject({
+			input: 5,
+			output: 2,
+			cacheRead: 300,
+			cacheWrite: 120,
+			contextTokens: 273,
+			turns: 1,
+		});
 	});
 });
 
