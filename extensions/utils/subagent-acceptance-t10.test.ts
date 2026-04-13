@@ -108,14 +108,44 @@ describe("T10 Acceptance Matrix", () => {
 			fs.rmSync(tmpDir, { recursive: true, force: true });
 		});
 
-		it("defaults to pi when runtime is absent", () => {
+		it("defaults to pi when runtime is absent and model is non-Claude", () => {
 			const tmpDir = createTempAgentDir();
 			const agentsDir = path.join(tmpDir, ".pi", "agents");
 			fs.mkdirSync(agentsDir, { recursive: true });
-			writeAgentFile(agentsDir, "b.md", "---\nname: b\ndescription: B\n---\nWork.");
+			writeAgentFile(agentsDir, "b.md", "---\nname: b\ndescription: B\nmodel: openai-codex/gpt-5.4\n---\nWork.");
 
 			const result = discoverAgents(tmpDir);
 			expect(result.agents.find((a) => a.name === "b")?.runtime).toBe("pi");
+			fs.rmSync(tmpDir, { recursive: true, force: true });
+		});
+
+		it("defaults to claude when runtime is absent and model is Anthropic Claude", () => {
+			const tmpDir = createTempAgentDir();
+			const agentsDir = path.join(tmpDir, ".pi", "agents");
+			fs.mkdirSync(agentsDir, { recursive: true });
+			writeAgentFile(
+				agentsDir,
+				"b-claude.md",
+				"---\nname: b-claude\ndescription: B Claude\nmodel: anthropic/claude-opus-4-6\n---\nWork.",
+			);
+
+			const result = discoverAgents(tmpDir);
+			expect(result.agents.find((a) => a.name === "b-claude")?.runtime).toBe("claude");
+			fs.rmSync(tmpDir, { recursive: true, force: true });
+		});
+
+		it("keeps explicit pi runtime even for Anthropic Claude models", () => {
+			const tmpDir = createTempAgentDir();
+			const agentsDir = path.join(tmpDir, ".pi", "agents");
+			fs.mkdirSync(agentsDir, { recursive: true });
+			writeAgentFile(
+				agentsDir,
+				"b-explicit-pi.md",
+				"---\nname: b-explicit-pi\ndescription: B Explicit Pi\nmodel: anthropic/claude-opus-4-6\nruntime: pi\n---\nWork.",
+			);
+
+			const result = discoverAgents(tmpDir);
+			expect(result.agents.find((a) => a.name === "b-explicit-pi")?.runtime).toBe("pi");
 			fs.rmSync(tmpDir, { recursive: true, force: true });
 		});
 	});
