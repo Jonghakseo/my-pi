@@ -60,10 +60,15 @@ export function mapPiToolsToClaude(piTools: string[]): string[] {
 	return Array.from(new Set(mapped));
 }
 
+export function isClaudeModel(model: string | undefined): boolean {
+	if (!model) return false;
+	const lower = model.toLowerCase();
+	return lower.startsWith("anthropic/claude-") || lower.startsWith("claude-");
+}
+
 export function validateClaudeRuntimeModel(model: string | undefined): void {
 	if (!model) return;
-	const lower = model.toLowerCase();
-	if (lower.startsWith("anthropic/claude-") || lower.startsWith("claude-")) return;
+	if (isClaudeModel(model)) return;
 	throw new Error(
 		`Model "${model}" is not supported with Claude runtime. Only Anthropic models (anthropic/claude-* or claude-*) are allowed.`,
 	);
