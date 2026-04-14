@@ -43,7 +43,6 @@ Custom extensions for the pi coding agent. All extensions are written in TypeScr
 ├── files.ts               # File picker / diff viewer UI
 ├── open-pr.ts             # /open-pr — open current-branch PR in browser (gh CLI integration)
 ├── interactive-shell/     # Interactive shell overlay (interactive/hands-free/dispatch)
-├── override-builtin-tools.ts # Compact tool output rendering (collapsed/expanded toggle)
 ├── footer.ts              # Custom footer UI (model, branch, context bar)
 ├── working-text.ts              # Spinner working message (tip text + elapsed time)
 ├── theme-cycler.ts        # Ctrl+X to cycle through themes

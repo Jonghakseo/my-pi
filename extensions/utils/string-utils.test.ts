@@ -346,11 +346,11 @@ describe("expandTabs", () => {
 
 describe("extensionName", () => {
 	it("should extract name from file path", () => {
-		expect(extensionName("/path/to/override-builtin-tools.ts")).toBe("override-builtin-tools");
+		expect(extensionName("/path/to/footer.ts")).toBe("footer");
 	});
 
 	it("should extract name from file:// URL", () => {
-		expect(extensionName("file:///path/to/override-builtin-tools.ts")).toBe("override-builtin-tools");
+		expect(extensionName("file:///path/to/footer.ts")).toBe("footer");
 	});
 
 	it("should handle .js extension", () => {
