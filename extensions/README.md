@@ -23,7 +23,6 @@
 | [`fork-panel.ts`](./fork-panel.ts) | 현재 세션을 Ghostty split panel로 포크 |
 | [`open-pr.ts`](./open-pr.ts) | 현재 브랜치 PR을 브라우저에서 열기 (gh CLI 연동) |
 | [`interactive-shell/`](./interactive-shell/index.ts) | 인터랙티브/핸즈프리/디스패치 모드의 셸 오버레이 |
-| [`override-builtin-tools.ts`](./override-builtin-tools.ts) | 도구 출력 접기/펼치기 |
 | [`footer.ts`](./footer.ts) | 커스텀 푸터 UI (모델, 브랜치, 컨텍스트 바) |
 | [`theme-cycler.ts`](./theme-cycler.ts) | `Ctrl+X`로 테마 순환 |
 | [`until.ts`](./until.ts) | `/until`, `until_report` 기반 반복 작업 관리 |

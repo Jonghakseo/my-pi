@@ -3,10 +3,10 @@ import { scoreMemorySearchMatch } from "../memory-layer/storage.ts";
 
 describe("scoreMemorySearchMatch", () => {
 	it("matches on any query token, not only the full query string", () => {
-		const score = scoreMemorySearchMatch("tool output rendering read override-builtin-tools compact output", {
+		const score = scoreMemorySearchMatch("tool output rendering read compact output", {
 			topic: "general",
 			title: "Compact read tool output",
-			content: "override-builtin-tools renders read output in a compact format",
+			content: "read tool output is rendered in a compact format",
 		});
 
 		expect(score).toBeGreaterThan(0);
