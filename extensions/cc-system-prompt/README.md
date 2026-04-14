@@ -1,6 +1,6 @@
-# zz-claude-code-opus-system-prompt
+# cc-system-prompt
 
-Test extension.
+Claude Code system prompt extension.
 
 ## Behavior
 
@@ -11,5 +11,4 @@ Test extension.
 ## Notes
 
 - This is intentionally experimental and prompt-fidelity is only approximate.
-- The folder name starts with `zz-` so the extension tends to load late during auto-discovery.
 - Vendored source files live under `vendor/system-prompts/`.
