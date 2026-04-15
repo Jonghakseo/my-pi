@@ -1,7 +1,7 @@
 {
   "theme": "nord",
   "quietStartup": true,
-  "lastChangelogVersion": "0.67.1",
+  "lastChangelogVersion": "0.67.2",
   "defaultProvider": "anthropic",
   "defaultModel": "claude-opus-4-6",
   "defaultThinkingLevel": "xhigh",
