@@ -26,7 +26,7 @@ export default function branchRename(pi: ExtensionAPI) {
 
 			ctx.ui.setStatus("auto-branch", "🔍 브랜치 이름 변경 중...");
 
-			const prompt = `You are a branch naming assistant. Analyze the context and output ONLY the ideal branch name. No explanation, no markdown, just the branch name on a single line.
+			const prompt = `You are a branch naming assistant. Analyze the context and decide the ideal branch name.
 
 Current branch: ${currentBranch}
 ${args ? `User hint: ${args}` : ""}
@@ -43,7 +43,8 @@ ${diffResult?.stdout?.trim() || "(no diff)"}
 Rules:
 - Match the naming convention of existing local branches exactly.
 - Infer branch purpose from commits and changed files.
-- Output only the new branch name. Nothing else.`;
+- Your final output MUST contain exactly this line: BRANCH_NAME=<name>
+- Example: BRANCH_NAME=feature/COM-1234/add-login`;
 
 			const result = await pi.exec("pi", ["-p", prompt], { timeout: 30000 });
 			ctx.ui.setStatus("auto-branch", "");
@@ -53,9 +54,10 @@ Rules:
 				return;
 			}
 
-			const suggested = result.stdout.trim().split("\n").pop()?.trim();
+			const match = result.stdout.match(/BRANCH_NAME=(.+)/);
+			const suggested = match?.[1]?.trim();
 			if (!suggested || suggested === currentBranch) {
-				ctx.ui.notify("현재 이름이 이미 적절합니다.", "info");
+				ctx.ui.notify("브랜치 이름을 결정하지 못했습니다.", "warning");
 				return;
 			}
 
