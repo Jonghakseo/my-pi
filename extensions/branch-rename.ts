@@ -1,6 +1,30 @@
-import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
+import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
 
 const PROTECTED = ["main", "master", "develop", "dev", "staging", "production"];
+const MAX_CONVERSATION_CHARS = 3000;
+
+function extractText(content: unknown): string {
+	if (!Array.isArray(content)) return "";
+	return content
+		.filter((b: Record<string, unknown>) => b.type === "text" && typeof b.text === "string")
+		.map((b: Record<string, unknown>) => b.text as string)
+		.join("")
+		.trim();
+}
+
+function extractConversation(ctx: ExtensionContext): string {
+	const lines: string[] = [];
+	for (const entry of ctx.sessionManager.getEntries()) {
+		if (!entry || entry.type !== "message") continue;
+		const msg = entry.message as { role: string; content: unknown };
+		if (msg.role !== "user" && msg.role !== "assistant") continue;
+		const text = extractText(msg.content);
+		if (text) lines.push(`${msg.role}: ${text}`);
+	}
+	const joined = lines.join("\n");
+	if (joined.length <= MAX_CONVERSATION_CHARS) return joined;
+	return joined.slice(joined.length - MAX_CONVERSATION_CHARS);
+}
 
 export default function branchRename(pi: ExtensionAPI) {
 	pi.registerCommand("auto-branch", {
@@ -26,6 +50,8 @@ export default function branchRename(pi: ExtensionAPI) {
 
 			ctx.ui.setStatus("auto-branch", "🔍 브랜치 이름 변경 중...");
 
+			const conversation = extractConversation(ctx);
+
 			const prompt = `You are a branch naming assistant. Analyze the context and decide the ideal branch name.
 
 Current branch: ${currentBranch}
@@ -40,9 +66,12 @@ ${logResult.stdout.trim()}
 Changed files:
 ${diffResult?.stdout?.trim() || "(no diff)"}
 
+Conversation history (what the developer has been working on):
+${conversation || "(no conversation)"}
+
 Rules:
 - Match the naming convention of existing local branches exactly.
-- Infer branch purpose from commits and changed files.
+- Infer branch purpose from commits, changed files, and conversation history.
 - Your final output MUST contain exactly this line: BRANCH_NAME=<name>
 - Example: BRANCH_NAME=feature/COM-1234/add-login`;
 
