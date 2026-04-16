@@ -60,6 +60,9 @@ describe("subagent constants", () => {
 	it("AGENT_SYMBOL_MAP contains expected agents", () => {
 		expect(AGENT_SYMBOL_MAP["/"]).toBe("finder");
 		expect(AGENT_SYMBOL_MAP["!"]).toBe("challenger");
+		expect(AGENT_SYMBOL_MAP["*"]).toBeUndefined();
+		expect(AGENT_SYMBOL_MAP["+"]).toBeUndefined();
+		expect(AGENT_SYMBOL_MAP["$"]).toBeUndefined();
 		expect(AGENT_SYMBOL_MAP["%"]).toBeUndefined();
 	});
 

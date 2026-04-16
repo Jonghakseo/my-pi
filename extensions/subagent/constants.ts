@@ -13,11 +13,8 @@ export const AGENT_SYMBOL_MAP: Record<string, string> = {
 	"/": "finder",
 	"?": "searcher",
 	"#": "planner",
-	"*": "reviewer",
-	"+": "verifier",
 	"!": "challenger",
 	"@": "browser",
-	$: "simplifier",
 };
 
 /** Format symbol hints for display, e.g. ">>/ finder  >>? searcher  >># planner ..." */
