@@ -1,9 +1,16 @@
 import { CustomEditor, type KeybindingsManager, type Theme } from "@mariozechner/pi-coding-agent";
 import { type Component, type EditorTheme, type TUI, truncateToWidth, visibleWidth } from "@mariozechner/pi-tui";
+import { AGENT_SYMBOL_MAP } from "../subagent/constants.ts";
 
 type AutocompleteEditorInternals = {
 	autocompleteList?: Pick<Component, "render">;
 	isShowingAutocomplete?: () => boolean;
+};
+
+type EditorMode = {
+	label: string;
+	borderToken: "border" | "bashMode" | "dim";
+	labelToken: "muted" | "bashMode" | "dim" | "accent";
 };
 
 export class PolishedEditor extends CustomEditor {
@@ -31,6 +38,85 @@ export class PolishedEditor extends CustomEditor {
 		const truncated = truncateToWidth(content, width, "");
 		const pad = " ".repeat(Math.max(0, width - visibleWidth(truncated)));
 		return `${truncated}${pad}`;
+	}
+
+	private joinLine(left: string, right: string, width: number): string {
+		const truncatedRight = truncateToWidth(right, width, "…");
+		const rightWidth = visibleWidth(truncatedRight);
+		const leftWidth = Math.max(0, width - rightWidth - (left && right ? 1 : 0));
+		const truncatedLeft = leftWidth > 0 ? truncateToWidth(left, leftWidth, "…") : "";
+		const gap = " ".repeat(Math.max(0, width - visibleWidth(truncatedLeft) - rightWidth));
+		return `${truncatedLeft}${gap}${truncatedRight}`;
+	}
+
+	private getSubagentLabel(text: string): string | undefined {
+		const inlineResumeMatch = /^#(\d+)(?:\s|$)/.exec(text);
+		if (inlineResumeMatch?.[1]) {
+			return `SUBAGENT · resume #${inlineResumeMatch[1]}`;
+		}
+
+		if (text.trim() === "><") {
+			return "SUBAGENT · back";
+		}
+
+		if (text.startsWith("<>")) {
+			return "SUBAGENT · switch";
+		}
+
+		const dedicated = text.startsWith(">>>");
+		if (!text.startsWith(">>")) {
+			return undefined;
+		}
+
+		const prefix = dedicated ? ">>>" : ">>";
+		const baseLabel = dedicated ? "SUBAGENT · isolated" : "SUBAGENT";
+		const forwarded = text.slice(prefix.length).trim();
+		if (!forwarded) {
+			return baseLabel;
+		}
+
+		const symbolAgent = AGENT_SYMBOL_MAP[forwarded[0] ?? ""];
+		if (symbolAgent) {
+			return `${baseLabel} · ${symbolAgent}`;
+		}
+
+		const resumeMatch = /^(\d+)(?:\s|$)/.exec(forwarded);
+		if (resumeMatch?.[1]) {
+			return `${baseLabel} · resume #${resumeMatch[1]}`;
+		}
+
+		return baseLabel;
+	}
+
+	private getEditorMode(): EditorMode {
+		const text = this.getText().trimStart();
+		if (text.startsWith("!!")) {
+			return {
+				label: "BASH · no ctx",
+				borderToken: "dim",
+				labelToken: "dim",
+			};
+		}
+		if (text.startsWith("!")) {
+			return {
+				label: "BASH",
+				borderToken: "bashMode",
+				labelToken: "bashMode",
+			};
+		}
+		const subagentLabel = this.getSubagentLabel(text);
+		if (subagentLabel) {
+			return {
+				label: subagentLabel,
+				borderToken: "border",
+				labelToken: "accent",
+			};
+		}
+		return {
+			label: "",
+			borderToken: "border",
+			labelToken: "muted",
+		};
 	}
 
 	render(width: number): string[] {
@@ -67,11 +153,13 @@ export class PolishedEditor extends CustomEditor {
 			metaParts.push(this.uiTheme.fg("muted", thinkingLevel));
 		}
 		const meta = metaParts.filter(Boolean).join(this.uiTheme.fg("border", "  "));
+		const mode = this.getEditorMode();
+		const statusLine = this.joinLine(this.uiTheme.fg(mode.labelToken, mode.label), meta, innerWidth);
 
-		const rail = `${this.uiTheme.fg("border", "│")}${this.reset} `;
-		const top = `${this.uiTheme.fg("border", "┌")}${this.uiTheme.fg("border", "─".repeat(Math.max(0, width - 1)))}`;
-		const bottom = `${this.uiTheme.fg("border", "└")}${this.uiTheme.fg("border", "─".repeat(Math.max(0, width - 1)))}`;
-		const lines = ["", ...editorLines, "", meta];
+		const rail = `${this.uiTheme.fg(mode.borderToken, "│")}${this.reset} `;
+		const top = `${this.uiTheme.fg(mode.borderToken, "┌")}${this.uiTheme.fg(mode.borderToken, "─".repeat(Math.max(0, width - 1)))}`;
+		const bottom = `${this.uiTheme.fg(mode.borderToken, "└")}${this.uiTheme.fg(mode.borderToken, "─".repeat(Math.max(0, width - 1)))}`;
+		const lines = ["", ...editorLines, "", statusLine];
 
 		return [top, ...lines.map((line) => `${rail}${this.fillLine(line, innerWidth)}`), bottom, ...autocompleteLines];
 	}
