@@ -1,230 +1,198 @@
-<div align="center">
+**English** | [한국어](./README.ko.md)
 
-[English](./README.en.md) | **한국어**
+# my-pi
 
-# 🧠 my-pi
+A [pi](https://github.com/mariozechner/pi-coding-agent) setup used for daily development.
 
-**[pi](https://github.com/mariozechner/pi-coding-agent) 기반 개인 AI 오퍼레이팅 시스템**
+This repository contains the agent definitions, extensions, skills, prompts, and themes used together in one working environment.
 
-*11개의 전문 에이전트 · 30개 이상의 확장 기능 · 한 개발자의 주관적인 셋업*
+> [!NOTE]
+> This is a personal setup. The documentation may lag behind the current state, and some parts can change without notice.
 
-<br/>
-
-`🤖 11 에이전트` &nbsp; `🧩 30+ 확장 기능` &nbsp; `🎨 7 테마`
-
-<br/>
-
-> AI 코딩 에이전트 설정을 하나의 **엔지니어링 프로젝트**로 다룬다면?
->
-> 이 레포가 그 답이다 — 매일 실사용하는 설정으로, pi를 CLI 도구에서 멀티 에이전트 오케스트레이션 플랫폼으로 확장한다. 역할별 전문 에이전트, 안전 장치, 세밀한 커스터마이징까지.
-
-</div>
-
----
-
-> [!WARNING]
-> 이 레포는 계속 바뀌는 개인 실사용 셋업이라 문서와 실제 상태가 언제든 어긋날 수 있다.
-> 일부 기능이나 설정은 특정 시점에 불안정하거나 깨져 있을 수 있다.
-
-
-## 🏗️ 아키텍처
+## Architecture
 
 <p align="center">
-  <img src="./tmp/architecture.ko.svg" alt="시스템 아키텍처" width="800"/>
+  <img src="./tmp/architecture.en.svg" alt="System Architecture" width="800"/>
 </p>
 
-시스템은 **네 개의 레이어**로 구성된다:
+The system is organized in **four layers**:
 
-| 레이어 | 역할 |
+| Layer | Purpose |
 |---|---|
-| **사용자 / pi TUI** | 터미널 기반 인터랙티브 인터페이스 |
-| **확장 기능** | 30개 이상의 TypeScript 플러그인 — 서브에이전트, MCP 브릿지, 원격 접속, UI 오버레이, 안전 장치 |
-| **에이전트 오케스트라** | 역할과 모델이 다른 11개의 전문 에이전트 정의 |
-| **인프라** | `@ryan_nookpi/pi-extension-claude-mcp-bridge`를 통한 MCP 도구 연동 — 기존 Claude Code MCP 설정을 그대로 재사용 (Jira, Slack, Gmail, Calendar, GA4, Figma, DB 등) |
+| **User / pi TUI** | Interactive terminal interface |
+| **Extensions** | 30+ TypeScript plugins — subagent management, MCP bridge, remote access, UI overlays, safety guards |
+| **Agents** | 11 specialized agent definitions with distinct roles and models |
+| **Infrastructure** | MCP tool integrations via `@ryan_nookpi/pi-extension-claude-mcp-bridge` — reuses your existing Claude Code MCP setup (Jira, Slack, Gmail, Calendar, GA4, Figma, DB, etc.) |
 
 ---
 
-## 🤖 에이전트 오케스트라
+## Agents
 
 <p align="center">
-  <img src="./tmp/agents.ko.svg" alt="에이전트 오케스트라" width="800"/>
+  <img src="./tmp/agents.en.svg" alt="Agents" width="800"/>
 </p>
 
-현재 기준 11개의 에이전트 정의, 3개의 모델, 하나의 오케스트레이터로 구성된다:
+The current setup has 11 agent definitions, three models, and one main agent:
 
-| 에이전트 | 모델 | 역할 | 사용 시점 |
+| Agent | Model | Role | When to Use |
 |---|---|---|---|
-| 🔍 **finder** | `anthropic/claude-sonnet-4-6` | 빠른 파일·코드 탐색 | 빠른 조회, grep 스타일 탐색 |
-| ⚡ **worker** | `openai-codex/gpt-5.4` | 범용 작업 실행기 | 구현, 작성, 수정 (복잡한 다중 파일) |
-| 📐 **planner** | `anthropic/claude-opus-4-6` | 구현 설계자 | 복잡한 작업 분할 |
-| ✨ **simplifier** | `anthropic/claude-sonnet-4-6` | 코드 단순화 전문가 | 최근 수정 코드 정리, 가독성 개선, 동작 보존 리팩터링 |
-| 🧹 **code-cleaner** | `openai-codex/gpt-5.4` | 코드 정리 분석가 | 중복 제거 후보, 품질 문제 탐색 |
-| 🔎 **reviewer** | `openai-codex/gpt-5.4` | 코드 리뷰 (P0–P3 심각도) | PR 리뷰, 품질 점검 |
-| 🥊 **challenger** | `openai-codex/gpt-5.4` | 스트레스 테스터 | 실행 전 계획 검증 |
-| ✅ **verifier** | `anthropic/claude-opus-4-6` | 3단계 근거 검증 | 주장 확인, 정확성 점검 |
-| 🔐 **security-auditor** | `openai-codex/gpt-5.4` | 보안 검토자 | 취약점 중심 리뷰 |
-| 🌐 **searcher** | `anthropic/claude-sonnet-4-6` | 리서치·웹 검색 | 문서 탐색, 조사 |
-| 🖥️ **browser** | `openai-codex/gpt-5.4` | 브라우저 자동화·UI 테스트 | E2E 테스트, 시각 검증 |
+| **finder** | `anthropic/claude-sonnet-4-6` | Fast file & code locator | Quick lookups, grep-like tasks |
+| **worker** | `openai-codex/gpt-5.4` | General-purpose executor | Implementation, writing, fixes (complex multi-file) |
+| **planner** | `anthropic/claude-opus-4-6` | Implementation architect | Breaking down complex tasks |
+| **simplifier** | `anthropic/claude-sonnet-4-6` | Code simplification specialist | Clean up recently modified code, improve readability, preserve behavior |
+| **code-cleaner** | `openai-codex/gpt-5.4` | Code cleanup analyst | Find cleanup opportunities and quality issues |
+| **reviewer** | `openai-codex/gpt-5.4` | Code review (P0–P3 severity) | PR reviews, quality checks |
+| **challenger** | `openai-codex/gpt-5.4` | Pressure tester | Stress-test plans before execution |
+| **verifier** | `anthropic/claude-opus-4-6` | 3-tier evidence validation | Verify claims, check correctness |
+| **security-auditor** | `openai-codex/gpt-5.4` | Security reviewer | Focused vulnerability reviews |
+| **searcher** | `anthropic/claude-sonnet-4-6` | Research & web search | Documentation lookup, exploration |
+| **browser** | `openai-codex/gpt-5.4` | Browser automation & UI testing | E2E testing, visual verification |
 
 <details>
-<summary><strong>모델 선택 기준</strong></summary>
+<summary><strong>Model Selection</strong></summary>
 
-- **openai-codex/gpt-5.4** — 범용 실행·리뷰 (구현, 테스트, 리뷰, 보안 검토, 브라우저 자동화)
-- **anthropic/claude-sonnet-4-6** — 빠른 탐색·리서치 (파일 검색, 웹 리서치, 코드 단순화)
-- **anthropic/claude-opus-4-6** — 깊은 추론 작업 (전략 설계, 검증)
+- **openai-codex/gpt-5.4** — General-purpose execution & review (implementation, testing, reviewing, security review, browser automation)
+- **anthropic/claude-sonnet-4-6** — Fast exploration & research (file search, web research, code simplification)
+- **anthropic/claude-opus-4-6** — Deep reasoning tasks (strategic planning, verification)
 
-오케스트레이터(메인 에이전트)는 `anthropic/claude-opus-4-6` 기반으로 동작하여 위임 결정을 수행한다.
+The main agent runs on `anthropic/claude-opus-4-6` and handles delegation decisions.
 
 </details>
 
 ---
 
-## 🧩 확장 기능
+## Extensions
 
-30개 이상의 커스텀 TypeScript 확장 중 대표 항목들을 도메인별로 정리했다:
+Here are representative items from the 30+ custom TypeScript extensions, grouped by domain:
 
-### 코어 시스템
+### Core System
 
-| 확장 | 설명 |
+| Extension | Description |
 |---|---|
-| **subagent/** | 멀티 에이전트 위임 엔진 — 서브 `pi` 프로세스 생성, below-editor 상태 위젯으로 실행 관리, 자동 follow-up/정리, 서브세션 전용 `ask_master` 에스컬레이션 포함 |
-| **@ryan_nookpi/pi-extension-claude-mcp-bridge** | Claude Code의 MCP 서버 설정을 그대로 재사용 — 중복 설정 제로 |
-| **@ryan_nookpi/pi-extension-cross-agent** | `.claude/`, `.gemini/`, `.codex/` 디렉터리에서 에이전트 정의 로드 |
-| **dynamic-agents-md.ts** | 런타임에 AGENTS.md를 동적 로드하여 편집·쓰기 범위 제한 강제 |
-| **@ryan_nookpi/pi-extension-claude-hooks-bridge** | Claude Code의 훅(hook) 이벤트를 Pi 세션에 연결하는 브릿지 |
-| **@ryan_nookpi/pi-extension-memory-layer** | 세션 간 영속 메모리 시스템 |
-| **remote/** | `/remote`, `/remote:lan`, `/remote:funnel` — 로컬/LAN/공개 URL 기반 원격 접속 |
+| **subagent/** | Multi-agent delegation engine — spawns sub-`pi` processes, manages runs with a below-editor status widget, handles follow-up/cleanup, and includes sub-session-only `ask_master` escalation |
+| **@ryan_nookpi/pi-extension-claude-mcp-bridge** | Reuses Claude Code's MCP server configurations — zero-duplication setup |
+| **@ryan_nookpi/pi-extension-cross-agent** | Load agent definitions from `.claude/`, `.gemini/`, `.codex/` directories |
+| **dynamic-agents-md.ts** | Dynamically loads AGENTS.md at runtime to enforce edit/write scope restrictions |
+| **@ryan_nookpi/pi-extension-claude-hooks-bridge** | Bridge connecting Claude Code hook events to Pi sessions |
+| **@ryan_nookpi/pi-extension-memory-layer** | Persistent memory system across sessions |
+| **remote/** | `/remote`, `/remote:lan`, `/remote:funnel` — local/LAN/public-URL remote access |
 
 ### UI / UX
 
-| 확장 | 설명 |
+| Extension | Description |
 |---|---|
-| **footer.ts** | 모델, git 브랜치, 컨텍스트 사용량을 보여주는 커스텀 푸터 |
-| **working-text.ts** | 처리 중 경과 시간과 함께 팁 중심 스피너 텍스트 |
-| **theme-cycler.ts** | `Ctrl+X`로 테마 실시간 순환 |
-| **diff-overlay.ts** | `/diff` — 분할 화면 git diff 뷰어 오버레이 |
-| **@ryan_nookpi/pi-extension-open-pr** | 현재 브랜치 PR을 브라우저에서 바로 열기 |
-| **files.ts** | `/files` — git 트리 파일 브라우저 + 열기/편집/diff 빠른 액션 |
-| **fork-panel.ts** | `/fork-panel` — 현재 세션을 새 Ghostty split panel로 포크 |
-| **@ryan_nookpi/pi-extension-generative-ui** | `visualize_read_me`, `show_widget` — 네이티브 시각화/위젯 렌더링 |
-| **override-builtin-tools.ts** | 도구 출력 접기/펼치기로 세션 깔끔하게 유지 |
+| **footer.ts** | Custom footer showing model, git branch, context usage |
+| **working-text.ts** | Tip-focused spinner text with elapsed time during processing |
+| **theme-cycler.ts** | `Ctrl+X` to cycle through all themes on-the-fly |
+| **diff-overlay.ts** | `/diff` — split-pane git diff viewer overlay |
+| **@ryan_nookpi/pi-extension-open-pr** | Open the current branch PR directly in the browser |
+| **files.ts** | `/files` — git tree file browser with open/edit/diff quick actions |
+| **fork-panel.ts** | `/fork-panel` — fork the current session into a new Ghostty split panel |
+| **@ryan_nookpi/pi-extension-generative-ui** | `visualize_read_me`, `show_widget` — native visual widgets and renderers |
+| **override-builtin-tools.ts** | Collapse/expand verbose tool output for cleaner sessions |
 
-### 개발 도구
+### Developer Tools
 
-| 확장 | 설명 |
+| Extension | Description |
 |---|---|
-| **upload-image-url.ts** | GitHub CDN으로 이미지 업로드 후 임베딩 |
-| **until.ts** | `/until`, `until_report` — 조건 충족까지 반복 실행 |
-| **usage-analytics.ts** | `/analytics` — 서브에이전트·스킬 사용 통계 오버레이 |
-| **archive-to-html.ts** | to-html 스킬로 생성된 HTML 파일을 `~/Documents`에 자동 아카이브 |
+| **upload-image-url.ts** | Upload images to GitHub CDN for embedding |
+| **until.ts** | `/until`, `until_report` — repeat work until a condition is met |
+| **usage-analytics.ts** | `/analytics` — subagent and skill usage analytics overlay |
+| **archive-to-html.ts** | Auto-archive HTML files generated by the to-html skill to `~/Documents` |
 
-### 안전 장치
+### Safety
 
-| 확장 | 설명 |
+| Extension | Description |
 |---|---|
-| **command-typo-assist.ts** | 명령어 오타를 감지하고 자동 수정 제안 |
+| **command-typo-assist.ts** | Detects command typos and offers auto-correction |
 
-### 설치형 npm 확장 패키지
+### Installed npm extension packages
 
-현재 일부 확장은 로컬 `extensions/` 디렉토리 대신 **설치형 npm 패키지**로 사용한다.
-또한 나머지 커스텀 확장들도 점진적으로 패키지화해서 이 방식으로 옮겨갈 예정이다.
+The following extension packages are currently listed in `settings.json`.
 
-| 패키지 | 역할 |
+| Package | Role |
 |---|---|
-| `@ryan_nookpi/pi-extension-codex-fast-mode` | Codex Fast Mode 상태 저장/토글 및 footer의 `⚡` 표시 연동 |
-| `@ryan_nookpi/pi-extension-clipboard` | 클립보드 복사 도구 |
-| `@ryan_nookpi/pi-extension-ask-user-question` | 옵션 선택 + 자유 입력 질문 도구 |
-| `@ryan_nookpi/pi-extension-auto-name` | 첫 사용자 메시지 기반 세션 이름 자동 감지 |
-| `@ryan_nookpi/pi-extension-delayed-action` | 지연 실행 예약 |
-| `@ryan_nookpi/pi-extension-idle-screensaver` | 유휴 스크린세이버 |
-| `@ryan_nookpi/pi-extension-todo-write` | `todo_write` 도구와 TUI 기반 할 일 관리 |
+| `@ryan_nookpi/pi-extension-codex-fast-mode` | Codex Fast Mode toggle |
+| `@ryan_nookpi/pi-extension-clipboard` | Clipboard copy tool |
+| `@ryan_nookpi/pi-extension-ask-user-question` | Interactive question tool |
+| `@ryan_nookpi/pi-extension-auto-name` | Session auto-naming |
+| `@ryan_nookpi/pi-extension-delayed-action` | Delayed follow-up actions |
+| `@ryan_nookpi/pi-extension-idle-screensaver` | Idle screensaver |
+| `@ryan_nookpi/pi-extension-todo-write` | `todo_write` tool |
+| `@ryan_nookpi/pi-extension-cc-system-prompt` | Claude Code style system prompt |
+| `@ryan_nookpi/pi-extension-open-pr` | Open the current branch PR |
+| `@ryan_nookpi/pi-extension-generative-ui` | `visualize_read_me`, `show_widget` |
+| `@ryan_nookpi/pi-extension-cross-agent` | Load commands from `.claude`, `.gemini`, `.codex` |
+| `@ryan_nookpi/pi-extension-claude-hooks-bridge` | Claude Code hooks bridge |
+| `@ryan_nookpi/pi-extension-claude-mcp-bridge` | Claude Code MCP bridge |
+| `@ryan_nookpi/pi-extension-memory-layer` | Persistent memory tools |
 
 ---
 
-## 🏷️ 세션 이름
+## Session Name
 
-`/name`은 프롬프트 템플릿이 아니라 **내장 명령**이다.
+`/name` is a built-in command, not a prompt template.
 
 ```
-/name <세션 이름>   # 이름 설정
-/name               # 현재 이름 확인
+/name <session name>   # set name
+/name                  # show current name
 ```
 
 ---
 
-## 🎨 테마
+## Themes
 
-현재 7개 테마를 제공하며, `Ctrl+X`로 실시간 전환할 수 있다:
+The setup currently ships with 7 themes, hot-swappable with `Ctrl+X`:
 
-| 테마 | 스타일 |
+| Theme | Style |
 |---|---|
-| **nord** *(기본)* | 북극풍, 깔끔한 블루와 서리 톤 |
-| **catppuccin-mocha** | 다크 초콜릿 위의 따뜻한 파스텔 |
-| **darcula** | JetBrains 스타일의 진한 다크 톤 |
-| **dracula** | 대비가 선명한 퍼플 계열 다크 테마 |
-| **gruvbox** | 레트로 따뜻한 톤, 눈이 편한 |
-| **midnight-ocean** | 깊은 바다 블루와 틸 |
-| **rose-pine** | 차분하고 우아한 로즈 톤 |
+| **nord** *(default)* | Arctic, clean blues and frost tones |
+| **catppuccin-mocha** | Warm pastels on dark chocolate |
+| **darcula** | Deep JetBrains-style dark tones |
+| **dracula** | Higher-contrast purple-toned dark theme |
+| **gruvbox** | Retro warm tones, easy on the eyes |
+| **midnight-ocean** | Deep sea blues and teals |
+| **rose-pine** | Muted, elegant rose tones |
 
 ---
 
-## ⌨️ 단축키
+## Keybindings
 
-| 키 | 동작 |
+| Key | Action |
 |---|---|
-| `Ctrl+T` | 사고(thinking) 표시 토글 |
-| `Ctrl+X` | 테마 순환 |
-| `Ctrl+Q` | 테마 역순 순환 |
-| `Ctrl+Shift+O` | 파일 브라우저 열기 |
-| `Ctrl+Shift+F` | 최근 파일 참조를 Finder에서 표시 |
-| `Ctrl+Shift+R` | 최근 파일 참조 Quick Look |
-| `Ctrl+O` | 도구 출력 접기/펼치기 (pi 기본, `override-builtin-tools.ts`로 커스터마이즈) |
+| `Ctrl+T` | Toggle thinking visibility |
+| `Ctrl+X` | Cycle themes |
+| `Ctrl+Q` | Cycle themes backward |
+| `Ctrl+Shift+O` | Open file browser |
+| `Ctrl+Shift+F` | Reveal the latest file reference in Finder |
+| `Ctrl+Shift+R` | Quick Look the latest file reference |
+| `Ctrl+O` | Toggle tool output collapse/expand (pi built-in, customized here via `override-builtin-tools.ts`) |
 
 
-## 🌐 웹 리서치 확장
+## Web Research Extension
 
-이 셋업은 `web_search`, `fetch_content`, `get_search_content` 도구 사용을 위해 **pi-web-access** 소스를 로컬 `extensions/web-access/`에 벤더링해서 사용한다.
+This setup vendors **pi-web-access** locally in `extensions/web-access/` for the `web_search`, `fetch_content`, and `get_search_content` tools.
 
-- 업스트림 레포지토리: https://github.com/nicobailon/pi-web-access
-- 확장 로컬 경로: `extensions/web-access/`
-- 포함된 `librarian` 스킬 로컬 경로: `skills/librarian/`
-
----
-
-## 💡 설계 철학
-
-이 프로젝트는 몇 가지 핵심 원칙에 기반한다:
-
-**1. 에이전트 설정은 설정 파일이 아니라 엔지니어링이다.**
-모든 에이전트 프롬프트는 직무 기술서처럼 설계한다. 모든 확장 기능은 실제 불편을 해결한다. 모든 자동화는 그 복잡성의 값어치를 한다.
-
-**2. 전문화가 범용을 이긴다.**
-리뷰만 하는 리뷰어가 "리뷰도 해줘"라는 범용 에이전트보다 더 많은 버그를 잡는다. challenger 에이전트는 오직 헛점을 찌르기 위해 존재하며, 시스템에서 가장 가치 있는 에이전트 중 하나다.
-
-**3. 안전은 제약이 아니라 기능이다.**
-오타 감지, 확인 프롬프트, 사고 과정 표시 같은 안전 장치는 생산성을 떨어뜨리는 제약이 아니라 시스템의 핵심 기능이다.
-
-**4. 터미널이 곧 IDE다.**
-git diff, GitHub PR, 스크린세이버, 파일 브라우징 — 전부 터미널 안에서. 컨텍스트 스위칭 필요 없음.
+- Upstream repository: https://github.com/nicobailon/pi-web-access
+- Local extension path: `extensions/web-access/`
+- Bundled `librarian` skill path: `skills/librarian/`
 
 ---
 
-## 📈 운영 현황
+## Notes
 
-데모 프로젝트가 아니다. 프로덕션 엔지니어링 업무에 **매일 사용하는 실전 설정**이다.
+A few practical choices shape this setup:
 
-| 지표 | 값 |
-|---|---|
-| 활성 확장 기능 | 30+ |
-| 에이전트 정의 | 11개 |
-| 테마 | 7개 |
+**1. Roles are separated by task.**
+Each agent has a narrow responsibility so delegation stays predictable.
 
----
+**2. Extensions are added for recurring friction.**
+Most custom tools exist because they remove a repeated manual step.
 
-<div align="center">
+**3. Safety features stay enabled.**
+Typo checks, confirmations, and visibility controls are part of the default workflow.
 
-*[@Jonghakseo](https://github.com/Jonghakseo)가 매일 만들고 사용하는 설정*
+**4. Most workflows stay in the terminal.**
+File browsing, diffs, PR work, and automation are handled from the same environment.
 
-*[pi coding agent](https://github.com/mariozechner/pi-coding-agent) 기반*
 
-</div>

@@ -16,7 +16,7 @@
 
   <rect width="1200" height="760" fill="url(#abgGrad)" rx="12"/>
   <circle cx="600" cy="380" r="275" fill="url(#centerGlow)"/>
-  <text x="600" y="36" text-anchor="middle" fill="#e6edf3" font-family="monospace" font-size="18" font-weight="bold">🤖 Agent Orchestra (11)</text>
+  <text x="600" y="36" text-anchor="middle" fill="#e6edf3" font-family="monospace" font-size="18" font-weight="bold">Agents (11)</text>
 
   <g stroke="#21262d" stroke-width="1.5" stroke-dasharray="4,4" opacity="0.5">
     <line x1="600" y1="350" x2="130" y2="126"/>
@@ -33,7 +33,7 @@
   </g>
 
   <rect x="470" y="304" width="260" height="92" rx="12" fill="rgba(210,168,255,0.12)" stroke="#d2a8ff" stroke-width="2" filter="url(#aglow)"/>
-  <text x="600" y="338" text-anchor="middle" fill="#e6edf3" font-family="monospace" font-size="15" font-weight="bold">Main Orchestrator</text>
+  <text x="600" y="338" text-anchor="middle" fill="#e6edf3" font-family="monospace" font-size="15" font-weight="bold">Main Agent</text>
   <text x="600" y="360" text-anchor="middle" fill="#8b949e" font-family="monospace" font-size="9">anthropic/claude-opus-4-6</text>
   <text x="600" y="381" text-anchor="middle" fill="#e6edf3" font-family="monospace" font-size="10">delegate · route · verify</text>
 

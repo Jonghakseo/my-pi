@@ -40,7 +40,7 @@
   <polygon points="394,171 400,178 406,171" fill="#484f58"/>
 
   <rect x="40" y="180" width="720" height="216" rx="10" fill="rgba(188,140,255,0.05)" stroke="#bc8cff" stroke-width="1.5"/>
-  <text x="60" y="200" fill="#bc8cff" font-family="monospace, 'Noto Sans KR', sans-serif" font-size="11" font-weight="bold">에이전트 오케스트라 · 11 agents / 3 models</text>
+  <text x="60" y="200" fill="#bc8cff" font-family="monospace, 'Noto Sans KR', sans-serif" font-size="11" font-weight="bold">에이전트 · 11개 / 3개 모델</text>
   <g font-family="monospace, 'Noto Sans KR', sans-serif" font-size="8">
     <!-- row 1 -->
     <rect x="52" y="214" width="108" height="56" rx="6" fill="rgba(88,166,255,0.12)" stroke="#58a6ff" stroke-width="1"/>
