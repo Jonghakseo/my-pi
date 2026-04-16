@@ -89,6 +89,7 @@ interface DiffState {
 
 interface Theme {
 	fg: (color: ThemeColor, text: string) => string;
+	bg: (color: "toolSuccessBg" | "toolErrorBg" | "selectedBg", text: string) => string;
 	bold: (text: string) => string;
 }
 
@@ -380,6 +381,12 @@ function colorDiffLine(t: Theme, line: string): string {
 	return line;
 }
 
+function padStyledLine(line: string, width: number): string {
+	const truncated = truncateToWidth(line, width, "");
+	const pad = " ".repeat(Math.max(0, width - visibleWidth(truncated)));
+	return `${truncated}${pad}`;
+}
+
 // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: tree row rendering keeps selection and styling logic in one place for overlay consistency.
 function renderFiles(t: Theme, st: DiffState, w: number, h: number): string[] {
 	const visibleRows = getVisibleRows(st);
@@ -512,6 +519,7 @@ function renderDiff(t: Theme, st: DiffState, w: number, h: number): string[] {
 	}
 	const all = st.highlightedDiffCache.get(f.path);
 	if (!all || all.length === 0) return [t.fg("muted", "  (empty diff)")];
+	const parsed = parseDiffLines(raw);
 
 	const max = Math.max(1, h);
 	const maxOffset = Math.max(0, all.length - max);
@@ -522,7 +530,15 @@ function renderDiff(t: Theme, st: DiffState, w: number, h: number): string[] {
 
 	const lines: string[] = [];
 	for (let i = start; i < end; i++) {
-		lines.push(truncateToWidth(` ${all[i] ?? ""}`, w));
+		const line = padStyledLine(` ${all[i] ?? ""}`, w);
+		const category = parsed[i]?.category;
+		if (category === "added") {
+			lines.push(t.bg("toolSuccessBg", line));
+		} else if (category === "removed") {
+			lines.push(t.bg("toolErrorBg", line));
+		} else {
+			lines.push(line);
+		}
 	}
 
 	while (lines.length < max) lines.push("");
@@ -592,7 +608,14 @@ function renderCommitFiles(t: Theme, st: DiffState, w: number, h: number): strin
 		}
 
 		for (const line of diffLines) {
-			rows.push(truncateToWidth(`    ${colorDiffLine(t, expandTabs(line))}`, w));
+			const renderedLine = padStyledLine(`    ${colorDiffLine(t, expandTabs(line))}`, w);
+			if (line.startsWith("+") && !line.startsWith("+++")) {
+				rows.push(t.bg("toolSuccessBg", renderedLine));
+			} else if (line.startsWith("-") && !line.startsWith("---")) {
+				rows.push(t.bg("toolErrorBg", renderedLine));
+			} else {
+				rows.push(renderedLine);
+			}
 		}
 	}
 
