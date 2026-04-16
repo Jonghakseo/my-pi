@@ -70,11 +70,11 @@ Here are representative items from the 30+ custom TypeScript extensions, grouped
 | Extension | Description |
 |---|---|
 | **subagent/** | Multi-agent delegation engine — spawns sub-`pi` processes, manages runs with a below-editor status widget, handles follow-up/cleanup, and includes sub-session-only `ask_master` escalation |
-| **@ryan_nookpi/pi-extension-claude-mcp-bridge** | Reuses Claude Code's MCP server configurations — zero-duplication setup |
-| **@ryan_nookpi/pi-extension-cross-agent** | Load agent definitions from `.claude/`, `.gemini/`, `.codex/` directories |
+| **[@ryan_nookpi/pi-extension-claude-mcp-bridge](https://github.com/Jonghakseo/pi-extension/tree/main/packages/claude-mcp-bridge)** | Reuses Claude Code's MCP server configurations — zero-duplication setup |
+| **[@ryan_nookpi/pi-extension-cross-agent](https://github.com/Jonghakseo/pi-extension/tree/main/packages/cross-agent)** | Load agent definitions from `.claude/`, `.gemini/`, `.codex/` directories |
 | **dynamic-agents-md.ts** | Dynamically loads AGENTS.md at runtime to enforce edit/write scope restrictions |
-| **@ryan_nookpi/pi-extension-claude-hooks-bridge** | Bridge connecting Claude Code hook events to Pi sessions |
-| **@ryan_nookpi/pi-extension-memory-layer** | Persistent memory system across sessions |
+| **[@ryan_nookpi/pi-extension-claude-hooks-bridge](https://github.com/Jonghakseo/pi-extension/tree/main/packages/claude-hooks-bridge)** | Bridge connecting Claude Code hook events to Pi sessions |
+| **[@ryan_nookpi/pi-extension-memory-layer](https://github.com/Jonghakseo/pi-extension/tree/main/packages/memory-layer)** | Persistent memory system across sessions |
 | **remote/** | `/remote`, `/remote:lan`, `/remote:funnel` — local/LAN/public-URL remote access |
 
 ### UI / UX
@@ -85,10 +85,10 @@ Here are representative items from the 30+ custom TypeScript extensions, grouped
 | **working-text.ts** | Tip-focused spinner text with elapsed time during processing |
 | **theme-cycler.ts** | `Ctrl+X` to cycle through all themes on-the-fly |
 | **diff-overlay.ts** | `/diff` — split-pane git diff viewer overlay |
-| **@ryan_nookpi/pi-extension-open-pr** | Open the current branch PR directly in the browser |
+| **[@ryan_nookpi/pi-extension-open-pr](https://github.com/Jonghakseo/pi-extension/tree/main/packages/open-pr)** | Open the current branch PR directly in the browser |
 | **files.ts** | `/files` — git tree file browser with open/edit/diff quick actions |
 | **fork-panel.ts** | `/fork-panel` — fork the current session into a new Ghostty split panel |
-| **@ryan_nookpi/pi-extension-generative-ui** | `visualize_read_me`, `show_widget` — native visual widgets and renderers |
+| **[@ryan_nookpi/pi-extension-generative-ui](https://github.com/Jonghakseo/pi-extension/tree/main/packages/generative-ui)** | `visualize_read_me`, `show_widget` — native visual widgets and renderers |
 | **override-builtin-tools.ts** | Collapse/expand verbose tool output for cleaner sessions |
 
 ### Developer Tools
@@ -112,20 +112,20 @@ The following extension packages are currently listed in `settings.json`.
 
 | Package | Role |
 |---|---|
-| `@ryan_nookpi/pi-extension-codex-fast-mode` | Codex Fast Mode toggle |
-| `@ryan_nookpi/pi-extension-clipboard` | Clipboard copy tool |
-| `@ryan_nookpi/pi-extension-ask-user-question` | Interactive question tool |
-| `@ryan_nookpi/pi-extension-auto-name` | Session auto-naming |
-| `@ryan_nookpi/pi-extension-delayed-action` | Delayed follow-up actions |
-| `@ryan_nookpi/pi-extension-idle-screensaver` | Idle screensaver |
-| `@ryan_nookpi/pi-extension-todo-write` | `todo_write` tool |
-| `@ryan_nookpi/pi-extension-cc-system-prompt` | Claude Code style system prompt |
-| `@ryan_nookpi/pi-extension-open-pr` | Open the current branch PR |
-| `@ryan_nookpi/pi-extension-generative-ui` | `visualize_read_me`, `show_widget` |
-| `@ryan_nookpi/pi-extension-cross-agent` | Load commands from `.claude`, `.gemini`, `.codex` |
-| `@ryan_nookpi/pi-extension-claude-hooks-bridge` | Claude Code hooks bridge |
-| `@ryan_nookpi/pi-extension-claude-mcp-bridge` | Claude Code MCP bridge |
-| `@ryan_nookpi/pi-extension-memory-layer` | Persistent memory tools |
+| [`@ryan_nookpi/pi-extension-codex-fast-mode`](https://github.com/Jonghakseo/pi-extension/tree/main/packages/codex-fast-mode) | Codex Fast Mode toggle |
+| [`@ryan_nookpi/pi-extension-clipboard`](https://github.com/Jonghakseo/pi-extension/tree/main/packages/clipboard) | Clipboard copy tool |
+| [`@ryan_nookpi/pi-extension-ask-user-question`](https://github.com/Jonghakseo/pi-extension/tree/main/packages/ask-user-question) | Interactive question tool |
+| [`@ryan_nookpi/pi-extension-auto-name`](https://github.com/Jonghakseo/pi-extension/tree/main/packages/auto-name) | Session auto-naming |
+| [`@ryan_nookpi/pi-extension-delayed-action`](https://github.com/Jonghakseo/pi-extension/tree/main/packages/delayed-action) | Delayed follow-up actions |
+| [`@ryan_nookpi/pi-extension-idle-screensaver`](https://github.com/Jonghakseo/pi-extension/tree/main/packages/idle-screensaver) | Idle screensaver |
+| [`@ryan_nookpi/pi-extension-todo-write`](https://github.com/Jonghakseo/pi-extension/tree/main/packages/todo-write) | `todo_write` tool |
+| [`@ryan_nookpi/pi-extension-cc-system-prompt`](https://github.com/Jonghakseo/pi-extension/tree/main/packages/cc-system-prompt) | Claude Code style system prompt |
+| [`@ryan_nookpi/pi-extension-open-pr`](https://github.com/Jonghakseo/pi-extension/tree/main/packages/open-pr) | Open the current branch PR |
+| [`@ryan_nookpi/pi-extension-generative-ui`](https://github.com/Jonghakseo/pi-extension/tree/main/packages/generative-ui) | `visualize_read_me`, `show_widget` |
+| [`@ryan_nookpi/pi-extension-cross-agent`](https://github.com/Jonghakseo/pi-extension/tree/main/packages/cross-agent) | Load commands from `.claude`, `.gemini`, `.codex` |
+| [`@ryan_nookpi/pi-extension-claude-hooks-bridge`](https://github.com/Jonghakseo/pi-extension/tree/main/packages/claude-hooks-bridge) | Claude Code hooks bridge |
+| [`@ryan_nookpi/pi-extension-claude-mcp-bridge`](https://github.com/Jonghakseo/pi-extension/tree/main/packages/claude-mcp-bridge) | Claude Code MCP bridge |
+| [`@ryan_nookpi/pi-extension-memory-layer`](https://github.com/Jonghakseo/pi-extension/tree/main/packages/memory-layer) | Persistent memory tools |
 
 ---
 
