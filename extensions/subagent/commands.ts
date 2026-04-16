@@ -7,9 +7,8 @@
  */
 
 import * as fs from "node:fs";
-import * as path from "node:path";
 import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
-import { Container, Key, matchesKey, Spacer, Text, truncateToWidth } from "@mariozechner/pi-tui";
+import { Container, Key, matchesKey, Spacer, Text, truncateToWidth, visibleWidth } from "@mariozechner/pi-tui";
 import { discoverAgents } from "./agents.js";
 import {
 	AGENT_SYMBOL_MAP,
@@ -94,13 +93,15 @@ function refreshDisplayTaskInBackground(
 			if (!isDisplayTaskRefreshTokenCurrent(runState, refreshToken)) return;
 			if (displayTask === runState.displayTask) return;
 			runState.displayTask = displayTask;
-			const originSessionFile = store.globalLiveRuns.get(runState.id)?.originSessionFile;
-			appendDisplayTaskUpdate(originSessionFile, {
-				runId: runState.id,
-				task: runState.task,
-				displayTask,
-				startedAt: runState.startedAt,
-			});
+			if (runState.deliveryMode !== "humanOnly") {
+				const originSessionFile = store.globalLiveRuns.get(runState.id)?.originSessionFile;
+				appendDisplayTaskUpdate(originSessionFile, {
+					runId: runState.id,
+					task: runState.task,
+					displayTask,
+					startedAt: runState.startedAt,
+				});
+			}
 			updateCommandRunsWidget(store);
 		})
 		.catch(() => {
@@ -108,66 +109,13 @@ function refreshDisplayTaskInBackground(
 		});
 }
 
-/**
- * Resolve a working switchSession function from either the context or the store.
- * Returns null if neither is available (no command has been run yet).
- */
-function resolveSwitchSession(
-	ctx: any,
-	store: SubagentStore,
-): ((sessionPath: string) => Promise<{ cancelled: boolean }>) | null {
-	if (typeof ctx?.switchSession === "function") return ctx.switchSession.bind(ctx);
-	return store.switchSessionFn;
-}
-
-/**
- * Ensure the current session file exists on disk before switching away.
- *
- * pi's SessionManager only flushes JSONL to disk after the session has at least one
- * assistant message. If users run only extension shortcuts/commands in a fresh session,
- * the in-memory session can exist while the file path does not yet exist.
- *
- * To make `><` reliable, materialize the current in-memory entries to the current
- * session path right before `<>` / `/sub:trans` switches into a child session.
- */
-function ensureSessionFileMaterialized(ctx: any, sessionFile: string | null): void {
-	if (!sessionFile) return;
-	const normalized = normalizePath(sessionFile);
-	if (!normalized || fs.existsSync(normalized)) return;
-
-	try {
-		const rawHeader = ctx.sessionManager?.getHeader?.();
-		const header =
-			rawHeader && rawHeader.type === "session"
-				? rawHeader
-				: {
-						type: "session",
-						version: 3,
-						id: ctx.sessionManager?.getSessionId?.() ?? `fallback-${Date.now()}`,
-						timestamp: new Date().toISOString(),
-						cwd: ctx.sessionManager?.getCwd?.() ?? ctx.cwd ?? process.cwd(),
-					};
-		const entries = ctx.sessionManager?.getEntries?.();
-		const fileEntries = [header, ...(Array.isArray(entries) ? entries : [])];
-
-		const parentDir = path.dirname(normalized);
-		if (!fs.existsSync(parentDir)) {
-			fs.mkdirSync(parentDir, { recursive: true });
-		}
-		const content = `${fileEntries.map((e: any) => JSON.stringify(e)).join("\n")}\n`;
-		fs.writeFileSync(normalized, content, "utf8");
-	} catch (_e) {
-		// Ignore materialization errors; fallback messaging will handle missing parent.
-	}
-}
-
 // ─── SubagentHistoryOverlay ───────────────────────────────────────────────────
 
 /**
  * TUI overlay that lists all subagent runs (including removed) and lets the
- * user select one to switch into via sub:trans.
+ * user inspect one.
  *
- * Keys: ↑↓ / j k  navigate · Enter  switch session · q / Esc  close
+ * Keys: ↑↓ / j k  navigate · Enter  inspect · q / Esc  close
  */
 class SubagentHistoryOverlay {
 	private selectedIndex = 0;
@@ -278,7 +226,7 @@ class SubagentHistoryOverlay {
 			new Text(
 				pad +
 					truncateToWidth(
-						`${theme.fg("dim", "↑↓/jk navigate · Enter switch session · q/Esc close")}  ${theme.fg("accent", range)}`,
+						`${theme.fg("dim", "↑↓/jk navigate · Enter inspect · q/Esc close")}  ${theme.fg("accent", range)}`,
 						innerWidth,
 					),
 				0,
@@ -291,81 +239,194 @@ class SubagentHistoryOverlay {
 	}
 }
 
-// ─── subTransHandler ─────────────────────────────────────────────────────────
+class SubagentLastResponseOverlay {
+	private scrollOffset = 0;
+	private cachedWidth = -1;
+	private wrappedLines: string[] = [];
 
-/**
- * Shared handler for switching to a subagent session (used by both /sub:trans and <>).
- * After a successful switch, persists a `subagent-parent` entry in the child session
- * so that `><` / `sub:back` can navigate back even across pi restarts.
- */
-async function subTransHandler(args: string, ctx: any, store: SubagentStore, pi: ExtensionAPI): Promise<void> {
+	constructor(
+		private title: string,
+		private subtitle: string,
+		private content: string,
+		private onAttach: () => void,
+		private onDone: () => void,
+	) {}
+
+	private getViewportRows(): number {
+		const rows = Math.max(18, (process.stdout as any).rows || 24);
+		return Math.max(6, rows - 10);
+	}
+
+	private getWrappedLines(width: number): string[] {
+		if (this.cachedWidth !== width) {
+			this.cachedWidth = width;
+			this.wrappedLines = new Text(this.content, 0, 0).render(width);
+		}
+		return this.wrappedLines;
+	}
+
+	handleInput(data: string, tui: any): void {
+		if (data === "a" || data === "A") {
+			this.onAttach();
+			this.onDone();
+			return;
+		}
+		if (matchesKey(data, Key.enter) || matchesKey(data, Key.escape) || data === "q" || data === "Q") {
+			this.onDone();
+			return;
+		}
+		const viewport = this.getViewportRows();
+		const maxOffset = Math.max(0, this.wrappedLines.length - viewport);
+		if (matchesKey(data, Key.up) || data === "k") {
+			this.scrollOffset = Math.max(0, this.scrollOffset - 1);
+		} else if (matchesKey(data, Key.down) || data === "j") {
+			this.scrollOffset = Math.min(maxOffset, this.scrollOffset + 1);
+		} else if (matchesKey(data, Key.pageUp)) {
+			this.scrollOffset = Math.max(0, this.scrollOffset - viewport);
+		} else if (matchesKey(data, Key.pageDown)) {
+			this.scrollOffset = Math.min(maxOffset, this.scrollOffset + viewport);
+		}
+		tui.requestRender();
+	}
+
+	render(width: number, _height: number, theme: any): string[] {
+		const container = new Container();
+		const pad = "  ";
+		const boxWidth = Math.max(24, width - 10);
+		const contentWidth = Math.max(18, boxWidth - 4);
+		const viewport = this.getViewportRows();
+		const wrappedLines = this.getWrappedLines(contentWidth);
+		const maxOffset = Math.max(0, wrappedLines.length - viewport);
+		if (this.scrollOffset > maxOffset) this.scrollOffset = maxOffset;
+		const visibleLines = wrappedLines.slice(this.scrollOffset, this.scrollOffset + viewport);
+		const range =
+			wrappedLines.length > 0
+				? `${this.scrollOffset + 1}-${Math.min(wrappedLines.length, this.scrollOffset + viewport)}/${wrappedLines.length}`
+				: "0/0";
+		const shadow = theme.fg("dim", "░");
+		const top = theme.fg("border", `┌${"─".repeat(boxWidth - 2)}┐`);
+		const separator = theme.fg("borderMuted", `├${"─".repeat(boxWidth - 2)}┤`);
+		const bottom = theme.fg("border", `└${"─".repeat(boxWidth - 2)}┘`);
+		const fill = (text: string) => {
+			const truncated = truncateToWidth(text, contentWidth, "…");
+			return `${truncated}${" ".repeat(Math.max(0, contentWidth - visibleWidth(truncated)))}`;
+		};
+		const frame = (text: string) => `${theme.fg("border", "│")} ${fill(text)} ${theme.fg("border", "│")}`;
+
+		container.addChild(new Spacer(1));
+		container.addChild(new Text(`${pad + top} ${shadow}`, 0, 0));
+		container.addChild(new Text(`${pad + frame(theme.bold(this.title))} ${shadow}`, 0, 0));
+		container.addChild(new Text(`${pad + frame(theme.fg("muted", this.subtitle))} ${shadow}`, 0, 0));
+		container.addChild(new Text(`${pad + separator} ${shadow}`, 0, 0));
+		for (const line of visibleLines) {
+			container.addChild(new Text(`${pad + frame(theme.fg("toolOutput", line))} ${shadow}`, 0, 0));
+		}
+		if (visibleLines.length === 0) {
+			container.addChild(new Text(`${pad + frame(theme.fg("muted", "(no response)"))} ${shadow}`, 0, 0));
+		}
+		container.addChild(new Text(`${pad + separator} ${shadow}`, 0, 0));
+		container.addChild(
+			new Text(
+				pad +
+					frame(theme.fg("muted", `↑↓/jk scroll · a attach to editor · Enter/Esc/q close  ${range}`)) +
+					` ${shadow}`,
+				0,
+				0,
+			),
+		);
+		container.addChild(new Text(`${pad + bottom} ${shadow}`, 0, 0));
+		container.addChild(new Text(`${pad} ${theme.fg("dim", "░".repeat(boxWidth))}`, 0, 0));
+		container.addChild(new Spacer(1));
+
+		return container.render(width);
+	}
+}
+
+function getRunLatestResponse(run: CommandRunState): string {
+	const output = (run.lastOutput ?? "").trim();
+	if (output) return output;
+
+	if (run.sessionFile && fs.existsSync(run.sessionFile)) {
+		const replayItems = readSessionReplayItems(run.sessionFile);
+		for (let i = replayItems.length - 1; i >= 0; i--) {
+			const item = replayItems[i];
+			if (item?.type === "assistant" && item.content.trim()) return item.content.trim();
+		}
+		for (let i = replayItems.length - 1; i >= 0; i--) {
+			const item = replayItems[i];
+			if (item && item.type !== "user" && item.content.trim()) return item.content.trim();
+		}
+	}
+
+	if (run.status === "running") return "(still running; no final response yet)";
+	return run.lastLine?.trim() || "(no response captured)";
+}
+
+function attachRunResponseToEditor(ctx: ExtensionContext, run: CommandRunState, response: string): void {
+	const current = ctx.ui.getEditorText();
+	const separator = current.trim().length > 0 ? "\n\n" : "";
+	const attachment = `[subagent:${run.agent}#${run.id}]\n${response}`;
+	ctx.ui.setEditorText(`${current}${separator}${attachment}`);
+	ctx.ui.notify(`Attached subagent #${run.id} response to editor`, "info");
+}
+
+async function showRunLatestResponseOverlay(ctx: ExtensionContext, run: CommandRunState): Promise<void> {
+	const response = getRunLatestResponse(run);
+	const contextLabel = run.contextMode === "main" ? "main" : "sub";
+	const subtitle = `#${run.id} · ${run.agent} · ${run.status} · ctx:${contextLabel} · turn:${run.turnCount ?? DEFAULT_TURN_COUNT}`;
+
+	await ctx.ui.custom(
+		(tui, theme, _kb, done) => {
+			const overlay = new SubagentLastResponseOverlay(
+				`Subagent #${run.id} last response`,
+				subtitle,
+				response,
+				() => attachRunResponseToEditor(ctx, run, response),
+				() => done(undefined),
+			);
+			return {
+				render: (w) => overlay.render(w, 0, theme),
+				handleInput: (data) => overlay.handleInput(data, tui),
+				invalidate: () => {},
+			};
+		},
+		{
+			overlay: true,
+			overlayOptions: { width: SUBVIEW_OVERLAY_WIDTH, maxHeight: SUBVIEW_OVERLAY_MAX_HEIGHT, anchor: "center" },
+		},
+	);
+}
+
+// ─── subPeekHandler ──────────────────────────────────────────────────────────
+
+async function subPeekHandler(args: string, ctx: ExtensionContext, store: SubagentStore): Promise<void> {
 	const raw = (args ?? "").trim();
-	let runId: number;
 	let run: CommandRunState | undefined;
+	let runId: number | undefined;
 
 	if (!raw) {
-		// No args: auto-switch to latest completed run
-		const latest = getLatestRun(store, ["done", "error"]);
-		if (!latest) {
-			ctx.ui.notify("No completed runs to switch to.", "info");
-			return;
-		}
-		runId = latest.id;
-		run = latest;
-	} else {
-		runId = parseInt(raw, 10);
-		if (Number.isNaN(runId)) {
-			ctx.ui.notify("Usage: <> [runId] or /sub:trans <runId>", "error");
-			return;
-		}
+		run = getLatestRun(store);
+		runId = run?.id;
+	} else if (/^\d+$/.test(raw)) {
+		runId = Number(raw);
 		run = store.commandRuns.get(runId);
-	}
-
-	if (!run) {
-		ctx.ui.notify(`Run #${runId} not found. Use /sub:open to see recent runs.`, "error");
-		return;
-	}
-	if (run.status === "running") {
-		ctx.ui.notify(`Run #${runId} is still running. Wait for it to finish or abort it first.`, "error");
-		return;
-	}
-	if (!run.sessionFile) {
-		ctx.ui.notify(`Run #${runId} has no session file.`, "error");
+	} else {
+		ctx.ui.notify("Usage: /sub:peek [runId] or <>7", "info");
 		return;
 	}
 
-	const switchFn = resolveSwitchSession(ctx, store);
-	if (!switchFn) {
-		ctx.ui.notify("Session switch not ready. Run any /sub:* command first.", "warning");
+	if (!run || runId === undefined) {
+		ctx.ui.notify(`Unknown subagent run${raw ? ` #${raw}` : ""}.`, "error");
 		return;
 	}
 
-	// Capture current session path before switching — this becomes the parent link.
-	const parentSessionFile = normalizePath(ctx.sessionManager.getSessionFile()) ?? undefined;
-	ensureSessionFileMaterialized(ctx, parentSessionFile ?? null);
-
-	try {
-		const result = await switchFn(run.sessionFile);
-		if (result.cancelled) {
-			ctx.ui.notify(`Failed to switch to session for run #${runId}.`, "error");
-			return;
-		}
-
-		// Persist parent link in the child session we just switched into.
-		if (parentSessionFile) {
-			pi.appendEntry(PARENT_ENTRY_TYPE, {
-				parentSessionFile,
-				runId,
-				agent: run.agent,
-				via: "<>",
-				v: 1,
-			});
-			store.currentParentSessionFile = parentSessionFile;
-			updateCommandRunsWidget(store);
-		}
-	} catch (err) {
-		ctx.ui.notify(`Session switch error: ${err}`, "error");
+	const response = getRunLatestResponse(run);
+	if (!ctx.hasUI) {
+		ctx.ui.notify(`Subagent #${run.id} last response\n\n${response}`, "info");
+		return;
 	}
+
+	await showRunLatestResponseOverlay(ctx, run);
 }
 
 /**
@@ -378,16 +439,6 @@ function normalizePath(raw: unknown): string | null {
 	return cleaned || null;
 }
 
-/**
- * Stage B: compact a path — strip ALL whitespace (repair wrap/corruption artifacts).
- * Only used as fallback when Stage A path does not exist on disk.
- */
-function compactPath(raw: unknown): string | null {
-	if (!raw || typeof raw !== "string") return null;
-	const cleaned = raw.replace(/\s+/g, "").trim();
-	return cleaned || null;
-}
-
 function stripStatusLogFooter(text: string): string {
 	if (!text) return text;
 	const doubleBreakSuffix = `\n\n${STATUS_LOG_FOOTER}`;
@@ -396,83 +447,6 @@ function stripStatusLogFooter(text: string): string {
 	if (text.endsWith(singleBreakSuffix)) return text.slice(0, -singleBreakSuffix.length);
 	if (text.endsWith(STATUS_LOG_FOOTER)) return text.slice(0, -STATUS_LOG_FOOTER.length).trimEnd();
 	return text;
-}
-
-/**
- * Try to resolve a valid on-disk path from a raw value using 2-stage strategy.
- * Returns null when neither stage yields an existing file.
- */
-function resolveValidPath(raw: unknown): string | null {
-	const stageA = normalizePath(raw);
-	if (stageA && fs.existsSync(stageA)) return stageA;
-	const stageB = compactPath(raw);
-	if (stageB && stageB !== stageA && fs.existsSync(stageB)) return stageB;
-	return null;
-}
-
-/**
- * Resolve the best parent session path.
- * Uses `store.currentParentSessionFile` first, then rescans session entries as fallback.
- * Applies 2-stage normalization (preserve spaces → compact fallback) and validates existence.
- */
-function resolveParentSessionFile(ctx: any, store: SubagentStore): string | null {
-	// Primary: in-memory cached value.
-	const cached = resolveValidPath(store.currentParentSessionFile);
-	if (cached) return cached;
-
-	// Fallback: rescan current session entries for the latest valid parent link.
-	try {
-		const entries = ctx.sessionManager?.getEntries?.() ?? [];
-		let best: string | null = null;
-		for (const entry of entries) {
-			if ((entry as any).type === "custom" && (entry as any).customType === PARENT_ENTRY_TYPE) {
-				const candidate = resolveValidPath((entry as any).data?.parentSessionFile);
-				if (candidate) best = candidate;
-			}
-		}
-		if (best) {
-			store.currentParentSessionFile = best;
-			return best;
-		}
-	} catch (_e) {
-		// Ignore rescan errors; fall through to null.
-	}
-
-	return null;
-}
-
-/**
- * Shared handler for returning to parent session (used by both /sub:back and ><).
- * Resolves the parent from `store.currentParentSessionFile` (persisted in session entries).
- */
-async function subBackHandler(ctx: any, store: SubagentStore): Promise<void> {
-	const parentSession = resolveParentSessionFile(ctx, store);
-	if (!parentSession) {
-		// Clear stale in-memory reference so widget hides the hint.
-		if (store.currentParentSessionFile) {
-			store.currentParentSessionFile = null;
-			updateCommandRunsWidget(store);
-		}
-		ctx.ui.notify("No parent session (file deleted or not linked).", "info");
-		return;
-	}
-
-	const switchFn = resolveSwitchSession(ctx, store);
-	if (!switchFn) {
-		ctx.ui.notify("Session switch not ready. Run any /sub:* command first.", "warning");
-		return;
-	}
-
-	try {
-		const result = await switchFn(parentSession);
-		if (result.cancelled) {
-			ctx.ui.notify("Failed to return to parent session.", "error");
-		}
-		// Note: currentParentSessionFile will be set correctly by restoreRunsFromSession
-		// when the parent session loads (via session_start event).
-	} catch (err) {
-		ctx.ui.notify(`Session switch error: ${err}`, "error");
-	}
 }
 
 function toValidTimestampMs(value: unknown): number | undefined {
@@ -909,6 +883,19 @@ function deliverOrQueueCompletion(
 	}
 }
 
+function finalizeHumanOnlyCompletion(
+	store: SubagentStore,
+	ctx: ExtensionContext,
+	runId: number,
+	_title: string,
+	_content: string,
+	notifyMessage: string,
+	notifyLevel: "info" | "error" | "warning",
+): void {
+	ctx.ui.notify(notifyMessage, notifyLevel);
+	store.globalLiveRuns.delete(runId);
+}
+
 // biome-ignore lint/complexity/noExcessiveLinesPerFunction: registration stays consolidated so commands, shortcuts, and event handlers share one store lifecycle.
 export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 	pi.registerTool({
@@ -993,532 +980,581 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 			const merged = [...runItems, ...agentItems];
 			return merged.length > 0 ? merged : null;
 		},
-		// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: subcommand entrypoint handles continuation, alias resolution, and launch setup while preserving existing UX.
-		handler: async (args: string, ctx: ExtensionContext, forceMainContextFromWrapper = false) => {
-			captureSwitchSession(store, ctx);
-			const input = (args ?? "").trim();
-			const usageText =
-				"Usage: /sub:main <agent|alias> <task> | /sub:main <runId> <task> | /sub:main <task> | /sub:isolate <agent|alias> <task> | /sub:isolate <runId> <task> | /sub:isolate <task>";
-			let forceMainContext = forceMainContextFromWrapper;
+		handler:
+			// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: subcommand entrypoint handles continuation, alias resolution, launch setup, and hidden completion behavior while preserving existing UX.
+			async (args: string, ctx: ExtensionContext, forceMainContextFromWrapper = false, hiddenFromMain = false) => {
+				captureSwitchSession(store, ctx);
+				const input = (args ?? "").trim();
+				const usageText =
+					"Usage: /sub:main <agent|alias> <task> | /sub:main <runId> <task> | /sub:main <task> | /sub:isolate <agent|alias> <task> | /sub:isolate <runId> <task> | /sub:isolate <task>";
+				let forceMainContext = forceMainContextFromWrapper;
+				const deliveryMode = hiddenFromMain ? "humanOnly" : "followUp";
 
-			if (input === "--main" || input.startsWith("--main ")) {
-				ctx.ui.notify(
-					"'--main' 접두어는 사용할 수 없습니다. /sub:main 또는 /sub:isolate 명령 자체로 컨텍스트를 선택하세요.",
-					"warning",
-				);
-				return;
-			}
-
-			if (!input) {
-				ctx.ui.notify(usageText, "info");
-				return;
-			}
-
-			const discovery = discoverAgents(ctx.cwd);
-			const agents = discovery.agents;
-
-			if (agents.length === 0) {
-				ctx.ui.notify(
-					"No subagents found. Checked user (~/.pi/agent/agents) + project-local (.pi/agents, .claude/agents).",
-					"error",
-				);
-				return;
-			}
-
-			const firstSpace = input.indexOf(" ");
-			const firstToken = firstSpace === -1 ? input : input.slice(0, firstSpace);
-			const continuationRun = /^\d+$/.test(firstToken) ? store.commandRuns.get(Number(firstToken)) : undefined;
-
-			let selectedAgent: string;
-			let taskForDisplay: string;
-			let taskForAgent: string;
-			let continuedFromRunId: number | undefined;
-			let sessionFileForRun: string | undefined;
-
-			if (continuationRun) {
-				if (firstSpace === -1) {
-					ctx.ui.notify(usageText, "info");
-					return;
-				}
-
-				const targetRunId = Number(firstToken);
-				const targetRun = continuationRun;
-
-				if (targetRun.status === "running") {
-					ctx.ui.notify(`Subagent #${targetRunId} is already running.`, "warning");
-					return;
-				}
-
-				if (targetRun.runtime === "claude") {
-					if (!targetRun.claudeSessionId) {
-						ctx.ui.notify(
-							`Cannot resume Claude run #${targetRunId}: no claudeSessionId found. The session metadata was lost or never captured.`,
-							"error",
-						);
-						return;
-					}
-					if (!targetRun.claudeProjectDir || targetRun.claudeProjectDir !== ctx.cwd) {
-						ctx.ui.notify(
-							`Cannot resume Claude run #${targetRunId}: claudeProjectDir mismatch. Expected "${targetRun.claudeProjectDir ?? "(none)"}", current cwd is "${ctx.cwd}".`,
-							"error",
-						);
-						return;
-					}
-				}
-
-				const nextInstruction = input.slice(firstSpace + 1).trim();
-				if (!nextInstruction) {
-					ctx.ui.notify(usageText, "info");
-					return;
-				}
-
-				const previousAgentName = targetRun.agent;
-				const directAgent = agents.find((agent) => agent.name.toLowerCase() === previousAgentName.toLowerCase());
-				const fuzzyAgent = matchSubCommandAgent(agents, previousAgentName).matchedAgent;
-				selectedAgent = directAgent?.name ?? fuzzyAgent?.name ?? previousAgentName;
-
-				if (!agents.some((agent) => agent.name === selectedAgent)) {
+				if (input === "--main" || input.startsWith("--main ")) {
 					ctx.ui.notify(
-						`Run #${targetRunId} references unknown agent "${previousAgentName}". Use /sub:main <agent> <task> instead.`,
+						"'--main' 접두어는 사용할 수 없습니다. /sub:main 또는 /sub:isolate 명령 자체로 컨텍스트를 선택하세요.",
+						"warning",
+					);
+					return;
+				}
+
+				if (!input) {
+					ctx.ui.notify(usageText, "info");
+					return;
+				}
+
+				if (hiddenFromMain && !ctx.hasUI) {
+					pi.sendMessage(
+						{
+							customType: "subagent-command",
+							content: ">>> hidden subagent mode requires interactive UI. Use /sub:isolate instead.",
+							display: true,
+							details: {},
+						},
+						{ deliverAs: "followUp", triggerTurn: false },
+					);
+					return;
+				}
+
+				const discovery = discoverAgents(ctx.cwd);
+				const agents = discovery.agents;
+
+				if (agents.length === 0) {
+					ctx.ui.notify(
+						"No subagents found. Checked user (~/.pi/agent/agents) + project-local (.pi/agents, .claude/agents).",
 						"error",
 					);
 					return;
 				}
 
-				taskForDisplay = `[continue #${targetRunId}] ${nextInstruction}`;
-				continuedFromRunId = targetRunId;
-				sessionFileForRun = targetRun.sessionFile;
+				const firstSpace = input.indexOf(" ");
+				const firstToken = firstSpace === -1 ? input : input.slice(0, firstSpace);
+				const continuationRun = /^\d+$/.test(firstToken) ? store.commandRuns.get(Number(firstToken)) : undefined;
 
-				if (sessionFileForRun) {
-					// True continuation: reuse the same per-run session file.
-					taskForAgent = nextInstruction;
-				} else {
-					// Fallback for older runs that were started in isolated/no-session mode.
-					const previousOutputRaw = (targetRun.lastOutput ?? targetRun.lastLine ?? "").trim();
-					const previousOutput =
-						previousOutputRaw.length > CONTINUATION_OUTPUT_CONTEXT_MAX_CHARS
-							? `${previousOutputRaw.slice(0, CONTINUATION_OUTPUT_CONTEXT_MAX_CHARS)}\n... [truncated]`
-							: previousOutputRaw;
+				let selectedAgent: string;
+				let taskForDisplay: string;
+				let taskForAgent: string;
+				let continuedFromRunId: number | undefined;
+				let sessionFileForRun: string | undefined;
 
-					taskForAgent = [
-						`Continue subagent run #${targetRunId} using the same agent (${selectedAgent}).`,
-						`Previous task:\n${targetRun.task}`,
-						previousOutput ? `Previous output:\n${previousOutput}` : "Previous output: (not available)",
-						`New instruction:\n${nextInstruction}`,
-					].join("\n\n");
-				}
-			} else {
-				const { matchedAgent, ambiguousAgents } = matchSubCommandAgent(agents, firstToken);
-				let resolvedAgent = matchedAgent;
-
-				if (ambiguousAgents.length > 1) {
-					const names = ambiguousAgents.map((agent) => agent.name).join(", ");
-
+				if (continuationRun) {
 					if (firstSpace === -1) {
-						ctx.ui.notify(`${usageText}. Ambiguous agent alias "${firstToken}": ${names}.`, "error");
+						ctx.ui.notify(usageText, "info");
 						return;
 					}
 
-					// NOTE(user-approved): no-UI 모드에서의 안내 처리 방식은 현재 구현을 유지한다.
-					// (headless/RPC 경고 경로 개선은 이번 변경 범위에서 제외)
-					if (!ctx.hasUI) {
+					const targetRunId = Number(firstToken);
+					const targetRun = continuationRun;
+
+					if (targetRun.status === "running") {
+						ctx.ui.notify(`Subagent #${targetRunId} is already running.`, "warning");
+						return;
+					}
+
+					if (targetRun.runtime === "claude") {
+						if (!targetRun.claudeSessionId) {
+							ctx.ui.notify(
+								`Cannot resume Claude run #${targetRunId}: no claudeSessionId found. The session metadata was lost or never captured.`,
+								"error",
+							);
+							return;
+						}
+						if (!targetRun.claudeProjectDir || targetRun.claudeProjectDir !== ctx.cwd) {
+							ctx.ui.notify(
+								`Cannot resume Claude run #${targetRunId}: claudeProjectDir mismatch. Expected "${targetRun.claudeProjectDir ?? "(none)"}", current cwd is "${ctx.cwd}".`,
+								"error",
+							);
+							return;
+						}
+					}
+
+					const nextInstruction = input.slice(firstSpace + 1).trim();
+					if (!nextInstruction) {
+						ctx.ui.notify(usageText, "info");
+						return;
+					}
+
+					const previousAgentName = targetRun.agent;
+					const directAgent = agents.find((agent) => agent.name.toLowerCase() === previousAgentName.toLowerCase());
+					const fuzzyAgent = matchSubCommandAgent(agents, previousAgentName).matchedAgent;
+					selectedAgent = directAgent?.name ?? fuzzyAgent?.name ?? previousAgentName;
+
+					if (!agents.some((agent) => agent.name === selectedAgent)) {
 						ctx.ui.notify(
-							`Ambiguous agent alias "${firstToken}": ${names}. Use a longer alias or exact name.`,
+							`Run #${targetRunId} references unknown agent "${previousAgentName}". Use /sub:main <agent> <task> instead.`,
 							"error",
 						);
 						return;
 					}
 
-					const selectedName = await ctx.ui.select(
-						`Ambiguous alias "${firstToken}" — choose subagent`,
-						ambiguousAgents.map((agent) => agent.name),
-					);
-					if (!selectedName) {
-						ctx.ui.notify("Subagent selection cancelled.", "info");
-						return;
-					}
+					taskForDisplay = `[continue #${targetRunId}] ${nextInstruction}`;
+					continuedFromRunId = targetRunId;
+					sessionFileForRun = targetRun.sessionFile;
 
-					resolvedAgent = ambiguousAgents.find((agent) => agent.name === selectedName);
-					if (!resolvedAgent) {
-						ctx.ui.notify("Could not resolve selected subagent.", "error");
-						return;
-					}
-				}
-
-				if (resolvedAgent && firstSpace === -1) {
-					ctx.ui.notify(usageText, "info");
-					return;
-				}
-
-				selectedAgent = resolvedAgent?.name ?? "worker";
-				taskForDisplay = resolvedAgent ? input.slice(firstSpace + 1).trim() : input;
-
-				if (!taskForDisplay) {
-					ctx.ui.notify(usageText, "info");
-					return;
-				}
-
-				taskForAgent = taskForDisplay;
-			}
-
-			let runId: number;
-			let runState: CommandRunState;
-
-			if (continuedFromRunId !== undefined) {
-				const existingRun = store.commandRuns.get(continuedFromRunId);
-				if (!existingRun) {
-					ctx.ui.notify(`Unknown subagent run #${continuedFromRunId}.`, "error");
-					return;
-				}
-
-				runId = existingRun.id;
-				runState = existingRun;
-				runState.agent = selectedAgent;
-				runState.task = taskForDisplay;
-				runState.displayTask = buildSubagentDisplayTaskFallback(taskForDisplay);
-				runState.status = "running";
-				runState.startedAt = Date.now();
-				runState.lastActivityAt = Date.now();
-				runState.elapsedMs = 0;
-				runState.toolCalls = 0;
-				runState.lastLine = "";
-				runState.lastOutput = "";
-				runState.continuedFromRunId = continuedFromRunId;
-				runState.usage = undefined;
-				runState.model = undefined;
-				runState.retryCount = 0;
-				runState.lastRetryReason = undefined;
-				runState.removed = false;
-				runState.turnCount = Math.max(DEFAULT_TURN_COUNT, runState.turnCount || DEFAULT_TURN_COUNT) + 1;
-				// NOTE(user-approved): continuation 시 기존 context/session을 유지한다.
-				// /sub:main 과 /sub:isolate 간 모드 전환은 기존 run에는 소급 적용하지 않는다.
-				runState.contextMode = runState.contextMode ?? (forceMainContext ? "main" : "sub");
-				runState.sessionFile = runState.sessionFile ?? sessionFileForRun ?? makeSubagentSessionFile(runId);
-				runState.persistedSessionBaseOffset = getSessionFileSize(runState.sessionFile);
-				sessionFileForRun = runState.sessionFile;
-			} else {
-				runId = store.nextCommandRunId++;
-				if (forceMainContext) {
-					// Extract main session context as text instead of copying the session file.
-					// This prevents subagents from inheriting the main agent's persona.
-					const subContextResult = buildMainContextText(ctx);
-					const subContextText = typeof subContextResult === "string" ? subContextResult : subContextResult.text;
-					const totalMessageCount = typeof subContextResult === "string" ? 0 : subContextResult.totalMessageCount;
-					const rawMainSessionFile = ctx.sessionManager?.getSessionFile?.() ?? undefined;
-					const mainSessionFile =
-						typeof rawMainSessionFile === "string"
-							? rawMainSessionFile.replace(/[\r\n\t]+/g, "").trim() || undefined
-							: undefined;
-					if (subContextText || mainSessionFile) {
-						taskForAgent = wrapTaskWithMainContext(taskForAgent, subContextText, {
-							mainSessionFile,
-							totalMessageCount,
-						});
+					if (sessionFileForRun) {
+						// True continuation: reuse the same per-run session file.
+						taskForAgent = nextInstruction;
 					} else {
-						ctx.ui.notify(
-							"Main session context is unavailable in this mode. Running with dedicated sub-session.",
-							"warning",
-						);
-						forceMainContext = false;
+						// Fallback for older runs that were started in isolated/no-session mode.
+						const previousOutputRaw = (targetRun.lastOutput ?? targetRun.lastLine ?? "").trim();
+						const previousOutput =
+							previousOutputRaw.length > CONTINUATION_OUTPUT_CONTEXT_MAX_CHARS
+								? `${previousOutputRaw.slice(0, CONTINUATION_OUTPUT_CONTEXT_MAX_CHARS)}\n... [truncated]`
+								: previousOutputRaw;
+
+						taskForAgent = [
+							`Continue subagent run #${targetRunId} using the same agent (${selectedAgent}).`,
+							`Previous task:\n${targetRun.task}`,
+							previousOutput ? `Previous output:\n${previousOutput}` : "Previous output: (not available)",
+							`New instruction:\n${nextInstruction}`,
+						].join("\n\n");
 					}
-					sessionFileForRun = makeSubagentSessionFile(runId);
 				} else {
-					sessionFileForRun = makeSubagentSessionFile(runId);
+					const { matchedAgent, ambiguousAgents } = matchSubCommandAgent(agents, firstToken);
+					let resolvedAgent = matchedAgent;
+
+					if (ambiguousAgents.length > 1) {
+						const names = ambiguousAgents.map((agent) => agent.name).join(", ");
+
+						if (firstSpace === -1) {
+							ctx.ui.notify(`${usageText}. Ambiguous agent alias "${firstToken}": ${names}.`, "error");
+							return;
+						}
+
+						// NOTE(user-approved): no-UI 모드에서의 안내 처리 방식은 현재 구현을 유지한다.
+						// (headless/RPC 경고 경로 개선은 이번 변경 범위에서 제외)
+						if (!ctx.hasUI) {
+							ctx.ui.notify(
+								`Ambiguous agent alias "${firstToken}": ${names}. Use a longer alias or exact name.`,
+								"error",
+							);
+							return;
+						}
+
+						const selectedName = await ctx.ui.select(
+							`Ambiguous alias "${firstToken}" — choose subagent`,
+							ambiguousAgents.map((agent) => agent.name),
+						);
+						if (!selectedName) {
+							ctx.ui.notify("Subagent selection cancelled.", "info");
+							return;
+						}
+
+						resolvedAgent = ambiguousAgents.find((agent) => agent.name === selectedName);
+						if (!resolvedAgent) {
+							ctx.ui.notify("Could not resolve selected subagent.", "error");
+							return;
+						}
+					}
+
+					if (resolvedAgent && firstSpace === -1) {
+						ctx.ui.notify(usageText, "info");
+						return;
+					}
+
+					selectedAgent = resolvedAgent?.name ?? "worker";
+					taskForDisplay = resolvedAgent ? input.slice(firstSpace + 1).trim() : input;
+
+					if (!taskForDisplay) {
+						ctx.ui.notify(usageText, "info");
+						return;
+					}
+
+					taskForAgent = taskForDisplay;
 				}
 
-				runState = {
-					id: runId,
-					agent: selectedAgent,
-					task: taskForDisplay,
-					displayTask: buildSubagentDisplayTaskFallback(taskForDisplay),
-					status: "running",
-					startedAt: Date.now(),
-					lastActivityAt: Date.now(),
-					elapsedMs: 0,
-					toolCalls: 0,
-					lastLine: "",
-					lastOutput: "",
-					continuedFromRunId,
-					turnCount: DEFAULT_TURN_COUNT,
-					sessionFile: sessionFileForRun,
-					persistedSessionBaseOffset: getSessionFileSize(sessionFileForRun),
-					removed: false,
-					contextMode: forceMainContext ? "main" : "sub",
-					retryCount: 0,
-				};
-				store.commandRuns.set(runId, runState);
-			}
+				let runId: number;
+				let runState: CommandRunState;
 
-			const abortController = new AbortController();
-			runState.abortController = abortController;
+				if (continuedFromRunId !== undefined) {
+					const existingRun = store.commandRuns.get(continuedFromRunId);
+					if (!existingRun) {
+						ctx.ui.notify(`Unknown subagent run #${continuedFromRunId}.`, "error");
+						return;
+					}
 
-			// Register in global live run registry (survives session switches).
-			let originSessionFile = "";
-			try {
-				originSessionFile = normalizePath(ctx.sessionManager.getSessionFile()) ?? "";
-			} catch {
-				/* ignore */
-			}
-			store.globalLiveRuns.set(runId, {
-				runState,
-				abortController,
-				originSessionFile,
-			});
+					runId = existingRun.id;
+					runState = existingRun;
+					runState.agent = selectedAgent;
+					runState.task = taskForDisplay;
+					runState.displayTask = buildSubagentDisplayTaskFallback(taskForDisplay);
+					runState.status = "running";
+					runState.startedAt = Date.now();
+					runState.lastActivityAt = Date.now();
+					runState.elapsedMs = 0;
+					runState.toolCalls = 0;
+					runState.lastLine = "";
+					runState.lastOutput = "";
+					runState.continuedFromRunId = continuedFromRunId;
+					runState.usage = undefined;
+					runState.model = undefined;
+					runState.retryCount = 0;
+					runState.lastRetryReason = undefined;
+					runState.removed = false;
+					runState.deliveryMode = deliveryMode;
+					runState.turnCount = Math.max(DEFAULT_TURN_COUNT, runState.turnCount || DEFAULT_TURN_COUNT) + 1;
+					// NOTE(user-approved): continuation 시 기존 context/session을 유지한다.
+					// /sub:main 과 /sub:isolate 간 모드 전환은 기존 run에는 소급 적용하지 않는다.
+					runState.contextMode = runState.contextMode ?? (forceMainContext ? "main" : "sub");
+					runState.sessionFile = runState.sessionFile ?? sessionFileForRun ?? makeSubagentSessionFile(runId);
+					runState.persistedSessionBaseOffset = getSessionFileSize(runState.sessionFile);
+					sessionFileForRun = runState.sessionFile;
+				} else {
+					runId = store.nextCommandRunId++;
+					if (forceMainContext) {
+						// Extract main session context as text instead of copying the session file.
+						// This prevents subagents from inheriting the main agent's persona.
+						const subContextResult = buildMainContextText(ctx);
+						const subContextText = typeof subContextResult === "string" ? subContextResult : subContextResult.text;
+						const totalMessageCount = typeof subContextResult === "string" ? 0 : subContextResult.totalMessageCount;
+						const rawMainSessionFile = ctx.sessionManager?.getSessionFile?.() ?? undefined;
+						const mainSessionFile =
+							typeof rawMainSessionFile === "string"
+								? rawMainSessionFile.replace(/[\r\n\t]+/g, "").trim() || undefined
+								: undefined;
+						if (subContextText || mainSessionFile) {
+							taskForAgent = wrapTaskWithMainContext(taskForAgent, subContextText, {
+								mainSessionFile,
+								totalMessageCount,
+							});
+						} else {
+							ctx.ui.notify(
+								"Main session context is unavailable in this mode. Running with dedicated sub-session.",
+								"warning",
+							);
+							forceMainContext = false;
+						}
+						sessionFileForRun = makeSubagentSessionFile(runId);
+					} else {
+						sessionFileForRun = makeSubagentSessionFile(runId);
+					}
 
-			store.commandWidgetCtx = ctx as unknown as WidgetRenderCtx;
-			updateCommandRunsWidget(store, ctx as unknown as WidgetRenderCtx);
-			refreshDisplayTaskInBackground(store, runState, taskForDisplay, ctx);
-
-			const makeDetails = (results: SingleResult[]): SubagentDetails => ({
-				mode: "single",
-				inheritMainContext: runState.contextMode === "main",
-				projectAgentsDir: discovery.projectAgentsDir,
-				results,
-			});
-
-			const contextLabel = runState.contextMode === "main" ? "main context" : "dedicated sub-session";
-			const startedState = continuedFromRunId !== undefined ? "resumed" : "started";
-
-			pi.sendMessage(
-				{
-					customType: "subagent-command",
-					content:
-						`[subagent:${selectedAgent}#${runId}] ${startedState}` +
-						`\nContext: ${contextLabel} · turn ${runState.turnCount}` +
-						``,
-					display: false,
-					details: {
-						runId,
+					runState = {
+						id: runId,
 						agent: selectedAgent,
 						task: taskForDisplay,
-						displayTask: runState.displayTask,
+						displayTask: buildSubagentDisplayTaskFallback(taskForDisplay),
+						status: "running",
+						startedAt: Date.now(),
+						lastActivityAt: Date.now(),
+						elapsedMs: 0,
+						toolCalls: 0,
+						lastLine: "",
+						lastOutput: "",
 						continuedFromRunId,
-						turnCount: runState.turnCount,
-						contextMode: runState.contextMode,
-						sessionFile: runState.sessionFile,
-						persistedSessionBaseOffset: runState.persistedSessionBaseOffset,
-						status: startedState,
-						startedAt: runState.startedAt,
-						elapsedMs: runState.elapsedMs,
-						lastActivityAt: runState.lastActivityAt,
-						thoughtText: runState.thoughtText,
-						runtime: runState.runtime,
-						claudeSessionId: runState.claudeSessionId,
-						claudeProjectDir: runState.claudeProjectDir,
-					},
-				},
-				{ deliverAs: "followUp", triggerTurn: false },
-			);
-
-			ctx.ui.notify(
-				`${
-					continuedFromRunId !== undefined
-						? `Resumed subagent #${runId}: ${selectedAgent}`
-						: `Started subagent #${runId}: ${selectedAgent}`
-				} (${contextLabel} · turn ${runState.turnCount})`,
-				"info",
-			);
-
-			const tick = setInterval(() => {
-				const current = store.commandRuns.get(runId);
-				if (!current || current.status !== "running") {
-					clearInterval(tick);
-					return;
+						turnCount: DEFAULT_TURN_COUNT,
+						sessionFile: sessionFileForRun,
+						persistedSessionBaseOffset: getSessionFileSize(sessionFileForRun),
+						removed: false,
+						contextMode: forceMainContext ? "main" : "sub",
+						retryCount: 0,
+						deliveryMode,
+					};
+					store.commandRuns.set(runId, runState);
 				}
-				current.elapsedMs = Date.now() - current.startedAt;
-				updateCommandRunsWidget(store);
-			}, RUN_TICK_INTERVAL_MS);
 
-			let claudeCheckpointSent = !!runState.claudeSessionId;
-			// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: completion flow must preserve retry, pending-delivery, and widget update behavior.
-			void (async () => {
+				const abortController = new AbortController();
+				runState.abortController = abortController;
+
+				// Register in global live run registry (survives session switches).
+				let originSessionFile = "";
 				try {
-					const { result, retryCount } = await invokeWithAutoRetry({
-						maxRetries: MAX_SUBAGENT_AUTO_RETRIES,
-						signal: abortController.signal,
-						onRetryScheduled: ({ retryIndex, maxRetries, delayMs, reason }) => {
-							runState.retryCount = retryIndex;
-							runState.lastRetryReason = reason;
-							runState.lastActivityAt = Date.now();
-							runState.lastLine = `Auto-retrying ${retryIndex}/${maxRetries} in ${Math.ceil(delayMs / 1000)}s: ${reason}`;
-							runState.lastOutput = runState.lastLine;
-							updateCommandRunsWidget(store);
-							ctx.ui.notify(`subagent #${runId} retry ${retryIndex}/${maxRetries}: ${reason}`, "warning");
-						},
-						invoke: () => {
-							runState.persistedSessionBaseOffset = getSessionFileSize(runState.sessionFile);
-							return enqueueSubagentInvocation(() =>
-								runSingleAgent(
-									ctx.cwd,
-									agents,
-									selectedAgent,
-									taskForAgent,
-									undefined,
-									abortController.signal,
-									(partial) => {
-										if (runState.removed) return;
-										const current = partial.details?.results?.[0];
-										if (!current) return;
-										updateRunFromResult(runState, current);
-										if (!claudeCheckpointSent && runState.claudeSessionId) {
-											claudeCheckpointSent = true;
-											pi.sendMessage(
-												{
-													customType: "subagent-command" as const,
-													content: `[subagent:${selectedAgent}#${runId}] checkpoint`,
-													display: false,
-													details: {
-														runId,
-														agent: selectedAgent,
-														task: taskForDisplay,
-														displayTask: runState.displayTask,
-														continuedFromRunId,
-														turnCount: runState.turnCount,
-														contextMode: runState.contextMode,
-														sessionFile: runState.sessionFile,
-														persistedSessionBaseOffset: runState.persistedSessionBaseOffset,
-														status: "started",
-														startedAt: runState.startedAt,
-														elapsedMs: runState.elapsedMs,
-														lastActivityAt: runState.lastActivityAt,
-														runtime: runState.runtime,
-														claudeSessionId: runState.claudeSessionId,
-														claudeProjectDir: runState.claudeProjectDir,
-													},
-												},
-												{ deliverAs: "followUp", triggerTurn: false },
-											);
-										}
-										updateCommandRunsWidget(store);
-									},
-									makeDetails,
-									{
-										sessionFile: runState.sessionFile,
-										resumeSessionId: runState.claudeSessionId,
-										sidecarSessionFile: runState.sessionFile,
-										persistedSessionBaseOffset: runState.persistedSessionBaseOffset,
-									},
-								),
-							);
-						},
-					});
-					runState.retryCount = retryCount;
-
-					if (runState.removed) return;
-
-					updateRunFromResult(runState, result);
-					const isError = result.exitCode !== 0 || result.stopReason === "error" || result.stopReason === "aborted";
-					runState.status = isError ? "error" : "done";
-					runState.elapsedMs = Date.now() - runState.startedAt;
-					updateCommandRunsWidget(store);
-
-					const rawOutput = isError
-						? result.errorMessage || result.stderr || getFinalOutput(result.messages) || "(no output)"
-						: getFinalOutput(result.messages) || "(no output)";
-					const output =
-						isError && rawOutput.length > RUN_OUTPUT_MESSAGE_MAX_CHARS
-							? `${rawOutput.slice(0, RUN_OUTPUT_MESSAGE_MAX_CHARS)}\n\n... [truncated]`
-							: rawOutput;
-					const usage = formatUsageStats(result.usage, result.model);
-
-					runState.lastOutput = rawOutput;
-					if (rawOutput) runState.lastLine = getLastNonEmptyLine(rawOutput);
-
-					const completionMessage = {
-						customType: "subagent-command" as const,
-						content:
-							`[subagent:${selectedAgent}#${runId}] ${isError ? "failed" : "completed"}` +
-							`\nPrompt: ${truncateLines(taskForDisplay, 2)}` +
-							(usage ? `\nUsage: ${usage}` : "") +
-							(runState.retryCount ? `\nRetries: ${runState.retryCount}/${MAX_SUBAGENT_AUTO_RETRIES}` : "") +
-							(runState.thoughtText ? `\nThought: ${runState.thoughtText}` : "") +
-							`\n\n${output}`,
-						display: true,
-						details: {
-							runId,
-							agent: selectedAgent,
-							task: taskForDisplay,
-							displayTask: runState.displayTask,
-							continuedFromRunId,
-							turnCount: runState.turnCount,
-							contextMode: runState.contextMode,
-							sessionFile: runState.sessionFile,
-							persistedSessionBaseOffset: runState.persistedSessionBaseOffset,
-							startedAt: runState.startedAt,
-							elapsedMs: runState.elapsedMs,
-							lastActivityAt: runState.lastActivityAt,
-							exitCode: result.exitCode,
-							usage: result.usage,
-							model: result.model,
-							source: result.agentSource,
-							thoughtText: runState.thoughtText,
-							retryCount: runState.retryCount,
-							status: runState.status,
-							runtime: runState.runtime,
-							claudeSessionId: runState.claudeSessionId,
-							claudeProjectDir: runState.claudeProjectDir,
-						},
-					};
-					deliverOrQueueCompletion(store, pi, ctx, runId, runState, completionMessage);
-
-					ctx.ui.notify(
-						isError
-							? `subagent #${runId} (${selectedAgent}) failed`
-							: `subagent #${runId} (${selectedAgent}) completed`,
-						isError ? "error" : "info",
-					);
-				} catch (error: any) {
-					if (runState.removed) return;
-					runState.status = "error";
-					runState.elapsedMs = Date.now() - runState.startedAt;
-					runState.lastLine = error?.message ? String(error.message) : "Subagent execution failed";
-					runState.lastOutput = runState.lastLine;
-
-					const cmdErrorMessage = {
-						customType: "subagent-command" as const,
-						content:
-							`[subagent:${selectedAgent}#${runId}] failed` +
-							`\nPrompt: ${truncateLines(taskForDisplay, 2)}` +
-							`\n\n${runState.lastLine}`,
-						display: true,
-						details: {
-							runId,
-							agent: selectedAgent,
-							task: taskForDisplay,
-							displayTask: runState.displayTask,
-							continuedFromRunId,
-							turnCount: runState.turnCount,
-							contextMode: runState.contextMode,
-							sessionFile: runState.sessionFile,
-							persistedSessionBaseOffset: runState.persistedSessionBaseOffset,
-							startedAt: runState.startedAt,
-							elapsedMs: runState.elapsedMs,
-							lastActivityAt: runState.lastActivityAt,
-							error: runState.lastLine,
-							thoughtText: runState.thoughtText,
-							status: runState.status,
-							runtime: runState.runtime,
-							claudeSessionId: runState.claudeSessionId,
-							claudeProjectDir: runState.claudeProjectDir,
-						},
-					};
-					deliverOrQueueCompletion(store, pi, ctx, runId, runState, cmdErrorMessage);
-
-					ctx.ui.notify(`subagent #${runId} failed: ${runState.lastLine}`, "error");
-				} finally {
-					clearInterval(tick);
-					runState.abortController = undefined;
-					trimCommandRunHistory(store, {
-						maxRuns: 10,
-						ctx,
-						pi,
-						updateWidget: false,
-						removalReason: "trim",
-					});
-					updateCommandRunsWidget(store);
+					originSessionFile = normalizePath(ctx.sessionManager.getSessionFile()) ?? "";
+				} catch {
+					/* ignore */
 				}
-			})();
-		},
+				store.globalLiveRuns.set(runId, {
+					runState,
+					abortController,
+					originSessionFile,
+				});
+
+				store.commandWidgetCtx = ctx as unknown as WidgetRenderCtx;
+				updateCommandRunsWidget(store, ctx as unknown as WidgetRenderCtx);
+				refreshDisplayTaskInBackground(store, runState, taskForDisplay, ctx);
+
+				const makeDetails = (results: SingleResult[]): SubagentDetails => ({
+					mode: "single",
+					inheritMainContext: runState.contextMode === "main",
+					projectAgentsDir: discovery.projectAgentsDir,
+					results,
+				});
+
+				const contextLabel = hiddenFromMain
+					? "hidden sub-session"
+					: runState.contextMode === "main"
+						? "main context"
+						: "dedicated sub-session";
+				const startedState = continuedFromRunId !== undefined ? "resumed" : "started";
+
+				if (!hiddenFromMain) {
+					pi.sendMessage(
+						{
+							customType: "subagent-command",
+							content:
+								`[subagent:${selectedAgent}#${runId}] ${startedState}` +
+								`\nContext: ${contextLabel} · turn ${runState.turnCount}` +
+								``,
+							display: false,
+							details: {
+								runId,
+								agent: selectedAgent,
+								task: taskForDisplay,
+								displayTask: runState.displayTask,
+								continuedFromRunId,
+								turnCount: runState.turnCount,
+								contextMode: runState.contextMode,
+								sessionFile: runState.sessionFile,
+								persistedSessionBaseOffset: runState.persistedSessionBaseOffset,
+								status: startedState,
+								startedAt: runState.startedAt,
+								elapsedMs: runState.elapsedMs,
+								lastActivityAt: runState.lastActivityAt,
+								thoughtText: runState.thoughtText,
+								runtime: runState.runtime,
+								claudeSessionId: runState.claudeSessionId,
+								claudeProjectDir: runState.claudeProjectDir,
+							},
+						},
+						{ deliverAs: "followUp", triggerTurn: false },
+					);
+				}
+
+				ctx.ui.notify(
+					`${
+						continuedFromRunId !== undefined
+							? `Resumed subagent #${runId}: ${selectedAgent}`
+							: `Started subagent #${runId}: ${selectedAgent}`
+					} (${contextLabel} · turn ${runState.turnCount})`,
+					"info",
+				);
+
+				const tick = setInterval(() => {
+					const current = store.commandRuns.get(runId);
+					if (!current || current.status !== "running") {
+						clearInterval(tick);
+						return;
+					}
+					current.elapsedMs = Date.now() - current.startedAt;
+					updateCommandRunsWidget(store);
+				}, RUN_TICK_INTERVAL_MS);
+
+				let claudeCheckpointSent = !!runState.claudeSessionId;
+				// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: completion flow must preserve retry, pending-delivery, and widget update behavior.
+				void (async () => {
+					try {
+						const { result, retryCount } = await invokeWithAutoRetry({
+							maxRetries: MAX_SUBAGENT_AUTO_RETRIES,
+							signal: abortController.signal,
+							onRetryScheduled: ({ retryIndex, maxRetries, delayMs, reason }) => {
+								runState.retryCount = retryIndex;
+								runState.lastRetryReason = reason;
+								runState.lastActivityAt = Date.now();
+								runState.lastLine = `Auto-retrying ${retryIndex}/${maxRetries} in ${Math.ceil(delayMs / 1000)}s: ${reason}`;
+								runState.lastOutput = runState.lastLine;
+								updateCommandRunsWidget(store);
+								ctx.ui.notify(`subagent #${runId} retry ${retryIndex}/${maxRetries}: ${reason}`, "warning");
+							},
+							invoke: () => {
+								runState.persistedSessionBaseOffset = getSessionFileSize(runState.sessionFile);
+								return enqueueSubagentInvocation(() =>
+									runSingleAgent(
+										ctx.cwd,
+										agents,
+										selectedAgent,
+										taskForAgent,
+										undefined,
+										abortController.signal,
+										(partial) => {
+											if (runState.removed) return;
+											const current = partial.details?.results?.[0];
+											if (!current) return;
+											updateRunFromResult(runState, current);
+											if (!claudeCheckpointSent && runState.claudeSessionId) {
+												claudeCheckpointSent = true;
+												if (!hiddenFromMain) {
+													pi.sendMessage(
+														{
+															customType: "subagent-command" as const,
+															content: `[subagent:${selectedAgent}#${runId}] checkpoint`,
+															display: false,
+															details: {
+																runId,
+																agent: selectedAgent,
+																task: taskForDisplay,
+																displayTask: runState.displayTask,
+																continuedFromRunId,
+																turnCount: runState.turnCount,
+																contextMode: runState.contextMode,
+																sessionFile: runState.sessionFile,
+																persistedSessionBaseOffset: runState.persistedSessionBaseOffset,
+																status: "started",
+																startedAt: runState.startedAt,
+																elapsedMs: runState.elapsedMs,
+																lastActivityAt: runState.lastActivityAt,
+																runtime: runState.runtime,
+																claudeSessionId: runState.claudeSessionId,
+																claudeProjectDir: runState.claudeProjectDir,
+															},
+														},
+														{ deliverAs: "followUp", triggerTurn: false },
+													);
+												}
+											}
+											updateCommandRunsWidget(store);
+										},
+										makeDetails,
+										{
+											sessionFile: runState.sessionFile,
+											resumeSessionId: runState.claudeSessionId,
+											sidecarSessionFile: runState.sessionFile,
+											persistedSessionBaseOffset: runState.persistedSessionBaseOffset,
+										},
+									),
+								);
+							},
+						});
+						runState.retryCount = retryCount;
+
+						if (runState.removed) return;
+
+						updateRunFromResult(runState, result);
+						const isError = result.exitCode !== 0 || result.stopReason === "error" || result.stopReason === "aborted";
+						runState.status = isError ? "error" : "done";
+						runState.elapsedMs = Date.now() - runState.startedAt;
+						updateCommandRunsWidget(store);
+
+						const rawOutput = isError
+							? result.errorMessage || result.stderr || getFinalOutput(result.messages) || "(no output)"
+							: getFinalOutput(result.messages) || "(no output)";
+						const output =
+							isError && rawOutput.length > RUN_OUTPUT_MESSAGE_MAX_CHARS
+								? `${rawOutput.slice(0, RUN_OUTPUT_MESSAGE_MAX_CHARS)}\n\n... [truncated]`
+								: rawOutput;
+						const usage = formatUsageStats(result.usage, result.model);
+
+						runState.lastOutput = rawOutput;
+						if (rawOutput) runState.lastLine = getLastNonEmptyLine(rawOutput);
+
+						const completionMessage = {
+							customType: "subagent-command" as const,
+							content:
+								`[subagent:${selectedAgent}#${runId}] ${isError ? "failed" : "completed"}` +
+								`\nPrompt: ${truncateLines(taskForDisplay, 2)}` +
+								(usage ? `\nUsage: ${usage}` : "") +
+								(runState.retryCount ? `\nRetries: ${runState.retryCount}/${MAX_SUBAGENT_AUTO_RETRIES}` : "") +
+								(runState.thoughtText ? `\nThought: ${runState.thoughtText}` : "") +
+								`\n\n${output}`,
+							display: true,
+							details: {
+								runId,
+								agent: selectedAgent,
+								task: taskForDisplay,
+								displayTask: runState.displayTask,
+								continuedFromRunId,
+								turnCount: runState.turnCount,
+								contextMode: runState.contextMode,
+								sessionFile: runState.sessionFile,
+								persistedSessionBaseOffset: runState.persistedSessionBaseOffset,
+								startedAt: runState.startedAt,
+								elapsedMs: runState.elapsedMs,
+								lastActivityAt: runState.lastActivityAt,
+								exitCode: result.exitCode,
+								usage: result.usage,
+								model: result.model,
+								source: result.agentSource,
+								thoughtText: runState.thoughtText,
+								retryCount: runState.retryCount,
+								status: runState.status,
+								runtime: runState.runtime,
+								claudeSessionId: runState.claudeSessionId,
+								claudeProjectDir: runState.claudeProjectDir,
+							},
+						};
+						if (hiddenFromMain) {
+							finalizeHumanOnlyCompletion(
+								store,
+								ctx,
+								runId,
+								`Hidden subagent #${runId} · ${selectedAgent}`,
+								completionMessage.content,
+								isError
+									? `hidden subagent #${runId} (${selectedAgent}) failed`
+									: `hidden subagent #${runId} (${selectedAgent}) completed`,
+								isError ? "error" : "info",
+							);
+						} else {
+							deliverOrQueueCompletion(store, pi, ctx, runId, runState, completionMessage);
+							ctx.ui.notify(
+								isError
+									? `subagent #${runId} (${selectedAgent}) failed`
+									: `subagent #${runId} (${selectedAgent}) completed`,
+								isError ? "error" : "info",
+							);
+						}
+					} catch (error: any) {
+						if (runState.removed) return;
+						runState.status = "error";
+						runState.elapsedMs = Date.now() - runState.startedAt;
+						runState.lastLine = error?.message ? String(error.message) : "Subagent execution failed";
+						runState.lastOutput = runState.lastLine;
+
+						const cmdErrorMessage = {
+							customType: "subagent-command" as const,
+							content:
+								`[subagent:${selectedAgent}#${runId}] failed` +
+								`\nPrompt: ${truncateLines(taskForDisplay, 2)}` +
+								`\n\n${runState.lastLine}`,
+							display: true,
+							details: {
+								runId,
+								agent: selectedAgent,
+								task: taskForDisplay,
+								displayTask: runState.displayTask,
+								continuedFromRunId,
+								turnCount: runState.turnCount,
+								contextMode: runState.contextMode,
+								sessionFile: runState.sessionFile,
+								persistedSessionBaseOffset: runState.persistedSessionBaseOffset,
+								startedAt: runState.startedAt,
+								elapsedMs: runState.elapsedMs,
+								lastActivityAt: runState.lastActivityAt,
+								error: runState.lastLine,
+								thoughtText: runState.thoughtText,
+								status: runState.status,
+								runtime: runState.runtime,
+								claudeSessionId: runState.claudeSessionId,
+								claudeProjectDir: runState.claudeProjectDir,
+							},
+						};
+						if (hiddenFromMain) {
+							finalizeHumanOnlyCompletion(
+								store,
+								ctx,
+								runId,
+								`Hidden subagent #${runId} · ${selectedAgent}`,
+								cmdErrorMessage.content,
+								`hidden subagent #${runId} failed: ${runState.lastLine}`,
+								"error",
+							);
+						} else {
+							deliverOrQueueCompletion(store, pi, ctx, runId, runState, cmdErrorMessage);
+							ctx.ui.notify(`subagent #${runId} failed: ${runState.lastLine}`, "error");
+						}
+					} finally {
+						clearInterval(tick);
+						runState.abortController = undefined;
+						trimCommandRunHistory(store, {
+							maxRuns: 10,
+							ctx,
+							pi,
+							updateWidget: false,
+							removalReason: "trim",
+						});
+						updateCommandRunsWidget(store);
+					}
+				})();
+			},
 	};
 
 	pi.registerCommand("sub:isolate", subCommand);
@@ -1558,6 +1594,30 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 			});
 
 			ctx.ui.notify(`Available subagents\n${lines.map((line) => `• ${line}`).join("\n")}`, "info");
+		},
+	});
+
+	pi.registerCommand("sub:peek", {
+		description: "Show the latest response from a subagent in an overlay: /sub:peek [runId]",
+		getArgumentCompletions: (argumentPrefix) => {
+			const trimmedStart = argumentPrefix.trimStart();
+			if (trimmedStart.includes(" ")) return null;
+
+			const items = Array.from(store.commandRuns.values())
+				.sort((a, b) => b.id - a.id)
+				.filter((run) => !trimmedStart || run.id.toString().startsWith(trimmedStart))
+				.slice(0, COMMAND_COMPLETION_LIMIT)
+				.map((run) => ({
+					value: `${run.id}`,
+					label: `${run.id}`,
+					description: `${run.status} ${run.agent}: ${truncateText(run.task, COMMAND_TASK_PREVIEW_CHARS)}`,
+				}));
+
+			return items.length > 0 ? items : null;
+		},
+		handler: async (args, ctx) => {
+			captureSwitchSession(store, ctx);
+			await subPeekHandler(args, ctx, store);
 		},
 	});
 
@@ -1653,14 +1713,6 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 		},
 	});
 
-	pi.registerCommand("sub:trans", {
-		description: "Switch to a subagent session in interactive mode: /sub:trans <runId>",
-		handler: async (args, ctx) => {
-			captureSwitchSession(store, ctx);
-			await subTransHandler(args, ctx, store, pi);
-		},
-	});
-
 	pi.registerCommand("sub:history", {
 		description: "Show all subagent run history (including removed) in an overlay: /sub:history",
 		handler: async (_args, ctx) => {
@@ -1695,15 +1747,7 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 						allRuns,
 						async (run) => {
 							done(undefined);
-							// Check if the selected run has a session file before trying to trans
-							if (!run.sessionFile) {
-								ctx.ui.notify(
-									`Run #${run.id} (${run.agent}) does not have a session file yet and cannot be opened.`,
-									"warning",
-								);
-								return;
-							}
-							await subTransHandler(run.id.toString(), ctx, store, pi);
+							await subPeekHandler(run.id.toString(), ctx, store);
 						},
 						() => done(undefined),
 					);
@@ -1901,7 +1945,7 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 	});
 
 	pi.registerShortcut(">>>" as any, {
-		description: "Run subagent in dedicated sub-session (= /sub:isolate, supports symbols)",
+		description: "Run hidden subagent (interactive UI only, supports symbols)",
 		handler: async () => {
 			// Documentation-only entry.
 		},
@@ -1918,9 +1962,22 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 			return { action: "continue" as const };
 		}
 
-		// ── >>> shortcut: dedicated sub-session (same as /sub:isolate) ──
+		// ── >>> shortcut: hidden subagent (interactive UI only) ──
 		// Must be matched before >> symbol/space patterns.
 		if (text.startsWith(">>>")) {
+			if (!ctx.hasUI) {
+				pi.sendMessage(
+					{
+						customType: "subagent-command",
+						content: ">>> hidden subagent mode requires interactive UI. Use /sub:isolate instead.",
+						display: true,
+						details: {},
+					},
+					{ deliverAs: "followUp", triggerTurn: false },
+				);
+				return { action: "handled" as const };
+			}
+
 			const forwardedArgs = text.slice(3).trim();
 			if (!forwardedArgs) {
 				ctx.ui.notify(
@@ -1938,7 +1995,7 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 					ctx.ui.notify(formatSymbolHints(">>>"), "info");
 					return { action: "handled" as const };
 				}
-				await subCommand.handler(`${dedicatedSymbol} ${task}`, ctx, false);
+				await subCommand.handler(`${dedicatedSymbol} ${task}`, ctx, true, true);
 				return { action: "handled" as const };
 			}
 
@@ -1948,7 +2005,7 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 				ctx.ui.notify(`Unknown subagent run #${firstToken}.`, "error");
 				return { action: "handled" as const };
 			}
-			await subCommand.handler(forwardedArgs, ctx, false);
+			await subCommand.handler(forwardedArgs, ctx, true, true);
 			return { action: "handled" as const };
 		}
 
@@ -2027,57 +2084,18 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 		return { action: "handled" as const };
 	});
 
-	// <> shortcut: switch to subagent session (equivalent to /sub:trans)
-	pi.registerShortcut("<>" as any, {
-		description: "Switch to subagent session",
-		handler: async () => {
-			// Documentation-only entry.
-		},
-	});
-
 	pi.on("input", async (event, ctx) => {
 		if (event.source === "extension") {
 			return { action: "continue" as const };
 		}
 
 		const text = event.text ?? "";
-		if (!text.startsWith("<>")) {
+		const compactPeekMatch = /^<>(\d+)$/.exec(text.trim());
+		if (!compactPeekMatch?.[1]) {
 			return { action: "continue" as const };
 		}
 
-		const raw = text.slice(2).trim();
-		await subTransHandler(raw, ctx, store, pi);
-		return { action: "handled" as const };
-	});
-
-	// sub:back command: return to parent session (used by >< shortcut)
-	pi.registerCommand("sub:back", {
-		description: "Return to parent session (pop from session stack): /sub:back",
-		handler: async (_args, ctx) => {
-			captureSwitchSession(store, ctx);
-			await subBackHandler(ctx, store);
-		},
-	});
-
-	// >< shortcut: back to parent session (pop from session stack)
-	pi.registerShortcut("><" as any, {
-		description: "Back to parent session",
-		handler: async () => {
-			// Documentation-only entry.
-		},
-	});
-
-	pi.on("input", async (event, ctx) => {
-		if (event.source === "extension") {
-			return { action: "continue" as const };
-		}
-
-		const text = event.text ?? "";
-		if (text.trim() !== "><") {
-			return { action: "continue" as const };
-		}
-
-		await subBackHandler(ctx, store);
+		await subPeekHandler(compactPeekMatch[1], ctx, store);
 		return { action: "handled" as const };
 	});
 
@@ -2184,14 +2202,7 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 		return { action: "handled" as const };
 	});
 
-	// ── onTerminalInput hack: auto-redirect <> / >< to command path ─────
-	// When switchSessionFn is not yet captured, rewrite editor text to the
-	// equivalent slash command right before Enter is processed.  The editor
-	// reads its state.lines at submit time, so a synchronous setEditorText()
-	// in the input listener guarantees the command path sees "/sub:trans …".
-	// Once switchSessionFn is captured (first successful command execution),
-	// the normal input event handler handles <> / >< directly and this
-	// listener becomes a no-op pass-through.
+	// ── onTerminalInput hack: auto-redirect <>7 to /sub:peek 7 ───────────
 	let unsubTerminalInput: (() => void) | null = null;
 
 	function registerTerminalInputRedirect(ctx: any): void {
@@ -2200,25 +2211,16 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 		unsubTerminalInput = null;
 
 		unsubTerminalInput = ctx.ui.onTerminalInput((data: string) => {
-			// Fast path: already captured — skip entirely.
-			if (store.switchSessionFn) return undefined;
-
 			// Only intercept Enter key (all terminal variants).
 			if (!matchesKey(data, "enter")) return undefined;
 
 			const editorText = (ctx.ui.getEditorText() ?? "").trim();
 
-			// <> [runId]  →  /sub:trans [runId]
-			if (editorText.startsWith("<>")) {
-				const args = editorText.slice(2).trim();
-				ctx.ui.setEditorText(args ? `/sub:trans ${args}` : "/sub:trans");
+			// <>7  →  /sub:peek 7
+			const compactPeekMatch = /^<>(\d+)$/.exec(editorText);
+			if (compactPeekMatch?.[1]) {
+				ctx.ui.setEditorText(`/sub:peek ${compactPeekMatch[1]}`);
 				return undefined; // let Enter proceed with rewritten text
-			}
-
-			// ><  →  /sub:back
-			if (editorText === "><") {
-				ctx.ui.setEditorText("/sub:back");
-				return undefined;
 			}
 
 			return undefined;

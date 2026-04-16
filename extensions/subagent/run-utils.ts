@@ -103,7 +103,7 @@ export function removeRun(store: SubagentStore, runId: number, options: RemoveRu
 	// The entry is re-hydrated from JSONL on session reload via subagent-removed entries.
 	store.globalLiveRuns.delete(runId);
 
-	if (persistRemovedEntry && options.pi) {
+	if (persistRemovedEntry && options.pi && run.deliveryMode !== "humanOnly") {
 		const payload: Record<string, unknown> = { runId };
 		if (options.removalReason) payload.reason = options.removalReason;
 		try {

@@ -1,6 +1,6 @@
 import { CustomEditor, type KeybindingsManager, type Theme } from "@mariozechner/pi-coding-agent";
 import { type Component, type EditorTheme, type TUI, truncateToWidth, visibleWidth } from "@mariozechner/pi-tui";
-import { AGENT_SYMBOL_MAP } from "../subagent/constants.ts";
+import { AGENT_SYMBOL_MAP, formatSymbolHints } from "../subagent/constants.ts";
 
 type AutocompleteEditorInternals = {
 	autocompleteList?: Pick<Component, "render">;
@@ -55,12 +55,16 @@ export class PolishedEditor extends CustomEditor {
 			return `SUBAGENT · resume #${inlineResumeMatch[1]}`;
 		}
 
-		if (text.trim() === "><") {
-			return "SUBAGENT · back";
+		const peekMatch = /^<>(\d+)$/.exec(text.trim());
+		if (peekMatch?.[1]) {
+			return `SUBAGENT · peek #${peekMatch[1]}`;
 		}
 
-		if (text.startsWith("<>")) {
-			return "SUBAGENT · switch";
+		if (text.startsWith("<<<")) {
+			return "SUBAGENT · clear";
+		}
+		if (text.startsWith("<<")) {
+			return "SUBAGENT · manage";
 		}
 
 		const dedicated = text.startsWith(">>>");
@@ -69,7 +73,7 @@ export class PolishedEditor extends CustomEditor {
 		}
 
 		const prefix = dedicated ? ">>>" : ">>";
-		const baseLabel = dedicated ? "SUBAGENT · isolated" : "SUBAGENT";
+		const baseLabel = dedicated ? "SUBAGENT · hidden" : "SUBAGENT";
 		const forwarded = text.slice(prefix.length).trim();
 		if (!forwarded) {
 			return baseLabel;
@@ -88,8 +92,7 @@ export class PolishedEditor extends CustomEditor {
 		return baseLabel;
 	}
 
-	private getEditorMode(): EditorMode {
-		const text = this.getText().trimStart();
+	private getEditorMode(text: string): EditorMode {
 		if (text.startsWith("!!")) {
 			return {
 				label: "BASH · no ctx",
@@ -117,6 +120,21 @@ export class PolishedEditor extends CustomEditor {
 			borderToken: "border",
 			labelToken: "muted",
 		};
+	}
+
+	private getStatusLabel(text: string, mode: EditorMode): string {
+		const baseLabel = this.uiTheme.fg(mode.labelToken, mode.label);
+		if (text === ">>") {
+			return `${baseLabel}${this.uiTheme.fg("muted", ` · ${formatSymbolHints()}`)}`;
+		}
+		if (text === "<<") {
+			return `${baseLabel}${this.uiTheme.fg("muted", " · << abort latest  << 7 abort/clear #7  << 1,2 abort/clear many  <<< clear finished  <<< all clear all")}`;
+		}
+		if (text === "<<<") {
+			return `${baseLabel}${this.uiTheme.fg("muted", " · <<< clear finished  <<< all clear all")}`;
+		}
+
+		return baseLabel;
 	}
 
 	render(width: number): string[] {
@@ -147,14 +165,15 @@ export class PolishedEditor extends CustomEditor {
 		}
 
 		const editorLines = editorFrame.slice(1, -1);
+		const text = this.getText().trimStart();
 		const metaParts = [this.getModelMeta()];
 		const thinkingLevel = this.getThinkingLevel();
 		if (thinkingLevel && thinkingLevel !== "off") {
 			metaParts.push(this.uiTheme.fg("muted", thinkingLevel));
 		}
 		const meta = metaParts.filter(Boolean).join(this.uiTheme.fg("border", "  "));
-		const mode = this.getEditorMode();
-		const statusLine = this.joinLine(this.uiTheme.fg(mode.labelToken, mode.label), meta, innerWidth);
+		const mode = this.getEditorMode(text);
+		const statusLine = this.joinLine(this.getStatusLabel(text, mode), meta, innerWidth);
 
 		const rail = `${this.uiTheme.fg(mode.borderToken, "│")}${this.reset} `;
 		const top = `${this.uiTheme.fg(mode.borderToken, "┌")}${this.uiTheme.fg(mode.borderToken, "─".repeat(Math.max(0, width - 1)))}`;
