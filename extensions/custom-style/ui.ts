@@ -124,14 +124,15 @@ export class PolishedEditor extends CustomEditor {
 
 	private getStatusLabel(text: string, mode: EditorMode): string {
 		const baseLabel = this.uiTheme.fg(mode.labelToken, mode.label);
-		if (text === ">>") {
+		const trimmed = text.trimEnd();
+		if (trimmed === ">>") {
 			return `${baseLabel}${this.uiTheme.fg("muted", ` · ${formatSymbolHints()}`)}`;
 		}
-		if (text === "<<") {
-			return `${baseLabel}${this.uiTheme.fg("muted", " · << abort latest  << 7 abort/clear #7  << 1,2 abort/clear many  <<< clear finished  <<< all clear all")}`;
-		}
-		if (text === "<<<") {
+		if (trimmed.startsWith("<<<")) {
 			return `${baseLabel}${this.uiTheme.fg("muted", " · <<< clear finished  <<< all clear all")}`;
+		}
+		if (trimmed.startsWith("<<")) {
+			return `${baseLabel}${this.uiTheme.fg("muted", " · << abort latest  <<N abort/clear #N  <<N,M abort/clear many  <<< clear finished  <<< all clear all")}`;
 		}
 
 		return baseLabel;
