@@ -70,11 +70,11 @@
 | 확장 | 설명 |
 |---|---|
 | **subagent/** | 멀티 에이전트 위임 엔진 — 서브 `pi` 프로세스 생성, below-editor 상태 위젯으로 실행 관리, 자동 follow-up/정리, 서브세션 전용 `ask_master` 에스컬레이션 포함 |
-| **@ryan_nookpi/pi-extension-claude-mcp-bridge** | Claude Code의 MCP 서버 설정을 그대로 재사용 — 중복 설정 제로 |
-| **@ryan_nookpi/pi-extension-cross-agent** | `.claude/`, `.gemini/`, `.codex/` 디렉터리에서 에이전트 정의 로드 |
+| **[@ryan_nookpi/pi-extension-claude-mcp-bridge](https://github.com/Jonghakseo/pi-extension/tree/main/packages/claude-mcp-bridge)** | Claude Code의 MCP 서버 설정을 그대로 재사용 — 중복 설정 제로 |
+| **[@ryan_nookpi/pi-extension-cross-agent](https://github.com/Jonghakseo/pi-extension/tree/main/packages/cross-agent)** | `.claude/`, `.gemini/`, `.codex/` 디렉터리에서 에이전트 정의 로드 |
 | **dynamic-agents-md.ts** | 런타임에 AGENTS.md를 동적 로드하여 편집·쓰기 범위 제한 강제 |
-| **@ryan_nookpi/pi-extension-claude-hooks-bridge** | Claude Code의 훅(hook) 이벤트를 Pi 세션에 연결하는 브릿지 |
-| **@ryan_nookpi/pi-extension-memory-layer** | 세션 간 영속 메모리 시스템 |
+| **[@ryan_nookpi/pi-extension-claude-hooks-bridge](https://github.com/Jonghakseo/pi-extension/tree/main/packages/claude-hooks-bridge)** | Claude Code의 훅(hook) 이벤트를 Pi 세션에 연결하는 브릿지 |
+| **[@ryan_nookpi/pi-extension-memory-layer](https://github.com/Jonghakseo/pi-extension/tree/main/packages/memory-layer)** | 세션 간 영속 메모리 시스템 |
 | **remote/** | `/remote`, `/remote:lan`, `/remote:funnel` — 로컬/LAN/공개 URL 기반 원격 접속 |
 
 ### UI / UX
@@ -85,10 +85,10 @@
 | **working-text.ts** | 처리 중 경과 시간과 함께 팁 중심 스피너 텍스트 |
 | **theme-cycler.ts** | `Ctrl+X`로 테마 실시간 순환 |
 | **diff-overlay.ts** | `/diff` — 분할 화면 git diff 뷰어 오버레이 |
-| **@ryan_nookpi/pi-extension-open-pr** | 현재 브랜치 PR을 브라우저에서 바로 열기 |
+| **[@ryan_nookpi/pi-extension-open-pr](https://github.com/Jonghakseo/pi-extension/tree/main/packages/open-pr)** | 현재 브랜치 PR을 브라우저에서 바로 열기 |
 | **files.ts** | `/files` — git 트리 파일 브라우저 + 열기/편집/diff 빠른 액션 |
 | **fork-panel.ts** | `/fork-panel` — 현재 세션을 새 Ghostty split panel로 포크 |
-| **@ryan_nookpi/pi-extension-generative-ui** | `visualize_read_me`, `show_widget` — 네이티브 시각화/위젯 렌더링 |
+| **[@ryan_nookpi/pi-extension-generative-ui](https://github.com/Jonghakseo/pi-extension/tree/main/packages/generative-ui)** | `visualize_read_me`, `show_widget` — 네이티브 시각화/위젯 렌더링 |
 | **override-builtin-tools.ts** | 도구 출력 접기/펼치기로 세션 깔끔하게 유지 |
 
 ### 개발 도구
@@ -112,20 +112,20 @@
 
 | 패키지 | 역할 |
 |---|---|
-| `@ryan_nookpi/pi-extension-codex-fast-mode` | Codex Fast Mode 토글 |
-| `@ryan_nookpi/pi-extension-clipboard` | 클립보드 복사 도구 |
-| `@ryan_nookpi/pi-extension-ask-user-question` | 인터랙티브 질문 도구 |
-| `@ryan_nookpi/pi-extension-auto-name` | 세션 이름 자동 지정 |
-| `@ryan_nookpi/pi-extension-delayed-action` | 지연 실행 액션 |
-| `@ryan_nookpi/pi-extension-idle-screensaver` | 유휴 스크린세이버 |
-| `@ryan_nookpi/pi-extension-todo-write` | `todo_write` 도구 |
-| `@ryan_nookpi/pi-extension-cc-system-prompt` | Claude Code 스타일 시스템 프롬프트 |
-| `@ryan_nookpi/pi-extension-open-pr` | 현재 브랜치 PR 열기 |
-| `@ryan_nookpi/pi-extension-generative-ui` | `visualize_read_me`, `show_widget` |
-| `@ryan_nookpi/pi-extension-cross-agent` | `.claude`, `.gemini`, `.codex` 명령 로드 |
-| `@ryan_nookpi/pi-extension-claude-hooks-bridge` | Claude Code hooks 브릿지 |
-| `@ryan_nookpi/pi-extension-claude-mcp-bridge` | Claude Code MCP 브릿지 |
-| `@ryan_nookpi/pi-extension-memory-layer` | 영속 메모리 도구 |
+| [`@ryan_nookpi/pi-extension-codex-fast-mode`](https://github.com/Jonghakseo/pi-extension/tree/main/packages/codex-fast-mode) | Codex Fast Mode 토글 |
+| [`@ryan_nookpi/pi-extension-clipboard`](https://github.com/Jonghakseo/pi-extension/tree/main/packages/clipboard) | 클립보드 복사 도구 |
+| [`@ryan_nookpi/pi-extension-ask-user-question`](https://github.com/Jonghakseo/pi-extension/tree/main/packages/ask-user-question) | 인터랙티브 질문 도구 |
+| [`@ryan_nookpi/pi-extension-auto-name`](https://github.com/Jonghakseo/pi-extension/tree/main/packages/auto-name) | 세션 이름 자동 지정 |
+| [`@ryan_nookpi/pi-extension-delayed-action`](https://github.com/Jonghakseo/pi-extension/tree/main/packages/delayed-action) | 지연 실행 액션 |
+| [`@ryan_nookpi/pi-extension-idle-screensaver`](https://github.com/Jonghakseo/pi-extension/tree/main/packages/idle-screensaver) | 유휴 스크린세이버 |
+| [`@ryan_nookpi/pi-extension-todo-write`](https://github.com/Jonghakseo/pi-extension/tree/main/packages/todo-write) | `todo_write` 도구 |
+| [`@ryan_nookpi/pi-extension-cc-system-prompt`](https://github.com/Jonghakseo/pi-extension/tree/main/packages/cc-system-prompt) | Claude Code 스타일 시스템 프롬프트 |
+| [`@ryan_nookpi/pi-extension-open-pr`](https://github.com/Jonghakseo/pi-extension/tree/main/packages/open-pr) | 현재 브랜치 PR 열기 |
+| [`@ryan_nookpi/pi-extension-generative-ui`](https://github.com/Jonghakseo/pi-extension/tree/main/packages/generative-ui) | `visualize_read_me`, `show_widget` |
+| [`@ryan_nookpi/pi-extension-cross-agent`](https://github.com/Jonghakseo/pi-extension/tree/main/packages/cross-agent) | `.claude`, `.gemini`, `.codex` 명령 로드 |
+| [`@ryan_nookpi/pi-extension-claude-hooks-bridge`](https://github.com/Jonghakseo/pi-extension/tree/main/packages/claude-hooks-bridge) | Claude Code hooks 브릿지 |
+| [`@ryan_nookpi/pi-extension-claude-mcp-bridge`](https://github.com/Jonghakseo/pi-extension/tree/main/packages/claude-mcp-bridge) | Claude Code MCP 브릿지 |
+| [`@ryan_nookpi/pi-extension-memory-layer`](https://github.com/Jonghakseo/pi-extension/tree/main/packages/memory-layer) | 영속 메모리 도구 |
 
 ---
 
