@@ -16,13 +16,13 @@
     "comment":   "#fcebc5",
     "fg":        "#ffffff",
     "fgSoft":    "#bbbbbb",
-    "red":       "#fb4b37",
-    "green":     "#ebed5e",
-    "yellow":    "#fcd783",
+    "red":       "#e55c4d",
+    "green":     "#dcdd6e",
+    "yellow":    "#efd290",
     "blue":      "#67a6e4",
     "purple":    "#ca74e7",
     "aqua":      "#81e4be",
-    "orange":    "#fd953f"
+    "orange":    "#e89754"
   },
   "colors": {
     "accent": "orange",

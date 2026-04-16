@@ -3,16 +3,16 @@
   "name": "midnight-ocean",
   "vars": {
     "deepBlue": "#0a192f",
-    "oceanBlue": "#0077be",
-    "teal": "#00ced1",
-    "cyan": "#4fd1ed",
+    "oceanBlue": "#1572a9",
+    "teal": "#17b8ba",
+    "cyan": "#60c6dc",
     "softWhite": "#e6f1ff",
     "mutedBlue": "#233554",
     "lightMutedBlue": "#a8b2d1",
     "slate": "#8892b0",
-    "successGreen": "#64ffda",
-    "errorRed": "#ff5f56",
-    "warningAmber": "#ffd700",
+    "successGreen": "#75eed1",
+    "errorRed": "#ec7069",
+    "warningAmber": "#e3c41c",
     "purple": "#c678dd"
   },
   "colors": {
