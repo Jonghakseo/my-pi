@@ -2,8 +2,8 @@
   "theme": "nord",
   "quietStartup": true,
   "lastChangelogVersion": "0.67.3",
-  "defaultProvider": "anthropic",
-  "defaultModel": "claude-opus-4-6",
+  "defaultProvider": "openai-codex",
+  "defaultModel": "gpt-5.4",
   "defaultThinkingLevel": "xhigh",
   "subagent": {
     "claudeRuntime": "cli"
@@ -21,7 +21,13 @@
     "npm:@ryan_nookpi/pi-extension-delayed-action",
     "npm:@ryan_nookpi/pi-extension-idle-screensaver",
     "npm:@ryan_nookpi/pi-extension-todo-write",
-    "npm:@ryan_nookpi/pi-extension-cc-system-prompt"
+    "npm:@ryan_nookpi/pi-extension-cc-system-prompt",
+    "npm:@ryan_nookpi/pi-extension-open-pr",
+    "npm:@ryan_nookpi/pi-extension-generative-ui",
+    "npm:@ryan_nookpi/pi-extension-cross-agent",
+    "npm:@ryan_nookpi/pi-extension-claude-hooks-bridge",
+    "npm:@ryan_nookpi/pi-extension-claude-mcp-bridge",
+    "npm:@ryan_nookpi/pi-extension-memory-layer"
   ],
   "compaction": {
     "enabled": true
