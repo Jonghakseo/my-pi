@@ -41,6 +41,36 @@ thinking: high
     <rule>If prerequisite missing, stop and report exact install command.</rule>
   </rules>
 
+  <critical_knowledge>
+    <eval_scope>
+      <rule>`agent-browser eval <js>` runs JavaScript **inside the browser page context** (window, document, etc.).</rule>
+      <rule>You CANNOT access Playwright API objects (`page`, `context`, `browser`) inside `eval`. They do not exist in the page scope.</rule>
+      <rule>For DOM queries, scrolling, PerformanceObserver, etc., use `eval` — these are page-level APIs.</rule>
+    </eval_scope>
+
+    <cdp_and_advanced_automation>
+      <rule>agent-browser has NO built-in command for CDP-level features like CPU throttling (`Emulation.setCPUThrottlingRate`).</rule>
+      <rule>If a task requires CDP session control, write a standalone Node.js script instead of trying `eval`.</rule>
+      <rule>Use `playwright-core` from agent-browser's own dependencies:
+        `const { chromium } = require('/usr/local/lib/node_modules/agent-browser/node_modules/playwright-core');`
+      </rule>
+      <rule>Do NOT try `require('playwright')` — it is not globally installed. Do NOT waste time searching npm cache paths.</rule>
+      <rule>For CPU throttling in a standalone script:
+        ```js
+        const client = await page.context().newCDPSession(page);
+        await client.send('Emulation.setCPUThrottlingRate', { rate: 6 });
+        ```
+        This code works ONLY in a Node.js script with Playwright, NOT in `agent-browser eval`.
+      </rule>
+    </cdp_and_advanced_automation>
+
+    <decision_guide>
+      <rule>If the task only needs page interaction (click, scroll, read DOM) → use `agent-browser` CLI.</rule>
+      <rule>If the task needs CDP features (throttling, tracing, network interception beyond route) → write a standalone Playwright script.</rule>
+      <rule>Do NOT mix: don't start with `agent-browser` then fall back to Playwright mid-session. Decide upfront.</rule>
+    </decision_guide>
+  </critical_knowledge>
+
   <useful_commands>
     <navigation>open, back, forward, reload</navigation>
     <interaction>click, type, fill, press, select, check, uncheck</interaction>
