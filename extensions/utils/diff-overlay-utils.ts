@@ -432,6 +432,19 @@ export interface ParsedDiffLine {
 	code: string;
 	/** The full original line */
 	originalLine: string;
+	/** Original-file line number for removed/context rows when known */
+	oldLineNumber?: number;
+	/** Modified-file line number for added/context rows when known */
+	newLineNumber?: number;
+}
+
+function parseHunkHeader(line: string): { oldStart: number; newStart: number } | null {
+	const match = /^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@/.exec(line);
+	if (!match) return null;
+	const oldStart = Number(match[1]);
+	const newStart = Number(match[2]);
+	if (!Number.isInteger(oldStart) || !Number.isInteger(newStart)) return null;
+	return { oldStart, newStart };
 }
 
 /**
@@ -442,20 +455,30 @@ export interface ParsedDiffLine {
  * are treated as code from the start.
  */
 export function parseDiffLines(rawDiff: string): ParsedDiffLine[] {
+	if (rawDiff === "") return [{ category: "context", prefix: "", code: "", originalLine: "" }];
 	const lines = rawDiff.split("\n");
 	// If the diff doesn't start with a standard diff header, assume raw code
 	let inHunk = lines.length > 0 && !lines[0].startsWith("diff ");
+	let oldLineNumber = inHunk ? 1 : 0;
+	let newLineNumber = inHunk ? 1 : 0;
 
 	return lines.map((line): ParsedDiffLine => {
 		// New diff block resets to meta mode
 		if (line.startsWith("diff ")) {
 			inHunk = false;
+			oldLineNumber = 0;
+			newLineNumber = 0;
 			return { category: "meta", prefix: "", code: "", originalLine: line };
 		}
 
 		// Hunk header enters code mode
 		if (line.startsWith("@@")) {
 			inHunk = true;
+			const header = parseHunkHeader(line);
+			if (header) {
+				oldLineNumber = header.oldStart;
+				newLineNumber = header.newStart;
+			}
 			return { category: "hunk", prefix: "", code: "", originalLine: line };
 		}
 
@@ -466,13 +489,39 @@ export function parseDiffLines(rawDiff: string): ParsedDiffLine[] {
 
 		// Inside hunk: code lines
 		if (line.startsWith("+")) {
-			return { category: "added", prefix: "+", code: line.slice(1), originalLine: line };
+			const parsed: ParsedDiffLine = {
+				category: "added",
+				prefix: "+",
+				code: line.slice(1),
+				originalLine: line,
+				newLineNumber,
+			};
+			newLineNumber += 1;
+			return parsed;
 		}
 		if (line.startsWith("-")) {
-			return { category: "removed", prefix: "-", code: line.slice(1), originalLine: line };
+			const parsed: ParsedDiffLine = {
+				category: "removed",
+				prefix: "-",
+				code: line.slice(1),
+				originalLine: line,
+				oldLineNumber,
+			};
+			oldLineNumber += 1;
+			return parsed;
 		}
 		if (line.startsWith(" ")) {
-			return { category: "context", prefix: " ", code: line.slice(1), originalLine: line };
+			const parsed: ParsedDiffLine = {
+				category: "context",
+				prefix: " ",
+				code: line.slice(1),
+				originalLine: line,
+				oldLineNumber,
+				newLineNumber,
+			};
+			oldLineNumber += 1;
+			newLineNumber += 1;
+			return parsed;
 		}
 
 		// "\ No newline at end of file"
@@ -481,7 +530,17 @@ export function parseDiffLines(rawDiff: string): ParsedDiffLine[] {
 		}
 
 		// Empty line or unexpected: treat as context
-		return { category: "context", prefix: "", code: line, originalLine: line };
+		const parsed: ParsedDiffLine = {
+			category: "context",
+			prefix: "",
+			code: line,
+			originalLine: line,
+			oldLineNumber,
+			newLineNumber,
+		};
+		oldLineNumber += 1;
+		newLineNumber += 1;
+		return parsed;
 	});
 }
 
