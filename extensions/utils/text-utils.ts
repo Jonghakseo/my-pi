@@ -13,7 +13,7 @@ import { truncateToWidth, visibleWidth } from "@mariozechner/pi-tui";
 export const COMMON_SUBAGENT_NO_RECURSION_RULE = [
 	"Global Runtime Rule (subagent):",
 	"- Never invoke the `subagent` tool.",
-	"- Never trigger subagent commands/shorthands such as `/sub:*` or `>>` or `>>>`.",
+	"- Never trigger subagent commands/shorthands such as `/sub:*`, `>>`, `>`, or `>>>`.",
 	"- If delegation is requested, explain that recursive subagent invocation is disabled and continue with available tools.",
 ].join("\n");
 

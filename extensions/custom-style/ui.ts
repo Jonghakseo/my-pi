@@ -55,9 +55,13 @@ export class PolishedEditor extends CustomEditor {
 			return `SUBAGENT · resume #${inlineResumeMatch[1]}`;
 		}
 
-		const peekMatch = /^<>(\d+)$/.exec(text.trim());
+		const trimmed = text.trim();
+		const peekMatch = /^<>(\d+)$/.exec(trimmed);
 		if (peekMatch?.[1]) {
 			return `SUBAGENT · peek #${peekMatch[1]}`;
+		}
+		if (trimmed === "><") {
+			return "SUBAGENT · back";
 		}
 
 		if (text.startsWith("<<<")) {
@@ -67,13 +71,15 @@ export class PolishedEditor extends CustomEditor {
 			return "SUBAGENT · manage";
 		}
 
-		const dedicated = text.startsWith(">>>");
-		if (!text.startsWith(">>")) {
+		const legacyHidden = text.startsWith(">>>");
+		const compactHidden = text.startsWith(">") && !text.startsWith(">>") && !text.startsWith("><");
+		const visible = text.startsWith(">>") && !legacyHidden;
+		if (!visible && !compactHidden && !legacyHidden) {
 			return undefined;
 		}
 
-		const prefix = dedicated ? ">>>" : ">>";
-		const baseLabel = dedicated ? "SUBAGENT · hidden" : "SUBAGENT";
+		const prefix = legacyHidden ? ">>>" : compactHidden ? ">" : ">>";
+		const baseLabel = legacyHidden || compactHidden ? "SUBAGENT · hidden" : "SUBAGENT";
 		const forwarded = text.slice(prefix.length).trim();
 		if (!forwarded) {
 			return baseLabel;
@@ -128,11 +134,14 @@ export class PolishedEditor extends CustomEditor {
 		if (trimmed === ">>") {
 			return `${baseLabel}${this.uiTheme.fg("muted", ` · ${formatSymbolHints()}`)}`;
 		}
+		if (trimmed === ">" || trimmed === ">>>") {
+			return `${baseLabel}${this.uiTheme.fg("muted", ` · ${formatSymbolHints(">")}`)}`;
+		}
 		if (trimmed.startsWith("<<<")) {
-			return `${baseLabel}${this.uiTheme.fg("muted", " · <<< clear finished  <<< all clear all")}`;
+			return baseLabel;
 		}
 		if (trimmed.startsWith("<<")) {
-			return `${baseLabel}${this.uiTheme.fg("muted", " · << abort latest  <<N abort/clear #N  <<N,M abort/clear many  <<< clear finished  <<< all clear all")}`;
+			return `${baseLabel}${this.uiTheme.fg("muted", " · << abort latest  <<N abort/clear #N  <<N,M abort/clear many")}`;
 		}
 
 		return baseLabel;

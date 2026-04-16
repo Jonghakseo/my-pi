@@ -1007,7 +1007,7 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 					pi.sendMessage(
 						{
 							customType: "subagent-command",
-							content: ">>> hidden subagent mode requires interactive UI. Use /sub:isolate instead.",
+							content: "Hidden subagent mode requires interactive UI. Use /sub:isolate instead.",
 							display: true,
 							details: {},
 						},
@@ -1935,7 +1935,7 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 		},
 	});
 
-	// /hotkeys "Extensions" 섹션에 >> shorthand 사용법을 노출한다.
+	// /hotkeys "Extensions" 섹션에 >> / > shorthand 사용법을 노출한다.
 	// 실제 입력 처리는 아래 input 핸들러에서 수행된다.
 	pi.registerShortcut(">>" as any, {
 		description: "Run subagent task",
@@ -1944,68 +1944,83 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 		},
 	});
 
-	pi.registerShortcut(">>>" as any, {
+	pi.registerShortcut(">" as any, {
 		description: "Run hidden subagent (interactive UI only, supports symbols)",
 		handler: async () => {
 			// Documentation-only entry.
 		},
 	});
 
-	// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: >> and >>> shortcuts intentionally share one stateful input router.
+	pi.registerShortcut(">>>" as any, {
+		description: "Run hidden subagent (legacy alias, interactive UI only, supports symbols)",
+		handler: async () => {
+			// Documentation-only entry.
+		},
+	});
+
+	// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: >> / > / >>> shortcuts intentionally share one stateful input router.
 	pi.on("input", async (event, ctx) => {
 		if (event.source === "extension") {
 			return { action: "continue" as const };
 		}
 
 		const text = event.text ?? "";
-		if (!text.startsWith(">>")) {
+		const isLegacyHiddenShortcut = text.startsWith(">>>");
+		const isVisibleShortcut = text.startsWith(">>") && !isLegacyHiddenShortcut;
+		const isHiddenShortcut = text.startsWith(">") && !isVisibleShortcut && !text.startsWith("><");
+		if (!isLegacyHiddenShortcut && !isVisibleShortcut && !isHiddenShortcut) {
 			return { action: "continue" as const };
 		}
 
-		// ── >>> shortcut: hidden subagent (interactive UI only) ──
-		// Must be matched before >> symbol/space patterns.
-		if (text.startsWith(">>>")) {
+		const handleHiddenShortcut = async (prefix: ">" | ">>>") => {
 			if (!ctx.hasUI) {
 				pi.sendMessage(
 					{
 						customType: "subagent-command",
-						content: ">>> hidden subagent mode requires interactive UI. Use /sub:isolate instead.",
+						content: "Hidden subagent mode requires interactive UI. Use /sub:isolate instead.",
 						display: true,
 						details: {},
 					},
 					{ deliverAs: "followUp", triggerTurn: false },
 				);
-				return { action: "handled" as const };
+				return;
 			}
 
-			const forwardedArgs = text.slice(3).trim();
+			const forwardedArgs = text.slice(prefix.length).trim();
 			if (!forwardedArgs) {
 				ctx.ui.notify(
-					`>>> [agent] <task> | >>> <runId> <task> | >>><symbol> <task>\n${formatSymbolHints(">>>")}`,
+					`${prefix} [agent] <task> | ${prefix} <runId> <task> | ${prefix}<symbol> <task>\n${formatSymbolHints(prefix)}`,
 					"info",
 				);
-				return { action: "handled" as const };
+				return;
 			}
 
-			// Dedicated symbol shortcut: >>>? task, >>>/ task, >>>* task, etc.
 			const dedicatedSymbol = AGENT_SYMBOL_MAP[forwardedArgs[0]];
 			if (dedicatedSymbol) {
 				const task = forwardedArgs.slice(1).trim();
 				if (!task) {
-					ctx.ui.notify(formatSymbolHints(">>>"), "info");
-					return { action: "handled" as const };
+					ctx.ui.notify(formatSymbolHints(prefix), "info");
+					return;
 				}
 				await subCommand.handler(`${dedicatedSymbol} ${task}`, ctx, true, true);
-				return { action: "handled" as const };
+				return;
 			}
 
 			const firstSpace = forwardedArgs.indexOf(" ");
 			const firstToken = firstSpace === -1 ? forwardedArgs : forwardedArgs.slice(0, firstSpace);
 			if (/^\d+$/.test(firstToken) && !store.commandRuns.has(Number(firstToken))) {
 				ctx.ui.notify(`Unknown subagent run #${firstToken}.`, "error");
-				return { action: "handled" as const };
+				return;
 			}
 			await subCommand.handler(forwardedArgs, ctx, true, true);
+		};
+
+		if (isLegacyHiddenShortcut) {
+			await handleHiddenShortcut(">>>");
+			return { action: "handled" as const };
+		}
+		if (isHiddenShortcut) {
+			await handleHiddenShortcut(">");
 			return { action: "handled" as const };
 		}
 
