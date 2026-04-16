@@ -1,5 +1,5 @@
 {
-  "theme": "gruvbox",
+  "theme": "dracula",
   "quietStartup": true,
   "lastChangelogVersion": "0.67.3",
   "defaultProvider": "openai-codex",
