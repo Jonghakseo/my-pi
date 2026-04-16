@@ -40,7 +40,7 @@ The system is organized in **four layers**:
 | **User / pi TUI** | Interactive terminal interface |
 | **Extensions** | 30+ TypeScript plugins — subagent management, MCP bridge, remote access, UI overlays, safety guards |
 | **Agent Orchestra** | 11 specialized agent definitions with distinct roles and models |
-| **Infrastructure** | MCP tool integrations via [claude-mcp-bridge](./extensions/claude-mcp-bridge/) — reuses your existing Claude Code MCP setup (Jira, Slack, Gmail, Calendar, GA4, Figma, DB, etc.) |
+| **Infrastructure** | MCP tool integrations via `@ryan_nookpi/pi-extension-claude-mcp-bridge` — reuses your existing Claude Code MCP setup (Jira, Slack, Gmail, Calendar, GA4, Figma, DB, etc.) |
 
 ---
 
@@ -88,11 +88,11 @@ Here are representative items from the 30+ custom TypeScript extensions, grouped
 | Extension | Description |
 |---|---|
 | **subagent/** | Multi-agent delegation engine — spawns sub-`pi` processes, manages runs with a below-editor status widget, handles follow-up/cleanup, and includes sub-session-only `ask_master` escalation |
-| **claude-mcp-bridge/** | Reuses Claude Code's MCP server configurations — zero-duplication setup |
-| **cross-agent.ts** | Load agent definitions from `.claude/`, `.gemini/`, `.codex/` directories |
+| **@ryan_nookpi/pi-extension-claude-mcp-bridge** | Reuses Claude Code's MCP server configurations — zero-duplication setup |
+| **@ryan_nookpi/pi-extension-cross-agent** | Load agent definitions from `.claude/`, `.gemini/`, `.codex/` directories |
 | **dynamic-agents-md.ts** | Dynamically loads AGENTS.md at runtime to enforce edit/write scope restrictions |
-| **claude-hooks-bridge.ts** | Bridge connecting Claude Code hook events to Pi sessions |
-| **memory-layer/** | Persistent memory system across sessions |
+| **@ryan_nookpi/pi-extension-claude-hooks-bridge** | Bridge connecting Claude Code hook events to Pi sessions |
+| **@ryan_nookpi/pi-extension-memory-layer** | Persistent memory system across sessions |
 | **remote/** | `/remote`, `/remote:lan`, `/remote:funnel` — local/LAN/public-URL remote access |
 
 ### UI / UX
@@ -103,10 +103,10 @@ Here are representative items from the 30+ custom TypeScript extensions, grouped
 | **working-text.ts** | Tip-focused spinner text with elapsed time during processing |
 | **theme-cycler.ts** | `Ctrl+X` to cycle through all themes on-the-fly |
 | **diff-overlay.ts** | `/diff` — split-pane git diff viewer overlay |
-| **open-pr.ts** | Open the current branch PR directly in the browser |
+| **@ryan_nookpi/pi-extension-open-pr** | Open the current branch PR directly in the browser |
 | **files.ts** | `/files` — git tree file browser with open/edit/diff quick actions |
 | **fork-panel.ts** | `/fork-panel` — fork the current session into a new Ghostty split panel |
-| **generative-ui/** | `visualize_read_me`, `show_widget` — native visual widgets and renderers |
+| **@ryan_nookpi/pi-extension-generative-ui** | `visualize_read_me`, `show_widget` — native visual widgets and renderers |
 | **override-builtin-tools.ts** | Collapse/expand verbose tool output for cleaner sessions |
 
 ### Developer Tools
