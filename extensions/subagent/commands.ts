@@ -1935,17 +1935,11 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 		},
 	});
 
-	// /hotkeys "Extensions" 섹션에 >> / > shorthand 사용법을 노출한다.
-	// 실제 입력 처리는 아래 input 핸들러에서 수행된다.
+	// /hotkeys "Extensions" 섹션에는 실제 키보드 단축키만 노출한다.
+	// NOTE: plain ">" is a real keybinding and hijacks editor text input,
+	// so hidden subagent prefixes are documented via footer/status hints instead.
 	pi.registerShortcut(">>" as any, {
 		description: "Run subagent task",
-		handler: async () => {
-			// Documentation-only entry.
-		},
-	});
-
-	pi.registerShortcut(">" as any, {
-		description: "Run hidden subagent (interactive UI only, supports symbols)",
 		handler: async () => {
 			// Documentation-only entry.
 		},

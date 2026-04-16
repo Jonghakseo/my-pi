@@ -167,4 +167,14 @@ describe("subagent input shortcuts", () => {
 		expect(String(mockRunSingleAgent.mock.calls[0]?.[3])).toContain("do hidden work");
 		expect(pi.sendMessage).not.toHaveBeenCalled();
 	});
+
+	it('does not register plain ">" as a keyboard shortcut', async () => {
+		const { registerAll } = await import("../subagent/commands.ts");
+		const store = createStore();
+		const { pi } = createPi();
+		registerAll(pi as never, store);
+
+		const shortcuts = pi.registerShortcut.mock.calls.map(([shortcut]) => shortcut);
+		expect(shortcuts).not.toContain(">");
+	});
 });
