@@ -57,6 +57,21 @@ interface CommitFile {
 
 type FocusPane = "left" | "right";
 
+interface ReviewDraft {
+	scope: OverlayDiffScope;
+	filePath: string;
+	fileDisplayPath: string;
+	lineStart: number;
+	lineEnd: number;
+	prompt: string;
+}
+
+interface ReviewInputState {
+	active: boolean;
+	buffer: string;
+	error: string | null;
+}
+
 interface DiffState {
 	// Diff mode
 	files: DiffFile[];
@@ -73,7 +88,8 @@ interface DiffState {
 	selectedFilePathByScope: Record<OverlayDiffScope, string | null>;
 	wrapLines: boolean;
 	changedOnly: boolean;
-	reviewedPaths: Set<string>;
+	reviewDrafts: ReviewDraft[];
+	reviewInput: ReviewInputState;
 
 	// Tree state for diff mode
 	treeNodes: FileTreeNode[];
@@ -152,6 +168,36 @@ function fileDisplayPath(file: { path: string; previousPath?: string | null }): 
 function fileTreeLabel(file: { path: string; previousPath?: string | null }, fallbackName: string): string {
 	if (!file.previousPath) return fallbackName;
 	return `${basename(file.previousPath)} → ${fallbackName}`;
+}
+
+function formatReviewLineRange(lineStart: number, lineEnd: number): string {
+	return lineStart === lineEnd ? `#${lineStart}` : `#${lineStart}-${lineEnd}`;
+}
+
+function parseReviewDraftInput(input: string): { lineStart: number; lineEnd: number; prompt: string } | null {
+	const trimmed = input.trim();
+	const match = /^#(\d+)(?:-(\d+))?\s+(.+)$/.exec(trimmed);
+	if (!match) return null;
+	const lineStart = Number(match[1]);
+	const lineEnd = Number(match[2] ?? match[1]);
+	const prompt = (match[3] ?? "").trim();
+	if (!Number.isInteger(lineStart) || !Number.isInteger(lineEnd) || lineStart <= 0 || lineEnd < lineStart || !prompt) {
+		return null;
+	}
+	return { lineStart, lineEnd, prompt };
+}
+
+function buildReviewTransferPrompt(drafts: ReviewDraft[]): string {
+	if (drafts.length === 0) return "";
+	const lines: string[] = ["Please address the following review feedback:", ""];
+	for (const [index, draft] of drafts.entries()) {
+		lines.push(
+			`${index + 1}. [${scopeLabel(draft.scope)}] ${draft.fileDisplayPath}:${formatReviewLineRange(draft.lineStart, draft.lineEnd)}`,
+		);
+		lines.push(`   ${draft.prompt}`);
+		lines.push("");
+	}
+	return lines.join("\n").trim();
 }
 
 interface CommitRowsMeta {
@@ -517,7 +563,16 @@ function padStyledLine(line: string, width: number): string {
 	return `${truncated}${pad}`;
 }
 
+function diffLineNumberWidth(parsed: ReturnType<typeof parseDiffLines>): number {
+	const maxLineNumber = parsed.reduce(
+		(max, line) => Math.max(max, line.oldLineNumber ?? 0, line.newLineNumber ?? 0),
+		0,
+	);
+	return Math.max(3, String(maxLineNumber || 0).length);
+}
+
 function buildRenderedDiffLines(
+	t: Theme,
 	all: string[],
 	parsed: ReturnType<typeof parseDiffLines>,
 	width: number,
@@ -525,23 +580,55 @@ function buildRenderedDiffLines(
 	changedOnly: boolean,
 ): Array<{ text: string; category: DiffLineCategory }> {
 	const rendered: Array<{ text: string; category: DiffLineCategory }> = [];
+	const lineNumberWidth = diffLineNumberWidth(parsed);
+	const blankLineNumber = " ".repeat(lineNumberWidth);
 
 	for (let i = 0; i < all.length; i++) {
-		const text = ` ${all[i] ?? ""}`;
-		const category = parsed[i]?.category ?? "context";
+		const text = all[i] ?? "";
+		const line = parsed[i];
+		const category = line?.category ?? "context";
 		if (changedOnly && category === "context") continue;
 
+		const oldNumber = line?.oldLineNumber ? String(line.oldLineNumber).padStart(lineNumberWidth, " ") : blankLineNumber;
+		const newNumber = line?.newLineNumber ? String(line.newLineNumber).padStart(lineNumberWidth, " ") : blankLineNumber;
+		const gutter = t.fg("dim", `${oldNumber} ${newNumber} │`);
+		const contentWidth = Math.max(1, width - visibleWidth(gutter) - 1);
+
 		if (wrapLines) {
-			for (const segment of wrapTextWithAnsi(text, Math.max(1, width))) {
-				rendered.push({ text: padStyledLine(segment, width), category });
+			const wrapped = wrapTextWithAnsi(` ${text}`, contentWidth);
+			for (const [segmentIndex, segment] of wrapped.entries()) {
+				const lineGutter = segmentIndex === 0 ? gutter : t.fg("dim", `${blankLineNumber} ${blankLineNumber} │`);
+				rendered.push({ text: padStyledLine(`${lineGutter} ${segment}`, width), category });
 			}
 			continue;
 		}
 
-		rendered.push({ text: padStyledLine(text, width), category });
+		rendered.push({ text: padStyledLine(`${gutter} ${text}`, width), category });
 	}
 
 	return rendered;
+}
+
+function countRenderedDiffLines(
+	all: string[],
+	parsed: ReturnType<typeof parseDiffLines>,
+	width: number,
+	wrapLines: boolean,
+	changedOnly: boolean,
+): number {
+	const lineNumberWidth = diffLineNumberWidth(parsed);
+	const gutterWidth = lineNumberWidth * 2 + 4;
+	const contentWidth = Math.max(1, width - gutterWidth - 1);
+	let count = 0;
+
+	for (let i = 0; i < all.length; i++) {
+		const category = parsed[i]?.category ?? "context";
+		if (changedOnly && category === "context") continue;
+		if (wrapLines) count += wrapTextWithAnsi(` ${all[i] ?? ""}`, contentWidth).length;
+		else count += 1;
+	}
+
+	return count;
 }
 
 // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: tree row rendering keeps selection and styling logic in one place for overlay consistency.
@@ -584,8 +671,8 @@ function renderFiles(t: Theme, st: DiffState, w: number, h: number): string[] {
 			lines.push(truncateToWidth(`${prefix}${dirName}`, w));
 		} else {
 			const file = fileByPath.get(row.fullPath);
-			const reviewed = file ? st.reviewedPaths.has(file.path) : false;
-			const reviewMark = reviewed ? t.fg("success", "✓") : t.fg("dim", "·");
+			const reviewCount = file ? st.reviewDrafts.filter((draft) => draft.filePath === file.path).length : 0;
+			const reviewMark = reviewCount > 0 ? t.fg("accent", String(reviewCount)) : t.fg("dim", "·");
 			const ic = file ? t.fg(statusColor(file.status), icon(file.status)) : " ";
 			const badge = file ? t.fg(commitStateColor(file.commitState), `[${commitStateBadge(file.commitState)}]`) : "";
 			const prefix = `${cursor} ${indent}${reviewMark} ${ic} ${badge} `;
@@ -598,9 +685,7 @@ function renderFiles(t: Theme, st: DiffState, w: number, h: number): string[] {
 			} else if (sel) {
 				label = t.fg("muted", truncateToWidth(fileName, nameW));
 			} else {
-				label = reviewed
-					? t.fg("muted", truncateToWidth(fileName, nameW))
-					: t.fg("text", truncateToWidth(fileName, nameW));
+				label = t.fg("text", truncateToWidth(fileName, nameW));
 			}
 			lines.push(truncateToWidth(`${prefix}${label}`, w));
 		}
@@ -686,7 +771,7 @@ function renderDiff(t: Theme, st: DiffState, w: number, h: number): string[] {
 	if (!all || all.length === 0) return [t.fg("muted", "  (empty diff)")];
 	const parsed = parseDiffLines(raw);
 
-	const rendered = buildRenderedDiffLines(all, parsed, w, st.wrapLines, st.changedOnly);
+	const rendered = buildRenderedDiffLines(t, all, parsed, w, st.wrapLines, st.changedOnly);
 	if (rendered.length === 0) return [t.fg("muted", "  (all context hidden by filter)")];
 
 	const max = Math.max(1, h);
@@ -817,10 +902,10 @@ class DiffOverlay {
 	private st: DiffState;
 	private pi: ExtensionAPI;
 	private cwd: string;
-	private done: () => void;
+	private done: (reviewPrompt?: string) => void;
 	private diffLoading = false;
 
-	constructor(pi: ExtensionAPI, cwd: string, st: DiffState, done: () => void) {
+	constructor(pi: ExtensionAPI, cwd: string, st: DiffState, done: (reviewPrompt?: string) => void) {
 		this.pi = pi;
 		this.cwd = cwd;
 		this.st = st;
@@ -844,11 +929,44 @@ class DiffOverlay {
 		void this.ensureDiff(tui);
 	}
 
-	private toggleReviewed(): void {
+	private openReviewDraftInput(): void {
+		if (!this.selectedDiffFile()) {
+			this.st.error = "Select a file before adding review feedback";
+			return;
+		}
+		this.st.reviewInput = { active: true, buffer: "", error: null };
+	}
+
+	private submitReviewDraft(): void {
 		const file = this.selectedDiffFile();
-		if (!file) return;
-		if (this.st.reviewedPaths.has(file.path)) this.st.reviewedPaths.delete(file.path);
-		else this.st.reviewedPaths.add(file.path);
+		if (!file) {
+			this.st.reviewInput.error = "No file selected";
+			return;
+		}
+		const parsed = parseReviewDraftInput(this.st.reviewInput.buffer);
+		if (!parsed) {
+			this.st.reviewInput.error = "Use format: #12 message or #12-18 message";
+			return;
+		}
+		this.st.reviewDrafts.push({
+			scope: this.st.scope,
+			filePath: file.path,
+			fileDisplayPath: fileDisplayPath(file),
+			lineStart: parsed.lineStart,
+			lineEnd: parsed.lineEnd,
+			prompt: parsed.prompt,
+		});
+		this.st.reviewInput = { active: false, buffer: "", error: null };
+		this.st.error = null;
+	}
+
+	private closeReviewDraftInput(): void {
+		this.st.reviewInput = { active: false, buffer: "", error: null };
+	}
+
+	private closeOverlay(): void {
+		const reviewPrompt = buildReviewTransferPrompt(this.st.reviewDrafts);
+		this.done(reviewPrompt || undefined);
 	}
 
 	private switchScope(nextScope: OverlayDiffScope, tui: Tui): void {
@@ -1034,6 +1152,31 @@ class DiffOverlay {
 	private handleDiffModeInput(data: string, tui: Tui): void {
 		const st = this.st;
 
+		if (st.reviewInput.active) {
+			if (matchesKey(data, Key.escape)) {
+				this.closeReviewDraftInput();
+				tui.requestRender();
+				return;
+			}
+			if (matchesKey(data, Key.enter)) {
+				this.submitReviewDraft();
+				tui.requestRender();
+				return;
+			}
+			if (matchesKey(data, Key.backspace)) {
+				st.reviewInput.buffer = st.reviewInput.buffer.slice(0, -1);
+				st.reviewInput.error = null;
+				tui.requestRender();
+				return;
+			}
+			if (data.length === 1 && data >= " " && data !== "\u007f") {
+				st.reviewInput.buffer += data;
+				st.reviewInput.error = null;
+				tui.requestRender();
+			}
+			return;
+		}
+
 		if (st.searchMode) {
 			if (matchesKey(data, Key.escape) || matchesKey(data, Key.enter)) {
 				st.searchMode = false;
@@ -1080,14 +1223,14 @@ class DiffOverlay {
 			return;
 		}
 		if (data === "r") {
-			this.toggleReviewed();
+			this.openReviewDraftInput();
 			tui.requestRender();
 			return;
 		}
 
 		if (st.focus === "left") {
 			if (matchesKey(data, Key.escape)) {
-				this.done();
+				this.closeOverlay();
 				return;
 			}
 			if (matchesKey(data, Key.up) || data === "k") {
@@ -1134,7 +1277,7 @@ class DiffOverlay {
 		const raw = f ? (st.diffCache.get(scopedDiffKey(st.scope, f.path)) ?? "") : "";
 		const parsed = parseDiffLines(raw);
 		const highlighted = f ? (st.highlightedDiffCache.get(scopedDiffKey(st.scope, f.path)) ?? raw.split("\n")) : [];
-		const diffLen = buildRenderedDiffLines(highlighted, parsed, Math.max(1, 80), st.wrapLines, st.changedOnly).length;
+		const diffLen = countRenderedDiffLines(highlighted, parsed, Math.max(1, 80), st.wrapLines, st.changedOnly);
 		if (matchesKey(data, Key.up) || data === "k") {
 			st.diffScrollOffset = Math.max(0, st.diffScrollOffset - 1);
 		} else if (matchesKey(data, Key.down) || data === "j") {
@@ -1166,7 +1309,7 @@ class DiffOverlay {
 
 		if (st.focus === "left") {
 			if (matchesKey(data, Key.escape)) {
-				this.done();
+				this.closeOverlay();
 				return;
 			}
 
@@ -1299,12 +1442,12 @@ class DiffOverlay {
 	}
 
 	handleInput(data: string, tui: Tui): void {
-		if (data === "q" && !this.st.searchMode) {
-			this.done();
+		if (data === "q" && !this.st.searchMode && !this.st.reviewInput.active) {
+			this.closeOverlay();
 			return;
 		}
 
-		if (this.st.viewMode === "diff" && this.st.searchMode) {
+		if (this.st.viewMode === "diff" && (this.st.searchMode || this.st.reviewInput.active)) {
 			this.handleDiffModeInput(data, tui);
 			return;
 		}
@@ -1353,19 +1496,28 @@ class DiffOverlay {
 			`  ${t.fg("accent", t.bold("DIFF"))} ${t.fg("dim", "|")} ${branch}${baseInfo} ${t.fg("dim", "·")} ${fileCnt} ${t.fg("dim", "·")} ${commitCnt} ${t.fg("dim", "·")} mode:${mode}`,
 		);
 		header.push(
-			`  ${t.fg("dim", "scope:")}${t.fg("muted", scopeLabel(st.scope))} ${t.fg("dim", "· filter:")}${t.fg(st.searchMode ? "accent" : "muted", st.searchQuery || "-")} ${t.fg("dim", "· wrap:")}${t.fg(st.wrapLines ? "success" : "muted", st.wrapLines ? "on" : "off")} ${t.fg("dim", "· changed-only:")}${t.fg(st.changedOnly ? "success" : "muted", st.changedOnly ? "on" : "off")}`,
+			`  ${t.fg("dim", "scope:")}${t.fg("muted", scopeLabel(st.scope))} ${t.fg("dim", "· filter:")}${t.fg(st.searchMode ? "accent" : "muted", st.searchQuery || "-")} ${t.fg("dim", "· wrap:")}${t.fg(st.wrapLines ? "success" : "muted", st.wrapLines ? "on" : "off")} ${t.fg("dim", "· changed-only:")}${t.fg(st.changedOnly ? "success" : "muted", st.changedOnly ? "on" : "off")} ${t.fg("dim", "· reviews:")}${t.fg(st.reviewDrafts.length > 0 ? "accent" : "muted", String(st.reviewDrafts.length))}`,
 		);
 
 		const footer: string[] = [];
-		footer.push(st.error ? t.fg("error", `  ${st.error}`) : "");
+		if (st.reviewInput.active) {
+			footer.push(
+				truncateToWidth(`  ${t.fg("accent", "review>")} ${st.reviewInput.buffer || t.fg("dim", "#12 message")}`, w),
+			);
+			footer.push(st.reviewInput.error ? t.fg("error", `  ${st.reviewInput.error}`) : "");
+		} else {
+			footer.push(st.error ? t.fg("error", `  ${st.error}`) : "");
+		}
 
 		const hint =
 			st.viewMode === "diff"
-				? st.searchMode
-					? "  Search mode · type to filter · Backspace delete · Enter/Esc close"
-					: st.focus === "left"
-						? "  ↑/↓ Select File  ·  / Search  ·  s Scope  ·  w Wrap  ·  c Changed-only  ·  r Reviewed  ·  Enter → Diff  ·  Tab/v Commit  ·  o Open  ·  f Finder  ·  S Stash  ·  q/Esc Close"
-						: "  ↑/↓ Scroll  ·  PgUp/PgDn Fast  ·  / Search  ·  s Scope  ·  w Wrap  ·  c Changed-only  ·  r Reviewed  ·  Tab/v Commit  ·  o Open  ·  f Finder  ·  ←/Esc → Files  ·  q Close"
+				? st.reviewInput.active
+					? `  Review draft · ${t.fg("accent", "#12 message")} or ${t.fg("accent", "#12-18 message")} · Enter save · Esc cancel`
+					: st.searchMode
+						? "  Search mode · type to filter · Backspace delete · Enter/Esc close"
+						: st.focus === "left"
+							? "  ↑/↓ Select File  ·  / Search  ·  s Scope  ·  w Wrap  ·  c Changed-only  ·  r Review draft  ·  Enter → Diff  ·  Tab/v Commit  ·  o Open  ·  f Finder  ·  S Stash  ·  q/Esc Close"
+							: "  ↑/↓ Scroll  ·  PgUp/PgDn Fast  ·  / Search  ·  s Scope  ·  w Wrap  ·  c Changed-only  ·  r Review draft  ·  Tab/v Commit  ·  o Open  ·  f Finder  ·  ←/Esc → Files  ·  q Close"
 				: st.focus === "left"
 					? "  ↑/↓ Select Commit  ·  Enter → Changed Files  ·  Tab/v Toggle Diff  ·  S Stash  ·  q/Esc Close"
 					: "  ↑/↓ Select (overflow 시 line scroll)  ·  j/k Select File  ·  Enter Fold/Unfold Diff  ·  PgUp/PgDn Scroll  ·  Tab/v Toggle Diff  ·  o Open  ·  f Finder  ·  ←/Esc → Commits  ·  q Close";
@@ -1382,8 +1534,11 @@ class DiffOverlay {
 		const rightTitle = st.focus === "right" ? t.fg("accent", t.bold(rightTitleLabel)) : t.fg("dim", rightTitleLabel);
 
 		const selectedFile = findFileByPath(st, st.selectedFilePath);
+		const selectedFileReviewCount = selectedFile
+			? st.reviewDrafts.filter((draft) => draft.filePath === selectedFile.path).length
+			: 0;
 		const fileLabel = selectedFile
-			? `${t.fg(statusColor(selectedFile.status), icon(selectedFile.status))} ${t.fg(commitStateColor(selectedFile.commitState), `[${commitStateBadge(selectedFile.commitState)}]`)} ${t.fg(this.st.reviewedPaths.has(selectedFile.path) ? "success" : "dim", this.st.reviewedPaths.has(selectedFile.path) ? "✓" : "·")} ${t.fg("muted", fileDisplayPath(selectedFile))}`
+			? `${t.fg(statusColor(selectedFile.status), icon(selectedFile.status))} ${t.fg(commitStateColor(selectedFile.commitState), `[${commitStateBadge(selectedFile.commitState)}]`)} ${t.fg(selectedFileReviewCount > 0 ? "accent" : "dim", selectedFileReviewCount > 0 ? `${selectedFileReviewCount} review${selectedFileReviewCount !== 1 ? "s" : ""}` : "no reviews")} ${t.fg("muted", fileDisplayPath(selectedFile))}`
 			: t.fg("muted", "(no file)");
 
 		const selectedCommit = st.commits[st.commitSelectedIndex];
@@ -1483,7 +1638,8 @@ export default function diffOverlayExtension(pi: ExtensionAPI) {
 			},
 			wrapLines: true,
 			changedOnly: false,
-			reviewedPaths: new Set(),
+			reviewDrafts: [],
+			reviewInput: { active: false, buffer: "", error: null },
 
 			treeNodes,
 			expandedDirs,
@@ -1543,9 +1699,9 @@ export default function diffOverlayExtension(pi: ExtensionAPI) {
 			}
 		}
 
-		await ctx.ui.custom<void>(
+		const reviewPrompt = await ctx.ui.custom<string | undefined>(
 			(tui, theme, _kb, done) => {
-				const overlay = new DiffOverlay(pi, root, st, () => done(undefined));
+				const overlay = new DiffOverlay(pi, root, st, (prompt) => done(prompt));
 				const tuiRef = tui as Tui;
 				return {
 					render: (w) => overlay.render(w, tuiRef.terminal?.rows ?? 40, theme),
@@ -1555,6 +1711,10 @@ export default function diffOverlayExtension(pi: ExtensionAPI) {
 			},
 			{ overlay: true, overlayOptions: { width: "100%", maxHeight: "100%", anchor: "center" } },
 		);
+		if (reviewPrompt) {
+			ctx.ui.setEditorText(reviewPrompt);
+			ctx.ui.notify("Moved review feedback into the editor.", "info");
+		}
 	};
 
 	pi.registerCommand("diff", {

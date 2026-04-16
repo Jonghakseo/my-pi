@@ -375,6 +375,8 @@ describe("parseDiffLines", () => {
 			prefix: " ",
 			code: "  const a = 1;",
 			originalLine: "   const a = 1;",
+			oldLineNumber: 10,
+			newLineNumber: 10,
 		});
 		// "-  const b = 2;" — removed
 		expect(parsed[6]).toEqual({
@@ -382,6 +384,7 @@ describe("parseDiffLines", () => {
 			prefix: "-",
 			code: "  const b = 2;",
 			originalLine: "-  const b = 2;",
+			oldLineNumber: 11,
 		});
 		// "+  const b = 3;" — added
 		expect(parsed[7]).toEqual({
@@ -389,6 +392,7 @@ describe("parseDiffLines", () => {
 			prefix: "+",
 			code: "  const b = 3;",
 			originalLine: "+  const b = 3;",
+			newLineNumber: 11,
 		});
 	});
 
@@ -397,9 +401,21 @@ describe("parseDiffLines", () => {
 		const parsed = parseDiffLines(diff);
 
 		// Inside hunk: "----" starts with "-" → removed, code is "---"
-		expect(parsed[4]).toEqual({ category: "removed", prefix: "-", code: "---", originalLine: "----" });
+		expect(parsed[4]).toEqual({
+			category: "removed",
+			prefix: "-",
+			code: "---",
+			originalLine: "----",
+			oldLineNumber: 1,
+		});
 		// "++++" starts with "+" → added, code is "+++"
-		expect(parsed[5]).toEqual({ category: "added", prefix: "+", code: "+++", originalLine: "++++" });
+		expect(parsed[5]).toEqual({
+			category: "added",
+			prefix: "+",
+			code: "+++",
+			originalLine: "++++",
+			newLineNumber: 1,
+		});
 	});
 
 	it("handles untracked file (no diff header, all + lines)", () => {
@@ -412,12 +428,14 @@ describe("parseDiffLines", () => {
 			prefix: "+",
 			code: " const x = 1;",
 			originalLine: "+ const x = 1;",
+			newLineNumber: 1,
 		});
 		expect(parsed[1]).toEqual({
 			category: "added",
 			prefix: "+",
 			code: " const y = 2;",
 			originalLine: "+ const y = 2;",
+			newLineNumber: 2,
 		});
 	});
 
@@ -459,7 +477,13 @@ describe("parseDiffLines", () => {
 		expect(parsed[8].category).toBe("meta"); // --- /dev/null
 		expect(parsed[9].category).toBe("meta"); // +++ b/b.ts
 		expect(parsed[10].category).toBe("hunk"); // @@ -0,0 +1 @@
-		expect(parsed[11]).toEqual({ category: "added", prefix: "+", code: "hello", originalLine: "+hello" });
+		expect(parsed[11]).toEqual({
+			category: "added",
+			prefix: "+",
+			code: "hello",
+			originalLine: "+hello",
+			newLineNumber: 1,
+		});
 	});
 
 	it("handles empty diff", () => {
@@ -469,7 +493,36 @@ describe("parseDiffLines", () => {
 	it("handles empty lines within a hunk as context", () => {
 		const diff = ["diff --git a/x b/x", "--- a/x", "+++ b/x", "@@ -1,3 +1,3 @@", " a", "", " b"].join("\n");
 		const parsed = parseDiffLines(diff);
-		expect(parsed[5]).toEqual({ category: "context", prefix: "", code: "", originalLine: "" });
+		expect(parsed[5]).toEqual({
+			category: "context",
+			prefix: "",
+			code: "",
+			originalLine: "",
+			oldLineNumber: 2,
+			newLineNumber: 2,
+		});
+	});
+
+	it("tracks old/new line numbers across hunk changes", () => {
+		const diff = [
+			"diff --git a/x b/x",
+			"--- a/x",
+			"+++ b/x",
+			"@@ -4,3 +4,4 @@",
+			" keep",
+			"-gone",
+			"+added",
+			" tail",
+		].join("\n");
+		const parsed = parseDiffLines(diff);
+		expect(parsed[4]?.oldLineNumber).toBe(4);
+		expect(parsed[4]?.newLineNumber).toBe(4);
+		expect(parsed[5]?.oldLineNumber).toBe(5);
+		expect(parsed[5]?.newLineNumber).toBeUndefined();
+		expect(parsed[6]?.oldLineNumber).toBeUndefined();
+		expect(parsed[6]?.newLineNumber).toBe(5);
+		expect(parsed[7]?.oldLineNumber).toBe(6);
+		expect(parsed[7]?.newLineNumber).toBe(6);
 	});
 });
 
