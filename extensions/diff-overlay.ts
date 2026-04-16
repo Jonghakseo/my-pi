@@ -571,6 +571,11 @@ function diffLineNumberWidth(parsed: ReturnType<typeof parseDiffLines>): number 
 	return Math.max(3, String(maxLineNumber || 0).length);
 }
 
+function shouldHideDiffMetaLine(line: ReturnType<typeof parseDiffLines>[number] | undefined): boolean {
+	if (!line || line.category !== "meta") return false;
+	return !line.originalLine.startsWith("\\");
+}
+
 function buildRenderedDiffLines(
 	t: Theme,
 	all: string[],
@@ -587,6 +592,7 @@ function buildRenderedDiffLines(
 		const text = all[i] ?? "";
 		const line = parsed[i];
 		const category = line?.category ?? "context";
+		if (shouldHideDiffMetaLine(line)) continue;
 		if (changedOnly && category === "context") continue;
 
 		const oldNumber = line?.oldLineNumber ? String(line.oldLineNumber).padStart(lineNumberWidth, " ") : blankLineNumber;
@@ -622,7 +628,9 @@ function countRenderedDiffLines(
 	let count = 0;
 
 	for (let i = 0; i < all.length; i++) {
-		const category = parsed[i]?.category ?? "context";
+		const line = parsed[i];
+		const category = line?.category ?? "context";
+		if (shouldHideDiffMetaLine(line)) continue;
 		if (changedOnly && category === "context") continue;
 		if (wrapLines) count += wrapTextWithAnsi(` ${all[i] ?? ""}`, contentWidth).length;
 		else count += 1;
