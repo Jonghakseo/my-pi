@@ -71,6 +71,9 @@ describe("subagent constants", () => {
 		expect(result).toContain(">>/ finder");
 		expect(result).toContain(">>! challenger");
 
+		const hidden = formatSymbolHints(">");
+		expect(hidden).toContain(">/ finder");
+
 		const custom = formatSymbolHints(">>>");
 		expect(custom).toContain(">>>/ finder");
 	});
