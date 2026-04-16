@@ -7,11 +7,13 @@ export type DiffFileStatus = "added" | "deleted" | "modified" | "renamed" | "cop
 export type CommitState = "committed" | "uncommitted" | "both";
 
 export type OverlayViewMode = "diff" | "commit";
+export type OverlayDiffScope = "branch" | "working" | "last-commit";
 
 export interface ParsedDiffEntry {
 	path: string;
 	status: DiffFileStatus;
 	rawStatus: string;
+	previousPath?: string | null;
 }
 
 export interface MergedDiffEntry extends ParsedDiffEntry {
@@ -67,12 +69,14 @@ export function parseNameStatusZ(stdout: string): ParsedDiffEntry[] {
 
 		const code = rawCode.charAt(0);
 		if (code === "R" || code === "C") {
+			const previousPath = tokens[i + 1];
 			const newPath = tokens[i + 2];
 			if (!newPath) break;
 			entries.push({
 				path: newPath,
 				status: mapDiffStatusCode(rawCode),
 				rawStatus: rawCode,
+				previousPath: previousPath ?? null,
 			});
 			i += 2;
 			continue;
@@ -110,8 +114,10 @@ export function parsePorcelainStatusZ(stdout: string): ParsedDiffEntry[] {
 
 		const raw = entry.slice(0, 2);
 		const filePath = entry.slice(3);
+		let previousPath: string | null = null;
 		if ((raw.startsWith("R") || raw.startsWith("C")) && statusParts[i + 1]) {
 			// entry.slice(3) already has the correct new/destination path; skip the old path entry
+			previousPath = statusParts[i + 1] ?? null;
 			i += 1;
 		}
 		if (!filePath) continue;
@@ -120,6 +126,7 @@ export function parsePorcelainStatusZ(stdout: string): ParsedDiffEntry[] {
 			path: filePath,
 			status: parseStatus(raw),
 			rawStatus: raw.trim() || raw,
+			previousPath,
 		});
 	}
 
@@ -193,6 +200,77 @@ export function commitStateBadge(state: CommitState): string {
 
 export function toggleOverlayViewMode(mode: OverlayViewMode): OverlayViewMode {
 	return mode === "diff" ? "commit" : "diff";
+}
+
+export function cycleOverlayDiffScope(scope: OverlayDiffScope): OverlayDiffScope {
+	if (scope === "branch") return "working";
+	if (scope === "working") return "last-commit";
+	return "branch";
+}
+
+export function normalizeOverlaySearchQuery(query: string): string {
+	return query.trim().toLowerCase().replace(/\s+/g, "");
+}
+
+export function scoreOverlayPathMatch(query: string, candidate: string): number {
+	if (!query) return 0;
+	let queryIndex = 0;
+	let score = 0;
+	let firstMatchIndex = -1;
+	let previousMatchIndex = -2;
+
+	for (let i = 0; i < candidate.length && queryIndex < query.length; i++) {
+		if (candidate[i] !== query[queryIndex]) continue;
+
+		if (firstMatchIndex === -1) firstMatchIndex = i;
+		score += 10;
+
+		if (i === previousMatchIndex + 1) score += 8;
+
+		const previousChar = i > 0 ? candidate[i - 1] : "";
+		if (i === 0 || previousChar === "/" || previousChar === "_" || previousChar === "-" || previousChar === ".") {
+			score += 12;
+		}
+
+		previousMatchIndex = i;
+		queryIndex += 1;
+	}
+
+	if (queryIndex !== query.length) return -1;
+	if (firstMatchIndex >= 0) score += Math.max(0, 20 - firstMatchIndex);
+	return score;
+}
+
+export function filterEntriesByOverlayQuery<T extends { path: string; previousPath?: string | null }>(
+	entries: T[],
+	query: string,
+): T[] {
+	const normalizedQuery = normalizeOverlaySearchQuery(query);
+	if (!normalizedQuery) return [...entries];
+
+	return entries
+		.map((entry) => {
+			const path = entry.path.toLowerCase();
+			const baseName = path.split("/").pop() ?? path;
+			const previousPath = (entry.previousPath ?? "").toLowerCase();
+			const pathScore = scoreOverlayPathMatch(normalizedQuery, path);
+			const baseScore = scoreOverlayPathMatch(normalizedQuery, baseName);
+			const previousScore = previousPath ? scoreOverlayPathMatch(normalizedQuery, previousPath) : -1;
+			let score = Math.max(
+				pathScore,
+				baseScore >= 0 ? baseScore + 40 : -1,
+				previousScore >= 0 ? previousScore + 25 : -1,
+			);
+
+			if (score < 0) return { entry, score };
+			if (baseName === normalizedQuery) score += 200;
+			else if (baseName.startsWith(normalizedQuery)) score += 120;
+			else if (path.includes(normalizedQuery) || previousPath.includes(normalizedQuery)) score += 35;
+			return { entry, score };
+		})
+		.filter((item) => item.score >= 0)
+		.sort((a, b) => b.score - a.score || a.entry.path.localeCompare(b.entry.path))
+		.map((item) => item.entry);
 }
 
 // ─── File Tree Types ───────────────────────────────────────────────────────

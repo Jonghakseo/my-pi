@@ -5,15 +5,19 @@ import {
 	collapseFileTree,
 	collectAllDirPaths,
 	commitStateBadge,
+	cycleOverlayDiffScope,
 	extractCodeBlock,
+	filterEntriesByOverlayQuery,
 	flattenVisibleTree,
 	mapDiffStatusCode,
 	mergeDiffEntries,
+	normalizeOverlaySearchQuery,
 	parseDiffLines,
 	parseGitLogOutput,
 	parseNameStatusZ,
 	parsePorcelainStatusZ,
 	parseStatus,
+	scoreOverlayPathMatch,
 	toggleOverlayViewMode,
 } from "./diff-overlay-utils.js";
 
@@ -49,7 +53,7 @@ describe("parseNameStatusZ", () => {
 		const parsed = parseNameStatusZ(stdout);
 		expect(parsed).toEqual([
 			{ path: "src/a.ts", status: "modified", rawStatus: "M" },
-			{ path: "src/new.ts", status: "renamed", rawStatus: "R100" },
+			{ path: "src/new.ts", status: "renamed", rawStatus: "R100", previousPath: "src/old.ts" },
 		]);
 	});
 
@@ -64,9 +68,9 @@ describe("parsePorcelainStatusZ", () => {
 		const stdout = `${[" M src/a.ts", "?? src/new.ts", "R  src/new-name.ts", "src/old.ts"].join("\0")}\0`;
 		const parsed = parsePorcelainStatusZ(stdout);
 		expect(parsed).toEqual([
-			{ path: "src/a.ts", status: "modified", rawStatus: "M" },
-			{ path: "src/new.ts", status: "untracked", rawStatus: "??" },
-			{ path: "src/new-name.ts", status: "renamed", rawStatus: "R" },
+			{ path: "src/a.ts", status: "modified", rawStatus: "M", previousPath: null },
+			{ path: "src/new.ts", status: "untracked", rawStatus: "??", previousPath: null },
+			{ path: "src/new-name.ts", status: "renamed", rawStatus: "R", previousPath: "src/old.ts" },
 		]);
 	});
 
@@ -116,6 +120,38 @@ describe("toggleOverlayViewMode", () => {
 	it("toggles diff and commit", () => {
 		expect(toggleOverlayViewMode("diff")).toBe("commit");
 		expect(toggleOverlayViewMode("commit")).toBe("diff");
+	});
+});
+
+describe("cycleOverlayDiffScope", () => {
+	it("cycles branch → working → last-commit", () => {
+		expect(cycleOverlayDiffScope("branch")).toBe("working");
+		expect(cycleOverlayDiffScope("working")).toBe("last-commit");
+		expect(cycleOverlayDiffScope("last-commit")).toBe("branch");
+	});
+});
+
+describe("overlay fuzzy search", () => {
+	it("normalizes query for subsequence matching", () => {
+		expect(normalizeOverlaySearchQuery("  Foo Bar  ")).toBe("foobar");
+	});
+
+	it("scores subsequence matches and rejects misses", () => {
+		expect(scoreOverlayPathMatch("fod", "foo/diff.ts")).toBeGreaterThan(0);
+		expect(scoreOverlayPathMatch("zzz", "foo/diff.ts")).toBe(-1);
+	});
+
+	it("filters entries by path and previous rename path", () => {
+		const entries = [
+			{ path: "src/diff-overlay.ts", previousPath: null },
+			{ path: "src/new-name.ts", previousPath: "src/old-name.ts" },
+			{ path: "README.md", previousPath: null },
+		];
+
+		expect(filterEntriesByOverlayQuery(entries, "diff")).toEqual([{ path: "src/diff-overlay.ts", previousPath: null }]);
+		expect(filterEntriesByOverlayQuery(entries, "oldname")).toEqual([
+			{ path: "src/new-name.ts", previousPath: "src/old-name.ts" },
+		]);
 	});
 });
 
