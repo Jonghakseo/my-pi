@@ -102,6 +102,8 @@ export interface CommandRunState {
 	pipelineId?: string;
 	/** Zero-based step index inside batch/pipeline metadata. */
 	pipelineStepIndex?: number;
+	/** How completion/start events should be surfaced back to the user. */
+	deliveryMode?: "followUp" | "humanOnly";
 }
 
 export interface SessionReplayItem {

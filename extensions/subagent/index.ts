@@ -93,11 +93,16 @@ export function checkForHungRuns(store: SubagentStore, pi: ExtensionAPI): void {
 			controller.abort();
 		}
 
+		const message = `⚠️ worker#${runId} (${run.agent}) — ${Math.round(idleMs / 1000)}초 무응답으로 자동 abort됨`;
+		if (run.deliveryMode === "humanOnly") {
+			return;
+		}
+
 		// Notify main session
 		pi.sendMessage(
 			{
 				customType: "subagent-command",
-				content: `⚠️ worker#${runId} (${run.agent}) — ${Math.round(idleMs / 1000)}초 무응답으로 자동 abort됨`,
+				content: message,
 				display: true,
 				details: {
 					runId,
