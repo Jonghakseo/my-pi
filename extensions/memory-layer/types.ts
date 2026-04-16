@@ -22,10 +22,13 @@ export const RememberParams = Type.Object({
 
 export const RecallParams = Type.Object({
 	query: Type.Optional(
-		Type.String({ description: "Search query (keywords or natural language) to find relevant memories" }),
+		Type.String({
+			description:
+				"Search query (keywords or natural language) to find relevant memories. Returns a summary list with IDs.",
+		}),
 	),
-	topic: Type.Optional(
-		Type.String({ description: "Topic filename to read in full (e.g. 'coding-rules' or 'coding-rules.md')" }),
+	id: Type.Optional(
+		Type.String({ description: "Memory entry ID for detail lookup. Returns the full content of a specific memory." }),
 	),
 	scope: Type.Optional(
 		StringEnum(["user", "project"] as const, {

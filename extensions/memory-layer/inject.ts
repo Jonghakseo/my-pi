@@ -44,6 +44,6 @@ export async function buildMemoryPrompt(projectId?: string): Promise<string | nu
 		"",
 		"[Memory Layer]",
 		lines.join("\n"),
-		"상세 내용은 recall 도구로 topic을 지정하여 조회할 수 있습니다.",
+		"상세 내용은 recall({ query })로 검색 후, 결과의 ID로 recall({ id })를 호출하면 볼 수 있습니다.",
 	].join("\n");
 }

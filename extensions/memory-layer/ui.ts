@@ -323,6 +323,14 @@ export class MemoryDetailOverlayComponent {
 	private viewHeight = 0;
 	private totalLines = 0;
 	private onClose: () => void;
+	private _focused = false;
+
+	get focused(): boolean {
+		return this._focused;
+	}
+	set focused(value: boolean) {
+		this._focused = value;
+	}
 
 	constructor(tui: TUI, theme: Theme, entry: SearchResult, onClose: () => void) {
 		this.tui = tui;
