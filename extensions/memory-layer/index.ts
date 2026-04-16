@@ -1,4 +1,4 @@
-import type { ExtensionAPI, ExtensionContext, InputEventResult } from "@mariozechner/pi-coding-agent";
+import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
 import { copyToClipboard } from "@mariozechner/pi-coding-agent";
 import { Text } from "@mariozechner/pi-tui";
 
@@ -6,8 +6,10 @@ import { buildMemoryPrompt } from "./inject.ts";
 import { resolveProjectId } from "./project-id.ts";
 import {
 	ensureDir,
+	findMemoryById,
 	listTopics,
 	loadTopicEntries,
+	memoryEntryId,
 	memoryExistsInScope,
 	migrateFromJson,
 	readMemoryMd,
@@ -27,11 +29,6 @@ import {
 	type MemoryMenuAction,
 	MemorySelectorComponent,
 } from "./ui.ts";
-
-type ScopeTarget = {
-	scope: MemoryScope;
-	projectId?: string;
-};
 
 function resolveCurrentProjectId(cwd: string): string | undefined {
 	try {
@@ -63,17 +60,6 @@ function normalizeTopicInput(topic: string): string {
 	const trimmed = topic.trim();
 	const withoutMd = trimmed.replace(/\.md$/i, "").trim();
 	return sanitizeTopic(withoutMd);
-}
-
-function scopeTargets(scope: MemoryScope | undefined, projectId: string | undefined): ScopeTarget[] {
-	if (scope === "user") return [{ scope: "user" }];
-	if (scope === "project") return projectId ? [{ scope: "project", projectId }] : [];
-
-	const targets: ScopeTarget[] = [{ scope: "user" }];
-	if (projectId) {
-		targets.push({ scope: "project", projectId });
-	}
-	return targets;
 }
 
 async function promptTopic(
@@ -144,25 +130,12 @@ function resolveRecallProjectScopeError(projectId: string | undefined, scope?: M
 	return null;
 }
 
-async function executeRecallTopic(topic: string, targets: ScopeTarget[], scope?: MemoryScope) {
-	let normalizedTopic: string;
-	try {
-		normalizedTopic = normalizeTopicInput(topic);
-	} catch {
-		return buildTextResult(`Invalid topic: ${topic}`, true);
+async function executeRecallById(id: string, projectId: string | undefined) {
+	const entry = await findMemoryById(id, projectId);
+	if (!entry) {
+		return buildTextResult(`Memory not found with id: ${id}`, true);
 	}
-
-	for (const target of targets) {
-		const content = await readTopicFile(target.scope, target.projectId, normalizedTopic);
-		if (!content) continue;
-		return buildTextResult(`[${target.scope}] ${normalizedTopic}.md\n\n${content}`);
-	}
-
-	const normalizedNote = normalizedTopic !== topic.trim() ? ` (normalized: ${normalizedTopic})` : "";
-	const scopeNote = scope ? ` in ${scope} scope` : "";
-	return buildTextResult(
-		`Topic not found${scopeNote}: ${topic}${normalizedNote}\nTip: pass topic as 'general' or 'general.md'.`,
-	);
+	return buildTextResult(`[${entry.scope}] ${entry.topic}/${entry.title}\n\n${entry.content}`);
 }
 
 async function executeRecallQuery(query: string, projectId: string | undefined, scope?: MemoryScope) {
@@ -173,8 +146,19 @@ async function executeRecallQuery(query: string, projectId: string | undefined, 
 	if (results.length === 0) {
 		return buildTextResult("No matching memories found.");
 	}
-	const lines = results.slice(0, 8).map((r) => `[${r.scope}] ${r.topic}.md / ${r.title}\n  ${r.content}`);
-	return buildTextResult(`Found ${results.length} memories:\n\n${lines.join("\n\n")}`);
+	const maxResults = 20;
+	const lines = results.slice(0, maxResults).map((r) => {
+		const id = memoryEntryId(r.scope, r.projectId, r.topic, r.title, r.content);
+		const firstLine = r.content.split("\n")[0] ?? "";
+		const snippet = firstLine.length > 80 ? `${firstLine.slice(0, 79)}…` : firstLine;
+		return `- [${id}] [${r.scope}] ${r.topic}/${r.title}${snippet ? `\n  ${snippet}` : ""}`;
+	});
+	const shown = Math.min(results.length, maxResults);
+	const header =
+		results.length > shown
+			? `Found ${results.length} memories (showing top ${shown}):`
+			: `Found ${results.length} memories:`;
+	return buildTextResult(`${header}\n\n${lines.join("\n")}\n\nUse recall with id to view full content.`);
 }
 
 async function executeRecallIndex(projectId: string | undefined, scope?: MemoryScope) {
@@ -351,33 +335,6 @@ export default function memoryLayerExtension(pi: ExtensionAPI) {
 
 	// ── /remember Command ─────────────────────────────────────────────────
 
-	pi.on("input", async (event, ctx): Promise<InputEventResult | undefined> => {
-		const text = event.text.trim();
-		if (!text.startsWith("/remember")) return;
-
-		const raw = text.replace(/^\/remember\s*/, "").trim();
-		if (!raw) {
-			ctx.ui.notify("사용법: /remember [user|project] <기억할 내용>", "warning");
-			return { action: "handled" };
-		}
-
-		const { scope, content } = parseRememberArgs(raw);
-		const result = await saveContent(content, undefined, scope, ctx);
-
-		if ("cancelled" in result) {
-			ctx.ui.notify("기억 저장을 취소했습니다.", "info");
-		} else if ("error" in result) {
-			ctx.ui.notify(result.error, "error");
-		} else {
-			ctx.ui.notify(
-				`📝 저장: "${result.title}" → ${result.topic}.md (scope: ${result.scope}) — /memory에서 이동/정리 가능`,
-				"info",
-			);
-		}
-
-		return { action: "handled" };
-	});
-
 	pi.registerCommand("remember", {
 		description: "Store a memory. Usage: /remember [user|project] <content>",
 		handler: async (args, ctx) => {
@@ -413,9 +370,11 @@ export default function memoryLayerExtension(pi: ExtensionAPI) {
 
 			if (!ctx.hasUI) {
 				if (!displayEntries.length) {
+					ctx.ui.notify("No memories stored.", "info");
 					return;
 				}
-				for (const _e of displayEntries) {
+				for (const e of displayEntries) {
+					ctx.ui.notify(`[${e.scope}] ${e.topic}/${e.title}`, "info");
 				}
 				return;
 			}
@@ -588,29 +547,32 @@ export default function memoryLayerExtension(pi: ExtensionAPI) {
 		description:
 			"Search the user's long-term memory for relevant information. " +
 			"Use this when you need to check if there are stored rules, preferences, or lessons " +
-			"related to the current task. You can search by keywords, retrieve a full topic file by name, and optionally filter by scope.",
+			"related to the current task. " +
+			"Three usage patterns: recall({ query }) to search and get a summary list with IDs, " +
+			"recall({ id }) to get the full content of a specific memory, " +
+			"or recall({ scope }) to list all memories filtered by scope.",
 		parameters: RecallParams,
 
 		renderCall(args, theme) {
 			const query = typeof args.query === "string" ? args.query : undefined;
-			const topic = typeof args.topic === "string" ? args.topic : undefined;
+			const id = typeof args.id === "string" ? args.id : undefined;
 			const scope = typeof args.scope === "string" ? args.scope : undefined;
 			let text = theme.fg("toolTitle", theme.bold("recall"));
+			if (id) text += ` ${theme.fg("accent", `id:${id}`)}`;
 			if (query) text += ` ${theme.fg("accent", `"${query}"`)}`;
-			if (topic) text += ` ${theme.fg("accent", `topic:${topic}`)}`;
 			if (scope) text += ` ${theme.fg("accent", `scope:${scope}`)}`;
-			if (!query && !topic) text += ` ${theme.fg("muted", "(index)")}`;
+			if (!query && !id) text += ` ${theme.fg("muted", "(index)")}`;
 			return new Text(text, 0, 0);
 		},
 
 		async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
 			try {
-				const { query, topic, scope } = params as { query?: string; topic?: string; scope?: MemoryScope };
+				const { query, id, scope } = params as { query?: string; id?: string; scope?: MemoryScope };
 				currentProjectId = resolveCurrentProjectId(ctx.cwd);
 
 				const scopeError = resolveRecallProjectScopeError(currentProjectId, scope);
 				if (scopeError) return scopeError;
-				if (topic) return await executeRecallTopic(topic, scopeTargets(scope, currentProjectId), scope);
+				if (id) return await executeRecallById(id, currentProjectId);
 				if (query) return await executeRecallQuery(query, currentProjectId, scope);
 				return await executeRecallIndex(currentProjectId, scope);
 			} catch (err: unknown) {

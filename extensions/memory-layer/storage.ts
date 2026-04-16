@@ -89,8 +89,14 @@ async function acquireLock(fp: string): Promise<() => Promise<void>> {
 	for (let attempt = 0; attempt < LOCK_MAX_RETRIES; attempt++) {
 		try {
 			const handle = await fs.open(lp, "wx");
-			await handle.writeFile(JSON.stringify({ pid: process.pid, ts: new Date().toISOString() }), "utf8");
-			await handle.close();
+			try {
+				await handle.writeFile(JSON.stringify({ pid: process.pid, ts: new Date().toISOString() }), "utf8");
+				await handle.close();
+			} catch (writeErr) {
+				await handle.close().catch(() => {});
+				await fs.unlink(lp).catch(() => {});
+				throw writeErr;
+			}
 			return async () => {
 				await fs.unlink(lp).catch(() => {});
 			};
@@ -451,6 +457,36 @@ export interface SearchResult {
 	topic: string;
 	title: string;
 	content: string;
+}
+
+export function memoryEntryId(
+	scope: MemoryScope,
+	projectId: string | undefined,
+	topic: string,
+	title: string,
+	content: string,
+): string {
+	const key = `${scope}:${projectId ?? ""}:${topic}:${title}:${content}`;
+	return crypto.createHash("sha256").update(key).digest("hex").slice(0, 12);
+}
+
+export async function findMemoryById(id: string, projectId?: string): Promise<SearchResult | null> {
+	const scopes: Array<{ scope: MemoryScope; pid?: string }> = [
+		{ scope: "user" },
+		...(projectId ? [{ scope: "project" as MemoryScope, pid: projectId }] : []),
+	];
+	for (const { scope, pid } of scopes) {
+		const topics = await listTopics(scope, pid);
+		for (const topic of topics) {
+			const entries = await loadTopicEntries(scope, pid, topic);
+			for (const entry of entries) {
+				if (memoryEntryId(scope, pid, topic, entry.title, entry.content) === id) {
+					return { scope, projectId: pid, topic, title: entry.title, content: entry.content };
+				}
+			}
+		}
+	}
+	return null;
 }
 
 function tokenizeSearchQuery(query: string): string[] {
