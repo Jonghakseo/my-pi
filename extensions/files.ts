@@ -706,7 +706,7 @@ const openExternalEditor = (tui: TUI, editorCmd: string, content: string): strin
 		const result = spawnSync(editor, [...editorArgs, tmpFile], { stdio: "inherit" });
 
 		if (result.status === 0) {
-			return readFileSync(tmpFile, "utf8").replace(/\n$/, "");
+			return readFileSync(tmpFile, "utf8");
 		}
 
 		return null;
