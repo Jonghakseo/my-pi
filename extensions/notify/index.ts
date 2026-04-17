@@ -8,8 +8,10 @@
  * - 기본 상태는 OFF. 세션마다 명시적으로 켜야 동작.
  * - 토글 상태는 세션 ID별로 ~/.pi/agent/state/notify-sessions.json 에 저장됨.
  * - resume 시 이전 토글 상태 복원.
- * - macOS에서는 say -v Sandy 로 본문 요약을 음성으로 읽어줌.
- *   (PI_NOTIFY_VOICE 환경변수로 보이스 변경 가능)
+ * - macOS에서는 본문 요약을 음성으로 읽어줌.
+ *   - 기본: edge-tts (Microsoft Edge 신경 보이스, ko-KR-SunHiNeural)
+ *   - edge-tts 미설치/실패 시 폴백: macOS `say` (Sandy)
+ *   - PI_NOTIFY_TTS=edge|say|off|auto, PI_NOTIFY_EDGE_VOICE, PI_NOTIFY_SAY_VOICE 환경변수로 커스터마이징
  */
 
 import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
