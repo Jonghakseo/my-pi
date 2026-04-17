@@ -107,7 +107,7 @@ export async function queryWithCookies(
 	cookieMap: CookieMap,
 	options: GeminiWebOptions = {},
 ): Promise<string> {
-	const model = options.model && MODEL_HEADERS[options.model] ? options.model : "gemini-2.5-flash";
+	const model = options.model ?? "gemini-2.5-flash";
 	const timeoutMs = options.timeoutMs ?? 120000;
 
 	let fullPrompt = prompt;
@@ -166,18 +166,22 @@ async function runGeminiWebOnce(
 	params.set("at", accessToken);
 	params.set("f.req", fReq);
 
+	const headers: Record<string, string> = {
+		"content-type": "application/x-www-form-urlencoded;charset=utf-8",
+		host: "gemini.google.com",
+		origin: "https://gemini.google.com",
+		referer: "https://gemini.google.com/",
+		"x-same-domain": "1",
+		"user-agent": USER_AGENT,
+		cookie: cookieHeader,
+	};
+	if (MODEL_HEADERS[model]) {
+		headers[MODEL_HEADER_NAME] = MODEL_HEADERS[model];
+	}
+
 	const res = await fetch(GEMINI_STREAM_GENERATE_URL, {
 		method: "POST",
-		headers: {
-			"content-type": "application/x-www-form-urlencoded;charset=utf-8",
-			host: "gemini.google.com",
-			origin: "https://gemini.google.com",
-			referer: "https://gemini.google.com/",
-			"x-same-domain": "1",
-			"user-agent": USER_AGENT,
-			cookie: cookieHeader,
-			[MODEL_HEADER_NAME]: MODEL_HEADERS[model],
-		},
+		headers,
 		body: params.toString(),
 		signal: effectiveSignal,
 	});
