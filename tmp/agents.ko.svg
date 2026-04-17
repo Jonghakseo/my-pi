@@ -34,7 +34,7 @@
 
   <rect x="470" y="304" width="260" height="92" rx="12" fill="rgba(210,168,255,0.12)" stroke="#d2a8ff" stroke-width="2" filter="url(#aglow)"/>
   <text x="600" y="338" text-anchor="middle" fill="#e6edf3" font-family="monospace, 'Noto Sans KR', sans-serif" font-size="15" font-weight="bold">메인 에이전트</text>
-  <text x="600" y="360" text-anchor="middle" fill="#8b949e" font-family="monospace, 'Noto Sans KR', sans-serif" font-size="9">anthropic/claude-opus-4-6</text>
+  <text x="600" y="360" text-anchor="middle" fill="#8b949e" font-family="monospace, 'Noto Sans KR', sans-serif" font-size="9">anthropic/claude-opus-4-7</text>
   <text x="600" y="381" text-anchor="middle" fill="#e6edf3" font-family="monospace, 'Noto Sans KR', sans-serif" font-size="10">위임 · 라우팅 · 검증</text>
 
   <g transform="translate(30, 80)">
@@ -58,7 +58,7 @@
   <g transform="translate(520, 80)">
     <rect width="200" height="92" rx="10" fill="rgba(210,168,255,0.10)" stroke="#d2a8ff" stroke-width="1.5"/>
     <text x="100" y="23" text-anchor="middle" fill="#d2a8ff" font-family="monospace, 'Noto Sans KR', sans-serif" font-size="12.5" font-weight="bold">📐 planner</text>
-    <text x="100" y="42" text-anchor="middle" fill="#8b949e" font-family="monospace, 'Noto Sans KR', sans-serif" font-size="7">anthropic/claude-opus-4-6</text>
+    <text x="100" y="42" text-anchor="middle" fill="#8b949e" font-family="monospace, 'Noto Sans KR', sans-serif" font-size="7">anthropic/claude-opus-4-7</text>
     <text x="100" y="62" text-anchor="middle" fill="#e6edf3" font-family="monospace, 'Noto Sans KR', sans-serif" font-size="9">구현</text>
     <text x="100" y="77" text-anchor="middle" fill="#e6edf3" font-family="monospace, 'Noto Sans KR', sans-serif" font-size="9">설계자</text>
     <circle cx="185" cy="15" r="5" fill="#d2a8ff" opacity="0.85"/>
@@ -112,7 +112,7 @@
   <g transform="translate(480, 535)">
     <rect width="200" height="92" rx="10" fill="rgba(210,168,255,0.10)" stroke="#d2a8ff" stroke-width="1.5"/>
     <text x="100" y="23" text-anchor="middle" fill="#d2a8ff" font-family="monospace, 'Noto Sans KR', sans-serif" font-size="12.5" font-weight="bold">✅ verifier</text>
-    <text x="100" y="42" text-anchor="middle" fill="#8b949e" font-family="monospace, 'Noto Sans KR', sans-serif" font-size="7">anthropic/claude-opus-4-6</text>
+    <text x="100" y="42" text-anchor="middle" fill="#8b949e" font-family="monospace, 'Noto Sans KR', sans-serif" font-size="7">anthropic/claude-opus-4-7</text>
     <text x="100" y="62" text-anchor="middle" fill="#e6edf3" font-family="monospace, 'Noto Sans KR', sans-serif" font-size="9">3단계 근거</text>
     <text x="100" y="77" text-anchor="middle" fill="#e6edf3" font-family="monospace, 'Noto Sans KR', sans-serif" font-size="9">검증</text>
     <circle cx="185" cy="15" r="5" fill="#d2a8ff" opacity="0.85"/>
@@ -142,6 +142,6 @@
     <circle cx="245" cy="6" r="5" fill="#58a6ff" opacity="0.9"/>
     <text x="257" y="10" fill="#8b949e">anthropic/claude-sonnet-4-6</text>
     <circle cx="535" cy="6" r="5" fill="#d2a8ff" opacity="0.95"/>
-    <text x="547" y="10" fill="#8b949e">anthropic/claude-opus-4-6</text>
+    <text x="547" y="10" fill="#8b949e">anthropic/claude-opus-4-7</text>
   </g>
 </svg>
