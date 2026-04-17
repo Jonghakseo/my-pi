@@ -61,8 +61,6 @@ interface ReviewDraft {
 	scope: OverlayDiffScope;
 	filePath: string;
 	fileDisplayPath: string;
-	lineStart: number;
-	lineEnd: number;
 	prompt: string;
 }
 
@@ -170,30 +168,11 @@ function fileTreeLabel(file: { path: string; previousPath?: string | null }, fal
 	return `${basename(file.previousPath)} → ${fallbackName}`;
 }
 
-function formatReviewLineRange(lineStart: number, lineEnd: number): string {
-	return lineStart === lineEnd ? `#${lineStart}` : `#${lineStart}-${lineEnd}`;
-}
-
-function parseReviewDraftInput(input: string): { lineStart: number; lineEnd: number; prompt: string } | null {
-	const trimmed = input.trim();
-	const match = /^#(\d+)(?:-(\d+))?\s+(.+)$/.exec(trimmed);
-	if (!match) return null;
-	const lineStart = Number(match[1]);
-	const lineEnd = Number(match[2] ?? match[1]);
-	const prompt = (match[3] ?? "").trim();
-	if (!Number.isInteger(lineStart) || !Number.isInteger(lineEnd) || lineStart <= 0 || lineEnd < lineStart || !prompt) {
-		return null;
-	}
-	return { lineStart, lineEnd, prompt };
-}
-
 function buildReviewTransferPrompt(drafts: ReviewDraft[]): string {
 	if (drafts.length === 0) return "";
 	const lines: string[] = ["Please address the following review feedback:", ""];
 	for (const [index, draft] of drafts.entries()) {
-		lines.push(
-			`${index + 1}. [${scopeLabel(draft.scope)}] ${draft.fileDisplayPath}:${formatReviewLineRange(draft.lineStart, draft.lineEnd)}`,
-		);
+		lines.push(`${index + 1}. [${scopeLabel(draft.scope)}] ${draft.fileDisplayPath}`);
 		lines.push(`   ${draft.prompt}`);
 		lines.push("");
 	}
@@ -952,18 +931,16 @@ class DiffOverlay {
 			this.st.reviewInput.error = "No file selected";
 			return;
 		}
-		const parsed = parseReviewDraftInput(this.st.reviewInput.buffer);
-		if (!parsed) {
-			this.st.reviewInput.error = "Use format: #12 message or #12-18 message";
+		const prompt = this.st.reviewInput.buffer.trim();
+		if (!prompt) {
+			this.st.reviewInput.error = "Review message cannot be empty";
 			return;
 		}
 		this.st.reviewDrafts.push({
 			scope: this.st.scope,
 			filePath: file.path,
 			fileDisplayPath: fileDisplayPath(file),
-			lineStart: parsed.lineStart,
-			lineEnd: parsed.lineEnd,
-			prompt: parsed.prompt,
+			prompt,
 		});
 		this.st.reviewInput = { active: false, buffer: "", error: null };
 		this.st.error = null;
@@ -1524,7 +1501,10 @@ class DiffOverlay {
 		const footer: string[] = [];
 		if (st.reviewInput.active) {
 			footer.push(
-				truncateToWidth(`  ${t.fg("accent", "review>")} ${st.reviewInput.buffer || t.fg("dim", "#12 message")}`, w),
+				truncateToWidth(
+					`  ${t.fg("accent", "review>")} ${st.reviewInput.buffer || t.fg("dim", "type review message (line numbers go here too)")}`,
+					w,
+				),
 			);
 			footer.push(st.reviewInput.error ? t.fg("error", `  ${st.reviewInput.error}`) : "");
 		} else {
@@ -1534,7 +1514,7 @@ class DiffOverlay {
 		const hint =
 			st.viewMode === "diff"
 				? st.reviewInput.active
-					? `  Review draft · ${t.fg("accent", "#12 message")} or ${t.fg("accent", "#12-18 message")} · Enter save · Esc cancel`
+					? `  Review draft · type message · Enter save · Esc cancel`
 					: st.searchMode
 						? "  Search mode · type to filter · Backspace delete · Enter/Esc close"
 						: st.focus === "left"
