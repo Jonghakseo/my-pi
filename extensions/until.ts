@@ -681,6 +681,12 @@ export default function (pi: ExtensionAPI) {
 	pi.on("agent_end", async (_event, ctx) => {
 		agentRunning = false;
 		latestCtx = ctx;
+
+		for (const task of tasks.values()) {
+			if (task.inFlight) {
+				task.inFlight = false;
+			}
+		}
 	});
 
 	// context 이벤트: until 로그 메시지만 LLM 컨텍스트에서 제거
