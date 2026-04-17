@@ -96,9 +96,14 @@ function makeNonBlockingUpdateHandler(pi: ExtensionAPI): (update: HandsFreeUpdat
 	};
 }
 
-function extractSelectedId(choice: string, separator: string): string {
-	const [selected] = choice.split(separator);
-	return selected ?? choice;
+function extractSelectedId(choice: string, knownIds: string[], separator: string): string {
+	for (const id of knownIds) {
+		if (choice === id || choice.startsWith(id + separator)) {
+			return id;
+		}
+	}
+	const idx = choice.indexOf(separator);
+	return idx === -1 ? choice : choice.slice(0, idx);
 }
 
 // biome-ignore lint/complexity/noExcessiveLinesPerFunction: extension registration groups lifecycle hooks, tool registration, and slash commands in one module entrypoint
@@ -1048,7 +1053,11 @@ export default function interactiveShellExtension(pi: ExtensionAPI) {
 				});
 				const choice = await ctx.ui.select("Background Sessions", options);
 				if (!choice) return;
-				targetId = extractSelectedId(choice, " - ");
+				targetId = extractSelectedId(
+					choice,
+					sessions.map((s) => s.id),
+					" - ",
+				);
 			}
 
 			const monitor = coordinator.getMonitor(targetId);
@@ -1131,7 +1140,16 @@ export default function interactiveShellExtension(pi: ExtensionAPI) {
 				];
 				const choice = await ctx.ui.select("Dismiss sessions", options);
 				if (!choice) return;
-				targetIds = choice === "All sessions" ? sessions.map((s) => s.id) : [extractSelectedId(choice, " (")];
+				targetIds =
+					choice === "All sessions"
+						? sessions.map((s) => s.id)
+						: [
+								extractSelectedId(
+									choice,
+									sessions.map((s) => s.id),
+									" (",
+								),
+							];
 			}
 
 			for (const tid of targetIds) {
