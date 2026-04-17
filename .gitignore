@@ -41,6 +41,7 @@ tmp/daily-retro.svg
 .pi/
 state/
 .context/
+bookmarks.json
 
 # OS / IDE
 .DS_Store
