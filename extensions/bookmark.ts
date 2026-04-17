@@ -135,6 +135,10 @@ function buildItems(storage: BookmarkStorage): { items: SelectItem[]; byId: Map<
 	return { items, byId };
 }
 
+function isGhosttyOnMac(): boolean {
+	return process.platform === "darwin" && process.env.TERM_PROGRAM === "ghostty";
+}
+
 async function openInGhosttyPanel(pi: ExtensionAPI, bookmark: Bookmark): Promise<{ ok: boolean; stderr?: string }> {
 	const esc = (s: string) => s.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
 	const script = `tell application "Ghostty"
@@ -155,6 +159,13 @@ async function activate(pi: ExtensionAPI, ctx: ExtensionCommandContext, bookmark
 	const sameCwd = path.resolve(bookmark.cwd) === path.resolve(ctx.cwd);
 	if (sameCwd) {
 		await ctx.switchSession(bookmark.sessionFile);
+		return;
+	}
+	if (!isGhosttyOnMac()) {
+		ctx.ui.notify(
+			`다른 cwd 북마크는 macOS Ghostty에서만 자동 패널 열기를 지원합니다. 수동 실행: cd "${bookmark.cwd}" && pi --session "${bookmark.sessionFile}"`,
+			"warning",
+		);
 		return;
 	}
 	const result = await openInGhosttyPanel(pi, bookmark);
