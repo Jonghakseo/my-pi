@@ -473,8 +473,16 @@ async function commitFileDiff(pi: ExtensionAPI, cwd: string, commitHash: string,
 	if (commitHash === UNCOMMITTED_HASH) {
 		return workingTreeFileDiff(pi, cwd, file);
 	}
-	const r = await pi.exec("git", ["show", "--no-color", "--format=", commitHash, "--", file.path], { cwd });
-	if (r.code === 0 && (r.stdout ?? "").trim()) return (r.stdout ?? "").trim();
+
+	const primary = await pi.exec(
+		"git",
+		["show", "--no-color", "--format=", "--diff-merges=first-parent", commitHash, "--", file.path],
+		{ cwd },
+	);
+	if (primary.code === 0 && (primary.stdout ?? "").trim()) return (primary.stdout ?? "").trim();
+
+	const fallback = await pi.exec("git", ["show", "--no-color", "--format=", commitHash, "--", file.path], { cwd });
+	if (fallback.code === 0 && (fallback.stdout ?? "").trim()) return (fallback.stdout ?? "").trim();
 	return "(no diff available)";
 }
 
