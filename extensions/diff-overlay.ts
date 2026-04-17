@@ -912,6 +912,7 @@ class DiffOverlay {
 	private cwd: string;
 	private done: (reviewPrompt?: string) => void;
 	private diffLoading = false;
+	private lastRightWidth = 80;
 
 	constructor(pi: ExtensionAPI, cwd: string, st: DiffState, done: (reviewPrompt?: string) => void) {
 		this.pi = pi;
@@ -1029,6 +1030,13 @@ class DiffOverlay {
 			this.diffLoading = false;
 		}
 		tui.requestRender();
+		const current = this.selectedDiffFile();
+		if (current) {
+			const currentKey = scopedDiffKey(this.st.scope, current.path);
+			if (!this.st.diffCache.has(currentKey)) {
+				void this.ensureDiff(tui);
+			}
+		}
 	}
 
 	private async ensureCommitFiles(tui: Tui): Promise<void> {
@@ -1285,7 +1293,13 @@ class DiffOverlay {
 		const raw = f ? (st.diffCache.get(scopedDiffKey(st.scope, f.path)) ?? "") : "";
 		const parsed = parseDiffLines(raw);
 		const highlighted = f ? (st.highlightedDiffCache.get(scopedDiffKey(st.scope, f.path)) ?? raw.split("\n")) : [];
-		const diffLen = countRenderedDiffLines(highlighted, parsed, Math.max(1, 80), st.wrapLines, st.changedOnly);
+		const diffLen = countRenderedDiffLines(
+			highlighted,
+			parsed,
+			Math.max(1, this.lastRightWidth),
+			st.wrapLines,
+			st.changedOnly,
+		);
 		if (matchesKey(data, Key.up) || data === "k") {
 			st.diffScrollOffset = Math.max(0, st.diffScrollOffset - 1);
 		} else if (matchesKey(data, Key.down) || data === "j") {
@@ -1535,6 +1549,7 @@ class DiffOverlay {
 		const bodyH = Math.max(3, h - header.length - footer.length);
 		const leftW = Math.max(14, Math.min(Math.floor(w * 0.28), 44));
 		const rightW = Math.max(10, w - leftW - 3);
+		this.lastRightWidth = rightW;
 
 		const leftTitleLabel = st.viewMode === "diff" ? ` FILES · ${scopeFilesLabel(st.scope)}` : " COMMITS";
 		const rightTitleLabel = st.viewMode === "diff" ? " DIFF" : " CHANGED FILES";

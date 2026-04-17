@@ -182,6 +182,7 @@ export function mergeDiffEntries(
 			path: filePath,
 			status: source.status,
 			rawStatus: source.rawStatus,
+			previousPath: value.committed?.previousPath ?? source.previousPath,
 			commitState: toCommitState(Boolean(value.committed), Boolean(value.working)),
 		});
 	}
