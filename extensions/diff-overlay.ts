@@ -170,7 +170,7 @@ function fileTreeLabel(file: { path: string; previousPath?: string | null }, fal
 
 function buildReviewTransferPrompt(drafts: ReviewDraft[]): string {
 	if (drafts.length === 0) return "";
-	const lines: string[] = ["Please address the following review feedback:", ""];
+	const lines: string[] = [];
 	for (const [index, draft] of drafts.entries()) {
 		lines.push(`${index + 1}. [${scopeLabel(draft.scope)}] ${draft.fileDisplayPath}`);
 		lines.push(`   ${draft.prompt}`);
