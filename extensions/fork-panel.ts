@@ -13,6 +13,11 @@ export default function (pi: ExtensionAPI) {
 			return filtered.length > 0 ? filtered : null;
 		},
 		handler: async (args, ctx) => {
+			if (process.platform !== "darwin" || process.env.TERM_PROGRAM !== "ghostty") {
+				ctx.ui.notify("/fork-panel은 macOS Ghostty 터미널에서만 동작합니다", "warning");
+				return;
+			}
+
 			const sessionFile = ctx.sessionManager.getSessionFile();
 			if (!sessionFile) {
 				ctx.ui.notify("포크할 세션 파일이 없습니다 (ephemeral session)", "error");
