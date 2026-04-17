@@ -1,10 +1,10 @@
 {
-  "theme": "dracula",
+  "theme": "gruvbox",
   "quietStartup": true,
-  "lastChangelogVersion": "0.67.3",
-  "defaultProvider": "openai-codex",
-  "defaultModel": "gpt-5.4",
-  "defaultThinkingLevel": "high",
+  "lastChangelogVersion": "0.67.6",
+  "defaultProvider": "anthropic",
+  "defaultModel": "claude-opus-4-6",
+  "defaultThinkingLevel": "xhigh",
   "subagent": {
     "claudeRuntime": "cli"
   },
