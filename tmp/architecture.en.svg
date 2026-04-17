@@ -101,7 +101,7 @@
 
   </g>
 
-  <text x="400" y="368" text-anchor="middle" fill="#8b949e" font-family="monospace" font-size="8">codex = openai-codex/gpt-5.4 · sonnet = anthropic/claude-sonnet-4-6 · opus = anthropic/claude-opus-4-6</text>
+  <text x="400" y="368" text-anchor="middle" fill="#8b949e" font-family="monospace" font-size="8">codex = openai-codex/gpt-5.4 · sonnet = anthropic/claude-sonnet-4-6 · opus = anthropic/claude-opus-4-7</text>
 
   <line x1="400" y1="396" x2="400" y2="410" stroke="#484f58" stroke-width="1.5"/>
   <polygon points="394,407 400,414 406,407" fill="#484f58"/>
