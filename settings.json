@@ -3,15 +3,15 @@
   "quietStartup": true,
   "lastChangelogVersion": "0.67.6",
   "defaultProvider": "anthropic",
-  "defaultModel": "claude-opus-4-6",
+  "defaultModel": "claude-opus-4-7",
   "defaultThinkingLevel": "xhigh",
   "subagent": {
     "claudeRuntime": "cli"
   },
   "enabledModels": [
-    "anthropic/claude-opus-4-6",
     "openai-codex/gpt-5.4",
-    "google-gemini-cli/gemini-3.1-pro-preview"
+    "google-gemini-cli/gemini-3.1-pro-preview",
+    "anthropic/claude-opus-4-7"
   ],
   "packages": [
     "npm:@ryan_nookpi/pi-extension-codex-fast-mode",
