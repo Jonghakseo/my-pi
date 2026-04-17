@@ -224,7 +224,7 @@ describe("claude-stream-parser: usage tracking regression", () => {
 			event: {
 				type: "message_start",
 				message: {
-					model: "claude-opus-4-6",
+					model: "claude-opus-4-7",
 					usage: {
 						input_tokens: 2,
 						cache_read_input_tokens: 100,
@@ -237,7 +237,7 @@ describe("claude-stream-parser: usage tracking regression", () => {
 		processClaudeEvent(state, {
 			type: "assistant",
 			message: {
-				model: "claude-opus-4-6",
+				model: "claude-opus-4-7",
 				role: "assistant",
 				content: [{ type: "text", text: "partial" }],
 				usage: {
@@ -279,7 +279,7 @@ describe("claude-stream-parser: usage tracking regression", () => {
 			event: {
 				type: "message_start",
 				message: {
-					model: "claude-opus-4-6",
+					model: "claude-opus-4-7",
 					usage: {
 						input_tokens: 2,
 						cache_read_input_tokens: 100,
@@ -292,7 +292,7 @@ describe("claude-stream-parser: usage tracking regression", () => {
 		processClaudeEvent(state, {
 			type: "assistant",
 			message: {
-				model: "claude-opus-4-6",
+				model: "claude-opus-4-7",
 				role: "assistant",
 				content: [{ type: "text", text: "first turn" }],
 				usage: {
@@ -315,7 +315,7 @@ describe("claude-stream-parser: usage tracking regression", () => {
 			event: {
 				type: "message_start",
 				message: {
-					model: "claude-opus-4-6",
+					model: "claude-opus-4-7",
 					usage: {
 						input_tokens: 3,
 						cache_read_input_tokens: 200,
@@ -462,7 +462,7 @@ describe("claude-stream-parser: processClaudeEvent edge cases", () => {
 		processClaudeEvent(state, {
 			type: "assistant",
 			message: {
-				model: "claude-opus-4-6",
+				model: "claude-opus-4-7",
 				role: "assistant",
 				content: [{ type: "text", text: "final text" }],
 			},

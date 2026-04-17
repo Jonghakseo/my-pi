@@ -88,7 +88,7 @@ describe("normalizeModel", () => {
 
 describe("isClaudeModel", () => {
 	it("should detect Anthropic Claude models", () => {
-		expect(isClaudeModel("anthropic/claude-opus-4-6")).toBe(true);
+		expect(isClaudeModel("anthropic/claude-opus-4-7")).toBe(true);
 		expect(isClaudeModel("claude-sonnet-4-6")).toBe(true);
 	});
 

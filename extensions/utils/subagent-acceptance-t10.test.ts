@@ -126,7 +126,7 @@ describe("T10 Acceptance Matrix", () => {
 			writeAgentFile(
 				agentsDir,
 				"b-claude.md",
-				"---\nname: b-claude\ndescription: B Claude\nmodel: anthropic/claude-opus-4-6\n---\nWork.",
+				"---\nname: b-claude\ndescription: B Claude\nmodel: anthropic/claude-opus-4-7\n---\nWork.",
 			);
 
 			const result = discoverAgents(tmpDir);
@@ -141,7 +141,7 @@ describe("T10 Acceptance Matrix", () => {
 			writeAgentFile(
 				agentsDir,
 				"b-explicit-pi.md",
-				"---\nname: b-explicit-pi\ndescription: B Explicit Pi\nmodel: anthropic/claude-opus-4-6\nruntime: pi\n---\nWork.",
+				"---\nname: b-explicit-pi\ndescription: B Explicit Pi\nmodel: anthropic/claude-opus-4-7\nruntime: pi\n---\nWork.",
 			);
 
 			const result = discoverAgents(tmpDir);
@@ -321,7 +321,7 @@ describe("T10 Acceptance Matrix", () => {
 			const state = createStreamState();
 			processClaudeEvent(state, {
 				type: "assistant",
-				message: { model: "claude-opus-4-6", role: "assistant", content: [{ type: "text", text: "partial" }] },
+				message: { model: "claude-opus-4-7", role: "assistant", content: [{ type: "text", text: "partial" }] },
 			});
 			expect(state.resultReceived).toBe(false);
 			const result = stateToSingleResult(state, "agent", "user", "task", 1, undefined, "");
