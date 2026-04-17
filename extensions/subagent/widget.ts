@@ -14,12 +14,12 @@ import {
 	resolveContextWindow,
 } from "./format.js";
 
-const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"] as const;
+const SPINNER_FRAMES = ["◐", "◓", "◑", "◒"] as const;
 const SPINNER_INTERVAL_MS = 120;
 const SPINNER_REFRESH_MS = 150;
 
 const MAX_VISIBLE_RUNS = 3;
-const MAX_TASK_LABEL_CHARS = 72;
+const MAX_TASK_LABEL_CHARS = 144;
 
 import { type SubagentStore, truncateText } from "./store.js";
 import type { CommandRunState } from "./types.js";
@@ -101,6 +101,7 @@ const WIDGET_BAR_WIDTH = 5;
 function formatCompactContextBar(percent: number): string {
 	const clamped = Math.max(0, Math.min(100, Math.round(percent)));
 	const filled = Math.round((clamped / 100) * WIDGET_BAR_WIDTH);
+	if (filled <= 0) return "";
 	return `[${"■".repeat(filled)}${"□".repeat(WIDGET_BAR_WIDTH - filled)}]`;
 }
 
@@ -110,6 +111,7 @@ function getContextShort(run: CommandRunState, ctx: WidgetRenderCtx, theme: Widg
 	const remainingContextPercent = getRemainingContextPercent(usedContextPercent);
 	if (usedContextPercent === undefined) return "";
 	const contextBar = formatCompactContextBar(usedContextPercent);
+	if (!contextBar) return "";
 	const contextBarColor =
 		remainingContextPercent !== undefined ? getContextBarColorByRemaining(remainingContextPercent) : undefined;
 	return contextBarColor ? theme.fg(contextBarColor, contextBar) : theme.fg("dim", contextBar);
@@ -144,8 +146,8 @@ function buildStatusLeft(run: CommandRunState, theme: WidgetTheme, maxWidth: num
 	const taskText = buildPrimaryLabelText(run);
 	const idleLabel = getIdleLabel(run, theme);
 	const statusLabel = theme.fg(statusColor, `${statusIcon} #${run.id}`);
-	const mainBadge = run.contextMode === "main" ? `${theme.fg("warning", "[M]")} ` : "";
-	const agentLabel = `${mainBadge}\x1b[38;5;${AGENT_NAME_PALETTE[agentBgIndex(run.agent)]}m${run.agent}\x1b[39m`;
+	const isolatedBadge = run.contextMode === "sub" ? `${theme.fg("accent", "[I]")} ` : "";
+	const agentLabel = `${isolatedBadge}\x1b[38;5;${AGENT_NAME_PALETTE[agentBgIndex(run.agent)]}m${run.agent}\x1b[39m`;
 	const elapsedLabel = theme.fg("dim", formatCompactDuration(run.elapsedMs));
 
 	const statusPart = { text: statusLabel, width: visibleWidth(statusLabel) };
