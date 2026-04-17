@@ -210,8 +210,9 @@ function buildCommitRowsMeta(
 			if (raw === undefined) {
 				row += 1; // loading / placeholder line
 			} else {
-				const diffLines = raw.split("\n");
-				row += Math.max(1, diffLines.length);
+				const parsed = parseDiffLines(raw);
+				const visibleDiffLines = parsed.filter((line) => !shouldHideCommitParsedLine(line));
+				row += Math.max(1, visibleDiffLines.length);
 			}
 		}
 
@@ -222,6 +223,8 @@ function buildCommitRowsMeta(
 }
 
 const UNCOMMITTED_HASH = "__uncommitted__";
+const ARROW_SCROLL_STEP = 5;
+const PAGE_SCROLL_STEP = 20;
 
 // ─── Tree helpers ──────────────────────────────────────────────────────────
 
@@ -527,8 +530,17 @@ function expandTabs(s: string, tabSize = 4): string {
 	return s.replace(/\t/g, " ".repeat(tabSize));
 }
 
+function isCommitFileMarkerLine(line: string): boolean {
+	return /^(\+\+\+|---)\s/.test(line);
+}
+
+function shouldHideCommitParsedLine(line: ReturnType<typeof parseDiffLines>[number] | undefined): boolean {
+	if (!line || line.category !== "meta") return false;
+	return line.originalLine.startsWith("diff ") || isCommitFileMarkerLine(line.originalLine);
+}
+
 function colorDiffLine(t: Theme, line: string): string {
-	if (line.startsWith("+++") || line.startsWith("---")) return t.fg("muted", line);
+	if (isCommitFileMarkerLine(line)) return t.fg("muted", line);
 	if (line.startsWith("+")) return t.fg("success", line);
 	if (line.startsWith("-")) return t.fg("error", line);
 	if (line.startsWith("@@")) return t.fg("accent", line);
@@ -548,6 +560,28 @@ function diffLineNumberWidth(parsed: ReturnType<typeof parseDiffLines>): number 
 		0,
 	);
 	return Math.max(3, String(maxLineNumber || 0).length);
+}
+
+function buildCommitRenderedDiffLines(
+	t: Theme,
+	rawDiff: string,
+	width: number,
+): Array<{ text: string; category: DiffLineCategory }> {
+	const parsed = parseDiffLines(rawDiff);
+	const lineNumberWidth = diffLineNumberWidth(parsed);
+	const blankLineNumber = " ".repeat(lineNumberWidth);
+	const rendered: Array<{ text: string; category: DiffLineCategory }> = [];
+
+	for (const line of parsed) {
+		if (shouldHideCommitParsedLine(line)) continue;
+		const oldNumber = line.oldLineNumber ? String(line.oldLineNumber).padStart(lineNumberWidth, " ") : blankLineNumber;
+		const newNumber = line.newLineNumber ? String(line.newLineNumber).padStart(lineNumberWidth, " ") : blankLineNumber;
+		const gutter = t.fg("dim", `${oldNumber} ${newNumber} │`);
+		const content = colorDiffLine(t, expandTabs(line.originalLine));
+		rendered.push({ text: padStyledLine(`${gutter} ${content}`, width), category: line.category });
+	}
+
+	return rendered;
 }
 
 function shouldHideDiffMetaLine(line: ReturnType<typeof parseDiffLines>[number] | undefined): boolean {
@@ -841,20 +875,19 @@ function renderCommitFiles(t: Theme, st: DiffState, w: number, h: number): strin
 			continue;
 		}
 
-		const diffLines = raw.split("\n");
-		if (diffLines.length === 0) {
+		const renderedDiffLines = buildCommitRenderedDiffLines(t, raw, w);
+		if (renderedDiffLines.length === 0) {
 			rows.push(t.fg("muted", "    (empty diff)"));
 			continue;
 		}
 
-		for (const line of diffLines) {
-			const renderedLine = padStyledLine(`    ${colorDiffLine(t, expandTabs(line))}`, w);
-			if (line.startsWith("+") && !line.startsWith("+++")) {
-				rows.push(t.bg("toolSuccessBg", renderedLine));
-			} else if (line.startsWith("-") && !line.startsWith("---")) {
-				rows.push(t.bg("toolErrorBg", renderedLine));
+		for (const line of renderedDiffLines) {
+			if (line.category === "added") {
+				rows.push(t.bg("toolSuccessBg", line.text));
+			} else if (line.category === "removed") {
+				rows.push(t.bg("toolErrorBg", line.text));
 			} else {
-				rows.push(renderedLine);
+				rows.push(line.text);
 			}
 		}
 	}
@@ -1277,14 +1310,18 @@ class DiffOverlay {
 			st.wrapLines,
 			st.changedOnly,
 		);
-		if (matchesKey(data, Key.up) || data === "k") {
+		if (matchesKey(data, Key.up)) {
+			st.diffScrollOffset = Math.max(0, st.diffScrollOffset - ARROW_SCROLL_STEP);
+		} else if (matchesKey(data, Key.down)) {
+			st.diffScrollOffset = Math.min(st.diffScrollOffset + ARROW_SCROLL_STEP, Math.max(0, diffLen - 3));
+		} else if (data === "k") {
 			st.diffScrollOffset = Math.max(0, st.diffScrollOffset - 1);
-		} else if (matchesKey(data, Key.down) || data === "j") {
+		} else if (data === "j") {
 			st.diffScrollOffset = Math.min(st.diffScrollOffset + 1, Math.max(0, diffLen - 3));
 		} else if (matchesKey(data, Key.pageUp) || matchesKey(data, Key.ctrl("u"))) {
-			st.diffScrollOffset = Math.max(0, st.diffScrollOffset - 20);
+			st.diffScrollOffset = Math.max(0, st.diffScrollOffset - PAGE_SCROLL_STEP);
 		} else if (matchesKey(data, Key.pageDown) || matchesKey(data, Key.ctrl("d"))) {
-			st.diffScrollOffset = Math.min(st.diffScrollOffset + 20, Math.max(0, diffLen - 3));
+			st.diffScrollOffset = Math.min(st.diffScrollOffset + PAGE_SCROLL_STEP, Math.max(0, diffLen - 3));
 		} else if (data === "g") {
 			st.diffScrollOffset = 0;
 		} else if (data === "G") {
@@ -1386,7 +1423,7 @@ class DiffOverlay {
 
 		if (matchesKey(data, Key.up)) {
 			if (shouldArrowUpScroll) {
-				st.commitFileScrollOffset = Math.max(0, st.commitFileScrollOffset - 1);
+				st.commitFileScrollOffset = Math.max(0, st.commitFileScrollOffset - ARROW_SCROLL_STEP);
 				st.commitFileManualScroll = true;
 			} else {
 				st.commitFileSelectedIndex = clamp(selectedIndex - 1, 0, maxIndex);
@@ -1394,7 +1431,7 @@ class DiffOverlay {
 			}
 		} else if (matchesKey(data, Key.down)) {
 			if (shouldArrowDownScroll) {
-				st.commitFileScrollOffset = Math.min(maxOffset, st.commitFileScrollOffset + 1);
+				st.commitFileScrollOffset = Math.min(maxOffset, st.commitFileScrollOffset + ARROW_SCROLL_STEP);
 				st.commitFileManualScroll = true;
 			} else {
 				st.commitFileSelectedIndex = clamp(selectedIndex + 1, 0, maxIndex);
@@ -1407,10 +1444,10 @@ class DiffOverlay {
 			st.commitFileSelectedIndex = clamp(selectedIndex + 1, 0, maxIndex);
 			st.commitFileManualScroll = false;
 		} else if (matchesKey(data, Key.pageUp) || matchesKey(data, Key.ctrl("u"))) {
-			st.commitFileScrollOffset = Math.max(0, st.commitFileScrollOffset - 20);
+			st.commitFileScrollOffset = Math.max(0, st.commitFileScrollOffset - PAGE_SCROLL_STEP);
 			st.commitFileManualScroll = true;
 		} else if (matchesKey(data, Key.pageDown) || matchesKey(data, Key.ctrl("d"))) {
-			st.commitFileScrollOffset = Math.min(maxOffset, st.commitFileScrollOffset + 20);
+			st.commitFileScrollOffset = Math.min(maxOffset, st.commitFileScrollOffset + PAGE_SCROLL_STEP);
 			st.commitFileManualScroll = true;
 		} else if (data === "g") {
 			st.commitFileSelectedIndex = 0;
@@ -1519,10 +1556,10 @@ class DiffOverlay {
 						? "  Search mode · type to filter · Backspace delete · Enter/Esc close"
 						: st.focus === "left"
 							? "  ↑/↓ Select File  ·  / Search  ·  s Scope  ·  w Wrap  ·  c Changed-only  ·  r Review draft  ·  Enter → Diff  ·  Tab/v Commit  ·  o Open  ·  f Finder  ·  S Stash  ·  q/Esc Close"
-							: "  ↑/↓ Scroll  ·  PgUp/PgDn Fast  ·  / Search  ·  s Scope  ·  w Wrap  ·  c Changed-only  ·  r Review draft  ·  Tab/v Commit  ·  o Open  ·  f Finder  ·  ←/Esc → Files  ·  q Close"
+							: "  ↑/↓ Scroll 5 lines  ·  j/k Scroll 1 line  ·  PgUp/PgDn Fast  ·  / Search  ·  s Scope  ·  w Wrap  ·  c Changed-only  ·  r Review draft  ·  Tab/v Commit  ·  o Open  ·  f Finder  ·  ←/Esc → Files  ·  q Close"
 				: st.focus === "left"
 					? "  ↑/↓ Select Commit  ·  Enter → Changed Files  ·  Tab/v Toggle Diff  ·  S Stash  ·  q/Esc Close"
-					: "  ↑/↓ Select (overflow 시 line scroll)  ·  j/k Select File  ·  Enter Fold/Unfold Diff  ·  PgUp/PgDn Scroll  ·  Tab/v Toggle Diff  ·  o Open  ·  f Finder  ·  ←/Esc → Commits  ·  q Close";
+					: "  ↑/↓ Select (overflow 시 5-line scroll)  ·  j/k Select File  ·  Enter Fold/Unfold Diff  ·  PgUp/PgDn Scroll  ·  Tab/v Toggle Diff  ·  o Open  ·  f Finder  ·  ←/Esc → Commits  ·  q Close";
 		footer.push(t.fg("dim", hint));
 		footer.push(...new DynamicBorder((s: string) => t.fg("accent", s)).render(w));
 
