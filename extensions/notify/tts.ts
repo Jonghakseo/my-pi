@@ -1,6 +1,6 @@
 import { type ChildProcess, spawn } from "node:child_process";
 
-const DEFAULT_VOICE = "Yuna";
+const DEFAULT_VOICE = "Sandy";
 const VOICE_ENV = "PI_NOTIFY_VOICE";
 
 let current: ChildProcess | undefined;
