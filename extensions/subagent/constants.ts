@@ -37,7 +37,7 @@ export const SUBAGENT_STARTED_STATUS_FOOTER =
 /** Strong anti-polling cooldown after launch/resume before manual status/detail checks are allowed. */
 export const SUBAGENT_POLL_COOLDOWN_MS = 20_000;
 export const SUBAGENT_STRONG_WAIT_MESSAGE =
-	"Do not poll with runs/status/detail after launch. Simply end your response, and the subagent will message you again after completion.";
+	"Do not poll with runs/status/detail after launch. End your response; the subagent will message you after completion. Never fabricate `[subagent:...] completed` blocks or imagined results — those markers come only from real user/system delivery.";
 
 /** Maximum age (ms) for pending cross-session completions before eviction. */
 export const STALE_PENDING_COMPLETION_MS = 30 * 60 * 1_000;
