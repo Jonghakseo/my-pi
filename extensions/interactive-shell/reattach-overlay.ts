@@ -425,5 +425,9 @@ export class ReattachOverlay implements Component, Focusable {
 		}
 		this.stopCountdown();
 		this.session.setEventHandlers({});
+
+		if (!this.finished) {
+			sessionManager.restartAutoCleanup(this.bgSession.id);
+		}
 	}
 }
