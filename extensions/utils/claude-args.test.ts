@@ -121,12 +121,12 @@ describe("buildClaudeArgs", () => {
 		const args = buildClaudeArgs({
 			prompt: "task",
 			tools: ["read"],
-			model: "anthropic/claude-opus-4-6",
+			model: "anthropic/claude-opus-4-7",
 		});
 
 		const idx = args.indexOf("--model");
 		expect(idx).toBeGreaterThanOrEqual(0);
-		expect(args[idx + 1]).toBe("claude-opus-4-6");
+		expect(args[idx + 1]).toBe("claude-opus-4-7");
 	});
 
 	it("passes model as-is when no anthropic/ prefix", () => {
@@ -180,7 +180,7 @@ describe("buildClaudeArgs", () => {
 		const args = buildClaudeArgs({
 			prompt: "do the thing",
 			tools: ["read", "bash"],
-			model: "claude-opus-4-6",
+			model: "claude-opus-4-7",
 			thinking: "enabled",
 		});
 
