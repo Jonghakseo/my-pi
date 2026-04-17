@@ -23,7 +23,7 @@
 		"ws": "^8.18.0"
 	},
 	"devDependencies": {
-		"@mariozechner/pi-coding-agent": "^0.67.3",
+		"@mariozechner/pi-coding-agent": "^0.67.6",
 		"@types/node": "^22.0.0",
 		"@types/ws": "^8.5.13",
 		"typescript": "^5.7.3"
