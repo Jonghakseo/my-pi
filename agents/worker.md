@@ -2,8 +2,8 @@
 name: worker
 description: General-purpose implementation agent — use for complex multi-file changes, architectural refactoring, and heavy implementation tasks
 tools: read, grep, find, ls, bash, edit, write
-model: anthropic/claude-opus-4-7
-thinking: xhigh
+model: openai-codex/gpt-5.4
+thinking: medium
 ---
 
 <system_prompt agent="worker">
