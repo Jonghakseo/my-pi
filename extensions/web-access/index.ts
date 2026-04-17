@@ -1325,6 +1325,8 @@ export default function (pi: ExtensionAPI) {
 						signal,
 					});
 
+					if (signal?.aborted) break;
+
 					searchResults.push({ query, answer, results, error: null, provider });
 					for (const r of results) {
 						if (!allUrls.includes(r.url)) {
@@ -1333,6 +1335,7 @@ export default function (pi: ExtensionAPI) {
 					}
 					if (inlineContent) allInlineContent.push(...inlineContent);
 				} catch (err) {
+					if (signal?.aborted) break;
 					const message = err instanceof Error ? err.message : String(err);
 					const requestedProvider =
 						typeof resolvedProvider === "string" && resolvedProvider !== "auto" ? resolvedProvider : undefined;
