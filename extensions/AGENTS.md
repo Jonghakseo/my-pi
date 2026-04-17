@@ -31,6 +31,7 @@ Custom extensions for the pi coding agent. All extensions are written in TypeScr
 ├── dynamic-agents-md.ts   # Dynamic AGENTS.md loading per directory scope
 ├── files.ts               # File picker / diff viewer UI
 ├── interactive-shell/     # Interactive shell overlay (interactive/hands-free/dispatch)
+├── notify/                # /notify session-toggle: OSC 777/99 alert + macOS say TTS on agent_end
 ├── footer.ts              # Custom footer UI (model, branch, context bar)
 ├── working-text.ts              # Spinner working message (tip text + elapsed time)
 ├── theme-cycler.ts        # Ctrl+X to cycle through themes

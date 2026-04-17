@@ -17,6 +17,7 @@
 | [`files.ts`](./files.ts) | 파일 피커 / Diff 뷰어 UI |
 | [`fork-panel.ts`](./fork-panel.ts) | 현재 세션을 Ghostty split panel로 포크 |
 | [`interactive-shell/`](./interactive-shell/index.ts) | 인터랙티브/핸즈프리/디스패치 모드의 셸 오버레이 |
+| [`notify/`](./notify/index.ts) | `/notify`로 세션별 작업 완료 알림(OSC 777/99) + macOS `say` TTS |
 | [`footer.ts`](./footer.ts) | 커스텀 푸터 UI (모델, 브랜치, 컨텍스트 바) |
 | [`theme-cycler.ts`](./theme-cycler.ts) | `Ctrl+X`로 테마 순환 |
 | [`until.ts`](./until.ts) | `/until`, `until_report` 기반 반복 작업 관리 |
