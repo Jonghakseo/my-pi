@@ -1,98 +1,60 @@
 ---
 name: simplify
-description: code-cleaner → (조건부) worker+simplifier 체인 또는 simplifier 단독으로 코드를 정리하는 스킬.
-argument-hint: "방금 수정한 코드 다듬어줘 | 이 변경사항 polish 해줘 | 가독성만 개선해줘 | 코드 정리해줘"
+description: 변경사항을 code-cleaner + reviewer 병렬 리뷰로 재사용·품질·효율 관점에서 점검하고, 발견된 이슈를 직접 수정하는 스킬.
+argument-hint: "방금 변경한 코드 정리해줘 | 이 diff 리뷰하고 고쳐줘 | simplify 돌려줘"
 disable-model-invocation: false
 ---
 
 # simplify
 
-`$ARGUMENTS`를 대상으로 **code-cleaner → (조건부 분기) → simplifier** 흐름을 실행한다.
+Review all changed files for reuse, quality, and efficiency. Fix any issues found.
 
-## 목적
-- 코드의 구조적 문제(중복, dead code, 비효율)를 먼저 진단한다.
-- 진단 결과에 따라 수정이 필요하면 빠르게 수정 후 다듬는다.
-- 기능 변경 없이 코드 품질만 높인다.
+## Phase 1: Identify Changes
 
-## 실행 흐름
+Run `git diff` (or `git diff HEAD` if there are staged changes) to see what changed. If there are no git changes, review the most recently modified files that the user mentioned or that you edited earlier in this conversation.
 
-```
-code-cleaner (단독 run)
-       │
-       ▼
-  마스터 판단
-       │
-       ├─ P0 있음 → 사용자에게 보고 + escalation (자동 수정 안 함)
-       │
-       ├─ P1 있음 (단일 파일 범위) → worker + simplifier 체인
-       │
-       ├─ P1 있음 (cross-file) → 사용자에게 보고 (worker 또는 수동 처리 권장)
-       │
-       └─ P0/P1 없음 → simplifier 단독 run
-```
+## Phase 2: Launch Three Review Agents in Parallel
 
-## Step 1: `code-cleaner` — 진단 (단독 `subagent run`)
+Use the `subagent` tool (`subagent batch` 형태)로 세 에이전트를 **한 번의 호출에서 병렬로** 실행한다. 각 에이전트에는 전체 diff를 넘겨 동일한 컨텍스트를 공유한다. 인터페이스가 불분명하면 먼저 `subagent help`로 확인한다.
 
-대상 코드를 3-phase(reuse, quality, efficiency)로 스캔하여 정리 항목을 수집한다.
+### Agent 1: Code Reuse Review (`code-cleaner`)
 
-**호출 프롬프트:**
-> `$ARGUMENTS` 를 code cleanup 리뷰해줘. 중복 코드, 품질 이슈, 비효율성을 3-phase로 스캔해서 findings를 보고해줘.
+For each change:
 
-**마스터 판단 단계** (code-cleaner 결과 수신 후):
-1. findings YAML에서 `priority`와 `exceeds_cleanup_scope` 필드를 확인한다.
-2. **P0 finding** → 자동 수정하지 않는다. 사용자에게 보고하고 escalation한다. (P0은 correctness/data-loss/security이므로 동작 변경이 필요할 수 있다.)
-3. **P1 finding + `exceeds_cleanup_scope: true`** → 자동 수정하지 않는다. 사용자에게 보고만 한다.
-4. **P1 finding + `exceeds_cleanup_scope: false` + 단일 파일 범위** → Step 2A로 진행.
-5. **P1 finding + cross-file 범위** → 사용자에게 보고하고 worker(또는 수동) 처리를 권장한다. 이 스킬은 좁은 범위의 품질 개선만 자동 수정한다.
-6. **P0/P1 없음** → Step 2B로 진행.
+1. **Search for existing utilities and helpers** that could replace newly written code. Look for similar patterns elsewhere in the codebase — common locations are utility directories, shared modules, and files adjacent to the changed ones.
+2. **Flag any new function that duplicates existing functionality.** Suggest the existing function to use instead.
+3. **Flag any inline logic that could use an existing utility** — hand-rolled string manipulation, manual path handling, custom environment checks, ad-hoc type guards, and similar patterns are common candidates.
 
-## Step 2A: `worker` + `simplifier` 체인 (`subagent chain`)
+### Agent 2: Code Quality Review (`reviewer`)
 
-P1 findings가 있고 수정 범위가 좁을 때만 실행한다.
+Review the same changes for hacky patterns:
 
-마스터는 code-cleaner 결과에서 추린 P1 findings를 **구조화된 목록**(파일 경로, 라인 범위, 제목, 권장 조치 포함)으로 정리하여 worker 태스크에 포함한다.
+1. **Redundant state**: state that duplicates existing state, cached values that could be derived, observers/effects that could be direct calls
+2. **Parameter sprawl**: adding new parameters to a function instead of generalizing or restructuring existing ones
+3. **Copy-paste with slight variation**: near-duplicate code blocks that should be unified with a shared abstraction
+4. **Leaky abstractions**: exposing internal details that should be encapsulated, or breaking existing abstraction boundaries
+5. **Stringly-typed code**: using raw strings where constants, enums (string unions), or branded types already exist in the codebase
+6. **Unnecessary JSX nesting**: wrapper Boxes/elements that add no layout value — check if inner component props (flexShrink, alignItems, etc.) already provide the needed behavior
+7. **Unnecessary comments**: comments explaining WHAT the code does (well-named identifiers already do that), narrating the change, or referencing the task/caller — delete; keep only non-obvious WHY (hidden constraints, subtle invariants, workarounds)
 
-**체인 호출:**
-```
-subagent chain
-  --agent worker --task "아래 cleanup findings를 수정해줘. 동작 변경 없이 구조만 개선해. 각 수정 후 타입체크/테스트 확인해줘.
-    {P1 findings 목록: title, source_file, line_range, suggested_action}"
-  --agent simplifier --task "$ARGUMENTS 를 code polishing 해줘. 동작은 바꾸지 말고, 방금 수정된 범위의 가독성과 유지보수성을 다듬어줘. 결과는 수정한 파일과 라인만 반환해줘."
-```
+### Agent 3: Efficiency Review (`reviewer`)
 
-**안전장치:**
-- worker가 3+ 파일 또는 아키텍처 변경이 필요하다고 판단하면 escalation한다.
-- 수정 후 타입체크/테스트 실패 시 revert하고 해당 항목을 skip 처리한다.
+Review the same changes for efficiency:
 
-## Step 2B: `simplifier` 단독 (`subagent run`)
+1. **Unnecessary work**: redundant computations, repeated file reads, duplicate network/API calls, N+1 patterns
+2. **Missed concurrency**: independent operations run sequentially when they could run in parallel
+3. **Hot-path bloat**: new blocking work added to startup or per-request/per-render hot paths
+4. **Recurring no-op updates**: state/store updates inside polling loops, intervals, or event handlers that fire unconditionally — add a change-detection guard so downstream consumers aren't notified when nothing changed. Also: if a wrapper function takes an updater/reducer callback, verify it honors same-reference returns (or whatever the "no change" signal is) — otherwise callers' early-return no-ops are silently defeated
+5. **Unnecessary existence checks**: pre-checking file/resource existence before operating (TOCTOU anti-pattern) — operate directly and handle the error
+6. **Memory**: unbounded data structures, missing cleanup, event listener leaks
+7. **Overly broad operations**: reading entire files when only a portion is needed, loading all items when filtering for one
 
-구조적 수정 없이 표현만 다듬을 때 실행한다.
+## Phase 3: Fix Issues (`simplifier`)
 
-**호출 프롬프트:**
-> `$ARGUMENTS` 를 code polishing 해줘. 동작은 바꾸지 말고, 최근 수정되었거나 명시된 범위만 가독성과 유지보수성 관점에서 다듬어줘. 결과는 수정한 파일과 라인만 반환해줘.
+Wait for all three agents to complete. Aggregate their findings, filter out false positives, and delegate the actual edits to the `simplifier` subagent — pass it the consolidated finding list plus the target files.
 
-**규칙:**
-- simplifier 결과가 no-op에 가까우면 억지로 추가 변경하지 않는다.
-- 설계 변경, API 변경, 의미 변경은 금지한다.
+- Use `simplifier` for behavior-preserving refactors (the default case — reuse swaps, quality cleanups, efficiency tweaks that don't change outputs).
+- If a finding requires genuine behavior change or larger architectural work beyond simplifier's scope, escalate that specific item to `worker` instead.
+- If a finding is a false positive or not worth addressing, note it and move on — do not argue with the finding, just skip it.
 
-## 최종 응답 형식
-
-1. `Scan` (code-cleaner 결과 요약)
-   - P0/P1/P2 findings 수
-   - 핵심 항목 1줄씩
-   - escalation 항목 (P0 또는 scope 초과)
-2. `Fix` (worker 결과, 또는 "skipped")
-   - 수정된 파일 목록
-   - skip된 항목과 사유
-3. `Polish` (simplifier 결과)
-   - 수정된 파일 목록
-   - no-op이면 "no changes needed"
-4. `Remaining`
-   - 자동 수정하지 않은 항목 (P0, scope 초과, cross-file, P2 이하)
-
-## 주의
-- 이 스킬은 기능 변경이 아니라 코드 품질 개선 전용이다.
-- 사용자가 functional change를 요청한 경우 이 스킬 단독으로 처리하지 않는다.
-- code-cleaner는 읽기 전용이다. 절대 코드를 수정하지 않는다.
-- P0 finding은 자동 수정하지 않는다. 반드시 사용자에게 보고한다.
-- 이 스킬의 자동 수정 범위를 넘어서는 cross-file 수정은 시도하지 않는다.
+When done, briefly summarize what was fixed (or confirm the code was already clean).
