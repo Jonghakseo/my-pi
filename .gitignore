@@ -33,6 +33,7 @@ lcov.info
 
 # Scripts (local automation)
 bin/
+local-scripts/
 
 # Daily retro SVG
 tmp/daily-retro.svg
