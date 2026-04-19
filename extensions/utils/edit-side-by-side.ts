@@ -10,8 +10,11 @@ export type EditDiffColor =
 	| "toolDiffRemoved"
 	| "warning";
 
+export type EditDiffBgColor = "toolSuccessBg" | "toolErrorBg";
+
 export interface EditDiffRenderTheme {
 	fg: (color: EditDiffColor, text: string) => string;
+	bg: (color: EditDiffBgColor, text: string) => string;
 	bold: (text: string) => string;
 }
 
@@ -202,6 +205,12 @@ function sideColor(type: EditDiffRowSide["type"]): EditDiffColor {
 	return "dim";
 }
 
+function sideBgColor(type: EditDiffRowSide["type"]): EditDiffBgColor | undefined {
+	if (type === "added") return "toolSuccessBg";
+	if (type === "removed") return "toolErrorBg";
+	return undefined;
+}
+
 function formatSide(side: EditDiffRowSide, width: number, numbersWidth: number, theme: EditDiffRenderTheme): string {
 	if (side.type === "empty") return " ".repeat(width);
 
@@ -210,7 +219,9 @@ function formatSide(side: EditDiffRowSide, width: number, numbersWidth: number, 
 	const rawLine = `${prefix}${lineNumber} ${side.content.replace(/\t/g, "    ")}`;
 	const truncated = truncateToWidth(rawLine, width, "");
 	const padded = `${truncated}${" ".repeat(Math.max(0, width - visibleWidth(truncated)))}`;
-	return theme.fg(sideColor(side.type), padded);
+	const colored = theme.fg(sideColor(side.type), padded);
+	const bgColor = sideBgColor(side.type);
+	return bgColor ? theme.bg(bgColor, colored) : colored;
 }
 
 export function renderEditSideBySide({
@@ -236,8 +247,10 @@ export function renderEditSideBySide({
 
 	if (width < MIN_SIDE_BY_SIDE_WIDTH * 2 + 1) {
 		for (const row of preview.rows) {
-			if (row.left.type === "removed") lines.push(theme.fg("toolDiffRemoved", `- ${row.left.content}`));
-			if (row.right.type === "added") lines.push(theme.fg("toolDiffAdded", `+ ${row.right.content}`));
+			if (row.left.type === "removed")
+				lines.push(theme.bg("toolErrorBg", theme.fg("toolDiffRemoved", `- ${row.left.content}`)));
+			if (row.right.type === "added")
+				lines.push(theme.bg("toolSuccessBg", theme.fg("toolDiffAdded", `+ ${row.right.content}`)));
 			if (row.left.type === "context") lines.push(theme.fg("toolDiffContext", `  ${row.left.content}`));
 			if (row.left.type === "ellipsis") lines.push(theme.fg("muted", "  ..."));
 		}

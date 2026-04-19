@@ -68,8 +68,11 @@ type ToolTextContent = {
 	text?: string;
 };
 
+type DiffBgColor = "toolSuccessBg" | "toolErrorBg";
+
 type RenderTheme = {
 	fg: (color: ThemeColor, text: string) => string;
+	bg: (color: DiffBgColor, text: string) => string;
 	bold: (text: string) => string;
 };
 

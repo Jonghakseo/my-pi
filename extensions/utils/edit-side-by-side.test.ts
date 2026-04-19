@@ -9,6 +9,7 @@ import {
 
 const theme = {
 	fg: (_color: string, text: string) => text,
+	bg: (color: string, text: string) => `[${color}]${text}[/${color}]`,
 	bold: (text: string) => text,
 };
 
@@ -79,6 +80,41 @@ describe("renderEditSideBySide", () => {
 		expect(lines[2]).toContain("beta");
 		expect(lines[2]).toContain("gamma");
 		expect(lines[2]).toContain("│");
+	});
+
+	it("wraps removed sides in toolErrorBg and added sides in toolSuccessBg", () => {
+		const lines = renderEditSideBySide({
+			diff: ["  1 alpha", "- 2 beta", "+ 2 gamma", "  3 omega"].join("\n"),
+			width: 80,
+			theme,
+		});
+
+		const changeRow = lines[2] ?? "";
+		expect(changeRow).toContain("[toolErrorBg]");
+		expect(changeRow).toContain("beta");
+		expect(changeRow).toContain("[/toolErrorBg]");
+		expect(changeRow).toContain("[toolSuccessBg]");
+		expect(changeRow).toContain("gamma");
+		expect(changeRow).toContain("[/toolSuccessBg]");
+		// Context rows stay unwrapped (no bg).
+		expect(lines[1] ?? "").not.toContain("[toolErrorBg]");
+		expect(lines[1] ?? "").not.toContain("[toolSuccessBg]");
+	});
+
+	it("applies row backgrounds in the narrow-terminal fallback too", () => {
+		const narrowTheme = {
+			fg: (_color: string, text: string) => text,
+			bg: (color: string, text: string) => `<${color}>${text}</${color}>`,
+			bold: (text: string) => text,
+		};
+		const lines = renderEditSideBySide({
+			diff: ["- 2 beta", "+ 2 gamma"].join("\n"),
+			width: 10,
+			theme: narrowTheme,
+		});
+
+		expect(lines.some((line) => line.includes("<toolErrorBg>") && line.includes("beta"))).toBe(true);
+		expect(lines.some((line) => line.includes("<toolSuccessBg>") && line.includes("gamma"))).toBe(true);
 	});
 
 	it("adds compact preview footer when rows are truncated", () => {
