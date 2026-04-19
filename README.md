@@ -75,7 +75,6 @@ Here are representative items from the 30+ custom TypeScript extensions, grouped
 | **dynamic-agents-md.ts** | Dynamically loads AGENTS.md at runtime to enforce edit/write scope restrictions |
 | **[@ryan_nookpi/pi-extension-claude-hooks-bridge](https://github.com/Jonghakseo/pi-extension/tree/main/packages/claude-hooks-bridge)** | Bridge connecting Claude Code hook events to Pi sessions |
 | **[@ryan_nookpi/pi-extension-memory-layer](https://github.com/Jonghakseo/pi-extension/tree/main/packages/memory-layer)** | Persistent memory system across sessions |
-| **remote/** | `/remote`, `/remote:lan`, `/remote:funnel` — local/LAN/public-URL remote access |
 
 ### UI / UX
 
