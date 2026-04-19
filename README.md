@@ -38,12 +38,12 @@ The current setup has 11 agent definitions, three models, and one main agent:
 |---|---|---|---|
 | **finder** | `anthropic/claude-sonnet-4-6` | Fast file & code locator | Quick lookups, grep-like tasks |
 | **worker** | `openai-codex/gpt-5.4` | General-purpose executor | Implementation, writing, fixes (complex multi-file) |
-| **planner** | `anthropic/claude-opus-4-6` | Implementation architect | Breaking down complex tasks |
+| **planner** | `anthropic/claude-opus-4-7` | Implementation architect | Breaking down complex tasks |
 | **simplifier** | `anthropic/claude-sonnet-4-6` | Code simplification specialist | Clean up recently modified code, improve readability, preserve behavior |
-| **code-cleaner** | `openai-codex/gpt-5.4` | Code cleanup analyst | Find cleanup opportunities and quality issues |
+| **code-cleaner** | `anthropic/claude-opus-4-7` | Code cleanup analyst | Find cleanup opportunities and quality issues |
 | **reviewer** | `openai-codex/gpt-5.4` | Code review (P0–P3 severity) | PR reviews, quality checks |
 | **challenger** | `openai-codex/gpt-5.4` | Pressure tester | Stress-test plans before execution |
-| **verifier** | `anthropic/claude-opus-4-6` | 3-tier evidence validation | Verify claims, check correctness |
+| **verifier** | `anthropic/claude-opus-4-7` | 3-tier evidence validation | Verify claims, check correctness |
 | **security-auditor** | `openai-codex/gpt-5.4` | Security reviewer | Focused vulnerability reviews |
 | **searcher** | `anthropic/claude-sonnet-4-6` | Research & web search | Documentation lookup, exploration |
 | **browser** | `openai-codex/gpt-5.4` | Browser automation & UI testing | E2E testing, visual verification |
@@ -53,7 +53,7 @@ The current setup has 11 agent definitions, three models, and one main agent:
 
 - **openai-codex/gpt-5.4** — General-purpose execution & review (implementation, testing, reviewing, security review, browser automation)
 - **anthropic/claude-sonnet-4-6** — Fast exploration & research (file search, web research, code simplification)
-- **anthropic/claude-opus-4-6** — Deep reasoning tasks (strategic planning, verification)
+- **anthropic/claude-opus-4-7** — Deep reasoning tasks (strategic planning, verification)
 
 The main agent runs on `anthropic/claude-opus-4-7` and handles delegation decisions.
 
