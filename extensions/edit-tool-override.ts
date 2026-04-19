@@ -8,7 +8,6 @@ import { withFileMutationQueue } from "@mariozechner/pi-coding-agent";
 import type { Component } from "@mariozechner/pi-tui";
 import { Text } from "@mariozechner/pi-tui";
 import { Type } from "@sinclair/typebox";
-import { DYNAMIC_SCOPE_SENTINEL_END, DYNAMIC_SCOPE_SENTINEL_START } from "./dynamic-agents-md.ts";
 import { applyEditOverrideToRawContent } from "./utils/edit-override.ts";
 import { renderEditSideBySide } from "./utils/edit-side-by-side.ts";
 
@@ -56,18 +55,6 @@ type EditExecute = (
 	details: EditToolDetails | undefined;
 }>;
 
-type FileSnapshotSource = "read" | "write" | "edit";
-
-type FileSnapshot = {
-	hash: string;
-	source: FileSnapshotSource;
-};
-
-type ToolTextContent = {
-	type: string;
-	text?: string;
-};
-
 type DiffBgColor = "toolSuccessBg" | "toolErrorBg";
 
 type RenderTheme = {
@@ -77,7 +64,6 @@ type RenderTheme = {
 };
 
 let currentCwd = process.cwd();
-const lastObservedFileStates = new Map<string, FileSnapshot>();
 
 function shortenPath(filePath: string): string {
 	if (!filePath) return filePath;
@@ -108,83 +94,6 @@ function throwIfAborted(signal?: AbortSignal, aborted = signal?.aborted ?? false
 
 function hashBuffer(buffer: Buffer): string {
 	return createHash("sha256").update(buffer).digest("hex");
-}
-
-function setFileSnapshot(absolutePath: string, hash: string, source: FileSnapshotSource): void {
-	lastObservedFileStates.set(absolutePath, { hash, source });
-}
-
-function setFileSnapshotFromText(absolutePath: string, text: string, source: FileSnapshotSource): void {
-	setFileSnapshot(absolutePath, hashBuffer(Buffer.from(text, "utf8")), source);
-}
-
-function getTextContent(content: unknown): string | undefined {
-	if (!Array.isArray(content)) return undefined;
-	const textParts = content
-		.filter((part): part is ToolTextContent => typeof part === "object" && part !== null && "type" in part)
-		.filter((part) => part.type === "text" && typeof part.text === "string")
-		.map((part) => part.text as string);
-	if (textParts.length === 0) return undefined;
-	return textParts.join("");
-}
-
-function getStaleReadError(displayPath: string, source: FileSnapshotSource): Error {
-	const sourceDescription = source === "read" ? "last read" : `last ${source}`;
-	return new Error(`File changed since its ${sourceDescription}. Re-read ${displayPath} before applying edits.`);
-}
-
-function hasReadTruncation(details: unknown): boolean {
-	return Boolean(details && typeof details === "object" && "truncation" in details && details.truncation);
-}
-
-function stripTrailingDynamicScopeInjections(text: string): string {
-	let stripped = text;
-
-	while (stripped.endsWith(DYNAMIC_SCOPE_SENTINEL_END)) {
-		const startIndex = stripped.lastIndexOf(`\n\n${DYNAMIC_SCOPE_SENTINEL_START}`);
-		if (startIndex === -1) return stripped;
-		const trailingBlock = stripped.slice(startIndex);
-		if (!trailingBlock.endsWith(DYNAMIC_SCOPE_SENTINEL_END)) return stripped;
-		stripped = stripped.slice(0, startIndex);
-	}
-
-	return stripped;
-}
-
-function isWholeFileReadInput(input: Record<string, unknown>): boolean {
-	if (typeof input.path !== "string") return false;
-	if (input.offset === undefined) return true;
-	return input.offset === 1;
-}
-
-function hasReadContinuationHint(text: string): boolean {
-	return /\n\n\[(?:Showing lines \d+-\d+ of \d+(?: \([^\]]+ limit\))?\. Use offset=\d+ to continue\.|\d+ more lines in file\. Use offset=\d+ to continue\.)\]$/.test(
-		text,
-	);
-}
-
-function shouldTrackReadSnapshot(input: Record<string, unknown>, details: unknown, text: string): boolean {
-	if (!isWholeFileReadInput(input)) return false;
-	if (hasReadTruncation(details)) return false;
-	if (hasReadContinuationHint(text)) return false;
-	return true;
-}
-
-function getReadSnapshotText(event: {
-	input?: Record<string, unknown>;
-	details?: unknown;
-	content?: unknown;
-}): string | undefined {
-	if (!event.input) return undefined;
-	const textContent = getTextContent(event.content);
-	if (textContent === undefined) return undefined;
-	const snapshotText = stripTrailingDynamicScopeInjections(textContent);
-	if (!shouldTrackReadSnapshot(event.input, event.details, snapshotText)) return undefined;
-	return snapshotText;
-}
-
-function getWriteSnapshotText(input: Record<string, unknown>): string | undefined {
-	return typeof input.content === "string" ? input.content : undefined;
 }
 
 function createEditDiffComponent(
@@ -243,11 +152,6 @@ export function createEditExecute(): EditExecute {
 					const rawHash = hashBuffer(rawBuffer);
 					throwIfAborted(signal, aborted);
 
-					const lastObserved = lastObservedFileStates.get(absolutePath);
-					if (lastObserved && lastObserved.hash !== rawHash) {
-						throw getStaleReadError(displayPath, lastObserved.source);
-					}
-
 					const applied = applyEditOverrideToRawContent(rawContent, edits, displayPath);
 					throwIfAborted(signal, aborted);
 
@@ -258,7 +162,6 @@ export function createEditExecute(): EditExecute {
 					throwIfAborted(signal, aborted);
 
 					await fs.writeFile(absolutePath, applied.rawNewContent, "utf8");
-					setFileSnapshot(absolutePath, hashBuffer(Buffer.from(applied.rawNewContent, "utf8")), "edit");
 
 					return {
 						isError: false,
@@ -286,37 +189,9 @@ export function createEditExecute(): EditExecute {
 export default function editToolOverride(pi: ExtensionAPI) {
 	pi.on("session_start", (_event, ctx) => {
 		currentCwd = ctx.sessionManager.getCwd();
-		lastObservedFileStates.clear();
 	});
 	pi.on("session_tree", (_event, ctx) => {
 		currentCwd = ctx.sessionManager.getCwd();
-	});
-	pi.on("tool_result", async (event, ctx) => {
-		if (event.isError) return;
-		const input = event.input as Record<string, unknown>;
-		if (typeof input.path !== "string") return;
-		const absolutePath = resolveEditPath(ctx.cwd, input.path);
-
-		if (event.toolName === "read") {
-			const snapshotText = getReadSnapshotText({
-				input,
-				details: event.details,
-				content: event.content,
-			});
-			if (snapshotText === undefined) return;
-			setFileSnapshotFromText(absolutePath, snapshotText, "read");
-			return;
-		}
-
-		if (event.toolName === "write") {
-			const snapshotText = getWriteSnapshotText(input);
-			if (snapshotText === undefined) {
-				lastObservedFileStates.delete(absolutePath);
-				return;
-			}
-			setFileSnapshotFromText(absolutePath, snapshotText, "write");
-			return;
-		}
 	});
 
 	pi.registerTool({
