@@ -39,6 +39,8 @@ import { extractPathsFromInput } from "./utils/path-utils.js";
 
 // --- Configuration ---
 const CANDIDATES = ["AGENTS.md", "CLAUDE.md"] as const;
+export const DYNAMIC_SCOPE_SENTINEL_START = "<!--PI_DYNAMIC_SCOPE_START-->";
+export const DYNAMIC_SCOPE_SENTINEL_END = "<!--PI_DYNAMIC_SCOPE_END-->";
 
 // --- Types ---
 interface ContextFile {
@@ -131,7 +133,10 @@ function extractPaths(event: ToolResultEvent): string[] {
 
 /** Format dynamic context blocks for LLM consumption. */
 function formatInjection(files: ContextFile[]): string {
-	const parts = files.map((f) => `\n\n---\n📋 [Dynamic scope context: ${f.path}]\n\n${f.content}\n---`);
+	const parts = files.map(
+		(f) =>
+			`\n\n${DYNAMIC_SCOPE_SENTINEL_START}\n📋 [Dynamic scope context: ${f.path}]\n\n${f.content}\n${DYNAMIC_SCOPE_SENTINEL_END}`,
+	);
 	return parts.join("");
 }
 
