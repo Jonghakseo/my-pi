@@ -3,7 +3,7 @@ name: verifier
 description: Validation specialist — use for proving changes are correct with concrete evidence (tests, lint, typecheck)
 tools: read, grep, find, bash
 model: anthropic/claude-opus-4-7
-runtime: claude
+runtime: pi
 thinking: xhigh
 ---
 

@@ -3,7 +3,7 @@ name: finder
 description: Fast file/code locator — use for exploring codebases, finding files, locating specific code patterns
 tools: read, grep, find
 model: anthropic/claude-sonnet-4-6
-runtime: claude
+runtime: pi
 thinking: low
 ---
 

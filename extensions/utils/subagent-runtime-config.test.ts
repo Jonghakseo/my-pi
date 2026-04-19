@@ -99,7 +99,7 @@ describe("runtime frontmatter parsing", () => {
 		fs.rmSync(tmpDir, { recursive: true, force: true });
 	});
 
-	it("defaults project .claude agents to 'claude' when runtime is not specified", () => {
+	it("defaults project .claude agents to 'pi' when runtime is not specified", () => {
 		const tmpDir = createTempAgentDir();
 		const agentsDir = path.join(tmpDir, ".claude", "agents");
 		fs.mkdirSync(agentsDir, { recursive: true });
@@ -121,25 +121,25 @@ describe("runtime frontmatter parsing", () => {
 		const result = discoverAgents(tmpDir);
 		const agent = result.agents.find((a) => a.name === "gemini-self-reviewer");
 		expect(agent).toBeDefined();
-		expect(agent?.runtime).toBe("claude");
+		expect(agent?.runtime).toBe("pi");
 		expect(agent?.model).toBe("claude-haiku-4-5");
 
 		fs.rmSync(tmpDir, { recursive: true, force: true });
 	});
 
-	it("respects explicit runtime: pi even for project .claude agents", () => {
+	it("respects explicit runtime: claude for project .claude agents", () => {
 		const tmpDir = createTempAgentDir();
 		const agentsDir = path.join(tmpDir, ".claude", "agents");
 		fs.mkdirSync(agentsDir, { recursive: true });
 
 		writeAgentFile(
 			agentsDir,
-			"pi-in-claude-dir.md",
+			"claude-in-claude-dir.md",
 			[
 				"---",
-				"name: pi-in-claude-dir",
-				"description: Claude-format project agent overridden to Pi runtime",
-				"runtime: pi",
+				"name: claude-in-claude-dir",
+				"description: Claude-format project agent explicitly using Claude runtime",
+				"runtime: claude",
 				"model: haiku",
 				"---",
 				"Do work.",
@@ -147,9 +147,9 @@ describe("runtime frontmatter parsing", () => {
 		);
 
 		const result = discoverAgents(tmpDir);
-		const agent = result.agents.find((a) => a.name === "pi-in-claude-dir");
+		const agent = result.agents.find((a) => a.name === "claude-in-claude-dir");
 		expect(agent).toBeDefined();
-		expect(agent?.runtime).toBe("pi");
+		expect(agent?.runtime).toBe("claude");
 		expect(agent?.model).toBe("claude-haiku-4-5");
 
 		fs.rmSync(tmpDir, { recursive: true, force: true });
