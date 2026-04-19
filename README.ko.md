@@ -75,7 +75,6 @@
 | **dynamic-agents-md.ts** | 런타임에 AGENTS.md를 동적 로드하여 편집·쓰기 범위 제한 강제 |
 | **[@ryan_nookpi/pi-extension-claude-hooks-bridge](https://github.com/Jonghakseo/pi-extension/tree/main/packages/claude-hooks-bridge)** | Claude Code의 훅(hook) 이벤트를 Pi 세션에 연결하는 브릿지 |
 | **[@ryan_nookpi/pi-extension-memory-layer](https://github.com/Jonghakseo/pi-extension/tree/main/packages/memory-layer)** | 세션 간 영속 메모리 시스템 |
-| **remote/** | `/remote`, `/remote:lan`, `/remote:funnel` — 로컬/LAN/공개 URL 기반 원격 접속 |
 
 ### UI / UX
 
