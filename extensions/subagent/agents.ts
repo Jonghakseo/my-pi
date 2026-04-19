@@ -9,7 +9,6 @@ import { parseFrontmatter } from "@mariozechner/pi-coding-agent";
 import {
 	AGENT_THINKING_LEVELS,
 	type AgentThinkingLevel,
-	isClaudeModel,
 	normalizeModel,
 	normalizeThinkingLevel,
 	normalizeTools,
@@ -150,9 +149,7 @@ function loadAgentsFromDir(dir: string, source: "user" | "project", options: Loa
 		const tools = normalizeTools(frontmatter.tools, format);
 		const model = normalizeModel(frontmatter.model, format);
 		const thinking = normalizeThinkingLevel(frontmatter.thinking);
-		const defaultRuntime: AgentRuntime = format === "claude" || isClaudeModel(model) ? "claude" : "pi";
-		const runtime: AgentRuntime =
-			frontmatter.runtime === "claude" ? "claude" : frontmatter.runtime === "pi" ? "pi" : defaultRuntime;
+		const runtime: AgentRuntime = frontmatter.runtime === "claude" ? "claude" : "pi";
 
 		agents.push({
 			name: frontmatter.name,

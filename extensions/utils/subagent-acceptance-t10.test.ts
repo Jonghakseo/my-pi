@@ -119,7 +119,7 @@ describe("T10 Acceptance Matrix", () => {
 			fs.rmSync(tmpDir, { recursive: true, force: true });
 		});
 
-		it("defaults to claude when runtime is absent and model is Anthropic Claude", () => {
+		it("defaults to pi when runtime is absent even if model is Anthropic Claude", () => {
 			const tmpDir = createTempAgentDir();
 			const agentsDir = path.join(tmpDir, ".pi", "agents");
 			fs.mkdirSync(agentsDir, { recursive: true });
@@ -130,7 +130,7 @@ describe("T10 Acceptance Matrix", () => {
 			);
 
 			const result = discoverAgents(tmpDir);
-			expect(result.agents.find((a) => a.name === "b-claude")?.runtime).toBe("claude");
+			expect(result.agents.find((a) => a.name === "b-claude")?.runtime).toBe("pi");
 			fs.rmSync(tmpDir, { recursive: true, force: true });
 		});
 
