@@ -73,15 +73,7 @@
 		}
 	},
 	"files": {
-		"includes": [
-			"**",
-			"!**/node_modules",
-			"!**/dist",
-			"!**/web-dist",
-			"!utils/coverage",
-			"!pi-session-*.html",
-			"!diff-review/web"
-		]
+		"includes": ["**", "!**/node_modules", "!**/dist", "!**/web-dist", "!utils/coverage", "!pi-session-*.html"]
 	},
 	"overrides": [
 		{
