@@ -1,127 +1,51 @@
-Apply edits to a file using `LINE#HASH` anchors from `read` output.
+Apply precise file edits using `LINE#HASH` anchors from `read` output.
 
-<usage>
-Submit one `edit` call per file. Include all operations for that file in a single call.
+Preferred shape: use one `edit` call per file, and express replacements as a block range plus a single `content` string.
 
-Use `read` first if you do not have current `LINE#HASH` references for the target file.
-</usage>
-
-<payload>
 ```json
-{
 {
   "path": "src/main.ts",
   "returnMode": "changed",
   "edits": [
-    { "op": "replace", "pos": "12#MQ", "lines": ["..."] }
+    {
+      "op": "replace",
+      "range": { "start": "12#MQ", "end": "14#VR" },
+      "content": "const x = 1;\nconst y = 2;"
+    }
   ]
 }
 ```
 
-- `path` — target file path.
-- `returnMode` — optional response mode. `changed` (default) returns diff + updated anchors; `ranges` returns a compact structure outline in `content` and the requested post-edit windows in `details.returnedRanges`.
-- `returnRanges` — required when `returnMode="ranges"`. Array of `{ "start": number, "end"?: number }` post-edit line windows to return.
-- `edits` — array of edit operations.
-</payload>
+Operations:
+- `replace` — replace `range.start` through optional `range.end` with `content` (`string` or `null`).
+- `append` — insert `content` after `pos`. Omit `pos` to append at EOF.
+- `prepend` — insert `content` before `pos`. Omit `pos` to prepend at BOF.
+- `replace_text` — exact unique text replacement with `oldText` and `newText`. Use only when anchored edits are not practical.
+- Legacy `pos`/`end` + `lines` is still supported, but prefer `range` + `content`.
 
-<operations>
-Each entry has an `op`.
+Rules:
+- Copy anchors exactly from `read`. Never invent or reconstruct them.
+- `content` must be literal file content. Do not include `LINE#HASH:` prefixes or diff markers.
+- For `replace`, include only the new content for the targeted range. Do not repeat the line before or after the range.
+- All edits in one call target the same pre-edit file state.
+- Do not emit overlapping or adjacent edits; merge them into one change.
+- Keep each edit as small as possible while still unique and correct.
+- If `replace_text` matches zero or multiple times, re-read and use anchors instead.
 
-- `replace` — replaces the line at `pos`, or all lines from `pos` through `end` inclusive, with the contents of `lines`. `pos` is required; `end` is optional.
-- `append` — inserts `lines` after `pos`. Omit `pos` to insert at end of file.
-- `prepend` — inserts `lines` before `pos`. Omit `pos` to insert at start of file.
-- `replace_text` — replaces one exact unique `oldText` match with `newText`. Use this when you do not have anchors yet, or for exact string substitutions that can safely coexist with anchored edits in the same request.
-
-`end` is only valid with `replace`.
-
-Anchor format: `"LINE#HASH"` copied exactly from `read` output (e.g. `"12#MQ"`).
-</operations>
-
-<examples>
-
-Replace one line:
-
+Examples:
 ```json
-{ "op": "replace", "pos": "12#MQ", "lines": ["const x = 1;"] }
-```
-
-Replace a range — `lines` is the complete new content for that range, not including the surrounding lines:
-
-```json
-{ "op": "replace", "pos": "12#MQ", "end": "14#VR", "lines": ["line a", "line b"] }
-```
-
-Delete lines:
-
-```json
-{ "op": "replace", "pos": "12#MQ", "end": "14#VR", "lines": [] }
-```
-
-Insert after a line:
-
-```json
-{ "op": "append", "pos": "50#NK", "lines": ["", "## New Section"] }
-```
-
-Exact unique text replacement:
-
-```json
+{ "op": "replace", "range": { "start": "12#MQ" }, "content": "const x = 1;" }
+{ "op": "replace", "range": { "start": "12#MQ", "end": "14#VR" }, "content": "line a\nline b" }
+{ "op": "replace", "range": { "start": "12#MQ", "end": "14#VR" }, "content": null }
+{ "op": "append", "pos": "50#NK", "content": "\n## New Section" }
+{ "op": "prepend", "content": "// header\n" }
 { "op": "replace_text", "oldText": "before", "newText": "after" }
 ```
 
-Mixed edits in one call — all anchors refer to the same pre-edit file state, and `replace_text` matches against that same state:
+Return modes:
+- `changed` (default) — returns diff preview and updated anchors around the changed region.
+- `ranges` — requires `returnRanges` and returns requested post-edit hashline windows in `details.returnedRanges`.
 
-```json
-{
-  "path": "README.md",
-  "edits": [
-    { "op": "replace",      "pos": "33#YW", "lines": ["updated line"] },
-    { "op": "replace_text", "oldText": "draft title", "newText": "final title" },
-    { "op": "append",       "pos": "50#NK", "lines": ["", "## New Section"] },
-    { "op": "prepend",                      "lines": ["// header"] }
-  ]
-}
-```
-
-Return only selected post-edit ranges:
-
-```json
-{
-  "path": "src/main.ts",
-  "returnMode": "ranges",
-  "returnRanges": [
-    { "start": 1, "end": 20 },
-    { "start": 80, "end": 90 }
-  ],
-  "edits": [
-    { "op": "replace", "pos": "12#MQ", "lines": ["const x = 1;"] }
-  ]
-}
-```
-</examples>
-
-<constraints>
-- Copy `LINE#HASH` anchors exactly from `read` output — do not guess or construct them.
-- Copy indentation exactly from `read` output.
-- `lines` must be literal file content. Do not include `LINE#HASH:` prefixes or diff markers.
-- `replace_text` is exact-only: it must match exactly once in the current file. If it matches zero or multiple times, re-read and use anchors instead.
-- Do not echo the line immediately before or after the replaced range into `lines` — include only the new content for the targeted lines.
-- Each edit in a call targets anchors from the same pre-edit file state. Do not use anchors from the result of one edit as input to another edit in the same call.
-- Do not emit overlapping or adjacent edits — merge nearby changes into a single entry.
-- Keep each edit as small as possible; do not pad with large unchanged regions.
-- Submitting content identical to the current file is rejected.
-</constraints>
-
-<after-edit>
-A successful edit returns:
-- `Diff preview` — in `returnMode="changed"`, changed lines with `+`/`-` markers.
-- `Structure outline` — in `returnMode="ranges"`, `content` contains a compact regex-level outline of the returned content.
-- `details.returnedRanges` — in `returnMode="ranges"`, the requested post-edit hashline windows.
-- `Updated anchors` — fresh `LINE#HASH` references for the changed region, usable in the next call without re-reading. For edits outside that region, use `read` first.
-</after-edit>
-
-<errors>
-- **Stale anchor**: the file has changed since your last `read`. The error shows the current content with `>>>` marking the lines you need. Copy those `>>> LINE#HASH` values and retry. For a range replace, update both `pos` and `end`.
-- **Identical content**: unchanged edits return `classification: "noop"` instead of throwing. Re-read only if you expected a real change.
-</errors>
-</errors>
+Errors:
+- Stale anchor: the file changed since `read`; retry using the `>>> LINE#HASH` lines from the error.
+- No-op: unchanged edits return `classification: "noop"`.

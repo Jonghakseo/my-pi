@@ -1,1 +1,1 @@
-Make precise file edits with LINE#HASH anchors, including multiple disjoint edits in one call
+Make one precise edit call per file using LINE#HASH anchors, preferring range + content block replacements

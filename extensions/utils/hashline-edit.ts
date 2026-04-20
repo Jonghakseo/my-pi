@@ -35,16 +35,21 @@ import { resolveToCwd } from "./hashline-path-utils.ts";
 import { formatHashlineReadPreview } from "./hashline-read.ts";
 import { throwIfAborted } from "./runtime.ts";
 
-const hashlineEditLinesSchema = Type.Union([
-	Type.Array(Type.String(), { description: "content (preferred format)" }),
-	Type.String(),
+const hashlineEditContentSchema = Type.Union([
+	Type.String({ description: "literal file content (preferred format)" }),
 	Type.Null(),
 ]);
 
-const returnRangeSchema = Type.Object(
+const hashlineEditLinesSchema = Type.Union([
+	Type.Array(Type.String(), { description: "legacy line-array content" }),
+	Type.String({ description: "legacy string content" }),
+	Type.Null(),
+]);
+
+const editAnchorRangeSchema = Type.Object(
 	{
-		start: Type.Integer({ minimum: 1, description: "first post-edit line to return" }),
-		end: Type.Optional(Type.Integer({ minimum: 1, description: "last post-edit line to return" })),
+		start: Type.String({ description: "range start anchor" }),
+		end: Type.Optional(Type.String({ description: "range end anchor" })),
 	},
 	{ additionalProperties: false },
 );
@@ -54,11 +59,21 @@ const hashlineEditItemSchema = Type.Object(
 		op: StringEnum(["replace", "append", "prepend", "replace_text"] as const, {
 			description: 'edit operation: "replace", "append", "prepend", or "replace_text"',
 		}),
-		pos: Type.Optional(Type.String({ description: "anchor" })),
-		end: Type.Optional(Type.String({ description: "limit position" })),
+		pos: Type.Optional(Type.String({ description: "legacy anchor" })),
+		end: Type.Optional(Type.String({ description: "legacy limit position" })),
+		range: Type.Optional(editAnchorRangeSchema),
+		content: Type.Optional(hashlineEditContentSchema),
 		lines: Type.Optional(hashlineEditLinesSchema),
 		oldText: Type.Optional(Type.String({ description: "exact text to replace" })),
 		newText: Type.Optional(Type.String({ description: "replacement text" })),
+	},
+	{ additionalProperties: false },
+);
+
+const returnRangeSchema = Type.Object(
+	{
+		start: Type.Integer({ minimum: 1, description: "first post-edit line to return" }),
+		end: Type.Optional(Type.Integer({ minimum: 1, description: "last post-edit line to return" })),
 	},
 	{ additionalProperties: false },
 );
@@ -82,6 +97,11 @@ export const hashlineEditToolSchema = Type.Object(
 type ReturnRange = {
 	start: number;
 	end?: number;
+};
+
+type EditAnchorRange = {
+	start: string;
+	end?: string;
 };
 
 type ReturnedRangePreview = {
@@ -133,7 +153,7 @@ const ROOT_KEYS = new Set([
 	"old_text",
 	"new_text",
 ]);
-const ITEM_KEYS = new Set(["op", "pos", "end", "lines", "oldText", "newText"]);
+const ITEM_KEYS = new Set(["op", "pos", "end", "range", "content", "lines", "oldText", "newText"]);
 const LEGACY_KEYS = ["oldText", "newText", "old_text", "new_text"] as const;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -331,6 +351,21 @@ export function assertEditRequest(request: unknown): asserts request is EditRequ
 		if (hasOwn(edit, "end") && typeof edit.end !== "string") {
 			throw new Error(`Edit ${index} field "end" must be a string when provided.`);
 		}
+		if (hasOwn(edit, "range")) {
+			if (!isRecord(edit.range)) {
+				throw new Error(`Edit ${index} field "range" must be an object when provided.`);
+			}
+			const range = edit.range as EditAnchorRange;
+			if (typeof range.start !== "string" || range.start.length === 0) {
+				throw new Error(`Edit ${index} field "range.start" must be a non-empty string.`);
+			}
+			if (hasOwn(range, "end") && typeof range.end !== "string") {
+				throw new Error(`Edit ${index} field "range.end" must be a string when provided.`);
+			}
+		}
+		if (hasOwn(edit, "content") && edit.content !== null && typeof edit.content !== "string") {
+			throw new Error(`Edit ${index} field "content" must be a string or null when provided.`);
+		}
 		if (hasOwn(edit, "oldText") && typeof edit.oldText !== "string") {
 			throw new Error(`Edit ${index} field "oldText" must be a string when provided.`);
 		}
@@ -345,17 +380,30 @@ export function assertEditRequest(request: unknown): asserts request is EditRequ
 			if (typeof edit.oldText !== "string" || typeof edit.newText !== "string") {
 				throw new Error(`Edit ${index} with op "replace_text" requires string "oldText" and "newText" fields.`);
 			}
-			if (hasOwn(edit, "pos") || hasOwn(edit, "end") || hasOwn(edit, "lines")) {
+			if (
+				hasOwn(edit, "pos") ||
+				hasOwn(edit, "end") ||
+				hasOwn(edit, "range") ||
+				hasOwn(edit, "content") ||
+				hasOwn(edit, "lines")
+			) {
 				throw new Error(`Edit ${index} with op "replace_text" only supports "oldText" and "newText".`);
 			}
 			continue;
 		}
 
-		if (!hasOwn(edit, "lines")) {
-			throw new Error(`Edit ${index} requires a "lines" field.`);
+		const hasContent = hasOwn(edit, "content");
+		const hasLines = hasOwn(edit, "lines");
+		if (hasContent && hasLines) {
+			throw new Error(`Edit ${index} must use either "content" or legacy "lines", not both.`);
 		}
-		const editLines = edit.lines as string[] | string | null;
-		const leadingPrefixError = getLeadingDisplayPrefixError(editLines);
+		if (!hasContent && !hasLines) {
+			throw new Error(`Edit ${index} requires a "content" field (or legacy "lines").`);
+		}
+		const editPayload = hasContent
+			? ((edit.content as string | null) ?? null)
+			: ((edit.lines as string[] | string | null) ?? null);
+		const leadingPrefixError = getLeadingDisplayPrefixError(editPayload, hasContent ? "content" : "lines");
 		if (leadingPrefixError) {
 			throw new Error(`Edit ${index} ${leadingPrefixError}`);
 		}
@@ -364,8 +412,24 @@ export function assertEditRequest(request: unknown): asserts request is EditRequ
 			throw new Error(`Edit ${index} with op "${edit.op}" does not support "oldText" or "newText".`);
 		}
 
-		if (edit.op === "replace" && typeof edit.pos !== "string") {
-			throw new Error(`Edit ${index} with op "replace" requires a "pos" anchor string.`);
+		if (edit.op === "replace") {
+			const hasRange = hasOwn(edit, "range");
+			const hasLegacyAnchors = hasOwn(edit, "pos") || hasOwn(edit, "end");
+			if (hasRange && hasLegacyAnchors) {
+				throw new Error(`Edit ${index} with op "replace" must use either "range" or legacy "pos"/"end", not both.`);
+			}
+			if (!hasRange && typeof edit.pos !== "string") {
+				throw new Error(
+					`Edit ${index} with op "replace" requires a "range.start" object or legacy "pos" anchor string.`,
+				);
+			}
+			continue;
+		}
+
+		if (hasOwn(edit, "range")) {
+			throw new Error(
+				`Edit ${index} with op "${edit.op}" does not support "range". Use "pos" or omit it for file boundary insertion.`,
+			);
 		}
 
 		if ((edit.op === "append" || edit.op === "prepend") && hasOwn(edit, "end")) {
