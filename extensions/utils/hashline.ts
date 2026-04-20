@@ -6,6 +6,7 @@
  * Vendored & adapted from oh-my-pi (MIT, github.com/can1357/oh-my-pi).
  */
 
+import * as Diff from "diff";
 import * as XXH from "xxhashjs";
 import { throwIfAborted } from "./runtime.ts";
 
@@ -919,49 +920,105 @@ export function applyHashlineEdits(
 const ANCHOR_CONTEXT_LINES = 2;
 const ANCHOR_MAX_OUTPUT_LINES = 12;
 
+function getVisibleDiffLines(text: string): string[] {
+	const lines = text.split("\n");
+	if (lines[lines.length - 1] === "") lines.pop();
+	return lines;
+}
+
+function countVisibleLines(text: string): number {
+	if (text.length === 0) {
+		return 0;
+	}
+	const lines = text.split("\n");
+	return text.endsWith("\n") ? lines.length - 1 : lines.length;
+}
+
 /**
- * Compute the post-edit line range covering changed lines plus context.
- * Uses `firstChangedLine` and `lastChangedLine` from the edit result for
- * precise bounds. Returns null if the range (with context) exceeds the
- * output budget, signalling that the LLM should re-read instead.
+ * Compute one or more post-edit anchor ranges covering changed hunks plus context.
+ *
+ * Nearby hunks merge after context expansion. Returns null if the combined output
+ * would exceed the anchor output budget, signalling that the LLM should re-read
+ * instead of receiving oversized anchor blocks.
  */
-export function computeAffectedLineRange(params: {
-	firstChangedLine: number | undefined;
-	lastChangedLine: number | undefined;
-	resultLineCount: number;
+export function computeAffectedLineRanges(params: {
+	originalContent: string;
+	resultContent: string;
 	contextLines?: number;
 	maxOutputLines?: number;
-}): { start: number; end: number } | null {
+}): Array<{ start: number; end: number }> | null {
 	const {
-		firstChangedLine,
-		lastChangedLine,
-		resultLineCount,
+		originalContent,
+		resultContent,
 		contextLines = ANCHOR_CONTEXT_LINES,
 		maxOutputLines = ANCHOR_MAX_OUTPUT_LINES,
 	} = params;
 
-	if (firstChangedLine === undefined || lastChangedLine === undefined) {
+	const resultLineCount = countVisibleLines(resultContent);
+	if (resultLineCount === 0 || originalContent === resultContent) {
 		return null;
 	}
 
-	// Empty file after edit: no meaningful anchor block.
-	if (resultLineCount === 0) {
+	const parts = Diff.diffLines(originalContent, resultContent);
+	const expandedRanges: Array<{ start: number; end: number }> = [];
+	let newLineNum = 1;
+
+	for (let index = 0; index < parts.length; ) {
+		const part = parts[index]!;
+		const lines = getVisibleDiffLines(part.value);
+
+		if (!part.added && !part.removed) {
+			newLineNum += lines.length;
+			index++;
+			continue;
+		}
+
+		const hunkStartNewLine = newLineNum;
+		let addedLines = 0;
+
+		while (index < parts.length && (parts[index]!.added || parts[index]!.removed)) {
+			const hunkPart = parts[index]!;
+			const hunkLines = getVisibleDiffLines(hunkPart.value);
+			if (hunkPart.added) {
+				addedLines += hunkLines.length;
+				newLineNum += hunkLines.length;
+			}
+			index++;
+		}
+
+		const firstChangedLine =
+			addedLines > 0 ? hunkStartNewLine : Math.min(Math.max(1, hunkStartNewLine), resultLineCount);
+		const lastChangedLine = addedLines > 0 ? newLineNum - 1 : firstChangedLine;
+		const start = Math.max(1, firstChangedLine - contextLines);
+		const end = Math.min(resultLineCount, lastChangedLine + contextLines);
+
+		if (end < start) {
+			return null;
+		}
+
+		expandedRanges.push({ start, end });
+	}
+
+	if (expandedRanges.length === 0) {
 		return null;
 	}
 
-	const start = Math.max(1, firstChangedLine - contextLines);
-	const end = Math.min(resultLineCount, lastChangedLine + contextLines);
+	const mergedRanges: Array<{ start: number; end: number }> = [];
+	for (const range of expandedRanges) {
+		const previous = mergedRanges.at(-1);
+		if (previous && range.start <= previous.end + 1) {
+			previous.end = Math.max(previous.end, range.end);
+			continue;
+		}
+		mergedRanges.push({ ...range });
+	}
 
-	// Guard against inverted range (can happen when context pushes end below start).
-	if (end < start) {
+	const totalOutputLines = mergedRanges.reduce((sum, range) => sum + (range.end - range.start + 1), 0);
+	if (totalOutputLines > maxOutputLines) {
 		return null;
 	}
 
-	if (end - start + 1 > maxOutputLines) {
-		return null;
-	}
-
-	return { start, end };
+	return mergedRanges;
 }
 
 export function formatHashlineRegion(lines: string[], startLine: number): string {

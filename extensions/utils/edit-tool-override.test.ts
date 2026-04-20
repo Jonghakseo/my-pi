@@ -174,6 +174,51 @@ describe("hashline edit/read behavior", () => {
 		});
 	});
 
+	it("returns separate updated anchor blocks for distant edits", async () => {
+		await withTempFile(
+			"sample.txt",
+			`${[
+				"line1",
+				"line2",
+				"line3",
+				"line4",
+				"line5",
+				"line6",
+				"line7",
+				"line8",
+				"line9",
+				"line10",
+				"line11",
+				"line12",
+			].join("\n")}\n`,
+			async ({ cwd }) => {
+				const { pi, getTool } = makeFakePiRegistry();
+				registerEditTool(pi);
+				const editTool = getTool("edit");
+
+				const result = await editTool.execute(
+					"e1",
+					{
+						path: "sample.txt",
+						edits: [
+							{ op: "replace", pos: `2#${computeLineHash(2, "line2")}`, lines: ["LINE2"] },
+							{ op: "replace", pos: `11#${computeLineHash(11, "line11")}`, lines: ["LINE11"] },
+						],
+					},
+					undefined,
+					undefined,
+					{ cwd, hasUI: true, ui: { notify() {} } },
+				);
+
+				const text = result.content[0]?.text ?? "";
+				expect((text.match(/--- Updated anchors/g) ?? []).length).toBe(2);
+				expect(text).toContain("region 1/2, lines 1-4");
+				expect(text).toContain("region 2/2, lines 9-12");
+				expect(text).not.toContain("lines 1-12");
+			},
+		);
+	});
+
 	it("keeps legacy oldText/newText as compatibility fallback", async () => {
 		await withTempFile("sample.txt", "hello world\n", async ({ cwd, path }) => {
 			const { pi, getTool } = makeFakePiRegistry();
