@@ -17,12 +17,11 @@ import {
 	applyHashlineEdits,
 	computeAffectedLineRange,
 	computeLegacyEditLineRange,
-	computeLineHash,
 	formatHashlineRegion,
 	type HashlineToolEdit,
-	parseLineRef,
 	resolveEditAnchors,
 } from "./hashline.ts";
+import { formatHashlineLineForDisplay, formatHashlineTextForDisplay } from "./hashline-display.ts";
 import {
 	buildCompactHashlineDiffPreview,
 	detectLineEnding,
@@ -34,7 +33,6 @@ import {
 import { resolveToCwd } from "./hashline-path-utils.ts";
 import { formatHashlineReadPreview } from "./hashline-read.ts";
 import { throwIfAborted } from "./runtime.ts";
-import { getFileSnapshot } from "./snapshot.ts";
 
 const hashlineEditLinesSchema = Type.Union([
 	Type.Array(Type.String(), { description: "content (preferred format)" }),
@@ -67,7 +65,6 @@ const hashlineEditItemSchema = Type.Object(
 export const hashlineEditToolSchema = Type.Object(
 	{
 		path: Type.String({ description: "path" }),
-		snapshotId: Type.Optional(Type.String({ description: "snapshot fingerprint from read" })),
 		returnMode: Type.Optional(
 			StringEnum(["changed", "full", "ranges"] as const, {
 				description: 'response mode: "changed", "full", or "ranges"',
@@ -101,7 +98,6 @@ type FullContentPreview = {
 
 type EditRequestParams = {
 	path: string;
-	snapshotId?: string;
 	returnMode?: "changed" | "full" | "ranges";
 	returnRanges?: ReturnRange[];
 	edits?: HashlineToolEdit[];
@@ -122,7 +118,6 @@ type HashlineEditToolDetails = {
 	diff: string;
 	firstChangedLine?: number;
 	compatibility?: CompatibilityDetails;
-	snapshotId?: string;
 	classification?: "noop";
 	nextOffset?: number;
 	fullContent?: FullContentPreview;
@@ -136,7 +131,6 @@ const EDIT_PROMPT_SNIPPET = readFileSync(new URL("../prompts/edit-snippet.md", i
 
 const ROOT_KEYS = new Set([
 	"path",
-	"snapshotId",
 	"returnMode",
 	"returnRanges",
 	"edits",
@@ -166,80 +160,6 @@ function getVisibleLines(text: string): string[] {
 	}
 	const lines = text.split("\n");
 	return text.endsWith("\n") ? lines.slice(0, -1) : lines;
-}
-
-function collectRequestedAnchorLines(edits: HashlineToolEdit[]): number[] {
-	const lines = new Set<number>();
-	for (const edit of edits) {
-		if (edit.op === "replace_text") {
-			continue;
-		}
-		for (const ref of [edit.pos, edit.end]) {
-			if (typeof ref !== "string") {
-				continue;
-			}
-			try {
-				lines.add(parseLineRef(ref).line);
-			} catch {}
-		}
-	}
-	return [...lines].sort((left, right) => left - right);
-}
-
-function formatSnapshotRefreshAnchors(text: string, anchorLines: number[]): string {
-	const visibleLines = getVisibleLines(text);
-	if (visibleLines.length === 0) {
-		return "File is empty. Use read to confirm the current state before retrying.";
-	}
-
-	const focusLines = [
-		...new Set(
-			anchorLines.length > 0 ? anchorLines.map((line) => Math.min(Math.max(line, 1), visibleLines.length)) : [1],
-		),
-	].sort((left, right) => left - right);
-
-	const displayLines = new Set<number>();
-	for (const line of focusLines) {
-		for (let current = Math.max(1, line - 4); current <= Math.min(visibleLines.length, line + 4); current++) {
-			displayLines.add(current);
-		}
-	}
-
-	const sorted = [...displayLines].sort((left, right) => left - right);
-	const focusSet = new Set<number>(focusLines);
-	const out: string[] = [];
-	let previousLine = -1;
-	for (const lineNumber of sorted) {
-		if (previousLine !== -1 && lineNumber > previousLine + 1) {
-			out.push("    ...");
-		}
-		previousLine = lineNumber;
-		const content = visibleLines[lineNumber - 1]!;
-		const hashline = `${lineNumber}#${computeLineHash(lineNumber, content)}:${content}`;
-		out.push(focusSet.has(lineNumber) ? `>>> ${hashline}` : `    ${hashline}`);
-	}
-	return out.join("\n");
-}
-
-async function assertSnapshotIdMatches(
-	absolutePath: string,
-	rawPath: string,
-	expectedSnapshotId: string | undefined,
-	options?: { currentText?: string; anchorLines?: number[] },
-): Promise<string> {
-	const snapshot = await getFileSnapshot(absolutePath);
-
-	if (expectedSnapshotId !== undefined && snapshot.snapshotId !== expectedSnapshotId) {
-		const refreshBlock =
-			options?.currentText !== undefined
-				? `\n\nRefresh anchors:\n${formatSnapshotRefreshAnchors(options.currentText, options.anchorLines ?? [])}`
-				: "";
-		throw new Error(
-			`Stale snapshotId for ${rawPath}. Re-run read and retry with the latest snapshotId. Current snapshotId: ${snapshot.snapshotId}${refreshBlock}`,
-		);
-	}
-
-	return snapshot.snapshotId;
 }
 
 function withHiddenStringProperty(
@@ -363,10 +283,6 @@ export function assertEditRequest(request: unknown): asserts request is EditRequ
 		}
 	} else if (hasOwn(request, "returnRanges")) {
 		throw new Error('Edit request field "returnRanges" is only supported when returnMode is "ranges".');
-	}
-
-	if (hasOwn(request, "snapshotId") && typeof request.snapshotId !== "string") {
-		throw new Error('Edit request field "snapshotId" must be a string when provided.');
 	}
 
 	for (const legacyKey of LEGACY_KEYS) {
@@ -507,9 +423,6 @@ function getRenderablePreviewInput(args: unknown): EditRequestParams | null {
 	}
 
 	const request: EditRequestParams = { path: args.path };
-	if (typeof args.snapshotId === "string") {
-		request.snapshotId = args.snapshotId;
-	}
 	if (Array.isArray(args.edits)) {
 		request.edits = args.edits as HashlineToolEdit[];
 	}
@@ -543,13 +456,14 @@ function formatPreviewDiff(
 	const lines = diff.split("\n");
 	const maxLines = expanded ? 40 : 16;
 	const shown = lines.slice(0, maxLines).map((line) => {
+		const displayLine = formatHashlineLineForDisplay(line);
 		if (line.startsWith("+") && !line.startsWith("+++")) {
-			return theme.fg("success", line);
+			return theme.fg("success", displayLine);
 		}
 		if (line.startsWith("-") && !line.startsWith("---")) {
-			return theme.fg("error", line);
+			return theme.fg("error", displayLine);
 		}
-		return theme.fg("dim", line);
+		return theme.fg("dim", displayLine);
 	});
 
 	if (lines.length > maxLines) {
@@ -590,7 +504,7 @@ function isRenderedEditSectionBoundary(line: string): boolean {
 }
 
 function formatRenderedEditResultMarkdown(text: string, options: { expanded: boolean }): string {
-	const lines = text.split("\n");
+	const lines = formatHashlineTextForDisplay(text).split("\n");
 	const maxLines = options.expanded ? 60 : 20;
 	const shownLines = lines.slice(0, maxLines);
 	const sections: string[] = [];
@@ -808,7 +722,7 @@ function formatEditCall(
 	}
 
 	if ("error" in state.preview) {
-		text += `\n\n${theme.fg("error", state.preview.error)}`;
+		text += `\n\n${theme.fg("error", formatHashlineTextForDisplay(state.preview.error))}`;
 		return text;
 	}
 
@@ -866,11 +780,6 @@ export async function computeEditPreview(request: unknown, cwd: string): Promise
 		}
 
 		const originalNormalized = normalizeToLF(stripBom(file.text).text);
-		await assertSnapshotIdMatches(absolutePath, path, params.snapshotId, {
-			currentText: originalNormalized,
-			anchorLines: collectRequestedAnchorLines(toolEdits),
-		});
-
 		let result: string;
 		if (toolEdits.length > 0) {
 			const resolved = resolveEditAnchors(toolEdits);
@@ -961,7 +870,7 @@ export function registerEditTool(pi: ExtensionAPI): void {
 
 			if (context.isError) {
 				const text = context.lastComponent instanceof Text ? context.lastComponent : new Text("", 0, 0);
-				text.setText(`\n${theme.fg("error", renderedText)}`);
+				text.setText(`\n${theme.fg("error", formatHashlineTextForDisplay(renderedText))}`);
 				return text;
 			}
 
@@ -1030,10 +939,6 @@ export function registerEditTool(pi: ExtensionAPI): void {
 				const { bom, text: content } = stripBom(file.text);
 				const originalEnding = detectLineEnding(content);
 				const originalNormalized = normalizeToLF(content);
-				const snapshotId = await assertSnapshotIdMatches(absolutePath, path, normalizedParams.snapshotId, {
-					currentText: originalNormalized,
-					anchorLines: collectRequestedAnchorLines(toolEdits),
-				});
 
 				let result: string;
 				let warnings: string[] | undefined;
@@ -1105,16 +1010,15 @@ export function registerEditTool(pi: ExtensionAPI): void {
 								type: "text",
 								text:
 									returnMode === "full"
-										? `No changes made to ${path}\nClassification: noop\nSnapshotId: ${snapshotId}\n\n${noopOutline?.text}\n\nFull content is available in details.fullContent.`
+										? `No changes made to ${path}\nClassification: noop\n\n${noopOutline?.text}\n\nFull content is available in details.fullContent.`
 										: returnMode === "ranges"
-											? `No changes made to ${path}\nClassification: noop\nSnapshotId: ${snapshotId}\n\n${noopOutline?.text}\n\nRequested range payloads are available in details.returnedRanges.`
+											? `No changes made to ${path}\nClassification: noop\n\n${noopOutline?.text}\n\nRequested range payloads are available in details.returnedRanges.`
 											: `No changes made to ${path}\nClassification: noop\n${noopDetails}`,
 							},
 						],
 						details: {
 							diff: "",
 							firstChangedLine: undefined,
-							snapshotId,
 							classification: "noop" as const,
 							...(noopFullPreview?.nextOffset !== undefined ? { nextOffset: noopFullPreview.nextOffset } : {}),
 							...(noopFullPreview
@@ -1133,7 +1037,6 @@ export function registerEditTool(pi: ExtensionAPI): void {
 
 				throwIfAborted(signal);
 				await writeFileAtomically(absolutePath, bom + restoreLineEndings(result, originalEnding));
-				const updatedSnapshotId = (await getFileSnapshot(absolutePath)).snapshotId;
 
 				const diffResult = generateDiffString(originalNormalized, result);
 				if (returnMode === "full") {
@@ -1144,13 +1047,12 @@ export function registerEditTool(pi: ExtensionAPI): void {
 						content: [
 							{
 								type: "text",
-								text: `Updated ${path}\nSnapshotId: ${updatedSnapshotId}${warningsBlock}\n\n${outline.text}\n\nFull content is available in details.fullContent.`,
+								text: `Updated ${path}${warningsBlock}\n\n${outline.text}\n\nFull content is available in details.fullContent.`,
 							},
 						],
 						details: {
 							diff: diffResult.diff,
 							firstChangedLine: firstChangedLine ?? diffResult.firstChangedLine,
-							snapshotId: updatedSnapshotId,
 							...(fullPreview.nextOffset !== undefined ? { nextOffset: fullPreview.nextOffset } : {}),
 							fullContent: {
 								text: fullPreview.text,
@@ -1175,13 +1077,12 @@ export function registerEditTool(pi: ExtensionAPI): void {
 						content: [
 							{
 								type: "text",
-								text: `Updated ${path}\nSnapshotId: ${updatedSnapshotId}${warningsBlock}\n\n${outline.text}\n\nRequested range payloads are available in details.returnedRanges.`,
+								text: `Updated ${path}${warningsBlock}\n\n${outline.text}\n\nRequested range payloads are available in details.returnedRanges.`,
 							},
 						],
 						details: {
 							diff: diffResult.diff,
 							firstChangedLine: firstChangedLine ?? diffResult.firstChangedLine,
-							snapshotId: updatedSnapshotId,
 							returnedRanges: rangePreviews.returnedRanges,
 							structureOutline: outline.outline,
 							...(compatibilityDetails ? { compatibility: compatibilityDetails } : {}),
@@ -1191,7 +1092,6 @@ export function registerEditTool(pi: ExtensionAPI): void {
 
 				const preview = buildCompactHashlineDiffPreview(diffResult.diff);
 				const summaryLine = `Changes: +${preview.addedLines} -${preview.removedLines}${preview.preview ? "" : " (no textual diff preview)"}`;
-				const snapshotLine = `SnapshotId: ${updatedSnapshotId}`;
 				const previewBlock = preview.preview ? `\n\nDiff preview:\n${preview.preview}` : "";
 				const warningsBlock = warnings?.length ? `\n\nWarnings:\n${warnings.join("\n")}` : "";
 
@@ -1214,13 +1114,12 @@ export function registerEditTool(pi: ExtensionAPI): void {
 					content: [
 						{
 							type: "text",
-							text: `Updated ${path}\n${summaryLine}\n${snapshotLine}${previewBlock}${warningsBlock}${anchorsBlock}`,
+							text: `Updated ${path}\n${summaryLine}${previewBlock}${warningsBlock}${anchorsBlock}`,
 						},
 					],
 					details: {
 						diff: diffResult.diff,
 						firstChangedLine: firstChangedLine ?? diffResult.firstChangedLine,
-						snapshotId: updatedSnapshotId,
 						...(compatibilityDetails ? { compatibility: compatibilityDetails } : {}),
 					},
 				};

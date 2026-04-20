@@ -9,13 +9,14 @@ import {
 	type TruncationResult,
 	truncateHead,
 } from "@mariozechner/pi-coding-agent";
+import { Text } from "@mariozechner/pi-tui";
 import { Type } from "@sinclair/typebox";
 import { loadFileKindAndText } from "./file-kind.ts";
 import { computeLineHash } from "./hashline.ts";
+import { formatHashlineTextForDisplay } from "./hashline-display.ts";
 import { normalizeToLF, stripBom } from "./hashline-edit-diff.ts";
 import { resolveToCwd } from "./hashline-path-utils.ts";
 import { throwIfAborted } from "./runtime.ts";
-import { getFileSnapshot } from "./snapshot.ts";
 
 const READ_DESC = readFileSync(new URL("../prompts/read.md", import.meta.url), "utf-8")
 	.replaceAll("{{DEFAULT_MAX_LINES}}", String(DEFAULT_MAX_LINES))
@@ -117,6 +118,8 @@ export function formatHashlineReadPreview(
 }
 
 export function registerReadTool(pi: ExtensionAPI): void {
+	const builtinReadRenderer = createReadToolDefinition(process.cwd());
+
 	pi.registerTool({
 		name: "read",
 		label: "Read",
@@ -140,6 +143,44 @@ export function registerReadTool(pi: ExtensionAPI): void {
 				}),
 			),
 		}),
+
+		renderCall(args, theme, context) {
+			if (builtinReadRenderer.renderCall) {
+				return builtinReadRenderer.renderCall(args, theme, context);
+			}
+			const text = context.lastComponent instanceof Text ? context.lastComponent : new Text("", 0, 0);
+			text.setText(`${theme.bold("read")} ${args.path}`);
+			return text;
+		},
+
+		renderResult(result, options, theme, context) {
+			const transformedResult =
+				Array.isArray(result.content) && !result.content.some((entry) => entry.type === "image")
+					? {
+							...result,
+							content: result.content.map((entry) =>
+								entry.type === "text" && typeof entry.text === "string"
+									? { ...entry, text: formatHashlineTextForDisplay(entry.text) }
+									: entry,
+							),
+						}
+					: result;
+
+			if (builtinReadRenderer.renderResult) {
+				type BuiltinRenderResult = NonNullable<typeof builtinReadRenderer.renderResult>;
+				const renderArgs: Parameters<BuiltinRenderResult> = [
+					transformedResult as Parameters<BuiltinRenderResult>[0],
+					options as Parameters<BuiltinRenderResult>[1],
+					theme as Parameters<BuiltinRenderResult>[2],
+					context as Parameters<BuiltinRenderResult>[3],
+				];
+				return builtinReadRenderer.renderResult(...renderArgs);
+			}
+
+			const text = context.lastComponent instanceof Text ? context.lastComponent : new Text("", 0, 0);
+			text.setText("");
+			return text;
+		},
 
 		async execute(_toolCallId, params, signal, _onUpdate, ctx) {
 			const rawPath = params.path;
@@ -182,13 +223,10 @@ export function registerReadTool(pi: ExtensionAPI): void {
 				offset: params.offset,
 				limit: params.limit,
 			});
-			const snapshot = await getFileSnapshot(absolutePath);
-
 			return {
-				content: [{ type: "text", text: `${preview.text}\n\n[snapshotId: ${snapshot.snapshotId}]` }],
+				content: [{ type: "text", text: preview.text }],
 				details: {
 					truncation: preview.truncation,
-					snapshotId: snapshot.snapshotId,
 					...(preview.nextOffset !== undefined ? { nextOffset: preview.nextOffset } : {}),
 				},
 			};
