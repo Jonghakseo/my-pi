@@ -3,8 +3,9 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import editToolOverride from "../edit-tool-override.ts";
 import readToolOverride from "../read-tool-override.ts";
+import { registerCompatibilityNotifications } from "./hashline-compatibility-notify.ts";
+import { assertEditRequest, prepareEditArguments, registerEditTool } from "./hashline-edit.ts";
 import { computeLineHash } from "./hashline.ts";
-import { registerEditTool } from "./hashline-edit.ts";
 import { registerReadTool } from "./hashline-read.ts";
 
 async function withTempFile(
@@ -66,6 +67,62 @@ describe("hashline tool overrides", () => {
 		const tool = getTool("read");
 		expect(tool.description).toContain("LINE#HASH");
 		expect(tool.promptSnippet).toContain("hash anchors");
+	});
+
+	describe("hashline edit compatibility helpers", () => {
+		it("stores legacy top-level replace fields as hidden prepared arguments", () => {
+			const prepared = prepareEditArguments({
+				path: "sample.txt",
+				oldText: "alpha",
+				newText: "beta",
+			}) as Record<string, unknown>;
+
+			expect(Object.keys(prepared)).toEqual(["path"]);
+			expect(prepared.oldText).toBe("alpha");
+			expect(prepared.newText).toBe("beta");
+			expect(() => assertEditRequest(prepared)).not.toThrow();
+		});
+
+		it("rejects mixed legacy key styles and stray returnRanges", () => {
+			expect(() =>
+				assertEditRequest({
+					path: "sample.txt",
+					oldText: "alpha",
+					new_text: "beta",
+				}),
+			).toThrow("cannot mix legacy camelCase and snake_case fields");
+
+			expect(() =>
+				assertEditRequest({
+					path: "sample.txt",
+					returnRanges: [{ start: 1, end: 1 }],
+					edits: [],
+				}),
+			).toThrow('Edit request field "returnRanges" is only supported when returnMode is "ranges".');
+		});
+
+		it("aggregates compatibility notifications once per turn", async () => {
+			const { pi, on } = makeFakePiRegistry();
+			registerCompatibilityNotifications(pi);
+
+			const handlers = Object.fromEntries(on.mock.calls.map(([eventName, handler]) => [eventName, handler])) as Record<
+				string,
+				(event: unknown, ctx: any) => Promise<void>
+			>;
+			const notify = vi.fn();
+			const ctx = {
+				hasUI: true,
+				ui: { notify },
+				sessionManager: { getSessionFile: () => "/tmp/hashline-test-session.json" },
+			} as any;
+
+			await handlers.turn_start({}, ctx);
+			await handlers.tool_result({ toolName: "edit", isError: false, details: { compatibility: { used: true } } }, ctx);
+			await handlers.tool_result({ toolName: "edit", isError: false, details: { compatibility: { used: true } } }, ctx);
+			await handlers.turn_end({}, ctx);
+
+			expect(notify).toHaveBeenCalledWith("Edit compatibility mode used for 2 edit(s)", "warning");
+		});
 	});
 });
 
@@ -310,4 +367,153 @@ describe("hashline edit/read behavior", () => {
 			);
 		});
 	});
+});
+
+it("supports append and prepend edits without anchors", async () => {
+	await withTempFile("sample.txt", "middle\n", async ({ cwd, path }) => {
+		const { pi, getTool } = makeFakePiRegistry();
+		registerEditTool(pi);
+		const editTool = getTool("edit");
+
+		await editTool.execute(
+			"e1",
+			{
+				path: "sample.txt",
+				edits: [
+					{ op: "prepend", lines: ["start"] },
+					{ op: "append", lines: ["end"] },
+				],
+			},
+			undefined,
+			undefined,
+			{ cwd, hasUI: true, ui: { notify() {} } },
+		);
+
+		expect(await readFile(path, "utf8")).toBe("start\nmiddle\nend\n");
+	});
+});
+
+it("applies replace_text edits through the override", async () => {
+	await withTempFile("sample.txt", "one fish\ntwo fish\n", async ({ cwd, path }) => {
+		const { pi, getTool } = makeFakePiRegistry();
+		registerEditTool(pi);
+		const editTool = getTool("edit");
+
+		const result = await editTool.execute(
+			"e1",
+			{
+				path: "sample.txt",
+				edits: [{ op: "replace_text", oldText: "two fish", newText: "TWO FISH" }],
+			},
+			undefined,
+			undefined,
+			{ cwd, hasUI: true, ui: { notify() {} } },
+		);
+
+		expect(await readFile(path, "utf8")).toBe("one fish\nTWO FISH\n");
+		expect(result.details?.diff).toContain("+2#");
+	});
+});
+
+it("returns range payloads, structure outlines, and warnings in ranges mode", async () => {
+	await withTempFile("sample.txt", "alpha\nbeta\ngamma\n", async ({ cwd }) => {
+		const { pi, getTool } = makeFakePiRegistry();
+		registerEditTool(pi);
+		const editTool = getTool("edit");
+
+		const result = await editTool.execute(
+			"e1",
+			{
+				path: "sample.txt",
+				returnMode: "ranges",
+				returnRanges: [
+					{ start: 1, end: 3 },
+					{ start: 10, end: 11 },
+				],
+				edits: [{ op: "replace", pos: `2#${computeLineHash(2, "beta")}`, lines: ["gamma"] }],
+			},
+			undefined,
+			undefined,
+			{ cwd, hasUI: true, ui: { notify() {} } },
+		);
+
+		const text = result.content[0]?.text ?? "";
+		expect(text).toContain("Updated sample.txt");
+		expect(text).toContain("Warnings:");
+		expect(text).toContain("Structure outline:");
+		expect(result.details?.returnedRanges).toHaveLength(2);
+		expect(result.details?.returnedRanges?.[0]?.text).toContain(`2#${computeLineHash(2, "gamma")}:gamma`);
+		expect(result.details?.returnedRanges?.[1]).toMatchObject({ start: 10, end: 11, empty: true });
+		expect(result.details?.structureOutline).toContain(
+			"Range 2 (lines 10-11): No structural markers found in returned content.",
+		);
+	});
+});
+
+it("returns noop range payload metadata when ranged edits make no changes", async () => {
+	await withTempFile("sample.txt", "alpha\n", async ({ cwd }) => {
+		const { pi, getTool } = makeFakePiRegistry();
+		registerEditTool(pi);
+		const editTool = getTool("edit");
+
+		const result = await editTool.execute(
+			"e1",
+			{
+				path: "sample.txt",
+				returnMode: "ranges",
+				returnRanges: [{ start: 1, end: 1 }],
+				edits: [{ op: "replace", pos: `1#${computeLineHash(1, "alpha")}`, lines: ["alpha"] }],
+			},
+			undefined,
+			undefined,
+			{ cwd, hasUI: true, ui: { notify() {} } },
+		);
+
+		expect(result.content[0]?.text).toContain("Classification: noop");
+		expect(result.details?.classification).toBe("noop");
+		expect(result.details?.returnedRanges?.[0]?.text).toContain(`1#${computeLineHash(1, "alpha")}:alpha`);
+		expect(result.details?.structureOutline?.[0]).toContain("Range 1 (lines 1-1): 1: alpha");
+	});
+});
+
+it("renders partial, markdown, and error edit results", () => {
+	const { pi, getTool } = makeFakePiRegistry();
+	registerEditTool(pi);
+	const editTool = getTool("edit");
+	const theme = {
+		fg: (_token: string, text: string) => text,
+		bold: (text: string) => text,
+		italic: (text: string) => text,
+		underline: (text: string) => text,
+		strikethrough: (text: string) => text,
+	};
+
+	const partial = editTool.renderResult(
+		{ content: [{ type: "text", text: "ignored" }], details: { diff: "" } },
+		{ expanded: true, isPartial: true },
+		theme,
+		{},
+	);
+	expect(partial.render(80).join("\n")).toContain("Editing...");
+
+	const markdown = editTool.renderResult(
+		{
+			content: [{ type: "text", text: "No changes made to sample.txt\nClassification: noop" }],
+			details: { diff: "", classification: "noop" },
+		},
+		{ expanded: true, isPartial: false },
+		theme,
+		{ lastComponent: undefined, isError: false },
+	);
+	expect(markdown.render(80).join("\n")).toContain("Classification: noop");
+
+	const error = editTool.renderResult(
+		{ content: [{ type: "text", text: `1#${computeLineHash(1, "alpha")}:alpha` }], details: { diff: "" } },
+		{ expanded: true, isPartial: false },
+		theme,
+		{ lastComponent: undefined, isError: true },
+	);
+	const renderedError = error.render(80).join("\n");
+	expect(renderedError).toContain("1: alpha");
+	expect(renderedError).not.toContain("1#");
 });
