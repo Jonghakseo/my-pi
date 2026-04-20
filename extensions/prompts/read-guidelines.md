@@ -1,0 +1,1 @@
+- Use read to examine files instead of cat or sed.
