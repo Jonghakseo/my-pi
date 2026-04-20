@@ -60,7 +60,7 @@
 		"actions": {
 			"source": {
 				"organizeImports": {
-					"level": "on"
+					"level": "off"
 				}
 			}
 		}

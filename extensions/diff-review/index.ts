@@ -1,6 +1,5 @@
 import type { ExtensionAPI, ExtensionCommandContext } from "@mariozechner/pi-coding-agent";
-import { Key, matchesKey, truncateToWidth } from "@mariozechner/pi-tui";
-import { type GlimpseWindow, open } from "glimpseui";
+import { openQuietGlimpse, type QuietGlimpseWindow } from "./quiet-glimpse.js";
 import { getCommitFiles, getReviewWindowData, loadReviewFileContents } from "./git.js";
 import { composeReviewPrompt } from "./prompt.js";
 import type {
@@ -31,92 +30,33 @@ function isRequestCommitPayload(value: ReviewWindowMessage): value is ReviewRequ
 	return value.type === "request-commit";
 }
 
-type WaitingEditorResult = "escape" | "window-settled";
-
 function escapeForInlineScript(value: string): string {
 	return value.replace(/</g, "\\u003c").replace(/>/g, "\\u003e").replace(/&/g, "\\u0026");
 }
 
-export default function (pi: ExtensionAPI) {
-	let activeWindow: GlimpseWindow | null = null;
-	let activeWaitingUIDismiss: (() => void) | null = null;
+function hasReviewFeedback(payload: ReviewSubmitPayload): boolean {
+	return payload.overallComment.trim().length > 0 || payload.comments.some((comment) => comment.body.trim().length > 0);
+}
 
-	function closeActiveWindow(): void {
+function appendReviewPrompt(ctx: ExtensionCommandContext, prompt: string): void {
+	const prefix = ctx.ui.getEditorText().trim().length > 0 ? "\n\n" : "";
+	ctx.ui.pasteToEditor(`${prefix}${prompt}`);
+}
+
+export default function (pi: ExtensionAPI) {
+	let activeWindow: QuietGlimpseWindow | null = null;
+	const suppressedWindows = new WeakSet<QuietGlimpseWindow>();
+
+	function closeActiveWindow(options: { suppressResults?: boolean } = {}): void {
 		if (activeWindow == null) return;
 		const windowToClose = activeWindow;
 		activeWindow = null;
+		if (options.suppressResults) {
+			suppressedWindows.add(windowToClose);
+		}
 		try {
 			windowToClose.close();
 		} catch {}
-	}
-
-	function showWaitingUI(ctx: ExtensionCommandContext): {
-		promise: Promise<WaitingEditorResult>;
-		dismiss: () => void;
-	} {
-		let settled = false;
-		let doneFn: ((result: WaitingEditorResult) => void) | null = null;
-		let pendingResult: WaitingEditorResult | null = null;
-
-		const finish = (result: WaitingEditorResult): void => {
-			if (settled) return;
-			settled = true;
-			if (activeWaitingUIDismiss === dismiss) {
-				activeWaitingUIDismiss = null;
-			}
-			if (doneFn != null) {
-				doneFn(result);
-			} else {
-				pendingResult = result;
-			}
-		};
-
-		const promise = ctx.ui.custom<WaitingEditorResult>((_tui, theme, _kb, done) => {
-			doneFn = done;
-			if (pendingResult != null) {
-				const result = pendingResult;
-				pendingResult = null;
-				queueMicrotask(() => done(result));
-			}
-
-			return {
-				render(width: number): string[] {
-					const innerWidth = Math.max(24, width - 2);
-					const borderTop = theme.fg("border", `╭${"─".repeat(innerWidth)}╮`);
-					const borderBottom = theme.fg("border", `╰${"─".repeat(innerWidth)}╯`);
-					const lines = [
-						theme.fg("accent", theme.bold("Waiting for review")),
-						"The native review window is open.",
-						"Press Escape to cancel and close the review window.",
-					];
-					return [
-						borderTop,
-						...lines.map(
-							(line) =>
-								`${theme.fg("border", "│")}${truncateToWidth(line, innerWidth, "...", true).padEnd(innerWidth, " ")}${theme.fg("border", "│")}`,
-						),
-						borderBottom,
-					];
-				},
-				handleInput(data: string): void {
-					if (matchesKey(data, Key.escape)) {
-						finish("escape");
-					}
-				},
-				invalidate(): void {},
-			};
-		});
-
-		const dismiss = (): void => {
-			finish("window-settled");
-		};
-
-		activeWaitingUIDismiss = dismiss;
-
-		return {
-			promise,
-			dismiss,
-		};
 	}
 
 	async function reviewRepository(ctx: ExtensionCommandContext): Promise<void> {
@@ -125,66 +65,68 @@ export default function (pi: ExtensionAPI) {
 			return;
 		}
 
-		const { repoRoot, files, commits } = await getReviewWindowData(pi, ctx.cwd);
-		if (files.length === 0 && commits.length === 0) {
-			ctx.ui.notify("No reviewable files found.", "info");
-			return;
-		}
-
-		const html = buildReviewHtml({ repoRoot, files, commits });
-		const window = open(html, {
-			width: 1680,
-			height: 1020,
-			title: "pi review",
-		});
-		activeWindow = window;
-
-		const waitingUI = showWaitingUI(ctx);
-		const fileMap = new Map(files.map((file) => [file.id, file]));
-		const commitFileCache = new Map<string, Promise<ReviewFile[]>>();
-		const contentCache = new Map<string, Promise<ReviewFileContents>>();
-
-		const sendWindowMessage = (message: ReviewHostMessage): void => {
-			if (activeWindow !== window) return;
-			const payload = escapeForInlineScript(JSON.stringify(message));
-			window.send(`window.__reviewReceive(${payload});`);
-		};
-
-		const loadCommitFiles = (sha: string): Promise<ReviewFile[]> => {
-			const cached = commitFileCache.get(sha);
-			if (cached != null) return cached;
-			const pending = getCommitFiles(pi, repoRoot, sha);
-			commitFileCache.set(sha, pending);
-			pending
-				.then((commitFiles) => {
-					for (const cf of commitFiles) fileMap.set(cf.id, cf);
-				})
-				.catch(() => {});
-			return pending;
-		};
-
-		const loadContents = (
-			file: ReviewFile,
-			scope: ReviewRequestFilePayload["scope"],
-			commitSha: string | null,
-		): Promise<ReviewFileContents> => {
-			const cacheKey = `${scope}:${commitSha ?? ""}:${file.id}`;
-			const cached = contentCache.get(cacheKey);
-			if (cached != null) return cached;
-
-			const pending = loadReviewFileContents(pi, repoRoot, file, scope, commitSha);
-			contentCache.set(cacheKey, pending);
-			return pending;
-		};
-
-		ctx.ui.notify("Opened native review window.", "info");
-
 		try {
+			const { repoRoot, files, commits } = await getReviewWindowData(pi, ctx.cwd);
+			if (files.length === 0 && commits.length === 0) {
+				ctx.ui.notify("No reviewable files found.", "info");
+				return;
+			}
+
+			const html = buildReviewHtml({ repoRoot, files, commits });
+			const window = await openQuietGlimpse(html, {
+				width: 1680,
+				height: 1020,
+				title: "pi review",
+			});
+			activeWindow = window;
+
+			const fileMap = new Map(files.map((file) => [file.id, file]));
+			const commitFileCache = new Map<string, Promise<ReviewFile[]>>();
+			const contentCache = new Map<string, Promise<ReviewFileContents>>();
+
+			const sendWindowMessage = (message: ReviewHostMessage): void => {
+				if (activeWindow !== window) return;
+				const payload = escapeForInlineScript(JSON.stringify(message));
+				window.send(`window.__reviewReceive(${payload});`);
+			};
+
+			const loadCommitFiles = (sha: string): Promise<ReviewFile[]> => {
+				const cached = commitFileCache.get(sha);
+				if (cached != null) return cached;
+				const pending = getCommitFiles(pi, repoRoot, sha);
+				commitFileCache.set(sha, pending);
+				pending
+					.then((commitFiles) => {
+						for (const cf of commitFiles) fileMap.set(cf.id, cf);
+					})
+					.catch(() => {});
+				return pending;
+			};
+
+			const loadContents = (
+				file: ReviewFile,
+				scope: ReviewRequestFilePayload["scope"],
+				commitSha: string | null,
+			): Promise<ReviewFileContents> => {
+				const cacheKey = `${scope}:${commitSha ?? ""}:${file.id}`;
+				const cached = contentCache.get(cacheKey);
+				if (cached != null) return cached;
+
+				const pending = loadReviewFileContents(pi, repoRoot, file, scope, commitSha);
+				contentCache.set(cacheKey, pending);
+				return pending;
+			};
+
 			const terminalMessagePromise = new Promise<ReviewSubmitPayload | ReviewCancelPayload | null>(
 				(resolve, reject) => {
 					let settled = false;
+					let closeTimer: ReturnType<typeof setTimeout> | null = null;
 
 					const cleanup = (): void => {
+						if (closeTimer != null) {
+							clearTimeout(closeTimer);
+							closeTimer = null;
+						}
 						window.removeListener("message", onMessage);
 						window.removeListener("closed", onClosed);
 						window.removeListener("error", onError);
@@ -271,7 +213,11 @@ export default function (pi: ExtensionAPI) {
 					};
 
 					const onClosed = (): void => {
-						settle(null);
+						if (settled || closeTimer != null) return;
+						closeTimer = setTimeout(() => {
+							closeTimer = null;
+							settle(null);
+						}, 250);
 					};
 
 					const onError = (error: Error): void => {
@@ -287,35 +233,30 @@ export default function (pi: ExtensionAPI) {
 				},
 			);
 
-			const result = await Promise.race([
-				terminalMessagePromise.then((message) => ({ type: "window" as const, message })),
-				waitingUI.promise.then((reason) => ({ type: "ui" as const, reason })),
-			]);
+			void (async () => {
+				try {
+					const message = await terminalMessagePromise;
+					if (suppressedWindows.has(window)) return;
+					if (message == null) return;
+					if (message.type === "cancel") {
+						ctx.ui.notify("Review cancelled.", "info");
+						return;
+					}
+					if (!hasReviewFeedback(message)) return;
 
-			if (result.type === "ui" && result.reason === "escape") {
-				closeActiveWindow();
-				await terminalMessagePromise.catch(() => null);
-				ctx.ui.notify("Review cancelled.", "info");
-				return;
-			}
+					const prompt = composeReviewPrompt([...fileMap.values()], message);
+					appendReviewPrompt(ctx, prompt);
+					ctx.ui.notify("Appended review feedback to the editor.", "info");
+				} catch (error) {
+					if (suppressedWindows.has(window)) return;
+					const message = error instanceof Error ? error.message : String(error);
+					ctx.ui.notify(`Review failed: ${message}`, "error");
+				}
+			})();
 
-			const message = result.type === "window" ? result.message : await terminalMessagePromise;
-
-			waitingUI.dismiss();
-			await waitingUI.promise;
-			closeActiveWindow();
-
-			if (message == null || message.type === "cancel") {
-				ctx.ui.notify("Review cancelled.", "info");
-				return;
-			}
-
-			const prompt = composeReviewPrompt(files, message);
-			ctx.ui.setEditorText(prompt);
-			ctx.ui.notify("Inserted review feedback into the editor.", "info");
+			ctx.ui.notify("Opened native review window.", "info");
 		} catch (error) {
-			activeWaitingUIDismiss?.();
-			closeActiveWindow();
+			closeActiveWindow({ suppressResults: true });
 			const message = error instanceof Error ? error.message : String(error);
 			ctx.ui.notify(`Review failed: ${message}`, "error");
 		}
@@ -329,7 +270,6 @@ export default function (pi: ExtensionAPI) {
 	});
 
 	pi.on("session_shutdown", async () => {
-		activeWaitingUIDismiss?.();
-		closeActiveWindow();
+		closeActiveWindow({ suppressResults: true });
 	});
 }
