@@ -283,7 +283,7 @@ function previewLeadingEditLine(line: string): string {
 	return compact.length > 96 ? `${compact.slice(0, 93)}...` : compact;
 }
 
-export function getLeadingDisplayPrefixError(edit: string[] | string | null): string | undefined {
+export function getLeadingDisplayPrefixError(edit: string[] | string | null, fieldName = "lines"): string | undefined {
 	const firstContentLine = normalizeIncomingEditLines(edit).find((line) => line.trim().length > 0);
 	if (!firstContentLine) {
 		return undefined;
@@ -294,7 +294,7 @@ export function getLeadingDisplayPrefixError(edit: string[] | string | null): st
 		HASHLINE_PREFIX_PLUS_RE.test(firstContentLine) ||
 		DIFF_MINUS_RE.test(firstContentLine)
 	) {
-		return `field "lines" must contain literal file content. Remove any leading LINE#HASH prefix or diff marker from the first content line (${JSON.stringify(previewLeadingEditLine(firstContentLine))}).`;
+		return `field "${fieldName}" must contain literal file content. Remove any leading LINE#HASH prefix or diff marker from the first content line (${JSON.stringify(previewLeadingEditLine(firstContentLine))}).`;
 	}
 
 	return undefined;
@@ -312,18 +312,48 @@ export function hashlineParseText(edit: string[] | string | null): string[] {
 }
 
 /**
+ * Schema-level edit as received from the tool layer.
+ *
+ * Preferred forms:
+ * - replace + range.start/range.end + content
+ * - append/prepend + pos + content
+ *
+ * Legacy forms remain supported for compatibility:
+ * - replace + pos/end + lines
+ * - append/prepend + lines
+ */
+export type HashlineToolRange = {
+	start?: string;
+	end?: string;
+};
+
+export type HashlineToolEdit = {
+	op: string;
+	pos?: string;
+	end?: string;
+	range?: HashlineToolRange;
+	content?: string | null;
+	lines?: string[] | string | null;
+	oldText?: string;
+	newText?: string;
+};
+
+function getToolEditContent(edit: HashlineToolEdit): string[] | string | null {
+	return edit.content !== undefined ? edit.content : (edit.lines ?? null);
+}
+
+/**
  * Map flat tool-schema edits into typed internal representations.
  *
  * Strict: provided anchors must parse successfully. Missing anchors are
  * fine for append (→ EOF) and prepend (→ BOF), but a malformed anchor
  * that was explicitly supplied is always an error.
  *
- * - replace + pos only → single-line replace
- * - replace + pos + end → range replace
- * - append + pos → append after that anchor
- * - prepend + pos → prepend before that anchor
+ * - replace + range.start (+ optional range.end) → preferred range replace
+ * - replace + pos (+ optional end) → legacy range replace
+ * - append/prepend + pos → anchored insertion
+ * - append/prepend without pos → file boundary insertion
  * - replace_text + oldText/newText → exact unique text replace
- * - no anchors → file-level append/prepend (only for those ops)
  *
  * Unknown or missing ops are rejected explicitly.
  */
@@ -337,15 +367,20 @@ export function resolveEditAnchors(edits: HashlineToolEdit[]): HashlineEdit[] {
 
 		switch (op) {
 			case "replace": {
-				if (!edit.pos) {
-					throw new Error('Replace requires a "pos" anchor.');
+				const startRef = edit.range?.start ?? edit.pos;
+				if (!startRef) {
+					throw new Error('Replace requires a "range.start" anchor or legacy "pos" anchor.');
 				}
 
 				result.push({
 					op: "replace",
-					pos: parseAnchorRef(edit.pos),
-					...(edit.end ? { end: parseAnchorRef(edit.end) } : {}),
-					lines: hashlineParseText(edit.lines ?? null),
+					pos: parseAnchorRef(startRef),
+					...(edit.range?.end
+						? { end: parseAnchorRef(edit.range.end) }
+						: edit.end
+							? { end: parseAnchorRef(edit.end) }
+							: {}),
+					lines: hashlineParseText(getToolEditContent(edit)),
 				});
 				break;
 			}
@@ -357,7 +392,7 @@ export function resolveEditAnchors(edits: HashlineToolEdit[]): HashlineEdit[] {
 				result.push({
 					op: "append",
 					...(edit.pos ? { pos: parseAnchorRef(edit.pos) } : {}),
-					lines: hashlineParseText(edit.lines ?? null),
+					lines: hashlineParseText(getToolEditContent(edit)),
 				});
 				break;
 			}
@@ -369,7 +404,7 @@ export function resolveEditAnchors(edits: HashlineToolEdit[]): HashlineEdit[] {
 				result.push({
 					op: "prepend",
 					...(edit.pos ? { pos: parseAnchorRef(edit.pos) } : {}),
-					lines: hashlineParseText(edit.lines ?? null),
+					lines: hashlineParseText(getToolEditContent(edit)),
 				});
 				break;
 			}
@@ -393,16 +428,6 @@ export function resolveEditAnchors(edits: HashlineToolEdit[]): HashlineEdit[] {
 }
 
 // ─── Main edit engine ───────────────────────────────────────────────────
-
-/** Schema-level edit as received from the tool layer (pos/end are tag strings, lines may be string|null). */
-export type HashlineToolEdit = {
-	op: string;
-	pos?: string;
-	end?: string;
-	lines?: string[] | string | null;
-	oldText?: string;
-	newText?: string;
-};
 
 function normalizeExactText(text: string | undefined): string | undefined {
 	if (typeof text !== "string") {

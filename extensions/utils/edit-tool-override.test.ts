@@ -101,6 +101,29 @@ describe("hashline tool overrides", () => {
 			).toThrow('Edit request field "returnRanges" is only supported when returnMode is "ranges".');
 		});
 
+		it("accepts preferred range + content edits and rejects mixed structured/legacy payloads", () => {
+			expect(() =>
+				assertEditRequest({
+					path: "sample.txt",
+					edits: [{ op: "replace", range: { start: "1#MQ" }, content: "beta" }],
+				}),
+			).not.toThrow();
+
+			expect(() =>
+				assertEditRequest({
+					path: "sample.txt",
+					edits: [{ op: "replace", range: { start: "1#MQ" }, pos: "1#MQ", content: "beta" }],
+				}),
+			).toThrow('must use either "range" or legacy "pos"/"end", not both');
+
+			expect(() =>
+				assertEditRequest({
+					path: "sample.txt",
+					edits: [{ op: "append", content: "beta", lines: ["beta"] }],
+				}),
+			).toThrow('must use either "content" or legacy "lines", not both');
+		});
+
 		it("aggregates compatibility notifications once per turn", async () => {
 			const { pi, on } = makeFakePiRegistry();
 			registerCompatibilityNotifications(pi);
@@ -165,7 +188,7 @@ describe("hashline edit/read behavior", () => {
 		});
 	});
 
-	it("applies anchored edits and returns updated anchors", async () => {
+	it("applies preferred range + content edits and returns updated anchors", async () => {
 		await withTempFile("sample.txt", "alpha\nbeta\ngamma\n", async ({ cwd, path }) => {
 			const { pi, getTool } = makeFakePiRegistry();
 			registerEditTool(pi);
@@ -178,8 +201,8 @@ describe("hashline edit/read behavior", () => {
 					edits: [
 						{
 							op: "replace",
-							pos: `2#${computeLineHash(2, "beta")}`,
-							lines: ["BETA"],
+							range: { start: `2#${computeLineHash(2, "beta")}` },
+							content: "BETA",
 						},
 					],
 				},
@@ -339,7 +362,7 @@ describe("hashline edit/read behavior", () => {
 		});
 	});
 
-	it("rejects edit lines that start with a hashline prefix", async () => {
+	it("rejects edit content that starts with a hashline prefix", async () => {
 		await withTempFile("sample.txt", "alpha\nbeta\n", async ({ cwd }) => {
 			const { pi, getTool } = makeFakePiRegistry();
 			registerEditTool(pi);
@@ -353,8 +376,8 @@ describe("hashline edit/read behavior", () => {
 						edits: [
 							{
 								op: "replace",
-								pos: `1#${computeLineHash(1, "alpha")}`,
-								lines: ["7#XH:alpha"],
+								range: { start: `1#${computeLineHash(1, "alpha")}` },
+								content: "7#XH:alpha",
 							},
 						],
 					},
@@ -363,7 +386,7 @@ describe("hashline edit/read behavior", () => {
 					{ cwd, hasUI: true, ui: { notify() {} } },
 				),
 			).rejects.toThrow(
-				'Edit 0 field "lines" must contain literal file content. Remove any leading LINE#HASH prefix or diff marker',
+				'Edit 0 field "content" must contain literal file content. Remove any leading LINE#HASH prefix or diff marker',
 			);
 		});
 	});
@@ -380,8 +403,8 @@ it("supports append and prepend edits without anchors", async () => {
 			{
 				path: "sample.txt",
 				edits: [
-					{ op: "prepend", lines: ["start"] },
-					{ op: "append", lines: ["end"] },
+					{ op: "prepend", content: "start" },
+					{ op: "append", content: "end" },
 				],
 			},
 			undefined,
@@ -430,7 +453,7 @@ it("returns range payloads, structure outlines, and warnings in ranges mode", as
 					{ start: 1, end: 3 },
 					{ start: 10, end: 11 },
 				],
-				edits: [{ op: "replace", pos: `2#${computeLineHash(2, "beta")}`, lines: ["gamma"] }],
+				edits: [{ op: "replace", range: { start: `2#${computeLineHash(2, "beta")}` }, content: "gamma" }],
 			},
 			undefined,
 			undefined,
@@ -462,7 +485,7 @@ it("returns noop range payload metadata when ranged edits make no changes", asyn
 				path: "sample.txt",
 				returnMode: "ranges",
 				returnRanges: [{ start: 1, end: 1 }],
-				edits: [{ op: "replace", pos: `1#${computeLineHash(1, "alpha")}`, lines: ["alpha"] }],
+				edits: [{ op: "replace", range: { start: `1#${computeLineHash(1, "alpha")}` }, content: "alpha" }],
 			},
 			undefined,
 			undefined,
