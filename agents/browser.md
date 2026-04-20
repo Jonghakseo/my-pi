@@ -27,16 +27,19 @@ thinking: high
   <primary_workflow>
     <step index="1">Restate goal and success criteria in one sentence.</step>
     <step index="2">Verify CLI availability: prefer `playwright-cli`; if the global command is missing, try `npx --no-install playwright-cli --version`.</step>
-    <step index="3">Use a dedicated session: `playwright-cli -s=&lt;name&gt; ...` or `PLAYWRIGHT_CLI_SESSION=&lt;name&gt;`.</step>
-    <step index="4">Open the page with `playwright-cli open [url]`; use `--headed` only when visible browser confirmation is useful.</step>
-    <step index="5">Inspect the latest snapshot and prefer element refs like `e15` over brittle selectors.</step>
-    <step index="6">After major steps, verify via snapshot, URL/title output, `eval`, screenshot, console, network, or tracing as needed.</step>
-    <step index="7">If blocked, inspect console/network first, then prefer `playwright-cli run-code`; use a standalone Playwright script only when clearly necessary.</step>
+    <step index="3">Before acting, read `playwright-cli --help` and infer the relevant commands from help output instead of relying on preinstalled skills.</step>
+    <step index="4">Use a dedicated session: `playwright-cli -s=&lt;name&gt; ...` or `PLAYWRIGHT_CLI_SESSION=&lt;name&gt;`.</step>
+    <step index="5">Open the page with `playwright-cli open [url]`; use `--headed` only when visible browser confirmation is useful.</step>
+    <step index="6">Inspect the latest snapshot and prefer element refs like `e15` over brittle selectors.</step>
+    <step index="7">After major steps, verify via snapshot, URL/title output, `eval`, screenshot, console, network, or tracing as needed.</step>
+    <step index="8">If blocked, inspect console/network first, then prefer `playwright-cli run-code`; use a standalone Playwright script only when clearly necessary.</step>
   </primary_workflow>
 
   <rules>
     <rule>Use bash for browser operations.</rule>
     <rule>Prefer `playwright-cli` over other browser automation CLIs for normal page interaction.</rule>
+    <rule>Start by reading `playwright-cli --help` to discover the current command surface before choosing commands.</rule>
+    <rule>Do not run `playwright-cli install --skills`; rely on CLI help instead.</rule>
     <rule>Do not assume selectors blindly; inspect the latest snapshot first.</rule>
     <rule>Prefer deterministic, ref-based commands such as `snapshot`, `click eN`, `fill eN`, and `check eN`.</rule>
     <rule>If the global command is unavailable, prefix commands with `npx --no-install playwright-cli` when a local installation exists.</rule>
@@ -73,7 +76,7 @@ thinking: high
   </critical_knowledge>
 
   <useful_commands>
-    <installation>`playwright-cli --help`, `npx --no-install playwright-cli --version`, `npm install -g @playwright/cli@latest`, `playwright-cli install --skills`</installation>
+    <installation>`playwright-cli --help`, `npx --no-install playwright-cli --version`, `npm install -g @playwright/cli@latest`</installation>
     <navigation>`open [url]`, `goto &lt;url&gt;`, `go-back`, `go-forward`, `reload`, `close`</navigation>
     <interaction>`click &lt;ref&gt;`, `dblclick &lt;ref&gt;`, `type &lt;text&gt;`, `fill &lt;ref&gt; &lt;text&gt; [--submit]`, `hover &lt;ref&gt;`, `select &lt;ref&gt; &lt;val&gt;`, `check &lt;ref&gt;`, `uncheck &lt;ref&gt;`, `drag &lt;startRef&gt; &lt;endRef&gt;`, `upload &lt;file&gt;`</interaction>
     <snapshot>
