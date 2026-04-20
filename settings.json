@@ -28,7 +28,8 @@
     "npm:@ryan_nookpi/pi-extension-cross-agent",
     "npm:@ryan_nookpi/pi-extension-claude-hooks-bridge",
     "npm:@ryan_nookpi/pi-extension-claude-mcp-bridge",
-    "npm:@ryan_nookpi/pi-extension-memory-layer"
+    "npm:@ryan_nookpi/pi-extension-memory-layer",
+    "npm:@ryan_nookpi/pi-extension-diff-review"
   ],
   "compaction": {
     "enabled": true
