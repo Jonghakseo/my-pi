@@ -1,3 +1,5 @@
+let suppressAutoSubmitOnClose = false;
+
 const reviewData = JSON.parse(document.getElementById("diff-review-data").textContent || "{}");
 if (!Array.isArray(reviewData.files)) reviewData.files = [];
 if (!Array.isArray(reviewData.commits)) reviewData.commits = [];
@@ -329,6 +331,32 @@ function getFilteredFiles() {
 		.map((entry) => entry.file);
 }
 
+function collapseTreeNode(node, isRoot = false) {
+	if (node.kind === "file") return node;
+
+	const collapsedChildren = [...node.children.values()].map((child) => collapseTreeNode(child));
+	let collapsed = {
+		...node,
+		children: new Map(collapsedChildren.map((child) => [child.name, child])),
+	};
+
+	if (isRoot) return collapsed;
+
+	while (collapsed.children.size === 1) {
+		const [onlyChild] = collapsed.children.values();
+		if (!onlyChild || onlyChild.kind !== "dir") break;
+		collapsed = {
+			name: `${collapsed.name}/${onlyChild.name}`,
+			path: onlyChild.path,
+			kind: "dir",
+			children: onlyChild.children,
+			file: null,
+		};
+	}
+
+	return collapsed;
+}
+
 function buildTree(files) {
 	const root = { name: "", path: "", kind: "dir", children: new Map(), file: null };
 	for (const file of files) {
@@ -353,7 +381,7 @@ function buildTree(files) {
 			if (isLeaf) node.file = file;
 		}
 	}
-	return root;
+	return collapseTreeNode(root, true);
 }
 
 function cacheKey(scope, fileId) {
@@ -1205,6 +1233,30 @@ function syncCommentBodiesFromDOM() {
 	});
 }
 
+function buildSubmitPayload() {
+	syncCommentBodiesFromDOM();
+	return {
+		type: "submit",
+		overallComment: state.overallComment.trim(),
+		comments: state.comments
+			.map((comment) => ({ ...comment, body: comment.body.trim() }))
+			.filter((comment) => comment.body.length > 0),
+	};
+}
+
+function hasSubmitPayloadContent(payload) {
+	return payload.overallComment.length > 0 || payload.comments.length > 0;
+}
+
+function submitDraftOnClose() {
+	if (suppressAutoSubmitOnClose) return;
+	const payload = buildSubmitPayload();
+	if (!hasSubmitPayloadContent(payload)) return;
+	suppressAutoSubmitOnClose = true;
+	window.glimpse?.send?.(payload);
+}
+
+
 function updateCommentsUI() {
 	renderTree();
 	syncViewZones();
@@ -1434,20 +1486,18 @@ function switchScope(scope) {
 	if (file) ensureFileLoaded(file.id, state.currentScope);
 }
 
+window.addEventListener("beforeunload", submitDraftOnClose);
+window.addEventListener("pagehide", submitDraftOnClose);
+
 submitButton.addEventListener("click", () => {
-	syncCommentBodiesFromDOM();
-	const payload = {
-		type: "submit",
-		overallComment: state.overallComment.trim(),
-		comments: state.comments
-			.map((comment) => ({ ...comment, body: comment.body.trim() }))
-			.filter((comment) => comment.body.length > 0),
-	};
+	const payload = buildSubmitPayload();
+	suppressAutoSubmitOnClose = true;
 	window.glimpse.send(payload);
 	window.glimpse.close();
 });
 
 cancelButton.addEventListener("click", () => {
+	suppressAutoSubmitOnClose = true;
 	window.glimpse.send({ type: "cancel" });
 	window.glimpse.close();
 });
