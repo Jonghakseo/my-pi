@@ -66,13 +66,13 @@ export default function (pi: ExtensionAPI) {
 		}
 
 		try {
-			const { repoRoot, files, commits } = await getReviewWindowData(pi, ctx.cwd);
+			const { repoRoot, files, commits, branchBaseRef, branchMergeBaseSha } = await getReviewWindowData(pi, ctx.cwd);
 			if (files.length === 0 && commits.length === 0) {
 				ctx.ui.notify("No reviewable files found.", "info");
 				return;
 			}
 
-			const html = buildReviewHtml({ repoRoot, files, commits });
+			const html = buildReviewHtml({ repoRoot, files, commits, branchBaseRef, branchMergeBaseSha });
 			const window = await openQuietGlimpse(html, {
 				width: 1680,
 				height: 1020,
@@ -112,7 +112,7 @@ export default function (pi: ExtensionAPI) {
 				const cached = contentCache.get(cacheKey);
 				if (cached != null) return cached;
 
-				const pending = loadReviewFileContents(pi, repoRoot, file, scope, commitSha);
+				const pending = loadReviewFileContents(pi, repoRoot, file, scope, commitSha, branchMergeBaseSha);
 				contentCache.set(cacheKey, pending);
 				return pending;
 			};
