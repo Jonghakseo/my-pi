@@ -255,38 +255,66 @@ export function generateDiffString(
 
 		const nextPartIsChange = i < parts.length - 1 && (parts[i + 1]?.added || parts[i + 1]?.removed);
 		if (lastWasChange || nextPartIsChange) {
-			let linesToShow = raw;
-			let skipStart = 0;
-			let skipEnd = 0;
+			if (lastWasChange && nextPartIsChange) {
+				if (raw.length <= contextLines * 2) {
+					for (const line of raw) {
+						output.push(formatDiffPreviewLine(" ", newLineNum, lineNumWidth, line, true));
+						oldLineNum++;
+						newLineNum++;
+					}
+				} else {
+					const leading = raw.slice(0, contextLines);
+					const trailing = raw.slice(-contextLines);
+					for (const line of leading) {
+						output.push(formatDiffPreviewLine(" ", newLineNum, lineNumWidth, line, true));
+						oldLineNum++;
+						newLineNum++;
+					}
+					output.push(` ${"".padStart(lineNumWidth, " ")} ...`);
+					const omitted = raw.length - leading.length - trailing.length;
+					oldLineNum += omitted;
+					newLineNum += omitted;
+					for (const line of trailing) {
+						output.push(formatDiffPreviewLine(" ", newLineNum, lineNumWidth, line, true));
+						oldLineNum++;
+						newLineNum++;
+					}
+				}
+			} else {
+				let linesToShow = raw;
+				let skipStart = 0;
+				let skipEnd = 0;
 
-			if (!lastWasChange) {
-				skipStart = Math.max(0, raw.length - contextLines);
-				linesToShow = raw.slice(skipStart);
-			}
-			if (!nextPartIsChange && linesToShow.length > contextLines) {
-				skipEnd = linesToShow.length - contextLines;
-				linesToShow = linesToShow.slice(0, contextLines);
-			}
+				if (!lastWasChange) {
+					skipStart = Math.max(0, raw.length - contextLines);
+					linesToShow = raw.slice(skipStart);
+				}
+				if (!nextPartIsChange && linesToShow.length > contextLines) {
+					skipEnd = linesToShow.length - contextLines;
+					linesToShow = linesToShow.slice(0, contextLines);
+				}
 
-			if (skipStart > 0) {
-				output.push(` ${"".padStart(lineNumWidth, " ")} ...`);
-				oldLineNum += skipStart;
-				newLineNum += skipStart;
-			}
-			for (const line of linesToShow) {
-				output.push(formatDiffPreviewLine(" ", newLineNum, lineNumWidth, line, true));
-				oldLineNum++;
-				newLineNum++;
-			}
-			if (skipEnd > 0) {
-				output.push(` ${"".padStart(lineNumWidth, " ")} ...`);
-				oldLineNum += skipEnd;
-				newLineNum += skipEnd;
+				if (skipStart > 0) {
+					output.push(` ${"".padStart(lineNumWidth, " ")} ...`);
+					oldLineNum += skipStart;
+					newLineNum += skipStart;
+				}
+				for (const line of linesToShow) {
+					output.push(formatDiffPreviewLine(" ", newLineNum, lineNumWidth, line, true));
+					oldLineNum++;
+					newLineNum++;
+				}
+				if (skipEnd > 0) {
+					output.push(` ${"".padStart(lineNumWidth, " ")} ...`);
+					oldLineNum += skipEnd;
+					newLineNum += skipEnd;
+				}
 			}
 		} else {
 			oldLineNum += raw.length;
 			newLineNum += raw.length;
 		}
+
 		lastWasChange = false;
 	}
 
