@@ -1,4 +1,5 @@
-import { extname } from "node:path";
+import { readFile } from "node:fs/promises";
+import { extname, join } from "node:path";
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import type {
 	ChangeStatus,
@@ -163,6 +164,14 @@ async function getRevisionContent(pi: ExtensionAPI, repoRoot: string, revision: 
 	return result.stdout;
 }
 
+async function getWorkingTreeContent(repoRoot: string, path: string): Promise<string> {
+	try {
+		return await readFile(join(repoRoot, path), "utf8");
+	} catch {
+		return "";
+	}
+}
+
 function isReviewableFilePath(path: string): boolean {
 	const lowerPath = path.toLowerCase();
 	const fileName = lowerPath.split("/").pop() ?? lowerPath;
@@ -216,6 +225,48 @@ function isReviewableFilePath(path: string): boolean {
 	return true;
 }
 
+function mergeChangedPaths(...groups: ChangedPath[][]): ChangedPath[] {
+	const merged = new Map<string, ChangedPath>();
+	for (const group of groups) {
+		for (const change of group) {
+			const key = change.newPath ?? change.oldPath ?? "";
+			if (key.length === 0) continue;
+			merged.set(key, change);
+		}
+	}
+	return [...merged.values()];
+}
+
+async function getUntrackedChangedPaths(pi: ExtensionAPI, repoRoot: string): Promise<ChangedPath[]> {
+	const output = await runGitAllowFailure(pi, repoRoot, ["ls-files", "--others", "--exclude-standard"]);
+	return output
+		.split(/\r?\n/)
+		.map((line) => line.trim())
+		.filter((line) => line.length > 0)
+		.map((path) => ({ status: "added", oldPath: null, newPath: path }) satisfies ChangedPath);
+}
+
+async function getBranchReviewChanges(
+	pi: ExtensionAPI,
+	repoRoot: string,
+	branchComparisonBase: string | null,
+): Promise<ChangedPath[]> {
+	const trackedChanges = branchComparisonBase
+		? parseNameStatus(
+				await runGitAllowFailure(pi, repoRoot, [
+					"diff",
+					"--find-renames",
+					"-M",
+					"--name-status",
+					branchComparisonBase,
+					"--",
+				]),
+			)
+		: [];
+	const untrackedChanges = await getUntrackedChangedPaths(pi, repoRoot);
+	return mergeChangedPaths(trackedChanges, untrackedChanges);
+}
+
 function compareReviewFiles(a: ReviewFile, b: ReviewFile): number {
 	return a.path.localeCompare(b.path);
 }
@@ -246,19 +297,9 @@ export async function getReviewWindowData(
 	const repoRoot = await getRepoRoot(pi, cwd);
 	const repositoryHasHead = await hasHead(pi, repoRoot);
 	const reviewBase = repositoryHasHead ? await findReviewBase(pi, repoRoot) : null;
-
-	const branchDiffOutput = reviewBase
-		? await runGitAllowFailure(pi, repoRoot, [
-				"diff",
-				"--find-renames",
-				"-M",
-				"--name-status",
-				reviewBase.mergeBase,
-				"HEAD",
-				"--",
-			])
-		: "";
-	const files = parseNameStatus(branchDiffOutput)
+	const branchComparisonBase = reviewBase?.mergeBase ?? (repositoryHasHead ? "HEAD" : null);
+	const branchChanges = await getBranchReviewChanges(pi, repoRoot, branchComparisonBase);
+	const files = branchChanges
 		.filter((change) => isReviewableFilePath(change.newPath ?? change.oldPath ?? ""))
 		.map(toBranchReviewFile)
 		.sort(compareReviewFiles);
@@ -269,7 +310,7 @@ export async function getReviewWindowData(
 		files,
 		commits,
 		branchBaseRef: reviewBase?.baseRef ?? null,
-		branchMergeBaseSha: reviewBase?.mergeBase ?? null,
+		branchMergeBaseSha: branchComparisonBase,
 	};
 }
 
@@ -338,8 +379,13 @@ export async function loadReviewFileContents(
 	branchMergeBaseSha: string | null = null,
 ): Promise<ReviewFileContents> {
 	if (scope === "all") {
-		const headPath = file.gitDiff?.newPath ?? (file.hasWorkingTreeFile ? file.path : null);
-		const content = headPath == null ? "" : await getRevisionContent(pi, repoRoot, "HEAD", headPath);
+		const path = file.gitDiff?.newPath ?? (file.hasWorkingTreeFile ? file.path : null);
+		const content =
+			path == null
+				? ""
+				: file.hasWorkingTreeFile
+					? await getWorkingTreeContent(repoRoot, path)
+					: await getRevisionContent(pi, repoRoot, "HEAD", path);
 		return { originalContent: content, modifiedContent: content };
 	}
 
@@ -364,6 +410,10 @@ export async function loadReviewFileContents(
 	const originalContent =
 		comparison.oldPath == null ? "" : await getRevisionContent(pi, repoRoot, branchMergeBaseSha, comparison.oldPath);
 	const modifiedContent =
-		comparison.newPath == null ? "" : await getRevisionContent(pi, repoRoot, "HEAD", comparison.newPath);
+		comparison.newPath == null
+			? ""
+			: file.hasWorkingTreeFile
+				? await getWorkingTreeContent(repoRoot, comparison.newPath)
+				: await getRevisionContent(pi, repoRoot, "HEAD", comparison.newPath);
 	return { originalContent, modifiedContent };
 }
