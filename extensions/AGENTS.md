@@ -29,7 +29,6 @@ Custom extensions for the pi coding agent. All extensions are written in TypeScr
 ├── command-typo-assist.ts # Slash command typo detection → suggest + editor prefill
 ├── context.ts             # /context — context window usage & session stats overlay
 ├── diff-overlay.ts        # /diff — Git diff split-pane overlay (file list + diff viewer)
-├── diff-review/           # /diff-review — Native review window (glimpseui + Monaco) with inline comments
 ├── dynamic-agents-md.ts   # Dynamic AGENTS.md loading per directory scope
 ├── files.ts               # File picker / diff viewer UI
 ├── interactive-shell/     # Interactive shell overlay (interactive/hands-free/dispatch)
