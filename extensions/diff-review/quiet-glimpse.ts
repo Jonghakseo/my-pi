@@ -1,11 +1,13 @@
-import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
+import { type ChildProcessWithoutNullStreams, spawn } from "node:child_process";
 import { EventEmitter } from "node:events";
+import { existsSync } from "node:fs";
 import { createInterface } from "node:readline";
 import type { GlimpseOpenOptions } from "glimpseui";
 
 interface NativeHostInfo {
 	path: string;
 	extraArgs?: string[];
+	buildHint?: string;
 }
 
 interface GlimpseProtocolMessage {
@@ -114,6 +116,10 @@ async function getNativeHostInfo(): Promise<NativeHostInfo> {
 
 export async function openQuietGlimpse(html: string, options: GlimpseOpenOptions = {}): Promise<QuietGlimpseWindow> {
 	const host = await getNativeHostInfo();
+	if (!existsSync(host.path)) {
+		const hint = host.buildHint ? ` ${host.buildHint}` : "";
+		throw new Error(`Glimpse host not found at '${host.path}'.${hint}`);
+	}
 	const args: string[] = [];
 
 	if (options.width != null) args.push("--width", String(options.width));
