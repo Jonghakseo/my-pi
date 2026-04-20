@@ -21,7 +21,7 @@ import {
 	type HashlineToolEdit,
 	resolveEditAnchors,
 } from "./hashline.ts";
-import { formatHashlineLineForDisplay, formatHashlineTextForDisplay } from "./hashline-display.ts";
+import { formatHashlineTextForDisplay } from "./hashline-display.ts";
 import {
 	buildCompactHashlineDiffPreview,
 	detectLineEnding,
@@ -66,8 +66,8 @@ export const hashlineEditToolSchema = Type.Object(
 	{
 		path: Type.String({ description: "path" }),
 		returnMode: Type.Optional(
-			StringEnum(["changed", "full", "ranges"] as const, {
-				description: 'response mode: "changed", "full", or "ranges"',
+			StringEnum(["changed", "ranges"] as const, {
+				description: 'response mode: "changed" or "ranges"',
 			}),
 		),
 		returnRanges: Type.Optional(
@@ -91,14 +91,9 @@ type ReturnedRangePreview = {
 	empty?: true;
 };
 
-type FullContentPreview = {
-	text: string;
-	nextOffset?: number;
-};
-
 type EditRequestParams = {
 	path: string;
-	returnMode?: "changed" | "full" | "ranges";
+	returnMode?: "changed" | "ranges";
 	returnRanges?: ReturnRange[];
 	edits?: HashlineToolEdit[];
 	oldText?: string;
@@ -119,8 +114,6 @@ type HashlineEditToolDetails = {
 	firstChangedLine?: number;
 	compatibility?: CompatibilityDetails;
 	classification?: "noop";
-	nextOffset?: number;
-	fullContent?: FullContentPreview;
 	returnedRanges?: ReturnedRangePreview[];
 	structureOutline?: string[];
 };
@@ -249,8 +242,8 @@ export function assertEditRequest(request: unknown): asserts request is EditRequ
 	}
 
 	if (hasOwn(request, "returnMode")) {
-		if (request.returnMode !== "changed" && request.returnMode !== "full" && request.returnMode !== "ranges") {
-			throw new Error('Edit request field "returnMode" must be "changed", "full", or "ranges" when provided.');
+		if (request.returnMode !== "changed" && request.returnMode !== "ranges") {
+			throw new Error('Edit request field "returnMode" must be "changed" or "ranges" when provided.');
 		}
 	}
 
@@ -448,28 +441,15 @@ function getRenderablePreviewInput(args: unknown): EditRequestParams | null {
 	return hasAnyEditPayload ? request : null;
 }
 
-function formatPreviewDiff(
-	diff: string,
-	expanded: boolean,
-	theme: { fg: (token: any, text: string) => string },
-): string {
-	const lines = diff.split("\n");
-	const maxLines = expanded ? 40 : 16;
-	const shown = lines.slice(0, maxLines).map((line) => {
-		const displayLine = formatHashlineLineForDisplay(line);
-		if (line.startsWith("+") && !line.startsWith("+++")) {
-			return theme.fg("success", displayLine);
-		}
-		if (line.startsWith("-") && !line.startsWith("---")) {
-			return theme.fg("error", displayLine);
-		}
-		return theme.fg("dim", displayLine);
-	});
-
-	if (lines.length > maxLines) {
-		shown.push(theme.fg("muted", `... ${lines.length - maxLines} more diff lines`));
-	}
-	return shown.join("\n");
+function formatPreviewSummary(diff: string, theme: { fg: (token: any, text: string) => string }): string {
+	const preview = buildCompactHashlineDiffPreview(diff, { maxOutputLines: 0 });
+	return [
+		theme.fg("dim", "Pending changes:"),
+		theme.fg("success", `+${preview.addedLines}`),
+		theme.fg("dim", "/"),
+		theme.fg("error", `-${preview.removedLines}`),
+		theme.fg("warning", "(preview)"),
+	].join(" ");
 }
 
 function getRenderedEditTextContent(result: { content?: Array<{ type: string; text?: string }> }): string | undefined {
@@ -706,7 +686,7 @@ function buildStructureOutline(sections: Array<{ label?: string; previewText: st
 function formatEditCall(
 	args: EditRequestParams | undefined,
 	state: EditRenderState,
-	expanded: boolean,
+	_expanded: boolean,
 	theme: {
 		bold: (text: string) => string;
 		fg: (token: any, text: string) => string;
@@ -727,7 +707,7 @@ function formatEditCall(
 	}
 
 	if (state.preview.diff) {
-		text += `\n\n${formatPreviewDiff(state.preview.diff, expanded, theme)}`;
+		text += `\n\n${formatPreviewSummary(state.preview.diff, theme)}`;
 	}
 	return text;
 }
@@ -987,48 +967,32 @@ export function registerEditTool(pi: ExtensionAPI): void {
 								)
 								.join("\n")
 						: "The edits produced identical content.";
-					const noopFullPreview =
-						returnMode === "full" ? formatHashlineReadPreview(originalNormalized, { offset: 1 }) : undefined;
 					const noopRangePreviews =
 						returnMode === "ranges" && requestedReturnRanges
 							? formatRequestedRangePreviews(originalNormalized, requestedReturnRanges)
 							: undefined;
-					const noopOutline =
-						returnMode === "full" && noopFullPreview
-							? buildStructureOutline([{ previewText: noopFullPreview.text }])
-							: returnMode === "ranges" && noopRangePreviews
-								? buildStructureOutline(
-										noopRangePreviews.returnedRanges.map((range, index) => ({
-											label: `Range ${index + 1} (lines ${range.start}-${range.end})`,
-											previewText: range.text,
-										})),
-									)
-								: undefined;
+					const noopOutline = noopRangePreviews
+						? buildStructureOutline(
+								noopRangePreviews.returnedRanges.map((range, index) => ({
+									label: `Range ${index + 1} (lines ${range.start}-${range.end})`,
+									previewText: range.text,
+								})),
+							)
+						: undefined;
 					return {
 						content: [
 							{
 								type: "text",
 								text:
-									returnMode === "full"
-										? `No changes made to ${path}\nClassification: noop\n\n${noopOutline?.text}\n\nFull content is available in details.fullContent.`
-										: returnMode === "ranges"
-											? `No changes made to ${path}\nClassification: noop\n\n${noopOutline?.text}\n\nRequested range payloads are available in details.returnedRanges.`
-											: `No changes made to ${path}\nClassification: noop\n${noopDetails}`,
+									returnMode === "ranges"
+										? `No changes made to ${path}\nClassification: noop\n\n${noopOutline?.text}\n\nRequested range payloads are available in details.returnedRanges.`
+										: `No changes made to ${path}\nClassification: noop\n${noopDetails}`,
 							},
 						],
 						details: {
 							diff: "",
 							firstChangedLine: undefined,
 							classification: "noop" as const,
-							...(noopFullPreview?.nextOffset !== undefined ? { nextOffset: noopFullPreview.nextOffset } : {}),
-							...(noopFullPreview
-								? {
-										fullContent: {
-											text: noopFullPreview.text,
-											...(noopFullPreview.nextOffset !== undefined ? { nextOffset: noopFullPreview.nextOffset } : {}),
-										},
-									}
-								: {}),
 							...(noopRangePreviews ? { returnedRanges: noopRangePreviews.returnedRanges } : {}),
 							...(noopOutline ? { structureOutline: noopOutline.outline } : {}),
 						},
@@ -1039,30 +1003,6 @@ export function registerEditTool(pi: ExtensionAPI): void {
 				await writeFileAtomically(absolutePath, bom + restoreLineEndings(result, originalEnding));
 
 				const diffResult = generateDiffString(originalNormalized, result);
-				if (returnMode === "full") {
-					const fullPreview = formatHashlineReadPreview(result, { offset: 1 });
-					const outline = buildStructureOutline([{ previewText: fullPreview.text }]);
-					const warningsBlock = warnings?.length ? `\n\nWarnings:\n${warnings.join("\n")}` : "";
-					return {
-						content: [
-							{
-								type: "text",
-								text: `Updated ${path}${warningsBlock}\n\n${outline.text}\n\nFull content is available in details.fullContent.`,
-							},
-						],
-						details: {
-							diff: diffResult.diff,
-							firstChangedLine: firstChangedLine ?? diffResult.firstChangedLine,
-							...(fullPreview.nextOffset !== undefined ? { nextOffset: fullPreview.nextOffset } : {}),
-							fullContent: {
-								text: fullPreview.text,
-								...(fullPreview.nextOffset !== undefined ? { nextOffset: fullPreview.nextOffset } : {}),
-							},
-							structureOutline: outline.outline,
-							...(compatibilityDetails ? { compatibility: compatibilityDetails } : {}),
-						},
-					};
-				}
 
 				if (returnMode === "ranges") {
 					const rangePreviews = formatRequestedRangePreviews(result, requestedReturnRanges!);

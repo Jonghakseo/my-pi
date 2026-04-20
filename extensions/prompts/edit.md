@@ -19,7 +19,7 @@ Use `read` first if you do not have current `LINE#HASH` references for the targe
 ```
 
 - `path` — target file path.
-- `returnMode` — optional response mode. `changed` (default) returns diff + updated anchors; `full` returns a compact structure outline in `content` and the returned hashline block in `details.fullContent`; `ranges` returns a compact structure outline in `content` and the requested post-edit windows in `details.returnedRanges`.
+- `returnMode` — optional response mode. `changed` (default) returns diff + updated anchors; `ranges` returns a compact structure outline in `content` and the requested post-edit windows in `details.returnedRanges`.
 - `returnRanges` — required when `returnMode="ranges"`. Array of `{ "start": number, "end"?: number }` post-edit line windows to return.
 - `edits` — array of edit operations.
 </payload>
@@ -115,8 +115,7 @@ Return only selected post-edit ranges:
 <after-edit>
 A successful edit returns:
 - `Diff preview` — in `returnMode="changed"`, changed lines with `+`/`-` markers.
-- `Structure outline` — in `returnMode="full"` and `returnMode="ranges"`, `content` contains a compact regex-level outline of the returned content.
-- `details.fullContent` — in `returnMode="full"`, the post-edit hashline block plus optional `nextOffset` for continuation.
+- `Structure outline` — in `returnMode="ranges"`, `content` contains a compact regex-level outline of the returned content.
 - `details.returnedRanges` — in `returnMode="ranges"`, the requested post-edit hashline windows.
 - `Updated anchors` — fresh `LINE#HASH` references for the changed region, usable in the next call without re-reading. For edits outside that region, use `read` first.
 </after-edit>

@@ -138,6 +138,42 @@ describe("hashline edit/read behavior", () => {
 		});
 	});
 
+	it("keeps edit call previews compact so the diff is not shown twice", async () => {
+		await withTempFile("sample.txt", "alpha\nbeta\ngamma\n", async ({ cwd }) => {
+			const { pi, getTool } = makeFakePiRegistry();
+			registerEditTool(pi);
+			const editTool = getTool("edit");
+			const invalidate = vi.fn();
+			const args = {
+				path: "sample.txt",
+				edits: [
+					{
+						op: "replace",
+						pos: `2#${computeLineHash(2, "beta")}`,
+						lines: ["BETA"],
+					},
+				],
+			};
+			const theme = { fg: (_token: string, text: string) => text, bold: (text: string) => text };
+			const context = {
+				argsComplete: true,
+				state: {},
+				cwd,
+				expanded: true,
+				invalidate,
+			};
+
+			editTool.renderCall(args, theme, context);
+			await vi.waitFor(() => expect(invalidate).toHaveBeenCalled());
+
+			const component = editTool.renderCall(args, theme, context);
+			const rendered = component.render(120).join("\n");
+			expect(rendered).toContain("Pending changes: +1 / -1 (preview)");
+			expect(rendered).not.toContain("beta");
+			expect(rendered).not.toContain("BETA");
+		});
+	});
+
 	it("keeps legacy oldText/newText as compatibility fallback", async () => {
 		await withTempFile("sample.txt", "hello world\n", async ({ cwd, path }) => {
 			const { pi, getTool } = makeFakePiRegistry();
@@ -154,6 +190,28 @@ describe("hashline edit/read behavior", () => {
 
 			expect(await readFile(path, "utf8")).toBe("bye world\n");
 			expect(result.details?.compatibility?.used).toBe(true);
+		});
+	});
+
+	it("rejects removed returnMode=full requests", async () => {
+		await withTempFile("sample.txt", "alpha\n", async ({ cwd }) => {
+			const { pi, getTool } = makeFakePiRegistry();
+			registerEditTool(pi);
+			const editTool = getTool("edit");
+
+			await expect(
+				editTool.execute(
+					"e1",
+					{
+						path: "sample.txt",
+						returnMode: "full",
+						edits: [{ op: "replace", pos: `1#${computeLineHash(1, "alpha")}`, lines: ["ALPHA"] }],
+					},
+					undefined,
+					undefined,
+					{ cwd, hasUI: true, ui: { notify() {} } },
+				),
+			).rejects.toThrow('Edit request field "returnMode" must be "changed" or "ranges" when provided.');
 		});
 	});
 
