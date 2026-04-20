@@ -23,6 +23,15 @@ describe("parseEditUnifiedDiff", () => {
 			{ type: "ellipsis", lineNum: "", content: "..." },
 		]);
 	});
+
+	it("parses hashline-formatted additions and context rows without exposing hashes", () => {
+		const parsed = parseEditUnifiedDiff(["  1#ZP:alpha", "- 2    beta", "+ 2#VR:gamma"].join("\n"));
+		expect(parsed).toEqual([
+			{ type: "context", lineNum: "1", content: "alpha" },
+			{ type: "removed", lineNum: "2", content: "beta" },
+			{ type: "added", lineNum: "2", content: "gamma" },
+		]);
+	});
 });
 
 describe("buildEditSideBySideRows", () => {
@@ -80,6 +89,20 @@ describe("renderEditSideBySide", () => {
 		expect(lines[2]).toContain("beta");
 		expect(lines[2]).toContain("gamma");
 		expect(lines[2]).toContain("│");
+	});
+
+	it("renders hashline-formatted diffs without showing hash prefixes", () => {
+		const lines = renderEditSideBySide({
+			diff: ["  1#ZP:alpha", "- 2    beta", "+ 2#VR:gamma", "  3#WS:omega"].join("\n"),
+			width: 80,
+			theme,
+		});
+
+		expect(lines.join("\n")).not.toContain("#");
+		expect(lines[1]).toContain("alpha");
+		expect(lines[2]).toContain("beta");
+		expect(lines[2]).toContain("gamma");
+		expect(lines[3]).toContain("omega");
 	});
 
 	it("wraps removed sides in toolErrorBg and added sides in toolSuccessBg", () => {

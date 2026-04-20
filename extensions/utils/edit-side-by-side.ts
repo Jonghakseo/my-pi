@@ -1,4 +1,5 @@
 import { truncateToWidth, visibleWidth } from "@mariozechner/pi-tui";
+import { parseDisplayableEditDiffLine } from "./hashline-display.ts";
 
 export type EditDiffColor =
 	| "dim"
@@ -60,12 +61,12 @@ export function parseEditUnifiedDiff(diffText: string): ParsedEditDiffLine[] {
 			continue;
 		}
 
-		const match = /^(?<prefix>[+\- ])(?<lineNum>\s*\d*) (?<content>.*)$/.exec(line);
-		if (match?.groups) {
-			const { prefix, lineNum, content } = match.groups;
-			if (prefix === "+") parsed.push({ type: "added", lineNum: lineNum.trim(), content });
-			else if (prefix === "-") parsed.push({ type: "removed", lineNum: lineNum.trim(), content });
-			else parsed.push({ type: "context", lineNum: lineNum.trim(), content });
+		const match = parseDisplayableEditDiffLine(line);
+		if (match) {
+			const { prefix, lineNum, content } = match;
+			if (prefix === "+") parsed.push({ type: "added", lineNum, content });
+			else if (prefix === "-") parsed.push({ type: "removed", lineNum, content });
+			else parsed.push({ type: "context", lineNum, content });
 		}
 	}
 

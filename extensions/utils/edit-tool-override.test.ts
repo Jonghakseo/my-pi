@@ -70,7 +70,7 @@ describe("hashline tool overrides", () => {
 });
 
 describe("hashline edit/read behavior", () => {
-	it("returns hashline read output with snapshotId", async () => {
+	it("returns hashline read output without snapshotId", async () => {
 		await withTempFile("sample.txt", "alpha\nbeta\n", async ({ cwd }) => {
 			const { pi, getTool } = makeFakePiRegistry();
 			registerReadTool(pi);
@@ -81,8 +81,30 @@ describe("hashline edit/read behavior", () => {
 			const text = result.content[0]?.text ?? "";
 			expect(text).toContain(`1#${computeLineHash(1, "alpha")}:alpha`);
 			expect(text).toContain(`2#${computeLineHash(2, "beta")}:beta`);
-			expect(text).toContain("[snapshotId:");
-			expect(result.details?.snapshotId).toEqual(expect.any(String));
+			expect(text).not.toContain("[snapshotId:");
+			expect(result.details?.snapshotId).toBeUndefined();
+		});
+	});
+
+	it("hides hash prefixes in read tool UI rendering", async () => {
+		await withTempFile("sample.txt", "alpha\nbeta\n", async ({ cwd }) => {
+			const { pi, getTool } = makeFakePiRegistry();
+			registerReadTool(pi);
+			const readTool = getTool("read");
+
+			const result = await readTool.execute("r1", { path: "sample.txt" }, undefined, undefined, { cwd });
+			const component = readTool.renderResult(
+				result,
+				{ expanded: true, isPartial: false },
+				{ fg: (_token: string, text: string) => text, bold: (text: string) => text },
+				{ args: { path: "sample.txt" }, showImages: false },
+			);
+			const rendered = component.render(120).join("\n");
+
+			expect(rendered).toContain("1: alpha");
+			expect(rendered).toContain("2: beta");
+			expect(rendered).not.toContain("1#");
+			expect(rendered).not.toContain("2#");
 		});
 	});
 
@@ -112,7 +134,7 @@ describe("hashline edit/read behavior", () => {
 			expect(await readFile(path, "utf8")).toBe("alpha\nBETA\ngamma\n");
 			expect(result.content[0]?.text).toContain("Updated sample.txt");
 			expect(result.content[0]?.text).toContain("Updated anchors");
-			expect(result.details?.snapshotId).toEqual(expect.any(String));
+			expect(result.details?.snapshotId).toBeUndefined();
 		});
 	});
 
@@ -132,6 +154,28 @@ describe("hashline edit/read behavior", () => {
 
 			expect(await readFile(path, "utf8")).toBe("bye world\n");
 			expect(result.details?.compatibility?.used).toBe(true);
+		});
+	});
+
+	it("rejects removed snapshotId field on edit requests", async () => {
+		await withTempFile("sample.txt", "alpha\n", async ({ cwd }) => {
+			const { pi, getTool } = makeFakePiRegistry();
+			registerEditTool(pi);
+			const editTool = getTool("edit");
+
+			await expect(
+				editTool.execute(
+					"e1",
+					{
+						path: "sample.txt",
+						snapshotId: "legacy-snapshot",
+						edits: [{ op: "replace", pos: `1#${computeLineHash(1, "alpha")}`, lines: ["ALPHA"] }],
+					},
+					undefined,
+					undefined,
+					{ cwd, hasUI: true, ui: { notify() {} } },
+				),
+			).rejects.toThrow("unknown or unsupported fields: snapshotId");
 		});
 	});
 });
