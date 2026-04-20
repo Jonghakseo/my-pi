@@ -16,10 +16,10 @@ export interface ReviewFile {
 	path: string;
 	worktreeStatus: ChangeStatus | null;
 	hasWorkingTreeFile: boolean;
-	/** True when the file is touched by the current branch diff (working tree vs HEAD). */
+	/** True when the file is touched by the current branch diff (merge-base/base ref vs HEAD). */
 	inGitDiff: boolean;
 	/** Diff comparison to render for the file in the current scope.
-	 *  - branch scope: working tree vs HEAD
+	 *  - branch scope: merge-base/base ref vs HEAD
 	 *  - commits scope: commit vs commit^ (populated when loaded via request-commit) */
 	gitDiff: ReviewFileComparison | null;
 }
@@ -124,4 +124,6 @@ export interface ReviewWindowData {
 	repoRoot: string;
 	files: ReviewFile[];
 	commits: ReviewCommitInfo[];
+	branchBaseRef: string | null;
+	branchMergeBaseSha: string | null;
 }

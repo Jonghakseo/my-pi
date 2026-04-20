@@ -124,16 +124,17 @@ function selectedCommitInfo() {
 }
 
 function scopeHint(scope) {
+	const baseRefLabel = reviewData.branchBaseRef || "the selected base";
 	switch (scope) {
 		case "branch":
-			return "Review working tree changes against HEAD. Hover or click line numbers in the gutter to add an inline comment.";
+			return `Review committed branch changes against ${baseRefLabel}. Hover or click line numbers in the gutter to add an inline comment.`;
 		case "commits": {
 			const info = selectedCommitInfo();
-			if (!info) return "Pick a commit from the list to review its diff.";
+			if (!info) return "Pick a branch commit from the list to review its diff.";
 			return `Review commit ${info.shortSha} — ${info.subject}`;
 		}
 		default:
-			return "Review the current working tree snapshot. Hover or click line numbers in the gutter to add a code review comment.";
+			return "Review the committed HEAD snapshot for files changed on this branch. Hover or click line numbers in the gutter to add a code review comment.";
 	}
 }
 
@@ -646,7 +647,7 @@ function renderCommitList() {
 	if (!commitListEl) return;
 	commitListEl.innerHTML = "";
 	if (reviewData.commits.length === 0) {
-		commitListEl.innerHTML = '<div class="px-3 py-2 text-[11px] text-review-muted">No commits.</div>';
+		commitListEl.innerHTML = '<div class="px-3 py-2 text-[11px] text-review-muted">No branch commits.</div>';
 		return;
 	}
 	for (const commit of reviewData.commits) {
