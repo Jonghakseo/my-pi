@@ -218,7 +218,7 @@ describe("hashline edit/read behavior", () => {
 		});
 	});
 
-	it("keeps edit call previews compact so the diff is not shown twice", async () => {
+	it("renders compact call previews before execution and collapses them once execution starts", async () => {
 		await withTempFile("sample.txt", "alpha\nbeta\ngamma\n", async ({ cwd }) => {
 			const { pi, getTool } = makeFakePiRegistry();
 			registerEditTool(pi);
@@ -234,24 +234,80 @@ describe("hashline edit/read behavior", () => {
 					},
 				],
 			};
-			const theme = { fg: (_token: string, text: string) => text, bold: (text: string) => text };
+			const theme = {
+				fg: (_token: string, text: string) => text,
+				bg: (_token: string, text: string) => text,
+				bold: (text: string) => text,
+			};
 			const context = {
 				argsComplete: true,
 				state: {},
 				cwd,
 				expanded: true,
+				executionStarted: false,
 				invalidate,
 			};
 
 			editTool.renderCall(args, theme, context);
 			await vi.waitFor(() => expect(invalidate).toHaveBeenCalled());
 
-			const component = editTool.renderCall(args, theme, context);
-			const rendered = component.render(120).join("\n");
-			expect(rendered).toContain("Pending changes: +1 / -1 (preview)");
-			expect(rendered).not.toContain("beta");
-			expect(rendered).not.toContain("BETA");
+			const previewComponent = editTool.renderCall(args, theme, context);
+			const previewRendered = previewComponent.render(120).join("\n");
+			expect(previewRendered).toContain("+1 / -1 (preview)");
+			expect(previewRendered).toContain("beta");
+			expect(previewRendered).toContain("BETA");
+			expect(previewRendered).not.toContain("2#");
+
+			context.executionStarted = true;
+			const settledComponent = editTool.renderCall(args, theme, context);
+			const settledRendered = settledComponent.render(120).join("\n");
+			expect(settledRendered).toContain("edit sample.txt");
+			expect(settledRendered).not.toContain("beta");
+			expect(settledRendered).not.toContain("BETA");
 		});
+	});
+
+	it("shows ellipsis between distant preview hunks when expanded", async () => {
+		await withTempFile(
+			"sample.txt",
+			`${Array.from({ length: 60 }, (_, index) => `line${index + 1}`).join("\n")}\n`,
+			async ({ cwd }) => {
+				const { pi, getTool } = makeFakePiRegistry();
+				registerEditTool(pi);
+				const editTool = getTool("edit");
+				const invalidate = vi.fn();
+				const args = {
+					path: "sample.txt",
+					edits: [
+						{ op: "replace", pos: `2#${computeLineHash(2, "line2")}`, lines: ["LINE2"] },
+						{ op: "replace", pos: `58#${computeLineHash(58, "line58")}`, lines: ["LINE58"] },
+					],
+				};
+				const theme = {
+					fg: (_token: string, text: string) => text,
+					bg: (_token: string, text: string) => text,
+					bold: (text: string) => text,
+				};
+				const context = {
+					argsComplete: true,
+					state: {},
+					cwd,
+					expanded: true,
+					executionStarted: false,
+					invalidate,
+				};
+
+				editTool.renderCall(args, theme, context);
+				await vi.waitFor(() => expect(invalidate).toHaveBeenCalled());
+
+				const component = editTool.renderCall(args, theme, context);
+				const rendered = component.render(120).join("\n");
+				expect(rendered).toContain("...");
+				expect(rendered).toContain("LINE2");
+				expect(rendered).toContain("LINE58");
+				expect(rendered).not.toContain("58#");
+			},
+		);
 	});
 
 	it("returns separate updated anchor blocks for distant edits", async () => {

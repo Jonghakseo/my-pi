@@ -7,7 +7,7 @@ import { StringEnum } from "@mariozechner/pi-ai";
 import type { ExtensionAPI, ToolDefinition } from "@mariozechner/pi-coding-agent";
 import { withFileMutationQueue } from "@mariozechner/pi-coding-agent";
 import type { Component } from "@mariozechner/pi-tui";
-import { Markdown, Text } from "@mariozechner/pi-tui";
+import { Container, Markdown, Spacer, Text } from "@mariozechner/pi-tui";
 import { Type } from "@sinclair/typebox";
 import { applyExactUniqueLegacyReplace, extractLegacyTopLevelReplace } from "./edit-compat.ts";
 import { renderEditSideBySide } from "./edit-side-by-side.ts";
@@ -457,27 +457,30 @@ function createEditDiffComponent(
 	theme: DiffTheme,
 	expanded: boolean,
 	isPartial: boolean,
+	options?: { showSummary?: boolean },
 ): Component {
 	return new (class implements Component {
 		constructor(
 			private readonly diffDetails: HashlineEditToolDetails,
 			private readonly renderTheme: DiffTheme,
 			private readonly preview: boolean,
-			private readonly rowLimit?: number,
+			private readonly rowLimit: number | undefined,
+			private readonly showSummary: boolean,
 		) {}
 
 		render(width: number): string[] {
-			return renderEditSideBySide({
+			const lines = renderEditSideBySide({
 				diff: this.diffDetails.diff,
 				width,
 				theme: this.renderTheme,
 				maxRows: this.rowLimit,
 				isPreview: this.preview,
 			});
+			return this.showSummary ? lines : lines.slice(1);
 		}
 
 		invalidate(): void {}
-	})(details, theme, isPartial || !expanded, expanded ? undefined : 5);
+	})(details, theme, isPartial || !expanded, expanded ? undefined : 5, options?.showSummary ?? true);
 }
 
 function getRenderablePreviewInput(args: unknown): EditRequestParams | null {
@@ -756,7 +759,7 @@ function buildStructureOutline(sections: Array<{ label?: string; previewText: st
 function formatEditCall(
 	args: EditRequestParams | undefined,
 	state: EditRenderState,
-	_expanded: boolean,
+	showPreviewSummary: boolean,
 	theme: {
 		bold: (text: string) => string;
 		fg: (token: any, text: string) => string;
@@ -776,10 +779,35 @@ function formatEditCall(
 		return text;
 	}
 
-	if (state.preview.diff) {
+	if (showPreviewSummary && state.preview.diff) {
 		text += `\n\n${formatPreviewSummary(state.preview.diff, theme)}`;
 	}
 	return text;
+}
+
+function renderEditCallComponent(
+	args: EditRequestParams | undefined,
+	state: EditRenderState,
+	theme: DiffTheme,
+	context: { expanded: boolean; executionStarted?: boolean; lastComponent?: Component },
+): Component {
+	const preview = state.preview;
+	const showPreviewBody = !!preview && !("error" in preview) && !!preview.diff && !context.executionStarted;
+	const headerText = formatEditCall(args, state, !showPreviewBody, theme);
+	if (!showPreviewBody || !preview || "error" in preview) {
+		const text = context.lastComponent instanceof Text ? context.lastComponent : new Text("", 0, 0);
+		text.setText(headerText);
+		return text;
+	}
+
+	const container = context.lastComponent instanceof Container ? context.lastComponent : new Container();
+	container.clear();
+	container.addChild(new Text(headerText, 0, 0));
+	container.addChild(new Spacer(1));
+	container.addChild(
+		createEditDiffComponent({ diff: preview.diff }, theme, context.expanded, true, { showSummary: true }),
+	);
+	return container;
 }
 
 export async function computeEditPreview(request: unknown, cwd: string): Promise<EditPreview> {
@@ -867,6 +895,7 @@ export function registerEditTool(pi: ExtensionAPI): void {
 			EditRenderState
 		>["prepareArguments"],
 		promptSnippet: EDIT_PROMPT_SNIPPET,
+		renderShell: "self",
 		renderCall(args, theme, context) {
 			const previewInput = getRenderablePreviewInput(args);
 			if (!context.argsComplete || !previewInput) {
@@ -894,16 +923,12 @@ export function registerEditTool(pi: ExtensionAPI): void {
 						});
 				}
 			}
-			const text = (context.lastComponent as Text | undefined) ?? new Text("", 0, 0);
-			text.setText(
-				formatEditCall(
-					getRenderablePreviewInput(args) ?? undefined,
-					context.state as EditRenderState,
-					context.expanded,
-					theme,
-				),
+			return renderEditCallComponent(
+				previewInput ?? undefined,
+				context.state as EditRenderState,
+				theme as DiffTheme,
+				context,
 			);
-			return text;
 		},
 
 		renderResult(result, { expanded, isPartial }, theme, context) {
