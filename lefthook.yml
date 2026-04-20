@@ -2,15 +2,27 @@
 # https://github.com/evilmartians/lefthook
 
 pre-commit:
-  parallel: true
+  parallel: false
   commands:
+    biome-format-staged:
+      priority: 1
+      root: extensions/
+      glob:
+        - "**/*.{js,cjs,mjs,jsx,ts,tsx,json,jsonc,md,yml,yaml}"
+      run: pnpm exec biome format --write {staged_files}
+      stage_fixed: true
+      skip:
+        - merge
+        - rebase
     biome-check:
+      priority: 2
       root: extensions/
       run: pnpm exec biome check --error-on-warnings --reporter=summary .
       skip:
         - merge
         - rebase
     typecheck:
+      priority: 3
       root: extensions/
       run: pnpm run typecheck
       skip:
