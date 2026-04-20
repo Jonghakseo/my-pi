@@ -15,7 +15,7 @@ import { loadFileKindAndText } from "./file-kind.ts";
 import { writeFileAtomically } from "./fs-write.ts";
 import {
 	applyHashlineEdits,
-	computeAffectedLineRange,
+	computeAffectedLineRanges,
 	computeLegacyEditLineRange,
 	formatHashlineRegion,
 	type HashlineToolEdit,
@@ -930,7 +930,6 @@ export function registerEditTool(pi: ExtensionAPI): void {
 					  }>
 					| undefined;
 				let firstChangedLine: number | undefined;
-				let lastChangedLine: number | undefined;
 				let compatibilityDetails: CompatibilityDetails | undefined;
 
 				if (toolEdits.length > 0) {
@@ -940,7 +939,6 @@ export function registerEditTool(pi: ExtensionAPI): void {
 					warnings = anchorResult.warnings;
 					noopEdits = anchorResult.noopEdits;
 					firstChangedLine = anchorResult.firstChangedLine;
-					lastChangedLine = anchorResult.lastChangedLine;
 				} else {
 					if (!legacy) throw new Error("No edits provided.");
 					const normalizedOldText = normalizeToLF(legacy.oldText);
@@ -955,7 +953,6 @@ export function registerEditTool(pi: ExtensionAPI): void {
 					};
 					const legacyRange = computeLegacyEditLineRange(originalNormalized, result);
 					firstChangedLine = legacyRange?.firstChangedLine;
-					lastChangedLine = legacyRange?.lastChangedLine;
 				}
 
 				if (originalNormalized === result) {
@@ -1037,17 +1034,22 @@ export function registerEditTool(pi: ExtensionAPI): void {
 
 				const resultLines =
 					result.length === 0 ? [] : result.endsWith("\n") ? result.split("\n").slice(0, -1) : result.split("\n");
-				const anchorRange = computeAffectedLineRange({
-					firstChangedLine,
-					lastChangedLine,
-					resultLineCount: resultLines.length,
+				const anchorRanges = computeAffectedLineRanges({
+					originalContent: originalNormalized,
+					resultContent: result,
 				});
-				const anchorsBlock = anchorRange
-					? (() => {
-							const region = resultLines.slice(anchorRange.start - 1, anchorRange.end);
-							const formatted = formatHashlineRegion(region, anchorRange.start);
-							return `\n\n--- Updated anchors (lines ${anchorRange.start}-${anchorRange.end}; use these for subsequent edits in this region, or read for distant edits) ---\n${formatted}`;
-						})()
+				const anchorsBlock = anchorRanges
+					? anchorRanges
+							.map((anchorRange, index) => {
+								const region = resultLines.slice(anchorRange.start - 1, anchorRange.end);
+								const formatted = formatHashlineRegion(region, anchorRange.start);
+								const rangeLabel =
+									anchorRanges.length > 1
+										? `region ${index + 1}/${anchorRanges.length}, lines ${anchorRange.start}-${anchorRange.end}`
+										: `lines ${anchorRange.start}-${anchorRange.end}`;
+								return `\n\n--- Updated anchors (${rangeLabel}; use these for subsequent edits in this region, or read for distant edits) ---\n${formatted}`;
+							})
+							.join("")
 					: "";
 
 				return {
