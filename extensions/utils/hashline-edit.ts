@@ -18,6 +18,7 @@ import {
 	computeAffectedLineRanges,
 	computeLegacyEditLineRange,
 	formatHashlineRegion,
+	getLeadingDisplayPrefixError,
 	type HashlineToolEdit,
 	resolveEditAnchors,
 } from "./hashline.ts";
@@ -352,6 +353,11 @@ export function assertEditRequest(request: unknown): asserts request is EditRequ
 
 		if (!hasOwn(edit, "lines")) {
 			throw new Error(`Edit ${index} requires a "lines" field.`);
+		}
+		const editLines = edit.lines as string[] | string | null;
+		const leadingPrefixError = getLeadingDisplayPrefixError(editLines);
+		if (leadingPrefixError) {
+			throw new Error(`Edit ${index} ${leadingPrefixError}`);
 		}
 
 		if (hasOwn(edit, "oldText") || hasOwn(edit, "newText")) {
