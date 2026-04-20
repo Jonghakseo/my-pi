@@ -1,5 +1,6 @@
 import { Type } from "@sinclair/typebox";
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
+import { Text } from "@mariozechner/pi-tui";
 import * as fs from "node:fs";
 import * as path from "node:path";
 
@@ -13,14 +14,26 @@ export default function (pi: ExtensionAPI) {
 	pi.registerTool({
 		name: "fast-find",
 		label: "Fast Find",
-		description: "Find files or code using gpt-5.3-codex-spark subagent. Returns the search results and explanations.",
+		description:
+			"Use when the user asks to find, search, or look into something and the exact file path is unknown. Prefer this whenever possible because it is extremely fast and token-efficient: a dedicated gpt-5.3-codex-spark subagent searches the codebase and returns up to 10 ranked candidate files with path, line, similarity, and rationale. Best for requests like 기능 위치 찾아봐, 관련 파일 찾아봐, 어디를 수정해야 할지 찾아봐.",
 		parameters: Type.Object({
 			target: Type.Optional(Type.String({ description: "Target file or code to find" })),
 			purpose: Type.String({ description: "Purpose of the search" }),
 		}),
+		renderCall(args, theme) {
+			const { target, purpose } = args as { target?: string; purpose?: string };
+			const lines = [
+				theme.fg("toolTitle", theme.bold("fast-find ")) + theme.fg("accent", target?.trim() || "(no target)"),
+			];
+			if (purpose?.trim()) {
+				const displayPurpose = purpose.length > 220 ? `${purpose.slice(0, 217)}...` : purpose;
+				lines.push(theme.fg("dim", "  purpose: ") + theme.fg("muted", displayPurpose));
+			}
+			return new Text(lines.join("\n"), 0, 0);
+		},
 		execute: async (toolCallId, params, signal, _onUpdate, ctx) => {
 			const { target, purpose } = params;
-			const model = "gpt-5.3-codex-spark";
+			const model = "openai-codex/gpt-5.3-codex-spark";
 
 			const prompt = `
 [FAST-FIND GUIDELINE]
