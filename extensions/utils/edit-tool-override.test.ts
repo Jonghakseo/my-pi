@@ -281,4 +281,33 @@ describe("hashline edit/read behavior", () => {
 			).rejects.toThrow("unknown or unsupported fields: snapshotId");
 		});
 	});
+
+	it("rejects edit lines that start with a hashline prefix", async () => {
+		await withTempFile("sample.txt", "alpha\nbeta\n", async ({ cwd }) => {
+			const { pi, getTool } = makeFakePiRegistry();
+			registerEditTool(pi);
+			const editTool = getTool("edit");
+
+			await expect(
+				editTool.execute(
+					"e1",
+					{
+						path: "sample.txt",
+						edits: [
+							{
+								op: "replace",
+								pos: `1#${computeLineHash(1, "alpha")}`,
+								lines: ["7#XH:alpha"],
+							},
+						],
+					},
+					undefined,
+					undefined,
+					{ cwd, hasUI: true, ui: { notify() {} } },
+				),
+			).rejects.toThrow(
+				'Edit 0 field "lines" must contain literal file content. Remove any leading LINE#HASH prefix or diff marker',
+			);
+		});
+	});
 });

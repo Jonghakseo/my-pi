@@ -268,6 +268,38 @@ export function stripNewLinePrefixes(lines: string[]): string[] {
 	return lines.map((line) => line.replace(HASHLINE_PREFIX_RE, ""));
 }
 
+function normalizeIncomingEditLines(edit: string[] | string | null): string[] {
+	if (edit === null) return [];
+	if (typeof edit === "string") {
+		const normalized = edit.endsWith("\n") ? edit.slice(0, -1) : edit;
+		return normalized.replaceAll("\r", "").split("\n");
+	}
+
+	return edit;
+}
+
+function previewLeadingEditLine(line: string): string {
+	const compact = line.replaceAll("\t", "\\t");
+	return compact.length > 96 ? `${compact.slice(0, 93)}...` : compact;
+}
+
+export function getLeadingDisplayPrefixError(edit: string[] | string | null): string | undefined {
+	const firstContentLine = normalizeIncomingEditLines(edit).find((line) => line.trim().length > 0);
+	if (!firstContentLine) {
+		return undefined;
+	}
+
+	if (
+		HASHLINE_PREFIX_RE.test(firstContentLine) ||
+		HASHLINE_PREFIX_PLUS_RE.test(firstContentLine) ||
+		DIFF_MINUS_RE.test(firstContentLine)
+	) {
+		return `field "lines" must contain literal file content. Remove any leading LINE#HASH prefix or diff marker from the first content line (${JSON.stringify(previewLeadingEditLine(firstContentLine))}).`;
+	}
+
+	return undefined;
+}
+
 /**
  * Parse replacement text into lines with prefix stripping.
  *
@@ -276,13 +308,7 @@ export function stripNewLinePrefixes(lines: string[]): string[] {
  * prefix stripping so explicitly provided blank lines remain intact.
  */
 export function hashlineParseText(edit: string[] | string | null): string[] {
-	if (edit === null) return [];
-	if (typeof edit === "string") {
-		const normalized = edit.endsWith("\n") ? edit.slice(0, -1) : edit;
-		return stripNewLinePrefixes(normalized.replaceAll("\r", "").split("\n"));
-	}
-
-	return stripNewLinePrefixes(edit);
+	return stripNewLinePrefixes(normalizeIncomingEditLines(edit));
 }
 
 /**
