@@ -1,451 +1,137 @@
-import path from "node:path";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { DYNAMIC_SCOPE_SENTINEL_END, DYNAMIC_SCOPE_SENTINEL_START } from "../dynamic-agents-md.ts";
+import editToolOverride from "../edit-tool-override.ts";
+import readToolOverride from "../read-tool-override.ts";
+import { computeLineHash } from "./hashline.ts";
+import { registerEditTool } from "./hashline-edit.ts";
+import { registerReadTool } from "./hashline-read.ts";
 
-const mockState = vi.hoisted(() => {
-	const access = vi.fn();
-	const readFile = vi.fn();
-	const writeFile = vi.fn();
-	const queueChains = new Map<string, Promise<unknown>>();
-	const withFileMutationQueue = vi.fn(async (filePath: string, task: () => Promise<unknown>) => {
-		const previous = queueChains.get(filePath) ?? Promise.resolve();
-		const next = previous.then(task, task);
-		queueChains.set(
-			filePath,
-			next.catch(() => undefined),
-		);
-		return next;
-	});
+async function withTempFile(
+	name: string,
+	content: string,
+	run: (args: { cwd: string; path: string }) => Promise<void>,
+) {
+	await mkdir(join(process.cwd(), ".tmp"), { recursive: true });
+	const cwd = await mkdtemp(join(process.cwd(), ".tmp/hashline-test-"));
+	const path = join(cwd, name);
+	try {
+		await writeFile(path, content, "utf8");
+		await run({ cwd, path });
+	} finally {
+		await rm(cwd, { recursive: true, force: true });
+	}
+}
 
+function makeFakePiRegistry() {
+	const tools = new Map<string, any>();
+	const on = vi.fn();
 	return {
-		access,
-		readFile,
-		writeFile,
-		withFileMutationQueue,
-		reset() {
-			access.mockReset();
-			readFile.mockReset();
-			writeFile.mockReset();
-			withFileMutationQueue.mockClear();
-			queueChains.clear();
+		pi: {
+			registerTool(tool: any) {
+				tools.set(tool.name, tool);
+			},
+			on,
+		} as any,
+		on,
+		getTool(name: string) {
+			const tool = tools.get(name);
+			if (!tool) throw new Error(`Tool not registered: ${name}`);
+			return tool;
 		},
 	};
-});
-
-vi.mock("node:fs/promises", () => ({
-	default: {
-		access: mockState.access,
-		readFile: mockState.readFile,
-		writeFile: mockState.writeFile,
-	},
-	access: mockState.access,
-	readFile: mockState.readFile,
-	writeFile: mockState.writeFile,
-}));
-
-vi.mock("@mariozechner/pi-coding-agent", () => ({
-	createEditTool: vi.fn(() => ({ description: "legacy single-edit description", execute: vi.fn() })),
-	withFileMutationQueue: mockState.withFileMutationQueue,
-}));
-
-vi.mock("@mariozechner/pi-tui", () => ({
-	Text: class Text {
-		constructor(
-			public readonly text: string,
-			public readonly x: number,
-			public readonly y: number,
-		) {}
-	},
-}));
+}
 
 afterEach(() => {
-	mockState.reset();
-	vi.resetModules();
+	vi.restoreAllMocks();
 });
 
-function deferredPromise<T = void>() {
-	let resolve!: (value: T | PromiseLike<T>) => void;
-	let reject!: (reason?: unknown) => void;
-	const promise = new Promise<T>((resolvePromise, rejectPromise) => {
-		resolve = resolvePromise;
-		reject = rejectPromise;
-	});
-	return { promise, resolve, reject };
-}
+describe("hashline tool overrides", () => {
+	it("registers the edit tool and compatibility lifecycle hooks", () => {
+		const { pi, on, getTool } = makeFakePiRegistry();
+		editToolOverride(pi);
 
-async function registerEditTool() {
-	const handlers = new Map<string, (...args: any[]) => unknown>();
-	let registeredTool: Record<string, unknown> | undefined;
-	const pi = {
-		on: vi.fn((event: string, handler: (...args: any[]) => unknown) => {
-			handlers.set(event, handler);
-		}),
-		registerTool: vi.fn((tool: Record<string, unknown>) => {
-			registeredTool = tool;
-		}),
-	};
-
-	const module = await import("../edit-tool-override.ts");
-	module.default(pi as never);
-
-	if (!registeredTool) {
-		throw new Error("edit tool was not registered");
-	}
-
-	return {
-		tool: registeredTool,
-		handlers,
-	};
-}
-
-function createToolContext(cwd: string) {
-	return { cwd };
-}
-
-describe("edit-tool-override", () => {
-	it("registers an explicit edits[] description with replaceAll guidance", async () => {
-		const { tool } = await registerEditTool();
-		const description = tool.description;
-
-		expect(typeof description).toBe("string");
-		expect(description).toContain("single file");
-		expect(description).toContain("edits[]");
-		expect(description).toContain("replaceAll");
-		expect(description).toContain("unique");
+		const tool = getTool("edit");
+		expect(tool.description).toContain("LINE#HASH");
+		expect(tool.description).toContain("replace_text");
+		expect(on).toHaveBeenCalledWith("turn_start", expect.any(Function));
+		expect(on).toHaveBeenCalledWith("tool_result", expect.any(Function));
+		expect(on).toHaveBeenCalledWith("turn_end", expect.any(Function));
 	});
 
-	it("serializes execute calls that target the same file path", async () => {
-		const { tool } = await registerEditTool();
-		const execute = tool.execute as (...args: any[]) => Promise<any>;
-		const cwd = "/tmp/project";
-		const firstWrite = deferredPromise<void>();
-		const absolutePath = path.join(cwd, "sample.txt");
+	it("registers the read tool override", () => {
+		const { pi, getTool } = makeFakePiRegistry();
+		readToolOverride(pi);
 
-		mockState.access.mockResolvedValue(undefined);
-		mockState.readFile
-			.mockResolvedValueOnce(Buffer.from("foo\n", "utf8"))
-			.mockResolvedValueOnce(Buffer.from("foo\n", "utf8"))
-			.mockResolvedValueOnce(Buffer.from("bar\n", "utf8"))
-			.mockResolvedValueOnce(Buffer.from("bar\n", "utf8"));
-		mockState.writeFile.mockImplementationOnce(() => firstWrite.promise).mockResolvedValueOnce(undefined);
-
-		const firstRun = execute(
-			"tool-1",
-			{ path: "sample.txt", edits: [{ oldText: "foo\n", newText: "bar\n" }] },
-			undefined,
-			undefined,
-			createToolContext(cwd),
-		);
-		await Promise.resolve();
-		await Promise.resolve();
-		expect(mockState.access).toHaveBeenCalledTimes(1);
-		expect(mockState.withFileMutationQueue).toHaveBeenNthCalledWith(1, absolutePath, expect.any(Function));
-
-		const secondRun = execute(
-			"tool-2",
-			{ path: "sample.txt", edits: [{ oldText: "bar\n", newText: "baz\n" }] },
-			undefined,
-			undefined,
-			createToolContext(cwd),
-		);
-		await Promise.resolve();
-		await Promise.resolve();
-		expect(mockState.access).toHaveBeenCalledTimes(1);
-
-		firstWrite.resolve();
-		const [firstResult, secondResult] = await Promise.all([firstRun, secondRun]);
-		expect(firstResult.isError).toBe(false);
-		expect(secondResult.isError).toBe(false);
-		expect(mockState.access).toHaveBeenCalledTimes(2);
+		const tool = getTool("read");
+		expect(tool.description).toContain("LINE#HASH");
+		expect(tool.promptSnippet).toContain("hash anchors");
 	});
+});
 
-	it("blocks writes when aborted before the write step", async () => {
-		const { tool } = await registerEditTool();
-		const execute = tool.execute as (...args: any[]) => Promise<any>;
-		const controller = new AbortController();
+describe("hashline edit/read behavior", () => {
+	it("returns hashline read output with snapshotId", async () => {
+		await withTempFile("sample.txt", "alpha\nbeta\n", async ({ cwd }) => {
+			const { pi, getTool } = makeFakePiRegistry();
+			registerReadTool(pi);
+			const readTool = getTool("read");
 
-		mockState.access.mockResolvedValue(undefined);
-		mockState.readFile.mockResolvedValueOnce(Buffer.from("foo\n", "utf8")).mockImplementationOnce(async () => {
-			controller.abort();
-			return Buffer.from("foo\n", "utf8");
+			const result = await readTool.execute("r1", { path: "sample.txt" }, undefined, undefined, { cwd });
+
+			const text = result.content[0]?.text ?? "";
+			expect(text).toContain(`1#${computeLineHash(1, "alpha")}:alpha`);
+			expect(text).toContain(`2#${computeLineHash(2, "beta")}:beta`);
+			expect(text).toContain("[snapshotId:");
+			expect(result.details?.snapshotId).toEqual(expect.any(String));
 		});
-
-		const result = await execute(
-			"tool-1",
-			{ path: "sample.txt", edits: [{ oldText: "foo\n", newText: "bar\n" }] },
-			controller.signal,
-			undefined,
-			createToolContext("/tmp/project"),
-		);
-
-		expect(result.isError).toBe(true);
-		expect(result.content[0]?.text).toContain("Operation aborted");
-		expect(mockState.writeFile).not.toHaveBeenCalled();
 	});
 
-	it("does not flip to an abort error after the write already completed", async () => {
-		const { tool } = await registerEditTool();
-		const execute = tool.execute as (...args: any[]) => Promise<any>;
-		const controller = new AbortController();
+	it("applies anchored edits and returns updated anchors", async () => {
+		await withTempFile("sample.txt", "alpha\nbeta\ngamma\n", async ({ cwd, path }) => {
+			const { pi, getTool } = makeFakePiRegistry();
+			registerEditTool(pi);
+			const editTool = getTool("edit");
 
-		mockState.access.mockResolvedValue(undefined);
-		mockState.readFile.mockResolvedValue(Buffer.from("foo\n", "utf8"));
-		mockState.writeFile.mockImplementationOnce(async () => {
-			controller.abort();
+			const result = await editTool.execute(
+				"e1",
+				{
+					path: "sample.txt",
+					edits: [
+						{
+							op: "replace",
+							pos: `2#${computeLineHash(2, "beta")}`,
+							lines: ["BETA"],
+						},
+					],
+				},
+				undefined,
+				undefined,
+				{ cwd, hasUI: true, ui: { notify() {} } },
+			);
+
+			expect(await readFile(path, "utf8")).toBe("alpha\nBETA\ngamma\n");
+			expect(result.content[0]?.text).toContain("Updated sample.txt");
+			expect(result.content[0]?.text).toContain("Updated anchors");
+			expect(result.details?.snapshotId).toEqual(expect.any(String));
 		});
-
-		const result = await execute(
-			"tool-1",
-			{ path: "sample.txt", edits: [{ oldText: "foo\n", newText: "bar\n" }] },
-			controller.signal,
-			undefined,
-			createToolContext("/tmp/project"),
-		);
-
-		expect(result.isError).toBe(false);
-		expect(result.content[0]?.text).toContain("Updated sample.txt with 1 edit.");
-		expect(mockState.writeFile).toHaveBeenCalledTimes(1);
 	});
 
-	it("uses the read tool_result payload as the stale baseline without re-reading the file", async () => {
-		const { tool, handlers } = await registerEditTool();
-		const execute = tool.execute as (...args: any[]) => Promise<any>;
-		const cwd = "/tmp/project";
+	it("keeps legacy oldText/newText as compatibility fallback", async () => {
+		await withTempFile("sample.txt", "hello world\n", async ({ cwd, path }) => {
+			const { pi, getTool } = makeFakePiRegistry();
+			registerEditTool(pi);
+			const editTool = getTool("edit");
 
-		await handlers.get("tool_result")?.(
-			{
-				toolName: "read",
-				isError: false,
-				input: { path: "sample.txt" },
-				details: undefined,
-				content: [{ type: "text", text: "foo\nbar\n" }],
-			},
-			{ cwd },
-		);
-		expect(mockState.readFile).not.toHaveBeenCalled();
+			const result = await editTool.execute(
+				"e1",
+				{ path: "sample.txt", oldText: "hello", newText: "bye" },
+				undefined,
+				undefined,
+				{ cwd, hasUI: true, ui: { notify() {} } },
+			);
 
-		mockState.access.mockResolvedValue(undefined);
-		mockState.readFile.mockResolvedValue(Buffer.from("qux\nbar\n", "utf8"));
-
-		const result = await execute(
-			"tool-1",
-			{ path: "sample.txt", edits: [{ oldText: "bar\n", newText: "baz\n" }] },
-			undefined,
-			undefined,
-			createToolContext(cwd),
-		);
-
-		expect(result.isError).toBe(true);
-		expect(result.content[0]?.text).toContain("File changed since its last read.");
-		expect(mockState.writeFile).not.toHaveBeenCalled();
-	});
-
-	it("tracks offset: 1 read payloads as whole-file stale baselines", async () => {
-		const { tool, handlers } = await registerEditTool();
-		const execute = tool.execute as (...args: any[]) => Promise<any>;
-		const cwd = "/tmp/project";
-
-		await handlers.get("tool_result")?.(
-			{
-				toolName: "read",
-				isError: false,
-				input: { path: "sample.txt", offset: 1 },
-				details: undefined,
-				content: [{ type: "text", text: "foo\nbar\n" }],
-			},
-			{ cwd },
-		);
-		expect(mockState.readFile).not.toHaveBeenCalled();
-
-		mockState.access.mockResolvedValue(undefined);
-		mockState.readFile.mockResolvedValue(Buffer.from("qux\nbar\n", "utf8"));
-
-		const result = await execute(
-			"tool-1",
-			{ path: "sample.txt", edits: [{ oldText: "bar\n", newText: "baz\n" }] },
-			undefined,
-			undefined,
-			createToolContext(cwd),
-		);
-
-		expect(result.isError).toBe(true);
-		expect(result.content[0]?.text).toContain("File changed since its last read.");
-		expect(mockState.writeFile).not.toHaveBeenCalled();
-	});
-
-	it("tracks offset: 1 + generous limit read payloads when the payload covers the whole file", async () => {
-		const { tool, handlers } = await registerEditTool();
-		const execute = tool.execute as (...args: any[]) => Promise<any>;
-		const cwd = "/tmp/project";
-
-		await handlers.get("tool_result")?.(
-			{
-				toolName: "read",
-				isError: false,
-				input: { path: "sample.txt", offset: 1, limit: 100 },
-				details: undefined,
-				content: [{ type: "text", text: "foo\nbar\n" }],
-			},
-			{ cwd },
-		);
-
-		mockState.access.mockResolvedValue(undefined);
-		mockState.readFile.mockResolvedValue(Buffer.from("qux\nbar\n", "utf8"));
-
-		const result = await execute(
-			"tool-1",
-			{ path: "sample.txt", edits: [{ oldText: "bar\n", newText: "baz\n" }] },
-			undefined,
-			undefined,
-			createToolContext(cwd),
-		);
-
-		expect(result.isError).toBe(true);
-		expect(result.content[0]?.text).toContain("File changed since its last read.");
-		expect(mockState.writeFile).not.toHaveBeenCalled();
-	});
-
-	it("preserves file content that ends with the legacy marker text without sentinels", async () => {
-		const { tool, handlers } = await registerEditTool();
-		const execute = tool.execute as (...args: any[]) => Promise<any>;
-		const cwd = "/tmp/project";
-		const fileContent =
-			"foo\nbar\n\n---\n📋 [Dynamic scope context: /tmp/project/AGENTS.md]\n\nexample block in file body\n---";
-
-		await handlers.get("tool_result")?.(
-			{
-				toolName: "read",
-				isError: false,
-				input: { path: "sample.txt" },
-				details: undefined,
-				content: [{ type: "text", text: fileContent }],
-			},
-			{ cwd },
-		);
-
-		mockState.access.mockResolvedValue(undefined);
-		mockState.readFile
-			.mockResolvedValueOnce(Buffer.from(fileContent, "utf8"))
-			.mockResolvedValueOnce(Buffer.from(fileContent, "utf8"));
-		mockState.writeFile.mockResolvedValue(undefined);
-
-		const result = await execute(
-			"tool-1",
-			{ path: "sample.txt", edits: [{ oldText: "bar\n", newText: "baz\n" }] },
-			undefined,
-			undefined,
-			createToolContext(cwd),
-		);
-
-		expect(result.isError).toBe(false);
-		expect(result.content[0]?.text).toContain("Updated sample.txt with 1 edit.");
-		expect(mockState.writeFile).toHaveBeenCalledTimes(1);
-	});
-
-	it("strips trailing sentinel-wrapped dynamic scope injections before hashing read baselines", async () => {
-		const { tool, handlers } = await registerEditTool();
-		const execute = tool.execute as (...args: any[]) => Promise<any>;
-		const cwd = "/tmp/project";
-		const injectedRead =
-			"foo\nbar\n" +
-			`\n\n${DYNAMIC_SCOPE_SENTINEL_START}\n📋 [Dynamic scope context: /tmp/project/AGENTS.md]\n\nscoped instructions\n${DYNAMIC_SCOPE_SENTINEL_END}` +
-			`\n\n${DYNAMIC_SCOPE_SENTINEL_START}\n📋 [Dynamic scope context: /tmp/project/docs/AGENTS.md]\n\nmore scoped instructions\n${DYNAMIC_SCOPE_SENTINEL_END}`;
-
-		await handlers.get("tool_result")?.(
-			{
-				toolName: "read",
-				isError: false,
-				input: { path: "sample.txt" },
-				details: undefined,
-				content: [{ type: "text", text: injectedRead }],
-			},
-			{ cwd },
-		);
-
-		mockState.access.mockResolvedValue(undefined);
-		mockState.readFile
-			.mockResolvedValueOnce(Buffer.from("foo\nbar\n", "utf8"))
-			.mockResolvedValueOnce(Buffer.from("foo\nbar\n", "utf8"));
-		mockState.writeFile.mockResolvedValue(undefined);
-
-		const result = await execute(
-			"tool-1",
-			{ path: "sample.txt", edits: [{ oldText: "bar\n", newText: "baz\n" }] },
-			undefined,
-			undefined,
-			createToolContext(cwd),
-		);
-
-		expect(result.isError).toBe(false);
-		expect(result.content[0]?.text).toContain("Updated sample.txt with 1 edit.");
-		expect(mockState.writeFile).toHaveBeenCalledTimes(1);
-	});
-
-	it("ignores limit-based read payloads that explicitly advertise continuation", async () => {
-		const { tool, handlers } = await registerEditTool();
-		const execute = tool.execute as (...args: any[]) => Promise<any>;
-		const cwd = "/tmp/project";
-
-		await handlers.get("tool_result")?.(
-			{
-				toolName: "read",
-				isError: false,
-				input: { path: "sample.txt", offset: 1, limit: 1 },
-				details: undefined,
-				content: [{ type: "text", text: "foo\n\n[1 more lines in file. Use offset=2 to continue.]" }],
-			},
-			{ cwd },
-		);
-
-		mockState.access.mockResolvedValue(undefined);
-		mockState.readFile
-			.mockResolvedValueOnce(Buffer.from("foo\nbar\n", "utf8"))
-			.mockResolvedValueOnce(Buffer.from("foo\nbar\n", "utf8"));
-		mockState.writeFile.mockResolvedValue(undefined);
-
-		const result = await execute(
-			"tool-1",
-			{ path: "sample.txt", edits: [{ oldText: "bar\n", newText: "baz\n" }] },
-			undefined,
-			undefined,
-			createToolContext(cwd),
-		);
-
-		expect(result.isError).toBe(false);
-		expect(result.content[0]?.text).toContain("Updated sample.txt with 1 edit.");
-		expect(mockState.writeFile).toHaveBeenCalledTimes(1);
-	});
-
-	it("uses write input content as the stale baseline without re-reading the file", async () => {
-		const { tool, handlers } = await registerEditTool();
-		const execute = tool.execute as (...args: any[]) => Promise<any>;
-		const cwd = "/tmp/project";
-
-		await handlers.get("tool_result")?.(
-			{
-				toolName: "write",
-				isError: false,
-				input: { path: "sample.txt", content: "foo\nbar\n" },
-				details: undefined,
-				content: [{ type: "text", text: "Wrote sample.txt" }],
-			},
-			{ cwd },
-		);
-		expect(mockState.readFile).not.toHaveBeenCalled();
-
-		mockState.access.mockResolvedValue(undefined);
-		mockState.readFile.mockResolvedValue(Buffer.from("qux\nbar\n", "utf8"));
-
-		const result = await execute(
-			"tool-1",
-			{ path: "sample.txt", edits: [{ oldText: "bar\n", newText: "baz\n" }] },
-			undefined,
-			undefined,
-			createToolContext(cwd),
-		);
-
-		expect(result.isError).toBe(true);
-		expect(result.content[0]?.text).toContain("File changed since its last write.");
-		expect(mockState.writeFile).not.toHaveBeenCalled();
+			expect(await readFile(path, "utf8")).toBe("bye world\n");
+			expect(result.details?.compatibility?.used).toBe(true);
+		});
 	});
 });
