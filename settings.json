@@ -29,7 +29,8 @@
     "npm:@ryan_nookpi/pi-extension-claude-hooks-bridge",
     "npm:@ryan_nookpi/pi-extension-claude-mcp-bridge",
     "npm:@ryan_nookpi/pi-extension-memory-layer",
-    "npm:@ryan_nookpi/pi-extension-diff-review"
+    "npm:@ryan_nookpi/pi-extension-diff-review",
+    "npm:@ryan_nookpi/pi-extension-claude-spinner"
   ],
   "compaction": {
     "enabled": true
