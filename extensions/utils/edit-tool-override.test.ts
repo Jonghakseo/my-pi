@@ -305,11 +305,13 @@ describe("hashline edit/read behavior", () => {
 			const previewRendered = editTool.renderCall(args, theme, context).render(120).join("\n");
 			expect(previewRendered).toContain("Warnings:");
 			expect(previewRendered).toContain("Potential boundary duplication");
+			expect(previewRendered).toContain("Prefer append/prepend");
 
 			context.executionStarted = true;
 			const settledRendered = editTool.renderCall(args, theme, context).render(120).join("\n");
 			expect(settledRendered).toContain("Warnings:");
 			expect(settledRendered).toContain("Potential boundary duplication");
+			expect(settledRendered).toContain("Prefer append/prepend");
 		});
 	});
 
@@ -355,6 +357,58 @@ describe("hashline edit/read behavior", () => {
 			expect(settledRendered).toContain("Warnings:");
 			expect(settledRendered).toContain("replacement starts with a line");
 		});
+	});
+
+	it("does not warn for nested block rewrites when delimiter indentation differs", async () => {
+		await withTempFile(
+			"sample.txt",
+			"function outer() {\n  if (ready) {\n    work();\n  }\n}\n",
+			async ({ cwd, path }) => {
+				const { pi, getTool } = makeFakePiRegistry();
+				registerEditTool(pi);
+				const editTool = getTool("edit");
+				const invalidate = vi.fn();
+				const args = {
+					path: "sample.txt",
+					edits: [
+						{
+							op: "replace",
+							range: {
+								start: `2#${computeLineHash(2, "  if (ready) {")}`,
+								end: `4#${computeLineHash(4, "  }")}`,
+							},
+							content: "  if (ready) {\n    doWork();\n  }",
+						},
+					],
+				};
+				const theme = {
+					fg: (_token: string, text: string) => text,
+					bg: (_token: string, text: string) => text,
+					bold: (text: string) => text,
+				};
+				const context = {
+					argsComplete: true,
+					state: {},
+					cwd,
+					expanded: true,
+					executionStarted: false,
+					invalidate,
+				};
+
+				editTool.renderCall(args, theme, context);
+				await vi.waitFor(() => expect(invalidate).toHaveBeenCalled());
+				const previewRendered = editTool.renderCall(args, theme, context).render(120).join("\n");
+				expect(previewRendered).not.toContain("Warnings:");
+
+				const result = await editTool.execute("e1", args, undefined, undefined, {
+					cwd,
+					hasUI: true,
+					ui: { notify() {} },
+				});
+				expect(await readFile(path, "utf8")).toBe("function outer() {\n  if (ready) {\n    doWork();\n  }\n}\n");
+				expect(result.content[0]?.text ?? "").not.toContain("Warnings:");
+			},
+		);
 	});
 
 	it("recomputes previews when cwd changes for identical relative edit args", async () => {
@@ -697,6 +751,7 @@ it("warns when replace content duplicates a delimiter-only boundary line", async
 		const text = result.content[0]?.text ?? "";
 		expect(text).toContain("Warnings:");
 		expect(text).toContain("Potential boundary duplication");
+		expect(text).toContain("Prefer append/prepend");
 	});
 });
 
@@ -727,6 +782,7 @@ it("warns when replace content duplicates a leading boundary line", async () => 
 		const text = result.content[0]?.text ?? "";
 		expect(text).toContain("Warnings:");
 		expect(text).toContain("matches the previous surviving line");
+		expect(text).toContain("Prefer append/prepend");
 	});
 });
 

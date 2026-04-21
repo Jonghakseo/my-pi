@@ -75,9 +75,31 @@ const RE_SIGNIFICANT = /[\p{L}\p{N}]/u;
 /** Delimiter-only lines such as `}`, `);`, `});`, or `],`. */
 const RE_DELIMITER_ONLY_LINE = /^[()[\]{}.,;]+$/u;
 
+function isDelimiterOnlyBoundaryLine(line: string): boolean {
+	return RE_DELIMITER_ONLY_LINE.test(line.trim());
+}
+
 function shouldWarnBoundaryDuplication(line: string): boolean {
 	const trimmed = line.trim();
-	return trimmed.length > 0 && (RE_SIGNIFICANT.test(trimmed) || RE_DELIMITER_ONLY_LINE.test(trimmed));
+	return trimmed.length > 0 && (RE_SIGNIFICANT.test(trimmed) || isDelimiterOnlyBoundaryLine(trimmed));
+}
+
+function boundaryDuplicationLinesMatch(replacementLine: string, survivingLine: string): boolean {
+	if (!shouldWarnBoundaryDuplication(replacementLine) || !shouldWarnBoundaryDuplication(survivingLine)) {
+		return false;
+	}
+	if (isDelimiterOnlyBoundaryLine(replacementLine) && isDelimiterOnlyBoundaryLine(survivingLine)) {
+		return replacementLine === survivingLine;
+	}
+	return replacementLine.trim() === survivingLine.trim();
+}
+
+function formatBoundaryDuplicationWarning(
+	editDescription: string,
+	direction: "starts" | "ends",
+	survivingSide: "previous" | "next",
+): string {
+	return `Potential boundary duplication after ${editDescription}: the replacement ${direction} with a line that matches the ${survivingSide} surviving line. Prefer append/prepend for insertion-only changes, or expand the replace range before retrying.`;
 }
 function xxh32(input: string, seed = 0): number {
 	return XXH.h32(seed).update(input).digest().toNumber() >>> 0;
@@ -876,30 +898,23 @@ export function applyHashlineEdits(
 				const endLine = edit.end?.line ?? edit.pos.line;
 				const previousLine = startLine > 1 ? lineIndex.fileLines[startLine - 2] : undefined;
 				const nextLine = lineIndex.fileLines[endLine];
-				const replacementFirstLine = edit.lines[0]?.trim();
-				const replacementLastLine = edit.lines.at(-1)?.trim();
-				const previousTrimmed = previousLine?.trim();
-				const nextTrimmed = nextLine?.trim();
+				const replacementFirstLine = edit.lines[0];
+				const replacementLastLine = edit.lines.at(-1);
 				if (
-					previousTrimmed !== undefined &&
-					replacementFirstLine &&
-					shouldWarnBoundaryDuplication(replacementFirstLine) &&
-					replacementFirstLine === previousTrimmed
+					previousLine !== undefined &&
+					replacementFirstLine !== undefined &&
+					boundaryDuplicationLinesMatch(replacementFirstLine, previousLine)
 				) {
-					warnings.push(
-						`Potential boundary duplication after ${describeEdit(edit)}: the replacement starts with a line that matches the previous surviving line after trim.`,
-					);
+					warnings.push(formatBoundaryDuplicationWarning(describeEdit(edit), "starts", "previous"));
 				}
 				if (
-					nextTrimmed !== undefined &&
-					replacementLastLine &&
-					shouldWarnBoundaryDuplication(replacementLastLine) &&
-					replacementLastLine === nextTrimmed
+					nextLine !== undefined &&
+					replacementLastLine !== undefined &&
+					boundaryDuplicationLinesMatch(replacementLastLine, nextLine)
 				) {
-					warnings.push(
-						`Potential boundary duplication after ${describeEdit(edit)}: the replacement ends with a line that matches the next surviving line after trim.`,
-					);
+					warnings.push(formatBoundaryDuplicationWarning(describeEdit(edit), "ends", "next"));
 				}
+
 				break;
 			}
 			case "append": {
