@@ -35,7 +35,7 @@ Custom extensions for the pi coding agent. All extensions are written in TypeScr
 ├── notify/                # /notify session-toggle: OSC 777/99 alert + macOS say TTS on agent_end
 ├── footer.ts              # Custom footer UI (model, branch, context bar)
 ├── working-text.ts              # Spinner working message (tip text + elapsed time)
-├── theme-cycler.ts        # Ctrl+X to cycle through themes
+├── theme-cycler.ts        # Ctrl+Shift+X to cycle through themes
 └── upload-image-url.ts    # Upload images to GitHub storage and return URLs
 ```
 

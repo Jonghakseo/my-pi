@@ -82,7 +82,7 @@ Here are representative items from the 30+ custom TypeScript extensions, grouped
 |---|---|
 | **footer.ts** | Custom footer showing model, git branch, context usage |
 | **working-text.ts** | Tip-focused spinner text with elapsed time during processing |
-| **theme-cycler.ts** | `Ctrl+X` to cycle through all themes on-the-fly |
+| **theme-cycler.ts** | `Ctrl+Shift+X` to cycle through all themes on-the-fly |
 | **diff-overlay.ts** | `/diff` — split-pane git diff viewer overlay |
 | **[@ryan_nookpi/pi-extension-open-pr](https://github.com/Jonghakseo/pi-extension/tree/main/packages/open-pr)** | Open the current branch PR directly in the browser |
 | **files.ts** | `/files` — git tree file browser with open/edit/diff quick actions |
@@ -141,7 +141,7 @@ The following extension packages are currently listed in `settings.json`.
 
 ## Themes
 
-The setup currently ships with 7 themes, hot-swappable with `Ctrl+X`:
+The setup currently ships with 7 themes, hot-swappable with `Ctrl+Shift+X`:
 
 | Theme | Style |
 |---|---|
@@ -160,7 +160,7 @@ The setup currently ships with 7 themes, hot-swappable with `Ctrl+X`:
 | Key | Action |
 |---|---|
 | `Ctrl+T` | Toggle thinking visibility |
-| `Ctrl+X` | Cycle themes |
+| `Ctrl+Shift+X` | Cycle themes |
 | `Ctrl+Q` | Cycle themes backward |
 | `Ctrl+Shift+O` | Open file browser |
 | `Ctrl+Shift+F` | Reveal the latest file reference in Finder |

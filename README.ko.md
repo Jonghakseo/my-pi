@@ -82,7 +82,7 @@
 |---|---|
 | **footer.ts** | 모델, git 브랜치, 컨텍스트 사용량을 보여주는 커스텀 푸터 |
 | **working-text.ts** | 처리 중 경과 시간과 함께 팁 중심 스피너 텍스트 |
-| **theme-cycler.ts** | `Ctrl+X`로 테마 실시간 순환 |
+| **theme-cycler.ts** | `Ctrl+Shift+X`로 테마 실시간 순환 |
 | **diff-overlay.ts** | `/diff` — 분할 화면 git diff 뷰어 오버레이 |
 | **[@ryan_nookpi/pi-extension-open-pr](https://github.com/Jonghakseo/pi-extension/tree/main/packages/open-pr)** | 현재 브랜치 PR을 브라우저에서 바로 열기 |
 | **files.ts** | `/files` — git 트리 파일 브라우저 + 열기/편집/diff 빠른 액션 |
@@ -141,7 +141,7 @@
 
 ## 테마
 
-현재 7개 테마를 제공하며, `Ctrl+X`로 실시간 전환할 수 있다:
+현재 7개 테마를 제공하며, `Ctrl+Shift+X`로 실시간 전환할 수 있다:
 
 | 테마 | 스타일 |
 |---|---|
@@ -160,7 +160,7 @@
 | 키 | 동작 |
 |---|---|
 | `Ctrl+T` | 사고(thinking) 표시 토글 |
-| `Ctrl+X` | 테마 순환 |
+| `Ctrl+Shift+X` | 테마 순환 |
 | `Ctrl+Q` | 테마 역순 순환 |
 | `Ctrl+Shift+O` | 파일 브라우저 열기 |
 | `Ctrl+Shift+F` | 최근 파일 참조를 Finder에서 표시 |
