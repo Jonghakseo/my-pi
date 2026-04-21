@@ -1,0 +1,589 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; style-src 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; img-src data: blob:; connect-src 'none'; font-src https://cdn.jsdelivr.net; object-src 'none'; base-uri 'none'; form-action 'none';">
+<title>pi Desktop</title>
+<script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4.1.3" crossorigin="anonymous"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/15.0.7/marked.min.js" integrity="sha384-H+hy9ULve6xfxRkWIh/YOtvDdpXgV2fmAGQkIDTxIgZwNoaoBal14Di2YTMR6MzR" crossorigin="anonymous"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.2.4/purify.min.js" integrity="sha384-eEu5CTj3qGvu9PdJuS+YlkNi7d2XxQROAFYOr59zgObtlcux1ae1Il3u7jvdCSWu" crossorigin="anonymous"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.21/dist/katex.min.css" crossorigin="anonymous">
+<script src="https://cdn.jsdelivr.net/npm/katex@0.16.21/dist/katex.min.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js" crossorigin="anonymous"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/styles/github.min.css" integrity="sha384-eFTL69TLRZTkNfYZOLM+G04821K1qZao/4QLJbet1pP4tcF+fdXq/9CdqAbWRl/L" crossorigin="anonymous" id="hljs-light">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/styles/github-dark.min.css" integrity="sha384-wH75j6z1lH97ZOpMOInqhgKzFkAInZPPSPlZpYKYTOqsaizPvhQZmAtLcPKXpLyH" crossorigin="anonymous" id="hljs-dark" disabled>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/highlight.min.js" integrity="sha384-RH2xi4eIQ/gjtbs9fUXM68sLSi99C7ZWBRX1vDrVv6GQXRibxXLbwO2NGZB74MbU" crossorigin="anonymous"></script>
+<style type="text/tailwindcss">
+  @theme {
+    --color-pi-bg: var(--bg);
+    --color-pi-sidebar: var(--sidebar-bg);
+    --color-pi-sidebar-hover: var(--sidebar-hover);
+    --color-pi-sidebar-active: var(--sidebar-active);
+    --color-pi-text: var(--text);
+    --color-pi-text-muted: var(--text-muted);
+    --color-pi-text-dim: var(--text-dim);
+    --color-pi-accent: var(--accent);
+    --color-pi-border: var(--border);
+    --color-pi-card: var(--card-bg);
+    --color-pi-input: var(--input-bg);
+    --color-pi-code: var(--code-bg);
+    --color-pi-user-bubble: var(--user-bubble);
+    --color-pi-breadcrumb-badge: var(--breadcrumb-badge);
+  }
+</style>
+<style>
+  :root {
+    --bg: #f8f4ef;
+    --sidebar-bg: #f0ebe4;
+    --sidebar-hover: #e8e2d9;
+    --sidebar-active: #e0dbd4;
+    --text: #2d2a26;
+    --text-muted: #6b6560;
+    --text-dim: #847e78;
+    --accent: #b07d4f;
+    --border: #ddd7cf;
+    --card-bg: #f0ebe4;
+    --input-bg: #ffffff;
+    --code-bg: #eae4dc;
+    --user-bubble: #ede6db;
+    --breadcrumb-badge: #e8e0d5;
+  }
+
+  [data-theme="dark"] {
+    --bg: #1a1714;
+    --sidebar-bg: #141210;
+    --sidebar-hover: #221f1b;
+    --sidebar-active: #2a2622;
+    --text: #e0ddd8;
+    --text-muted: #8a8580;
+    --text-dim: #756f6a;
+    --accent: #c4956a;
+    --border: #2d2a26;
+    --card-bg: #1f1c18;
+    --input-bg: #1a1714;
+    --code-bg: #252220;
+    --user-bubble: #2a2622;
+    --breadcrumb-badge: #2a2622;
+  }
+
+  html, body { width: 100%; height: 100%; overflow: hidden; margin: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif; }
+
+  .scrollbar-thin::-webkit-scrollbar { width: 6px; height: 6px; }
+  .scrollbar-thin::-webkit-scrollbar-thumb { background: var(--border); border-radius: 999px; }
+  .scrollbar-thin::-webkit-scrollbar-track { background: transparent; }
+
+  .message-content h1 { font-size: 1.5em; font-weight: 700; margin: 1em 0 0.5em; }
+  .message-content h2 { font-size: 1.25em; font-weight: 700; margin: 1em 0 0.5em; }
+  .message-content h3 { font-size: 1.1em; font-weight: 600; margin: 0.8em 0 0.4em; }
+  .message-content p { margin: 0.5em 0; line-height: 1.65; }
+  .message-content ul, .message-content ol { margin: 0.5em 0; padding-left: 1.5em; }
+  .message-content li { margin: 0.25em 0; line-height: 1.55; }
+  .message-content code {
+    font-family: 'SF Mono', 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+    font-size: 0.88em;
+    background: var(--code-bg);
+    padding: 0.15em 0.4em;
+    border-radius: 4px;
+  }
+  .message-content pre {
+    margin: 0.75em 0;
+    border-radius: 8px;
+    overflow-x: auto;
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+  }
+  .message-content pre code {
+    display: block;
+    padding: 0.85em 1em;
+    background: none;
+    font-size: 0.85em;
+    line-height: 1.5;
+  }
+  .message-content strong { font-weight: 600; }
+  .message-content a { color: var(--accent); text-decoration: underline; }
+  .message-content blockquote {
+    border-left: 3px solid var(--accent);
+    margin: 0.5em 0;
+    padding: 0.25em 0 0.25em 1em;
+    color: var(--text-muted);
+  }
+  .message-content table { border-collapse: collapse; margin: 0.75em 0; width: 100%; }
+  .message-content th, .message-content td {
+    border: 1px solid var(--border);
+    padding: 0.4em 0.75em;
+    text-align: left;
+    font-size: 0.9em;
+  }
+  .message-content th { font-weight: 600; background: var(--code-bg); }
+
+  /* Mermaid diagrams */
+  .mermaid-container {
+    margin: 0.75em 0;
+    padding: 1em;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--card-bg);
+    overflow-x: auto;
+    text-align: center;
+  }
+  .mermaid-container svg { max-width: 100%; height: auto; }
+  /* Mermaid renders once with initial theme; on toggle, CSS adapts colors */
+  [data-theme="dark"] .mermaid-rendered svg {
+    filter: invert(0.88) hue-rotate(180deg);
+  }
+  [data-theme="light"] .mermaid-rendered svg {
+    filter: none;
+  }
+  .mermaid-error {
+    color: #e55;
+    font-size: 0.85em;
+    padding: 0.5em;
+    text-align: left;
+  }
+
+  /* KaTeX math */
+  .math-block {
+    margin: 0.75em 0;
+    overflow-x: auto;
+    text-align: center;
+    padding: 0.5em 0;
+  }
+  .math-inline .katex { font-size: 1em; }
+
+  .nav-item { transition: background-color 0.1s; }
+  .nav-item:hover { background: var(--sidebar-hover); }
+  .nav-item.active { background: var(--sidebar-active); }
+
+  /* Sidebar collapse/expand */
+  #sidebar {
+    transition: width 0.2s ease, min-width 0.2s ease;
+    overflow: hidden;
+  }
+  #sidebar.sidebar-expanded {
+    width: 260px;
+    min-width: 260px;
+  }
+  #sidebar.sidebar-collapsed {
+    width: 48px;
+    min-width: 48px;
+  }
+  #sidebar.sidebar-collapsed .sidebar-expanded-only {
+    display: none !important;
+  }
+  #sidebar.sidebar-collapsed .nav-item {
+    justify-content: center;
+    padding-left: 0;
+    padding-right: 0;
+  }
+  #sidebar.sidebar-collapsed nav {
+    align-items: center;
+  }
+  #sidebar.sidebar-collapsed > div:first-child {
+    justify-content: center;
+    padding-left: 8px;
+    padding-right: 8px;
+  }
+
+  .thread-item { transition: background-color 0.1s; }
+  .thread-item:hover { background: var(--sidebar-hover); }
+  .thread-item.active { background: var(--sidebar-active); font-weight: 500; }
+
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+  .msg-animate { animation: fadeIn 0.2s ease-out; }
+
+  .input-area textarea {
+    resize: none;
+    outline: none;
+    font-family: inherit;
+    font-size: 14px;
+    line-height: 1.5;
+    background: transparent;
+    color: var(--text);
+  }
+  .input-area textarea::placeholder { color: var(--text-dim); }
+
+  /* Spinner for tool execution */
+  .tool-spinner {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    border: 2px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Thinking dots */
+  .thinking-dots span {
+    animation: blink 1.4s infinite;
+    font-size: 1.2em;
+    font-weight: bold;
+  }
+  .thinking-dots span:nth-child(2) { animation-delay: 0.2s; }
+  .thinking-dots span:nth-child(3) { animation-delay: 0.4s; }
+  @keyframes blink {
+    0%, 20% { opacity: 0.2; }
+    50% { opacity: 1; }
+    100% { opacity: 0.2; }
+  }
+
+  /* Disabled state for input during streaming */
+  textarea:disabled { opacity: 0.6; cursor: not-allowed; }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  /* Diff overlay */
+  .diff-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 100;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0,0,0,0.6);
+    backdrop-filter: blur(2px);
+  }
+  .diff-panel {
+    width: 96vw;
+    max-width: none;
+    height: 94vh;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.4);
+  }
+  .diff-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 20px;
+    border-bottom: 1px solid var(--border);
+    background: var(--sidebar-bg);
+  }
+  .diff-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 0;
+  }
+  .diff-edit-block {
+    border-bottom: 1px solid var(--border);
+  }
+  .diff-edit-label {
+    padding: 8px 20px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-dim);
+    background: var(--sidebar-bg);
+  }
+  .diff-columns {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+  .diff-col {
+    overflow-x: auto;
+    padding: 4px 0;
+    font-family: 'SF Mono', 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+    font-size: 13px;
+    line-height: 1.6;
+    white-space: pre;
+    word-break: keep-all;
+  }
+  .diff-col-old {
+    background: var(--bg);
+    border-right: 1px solid var(--border);
+  }
+  .diff-col-new {
+    background: var(--bg);
+  }
+  .diff-col-header {
+    padding: 4px 16px;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-dim);
+    border-bottom: 1px solid var(--border);
+  }
+  .diff-col-header-old {
+    background: color-mix(in srgb, #e55 6%, var(--sidebar-bg));
+    border-right: 1px solid var(--border);
+  }
+  .diff-col-header-new {
+    background: color-mix(in srgb, #3b3 6%, var(--sidebar-bg));
+  }
+  .diff-line {
+    display: flex;
+    min-height: 1.5em;
+  }
+  .diff-line-num {
+    display: inline-block;
+    width: 40px;
+    min-width: 40px;
+    text-align: right;
+    padding-right: 8px;
+    color: var(--text-dim);
+    font-size: 11px;
+    user-select: none;
+    opacity: 0.6;
+  }
+  .diff-line-content {
+    flex: 1;
+    padding: 0 8px;
+  }
+  .diff-line-removed {
+    background: color-mix(in srgb, #e55 12%, var(--bg));
+    display: flex;
+  }
+  .diff-line-removed .diff-line-num { color: #c66; }
+  .diff-line-added {
+    background: color-mix(in srgb, #3b3 12%, var(--bg));
+    display: flex;
+  }
+  .diff-line-added .diff-line-num { color: #6a6; }
+  .diff-line-unchanged {
+    display: flex;
+    opacity: 0.5;
+  }
+  .diff-word-removed {
+    background: color-mix(in srgb, #e55 35%, transparent);
+    border-radius: 2px;
+    padding: 0 1px;
+  }
+  .diff-word-added {
+    background: color-mix(in srgb, #3b3 35%, transparent);
+    border-radius: 2px;
+    padding: 0 1px;
+  }
+  .diff-collapsed {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2px 0;
+    font-size: 11px;
+    color: var(--text-dim);
+    background: var(--sidebar-bg);
+    border-top: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+    user-select: none;
+    cursor: default;
+    letter-spacing: 0.03em;
+  }
+  .diff-empty-line {
+    min-height: 1.5em;
+    background: color-mix(in srgb, var(--text-dim) 4%, var(--bg));
+  }
+
+  /* Command suggestions popup */
+  .cmd-suggestions {
+    position: absolute;
+    bottom: 100%;
+    left: 16px;
+    right: 16px;
+    margin-bottom: 4px;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    background: var(--input-bg);
+    box-shadow: 0 -4px 20px rgba(0,0,0,0.15);
+    overflow: hidden;
+    z-index: 50;
+    display: none;
+  }
+  .cmd-suggestion-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 14px;
+    cursor: pointer;
+    font-size: 13px;
+    transition: background 0.05s;
+  }
+  .cmd-suggestion-item:hover, .cmd-suggestion-item.cmd-active {
+    background: var(--sidebar-hover);
+  }
+  .cmd-suggestion-item + .cmd-suggestion-item {
+    border-top: 1px solid var(--border);
+  }
+
+  /* Plan Mode */
+  #btn-plan-mode.plan-active {
+    background: color-mix(in srgb, var(--accent) 15%, transparent);
+    border-color: var(--accent) !important;
+    color: var(--accent) !important;
+  }
+  .plan-mode-banner {
+    background: color-mix(in srgb, var(--accent) 10%, var(--bg));
+    border-bottom: 1px solid color-mix(in srgb, var(--accent) 30%, var(--border));
+    color: var(--accent);
+    font-size: 12px;
+    font-weight: 600;
+    padding: 6px 20px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    letter-spacing: 0.03em;
+  }
+  .plan-mode-banner svg {
+    flex-shrink: 0;
+  }
+</style>
+</head>
+<body class="h-full overflow-hidden bg-pi-bg text-pi-text antialiased">
+
+<div id="app" class="flex h-full w-full">
+  <!-- Sidebar -->
+  <aside id="sidebar" class="flex h-full flex-col border-r border-pi-border bg-pi-sidebar sidebar-expanded">
+    <!-- Sidebar Header -->
+    <div class="flex items-center justify-between px-4 py-3.5">
+      <div class="sidebar-expanded-only flex items-center gap-2">
+        <span class="text-pi-accent text-lg font-bold" style="font-family: serif; letter-spacing: -1px;">&pi;</span>
+        <span class="text-sm font-semibold" style="color: var(--text);">Desktop</span>
+      </div>
+      <div class="flex items-center gap-1">
+        <button id="btn-toggle-sidebar" class="rounded p-1 hover:bg-pi-sidebar-hover" title="Toggle sidebar">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-pi-text-muted">
+            <rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- Navigation -->
+    <nav class="flex flex-col px-2">
+      <button class="nav-item flex items-center gap-2.5 rounded-md px-3 py-2 text-[13px]" data-nav="workspace">
+        <span class="text-base">&#x1F4C2;</span><span class="sidebar-expanded-only">Open workspace</span>
+      </button>
+      <button class="nav-item flex items-center gap-2.5 rounded-md px-3 py-2 text-[13px] active" data-nav="threads">
+        <span class="text-base">&#x1F9F5;</span><span class="sidebar-expanded-only">Threads</span>
+      </button>
+      <button class="nav-item flex items-center gap-2.5 rounded-md px-3 py-2 text-[13px]" data-nav="skills">
+        <span class="text-base">&#x1F9E9;</span><span class="sidebar-expanded-only">Skills &amp; Extensions</span>
+      </button>
+      <button class="nav-item flex items-center gap-2.5 rounded-md px-3 py-2 text-[13px]" data-nav="settings">
+        <span class="text-base">&#x2699;&#xFE0F;</span><span class="sidebar-expanded-only">Settings</span>
+      </button>
+      <button class="nav-item flex items-center gap-2.5 rounded-md px-3 py-2 text-[13px]" data-nav="explorer">
+        <span class="text-base">&#x1F4C1;</span><span class="sidebar-expanded-only">Explorer</span>
+      </button>
+      <!-- Explorer Tree (inline, right after Explorer button) -->
+      <div id="explorer-tree" class="sidebar-expanded-only scrollbar-thin overflow-y-auto px-1 pb-1" style="display:none;max-height:50vh;">
+        <!-- Filled by JS -->
+      </div>
+    </nav>
+
+    <!-- New Thread -->
+    <div class="sidebar-expanded-only px-2 pt-2">
+      <button id="btn-new-thread" class="nav-item flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-[13px] text-pi-accent font-medium">
+        <span class="text-base">+</span><span>New thread</span>
+      </button>
+    </div>
+
+    <!-- Separator -->
+    <div class="my-2 border-t border-pi-border"></div>
+
+    <!-- Thread Search -->
+    <div class="sidebar-expanded-only px-2 pb-2">
+      <div class="relative">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-pi-text-dim absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none">
+          <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+        </svg>
+        <input id="thread-search" type="text" placeholder="Search threads..." class="w-full rounded-md border border-pi-border bg-pi-input pl-8 pr-8 py-1.5 text-[13px] text-pi-text placeholder:text-pi-text-dim focus:outline-none focus:border-pi-accent" autocomplete="off" spellcheck="false">
+        <button id="thread-search-clear" class="absolute right-2 top-1/2 -translate-y-1/2 text-pi-text-dim hover:text-pi-text hidden" title="Clear search">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- Project Tree (threads/workspaces) -->
+    <div id="project-tree" class="sidebar-expanded-only scrollbar-thin flex-1 overflow-y-auto px-2 pb-3">
+      <!-- Filled by JS -->
+    </div>
+  </aside>
+
+  <!-- Main Content -->
+  <main class="flex min-w-0 flex-1 flex-col bg-pi-bg">
+    <!-- Breadcrumb Bar -->
+    <div class="flex items-center justify-between border-b border-pi-border px-5 py-2.5">
+      <div id="breadcrumb" class="flex items-center gap-1.5 text-[13px] text-pi-text-muted">
+        <!-- Filled by JS -->
+      </div>
+      <button id="btn-theme" class="rounded-full p-2 hover:bg-pi-sidebar-hover" title="Toggle theme">
+        <svg id="icon-moon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-pi-text-muted">
+          <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+        </svg>
+        <svg id="icon-sun" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-pi-text-muted hidden">
+          <circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+        </svg>
+      </button>
+    </div>
+
+    <!-- Plan Mode Banner (hidden by default) -->
+    <div id="plan-mode-banner" class="plan-mode-banner" style="display:none;">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+      <span>PLAN MODE — Read-only. Pi will only read, search, and analyze. No file writes or edits.</span>
+    </div>
+
+    <!-- Thread Header -->
+    <div id="thread-header" class="border-b border-pi-border px-6 py-4">
+      <div id="thread-label" class="text-[11px] font-medium uppercase tracking-wider text-pi-text-dim"></div>
+      <div id="thread-title" class="mt-1 text-base font-semibold text-pi-text"></div>
+    </div>
+
+    <!-- Messages Area -->
+    <div id="messages" class="scrollbar-thin flex-1 overflow-y-auto px-6 py-4">
+      <!-- Filled by JS -->
+    </div>
+
+    <!-- Input Area -->
+    <div class="input-area border-t border-pi-border bg-pi-bg px-5 py-3">
+      <div class="rounded-xl border border-pi-border bg-pi-input px-4 py-3">
+        <textarea id="input-text" rows="1" placeholder="Ask pi to inspect the repo, run a fix, or continue the current thread..."
+          class="w-full"></textarea>
+      </div>
+      <div class="mt-2 flex items-center justify-between px-1">
+        <div class="flex items-center gap-2 text-[12px] text-pi-text-muted">
+          <button id="btn-plan-mode" class="flex items-center gap-1.5 rounded-lg border border-pi-border px-2.5 py-1 text-[12px] font-medium hover:bg-pi-sidebar-hover transition-all" style="color: var(--text-muted);" title="Plan Mode — read-only, no writes (Ctrl+P)">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>
+            </svg>
+            <span>Plan</span>
+          </button>
+          <span>·</span>
+          <span>Enter to send</span>
+          <span>·</span>
+          <span>Shift+Enter for newline</span>
+          <span>·</span>
+          <span id="model-label"></span>
+          <span>·</span>
+          <span id="thinking-label"></span>
+        </div>
+        <div class="flex items-center gap-2">
+          <div id="stats-bar" class="flex items-center gap-3 text-[12px] text-pi-text-muted">
+            <!-- Filled by JS -->
+          </div>
+          <button id="btn-attach" class="rounded-lg border border-pi-border p-2 hover:bg-pi-sidebar-hover" title="Attach">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-pi-text-muted">
+              <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+            </svg>
+          </button>
+          <button id="btn-send" class="rounded-lg bg-pi-accent p-2 text-white hover:opacity-90" title="Send">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script id="desktop-data" type="application/json">__INLINE_DATA__</script>
+<script>
+__INLINE_JS__
+</script>
+</body>
+</html>
