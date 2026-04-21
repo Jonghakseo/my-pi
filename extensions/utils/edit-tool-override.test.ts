@@ -55,6 +55,8 @@ describe("hashline tool overrides", () => {
 		const tool = getTool("edit");
 		expect(tool.description).toContain("LINE#HASH");
 		expect(tool.description).toContain("replace_text");
+		expect(tool.description).toContain("append`/`prepend");
+		expect(tool.promptSnippet).toContain("Prefer append/prepend for insertion-only changes");
 		expect(on).toHaveBeenCalledWith("turn_start", expect.any(Function));
 		expect(on).toHaveBeenCalledWith("tool_result", expect.any(Function));
 		expect(on).toHaveBeenCalledWith("turn_end", expect.any(Function));
@@ -265,6 +267,145 @@ describe("hashline edit/read behavior", () => {
 			expect(settledRendered).not.toContain("beta");
 			expect(settledRendered).not.toContain("BETA");
 		});
+	});
+
+	it("surfaces delimiter-only boundary duplication warnings in call previews", async () => {
+		await withTempFile("sample.txt", "function demo() {\n  run();\n}\n", async ({ cwd }) => {
+			const { pi, getTool } = makeFakePiRegistry();
+			registerEditTool(pi);
+			const editTool = getTool("edit");
+			const invalidate = vi.fn();
+			const args = {
+				path: "sample.txt",
+				edits: [
+					{
+						op: "replace",
+						range: { start: `2#${computeLineHash(2, "  run();")}` },
+						content: "  run();\n}",
+					},
+				],
+			};
+			const theme = {
+				fg: (_token: string, text: string) => text,
+				bg: (_token: string, text: string) => text,
+				bold: (text: string) => text,
+			};
+			const context = {
+				argsComplete: true,
+				state: {},
+				cwd,
+				expanded: true,
+				executionStarted: false,
+				invalidate,
+			};
+
+			editTool.renderCall(args, theme, context);
+			await vi.waitFor(() => expect(invalidate).toHaveBeenCalled());
+
+			const previewRendered = editTool.renderCall(args, theme, context).render(120).join("\n");
+			expect(previewRendered).toContain("Warnings:");
+			expect(previewRendered).toContain("Potential boundary duplication");
+
+			context.executionStarted = true;
+			const settledRendered = editTool.renderCall(args, theme, context).render(120).join("\n");
+			expect(settledRendered).toContain("Warnings:");
+			expect(settledRendered).toContain("Potential boundary duplication");
+		});
+	});
+
+	it("surfaces leading boundary duplication warnings in call previews", async () => {
+		await withTempFile("sample.txt", "alpha\nbeta\ngamma\n", async ({ cwd }) => {
+			const { pi, getTool } = makeFakePiRegistry();
+			registerEditTool(pi);
+			const editTool = getTool("edit");
+			const invalidate = vi.fn();
+			const args = {
+				path: "sample.txt",
+				edits: [
+					{
+						op: "replace",
+						range: { start: `2#${computeLineHash(2, "beta")}` },
+						content: "alpha\nbeta",
+					},
+				],
+			};
+			const theme = {
+				fg: (_token: string, text: string) => text,
+				bg: (_token: string, text: string) => text,
+				bold: (text: string) => text,
+			};
+			const context = {
+				argsComplete: true,
+				state: {},
+				cwd,
+				expanded: true,
+				executionStarted: false,
+				invalidate,
+			};
+
+			editTool.renderCall(args, theme, context);
+			await vi.waitFor(() => expect(invalidate).toHaveBeenCalled());
+
+			const previewRendered = editTool.renderCall(args, theme, context).render(120).join("\n");
+			expect(previewRendered).toContain("Warnings:");
+			expect(previewRendered).toContain("replacement starts with a line");
+
+			context.executionStarted = true;
+			const settledRendered = editTool.renderCall(args, theme, context).render(120).join("\n");
+			expect(settledRendered).toContain("Warnings:");
+			expect(settledRendered).toContain("replacement starts with a line");
+		});
+	});
+
+	it("recomputes previews when cwd changes for identical relative edit args", async () => {
+		await mkdir(join(process.cwd(), ".tmp"), { recursive: true });
+		const cwdA = await mkdtemp(join(process.cwd(), ".tmp/hashline-preview-a-"));
+		const cwdB = await mkdtemp(join(process.cwd(), ".tmp/hashline-preview-b-"));
+		try {
+			await writeFile(join(cwdA, "sample.txt"), "alpha\nbeta\ngamma\n", "utf8");
+			await writeFile(join(cwdB, "sample.txt"), "zero\nbeta\ndelta\n", "utf8");
+
+			const { pi, getTool } = makeFakePiRegistry();
+			registerEditTool(pi);
+			const editTool = getTool("edit");
+			const invalidate = vi.fn();
+			const args = {
+				path: "sample.txt",
+				edits: [{ op: "replace", pos: `2#${computeLineHash(2, "beta")}`, lines: ["BETA"] }],
+			};
+			const theme = {
+				fg: (_token: string, text: string) => text,
+				bg: (_token: string, text: string) => text,
+				bold: (text: string) => text,
+			};
+			const context = {
+				argsComplete: true,
+				state: {},
+				cwd: cwdA,
+				expanded: true,
+				executionStarted: false,
+				invalidate,
+			};
+
+			editTool.renderCall(args, theme, context);
+			await vi.waitFor(() => expect(invalidate).toHaveBeenCalledTimes(1));
+			const previewA = editTool.renderCall(args, theme, context).render(120).join("\n");
+			expect(previewA).toContain("alpha");
+			expect(previewA).toContain("gamma");
+			expect(previewA).not.toContain("zero");
+
+			invalidate.mockClear();
+			context.cwd = cwdB;
+			editTool.renderCall(args, theme, context);
+			await vi.waitFor(() => expect(invalidate).toHaveBeenCalledTimes(1));
+			const previewB = editTool.renderCall(args, theme, context).render(120).join("\n");
+			expect(previewB).toContain("zero");
+			expect(previewB).toContain("delta");
+			expect(previewB).not.toContain("alpha");
+		} finally {
+			await rm(cwdA, { recursive: true, force: true });
+			await rm(cwdB, { recursive: true, force: true });
+		}
 	});
 
 	it("shows ellipsis between distant preview hunks when expanded", async () => {
@@ -529,6 +670,66 @@ it("returns range payloads, structure outlines, and warnings in ranges mode", as
 	});
 });
 
+it("warns when replace content duplicates a delimiter-only boundary line", async () => {
+	await withTempFile("sample.txt", "function demo() {\n  run();\n}\n", async ({ cwd, path }) => {
+		const { pi, getTool } = makeFakePiRegistry();
+		registerEditTool(pi);
+		const editTool = getTool("edit");
+
+		const result = await editTool.execute(
+			"e1",
+			{
+				path: "sample.txt",
+				edits: [
+					{
+						op: "replace",
+						range: { start: `2#${computeLineHash(2, "  run();")}` },
+						content: "  run();\n}",
+					},
+				],
+			},
+			undefined,
+			undefined,
+			{ cwd, hasUI: true, ui: { notify() {} } },
+		);
+
+		expect(await readFile(path, "utf8")).toBe("function demo() {\n  run();\n}\n}\n");
+		const text = result.content[0]?.text ?? "";
+		expect(text).toContain("Warnings:");
+		expect(text).toContain("Potential boundary duplication");
+	});
+});
+
+it("warns when replace content duplicates a leading boundary line", async () => {
+	await withTempFile("sample.txt", "alpha\nbeta\ngamma\n", async ({ cwd, path }) => {
+		const { pi, getTool } = makeFakePiRegistry();
+		registerEditTool(pi);
+		const editTool = getTool("edit");
+
+		const result = await editTool.execute(
+			"e1",
+			{
+				path: "sample.txt",
+				edits: [
+					{
+						op: "replace",
+						range: { start: `2#${computeLineHash(2, "beta")}` },
+						content: "alpha\nbeta",
+					},
+				],
+			},
+			undefined,
+			undefined,
+			{ cwd, hasUI: true, ui: { notify() {} } },
+		);
+
+		expect(await readFile(path, "utf8")).toBe("alpha\nalpha\nbeta\ngamma\n");
+		const text = result.content[0]?.text ?? "";
+		expect(text).toContain("Warnings:");
+		expect(text).toContain("matches the previous surviving line");
+	});
+});
+
 it("returns noop range payload metadata when ranged edits make no changes", async () => {
 	await withTempFile("sample.txt", "alpha\n", async ({ cwd }) => {
 		const { pi, getTool } = makeFakePiRegistry();
@@ -555,12 +756,13 @@ it("returns noop range payload metadata when ranged edits make no changes", asyn
 	});
 });
 
-it("renders partial, markdown, and error edit results", () => {
+it("renders partial, markdown, error, and warning-bearing diff edit results", async () => {
 	const { pi, getTool } = makeFakePiRegistry();
 	registerEditTool(pi);
 	const editTool = getTool("edit");
 	const theme = {
 		fg: (_token: string, text: string) => text,
+		bg: (_token: string, text: string) => text,
 		bold: (text: string) => text,
 		italic: (text: string) => text,
 		underline: (text: string) => text,
@@ -595,4 +797,34 @@ it("renders partial, markdown, and error edit results", () => {
 	const renderedError = error.render(80).join("\n");
 	expect(renderedError).toContain("1: alpha");
 	expect(renderedError).not.toContain("1#");
+
+	await withTempFile("sample.txt", "function demo() {\n  run();\n}\n", async ({ cwd }) => {
+		const result = await editTool.execute(
+			"e1",
+			{
+				path: "sample.txt",
+				edits: [
+					{
+						op: "replace",
+						range: { start: `2#${computeLineHash(2, "  run();")}` },
+						content: "  run();\n}",
+					},
+				],
+			},
+			undefined,
+			undefined,
+			{ cwd, hasUI: true, ui: { notify() {} } },
+		);
+
+		const renderedSuccess = editTool
+			.renderResult(result, { expanded: true, isPartial: false }, theme, {
+				lastComponent: undefined,
+				isError: false,
+			})
+			.render(120)
+			.join("\n");
+		expect(renderedSuccess).toContain("Warnings:");
+		expect(renderedSuccess).toContain("Potential boundary duplication");
+		expect(renderedSuccess).toContain("Updated anchors");
+	});
 });
