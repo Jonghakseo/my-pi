@@ -1,5 +1,4 @@
 import { truncateToWidth, visibleWidth } from "@mariozechner/pi-tui";
-import { parseDisplayableEditDiffLine } from "./hashline-display.ts";
 
 export type EditDiffColor =
 	| "dim"
@@ -50,6 +49,27 @@ export interface RenderEditSideBySideOptions {
 }
 
 const MIN_SIDE_BY_SIDE_WIDTH = 20;
+const DISPLAYABLE_DIFF_LINE_RE = /^(?<prefix>[+\- ])(?<lineNum>\s*\d+)(?:\s(?<content>.*))?$/;
+
+function parseDisplayableEditDiffLine(
+	line: string,
+): { prefix: "+" | "-" | " "; lineNum: string; content: string } | null {
+	const match = DISPLAYABLE_DIFF_LINE_RE.exec(line);
+	if (!match?.groups) {
+		return null;
+	}
+
+	const prefix = match.groups.prefix;
+	if (prefix !== "+" && prefix !== "-" && prefix !== " ") {
+		return null;
+	}
+
+	return {
+		prefix,
+		lineNum: match.groups.lineNum.trim(),
+		content: match.groups.content ?? "",
+	};
+}
 
 export function parseEditUnifiedDiff(diffText: string): ParsedEditDiffLine[] {
 	const lines = diffText.split("\n");
@@ -248,10 +268,12 @@ export function renderEditSideBySide({
 
 	if (width < MIN_SIDE_BY_SIDE_WIDTH * 2 + 1) {
 		for (const row of preview.rows) {
-			if (row.left.type === "removed")
+			if (row.left.type === "removed") {
 				lines.push(theme.bg("toolErrorBg", theme.fg("toolDiffRemoved", `- ${row.left.content}`)));
-			if (row.right.type === "added")
+			}
+			if (row.right.type === "added") {
 				lines.push(theme.bg("toolSuccessBg", theme.fg("toolDiffAdded", `+ ${row.right.content}`)));
+			}
 			if (row.left.type === "context") lines.push(theme.fg("toolDiffContext", `  ${row.left.content}`));
 			if (row.left.type === "ellipsis") lines.push(theme.fg("muted", "  ..."));
 		}

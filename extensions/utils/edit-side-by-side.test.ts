@@ -15,7 +15,7 @@ const theme = {
 
 describe("parseEditUnifiedDiff", () => {
 	it("parses added, removed, context, and ellipsis rows", () => {
-		const parsed = parseEditUnifiedDiff(["  1 alpha", "- 2 beta", "+ 2 gamma", "    ..."].join("\n"));
+		const parsed = parseEditUnifiedDiff([" 1 alpha", "-2 beta", "+2 gamma", "    ..."].join("\n"));
 		expect(parsed).toEqual([
 			{ type: "context", lineNum: "1", content: "alpha" },
 			{ type: "removed", lineNum: "2", content: "beta" },
@@ -24,12 +24,12 @@ describe("parseEditUnifiedDiff", () => {
 		]);
 	});
 
-	it("parses hashline-formatted additions and context rows without exposing hashes", () => {
-		const parsed = parseEditUnifiedDiff(["  1#ZP:alpha", "- 2    beta", "+ 2#VR:gamma"].join("\n"));
+	it("supports padded line numbers from unified diffs", () => {
+		const parsed = parseEditUnifiedDiff(["  12 alpha", "- 13 beta", "+ 13 gamma"].join("\n"));
 		expect(parsed).toEqual([
-			{ type: "context", lineNum: "1", content: "alpha" },
-			{ type: "removed", lineNum: "2", content: "beta" },
-			{ type: "added", lineNum: "2", content: "gamma" },
+			{ type: "context", lineNum: "12", content: "alpha" },
+			{ type: "removed", lineNum: "13", content: "beta" },
+			{ type: "added", lineNum: "13", content: "gamma" },
 		]);
 	});
 });
@@ -37,7 +37,7 @@ describe("parseEditUnifiedDiff", () => {
 describe("buildEditSideBySideRows", () => {
 	it("aligns removed and added rows side by side", () => {
 		const rows = buildEditSideBySideRows(
-			parseEditUnifiedDiff(["  1 alpha", "- 2 beta", "+ 2 gamma", "  3 omega"].join("\n")),
+			parseEditUnifiedDiff([" 1 alpha", "-2 beta", "+2 gamma", " 3 omega"].join("\n")),
 		);
 
 		expect(rows[0]).toEqual({
@@ -57,7 +57,7 @@ describe("buildEditSideBySideRows", () => {
 
 describe("countEditDiffChanges", () => {
 	it("counts only added and removed lines", () => {
-		expect(countEditDiffChanges(["  1 alpha", "- 2 beta", "+ 2 gamma", "+ 3 delta"].join("\n"))).toEqual({
+		expect(countEditDiffChanges([" 1 alpha", "-2 beta", "+2 gamma", "+3 delta"].join("\n"))).toEqual({
 			additions: 2,
 			removals: 1,
 		});
@@ -67,7 +67,7 @@ describe("countEditDiffChanges", () => {
 describe("slicePreviewRows", () => {
 	it("starts the preview around the first changed row", () => {
 		const rows = buildEditSideBySideRows(
-			parseEditUnifiedDiff(["  1 alpha", "  2 beta", "- 3 gamma", "+ 3 delta", "  4 omega", "  5 tail"].join("\n")),
+			parseEditUnifiedDiff([" 1 alpha", " 2 beta", "-3 gamma", "+3 delta", " 4 omega", " 5 tail"].join("\n")),
 		);
 
 		const preview = slicePreviewRows(rows, 3);
@@ -80,7 +80,7 @@ describe("slicePreviewRows", () => {
 describe("renderEditSideBySide", () => {
 	it("renders summary and side-by-side rows", () => {
 		const lines = renderEditSideBySide({
-			diff: ["  1 alpha", "- 2 beta", "+ 2 gamma", "  3 omega"].join("\n"),
+			diff: [" 1 alpha", "-2 beta", "+2 gamma", " 3 omega"].join("\n"),
 			width: 80,
 			theme,
 		});
@@ -91,23 +91,9 @@ describe("renderEditSideBySide", () => {
 		expect(lines[2]).toContain("│");
 	});
 
-	it("renders hashline-formatted diffs without showing hash prefixes", () => {
-		const lines = renderEditSideBySide({
-			diff: ["  1#ZP:alpha", "- 2    beta", "+ 2#VR:gamma", "  3#WS:omega"].join("\n"),
-			width: 80,
-			theme,
-		});
-
-		expect(lines.join("\n")).not.toContain("#");
-		expect(lines[1]).toContain("alpha");
-		expect(lines[2]).toContain("beta");
-		expect(lines[2]).toContain("gamma");
-		expect(lines[3]).toContain("omega");
-	});
-
 	it("wraps removed sides in toolErrorBg and added sides in toolSuccessBg", () => {
 		const lines = renderEditSideBySide({
-			diff: ["  1 alpha", "- 2 beta", "+ 2 gamma", "  3 omega"].join("\n"),
+			diff: [" 1 alpha", "-2 beta", "+2 gamma", " 3 omega"].join("\n"),
 			width: 80,
 			theme,
 		});
@@ -119,7 +105,6 @@ describe("renderEditSideBySide", () => {
 		expect(changeRow).toContain("[toolSuccessBg]");
 		expect(changeRow).toContain("gamma");
 		expect(changeRow).toContain("[/toolSuccessBg]");
-		// Context rows stay unwrapped (no bg).
 		expect(lines[1] ?? "").not.toContain("[toolErrorBg]");
 		expect(lines[1] ?? "").not.toContain("[toolSuccessBg]");
 	});
@@ -131,7 +116,7 @@ describe("renderEditSideBySide", () => {
 			bold: (text: string) => text,
 		};
 		const lines = renderEditSideBySide({
-			diff: ["- 2 beta", "+ 2 gamma"].join("\n"),
+			diff: ["-2 beta", "+2 gamma"].join("\n"),
 			width: 10,
 			theme: narrowTheme,
 		});
@@ -142,7 +127,7 @@ describe("renderEditSideBySide", () => {
 
 	it("adds compact preview footer when rows are truncated", () => {
 		const lines = renderEditSideBySide({
-			diff: ["  1 alpha", "  2 beta", "- 3 gamma", "+ 3 delta", "  4 omega", "  5 tail"].join("\n"),
+			diff: [" 1 alpha", " 2 beta", "-3 gamma", "+3 delta", " 4 omega", " 5 tail"].join("\n"),
 			width: 80,
 			theme,
 			maxRows: 2,
