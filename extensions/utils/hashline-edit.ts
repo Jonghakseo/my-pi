@@ -781,7 +781,7 @@ function buildStructureOutline(sections: Array<{ label?: string; previewText: st
 function formatEditCall(
 	args: EditRequestParams | undefined,
 	state: EditRenderState,
-	showPreviewSummary: boolean,
+	options: { showPreviewSummary: boolean; showPreviewError: boolean },
 	theme: {
 		bold: (text: string) => string;
 		fg: (token: any, text: string) => string;
@@ -797,14 +797,16 @@ function formatEditCall(
 	}
 
 	if ("error" in state.preview) {
-		text += `\n\n${theme.fg("error", formatHashlineTextForDisplay(state.preview.error))}`;
+		if (options.showPreviewError) {
+			text += `\n\n${theme.fg("error", formatHashlineTextForDisplay(state.preview.error))}`;
+		}
 		return text;
 	}
 
-	if (showPreviewSummary && state.preview.diff) {
+	if (options.showPreviewSummary && state.preview.diff) {
 		text += `\n\n${formatPreviewSummary(state.preview.diff, theme)}`;
 	}
-	const previewWarnings = showPreviewSummary ? formatPreviewWarnings(state.preview.warnings) : undefined;
+	const previewWarnings = options.showPreviewSummary ? formatPreviewWarnings(state.preview.warnings) : undefined;
 	if (previewWarnings) {
 		text += `\n\n${theme.fg("warning", previewWarnings)}`;
 	}
@@ -819,7 +821,12 @@ function renderEditCallComponent(
 ): Component {
 	const preview = state.preview;
 	const showPreviewBody = !!preview && !("error" in preview) && !!preview.diff && !context.executionStarted;
-	const headerText = formatEditCall(args, state, !showPreviewBody, theme);
+	const headerText = formatEditCall(
+		args,
+		state,
+		{ showPreviewSummary: !showPreviewBody, showPreviewError: !context.executionStarted },
+		theme,
+	);
 	if (!showPreviewBody || !preview || "error" in preview) {
 		const text = context.lastComponent instanceof Text ? context.lastComponent : new Text("", 0, 0);
 		text.setText(headerText);

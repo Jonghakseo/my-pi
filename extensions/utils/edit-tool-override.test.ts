@@ -269,6 +269,43 @@ describe("hashline edit/read behavior", () => {
 		});
 	});
 
+	it("hides preview errors once execution has started", async () => {
+		await withTempFile("sample.txt", "alpha\nbeta\n", async ({ cwd }) => {
+			const { pi, getTool } = makeFakePiRegistry();
+			registerEditTool(pi);
+			const editTool = getTool("edit");
+			const invalidate = vi.fn();
+			const args = {
+				path: "sample.txt",
+				edits: [{ op: "replace", pos: `2#${computeLineHash(2, "BETA")}`, lines: ["BETA"] }],
+			};
+			const theme = {
+				fg: (_token: string, text: string) => text,
+				bg: (_token: string, text: string) => text,
+				bold: (text: string) => text,
+			};
+			const context = {
+				argsComplete: true,
+				state: {},
+				cwd,
+				expanded: true,
+				executionStarted: false,
+				invalidate,
+			};
+
+			editTool.renderCall(args, theme, context);
+			await vi.waitFor(() => expect(invalidate).toHaveBeenCalled());
+
+			const previewRendered = editTool.renderCall(args, theme, context).render(120).join("\n");
+			expect(previewRendered).toContain("stale anchor");
+
+			context.executionStarted = true;
+			const settledRendered = editTool.renderCall(args, theme, context).render(120).join("\n");
+			expect(settledRendered).toContain("edit sample.txt");
+			expect(settledRendered).not.toContain("stale anchor");
+		});
+	});
+
 	it("surfaces delimiter-only boundary duplication warnings in call previews", async () => {
 		await withTempFile("sample.txt", "function demo() {\n  run();\n}\n", async ({ cwd }) => {
 			const { pi, getTool } = makeFakePiRegistry();
