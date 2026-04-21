@@ -80,7 +80,8 @@ describe("edit tool UI override", () => {
 			await vi.waitFor(() => expect(invalidate).toHaveBeenCalled());
 
 			const previewRendered = editTool.renderCall(args, theme, context).render(120).join("\n");
-			expect(previewRendered).toContain("+1 / -1 (preview)");
+			expect(previewRendered).toContain("+1 / -1");
+			expect(previewRendered).not.toContain("(preview)");
 			expect(previewRendered).toContain("beta");
 			expect(previewRendered).toContain("BETA");
 			expect(previewRendered).toContain("│");
