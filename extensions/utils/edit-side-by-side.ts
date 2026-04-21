@@ -245,20 +245,13 @@ function formatSide(side: EditDiffRowSide, width: number, numbersWidth: number, 
 	return bgColor ? theme.bg(bgColor, colored) : colored;
 }
 
-export function renderEditSideBySide({
-	diff,
-	width,
-	theme,
-	maxRows,
-	isPreview = false,
-}: RenderEditSideBySideOptions): string[] {
+export function renderEditSideBySide({ diff, width, theme, maxRows }: RenderEditSideBySideOptions): string[] {
 	const rows = buildEditSideBySideRows(parseEditUnifiedDiff(diff));
 	const counts = countEditDiffChanges(diff);
 	const summary = [
 		theme.fg("success", `+${counts.additions}`),
 		theme.fg("dim", " / "),
 		theme.fg("error", `-${counts.removals}`),
-		isPreview ? theme.fg("warning", " (preview)") : "",
 	].join("");
 
 	if (rows.length === 0) return [summary];

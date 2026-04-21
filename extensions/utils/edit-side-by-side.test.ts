@@ -134,7 +134,8 @@ describe("renderEditSideBySide", () => {
 			isPreview: true,
 		});
 
-		expect(lines[0]).toContain("(preview)");
+		expect(lines[0]).toContain("+1 / -1");
+		expect(lines[0]).not.toContain("(preview)");
 		expect(lines.at(-1)).toContain("more rows");
 	});
 });
