@@ -565,11 +565,21 @@ function isRenderedEditSectionBoundary(line: string): boolean {
 
 function formatRenderedEditResultMarkdown(
 	text: string,
-	options: { expanded: boolean; includeDiffPreview?: boolean },
+	options: { expanded: boolean; includeDiffPreview?: boolean; hideLeadingStatusSummary?: boolean },
 ): string {
 	const lines = formatHashlineTextForDisplay(text).split("\n");
+	const displayedLines = [...lines];
+	if (options.hideLeadingStatusSummary && displayedLines[0]?.startsWith("Updated ")) {
+		displayedLines.shift();
+		if (displayedLines[0]?.startsWith("Changes:")) {
+			displayedLines.shift();
+		}
+		while (displayedLines[0] === "") {
+			displayedLines.shift();
+		}
+	}
 	const maxLines = options.expanded ? 60 : 20;
-	const shownLines = lines.slice(0, maxLines);
+	const shownLines = displayedLines.slice(0, maxLines);
 	const sections: string[] = [];
 	let plainLines: string[] = [];
 
@@ -618,8 +628,8 @@ function formatRenderedEditResultMarkdown(
 
 	flushPlainLines();
 
-	if (lines.length > maxLines) {
-		sections.push(`... ${lines.length - maxLines} more result lines`);
+	if (displayedLines.length > maxLines) {
+		sections.push(`... ${displayedLines.length - maxLines} more result lines`);
 	}
 
 	return sections.join("\n\n");
@@ -981,6 +991,7 @@ export function registerEditTool(pi: ExtensionAPI): void {
 				const supplementaryMarkdownText = formatRenderedEditResultMarkdown(renderedText, {
 					expanded,
 					includeDiffPreview: false,
+					hideLeadingStatusSummary: true,
 				});
 				if (supplementaryMarkdownText.trim().length > 0) {
 					container.addChild(new Spacer(1));

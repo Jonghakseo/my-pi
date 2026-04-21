@@ -882,5 +882,7 @@ it("renders partial, markdown, error, and warning-bearing diff edit results", as
 		expect(renderedSuccess).toContain("Warnings:");
 		expect(renderedSuccess).toContain("Potential boundary duplication");
 		expect(renderedSuccess).toContain("Updated anchors");
+		expect(renderedSuccess).not.toContain("Updated sample.txt");
+		expect(renderedSuccess).not.toContain("Changes: +");
 	});
 });
