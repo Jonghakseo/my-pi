@@ -1,6 +1,6 @@
 Apply precise file edits using `LINE#HASH` anchors from `read` output.
 
-Preferred shape: use one `edit` call per file, and express replacements as a block range plus a single `content` string.
+Preferred shape: use one `edit` call per file. For insertion-only changes, prefer `append`/`prepend`; when existing lines must change, express replacements as a block range plus a single `content` string.
 
 ```json
 {
@@ -17,7 +17,7 @@ Preferred shape: use one `edit` call per file, and express replacements as a blo
 ```
 
 Operations:
-- `replace` — replace `range.start` through optional `range.end` with `content` (`string` or `null`).
+- `replace` — replace `range.start` through optional `range.end` with `content` (`string` or `null`). Use this when you are actually rewriting or removing those existing lines.
 - `append` — insert `content` after `pos`. Omit `pos` to append at EOF.
 - `prepend` — insert `content` before `pos`. Omit `pos` to prepend at BOF.
 - `replace_text` — exact unique text replacement with `oldText` and `newText`. Use only when anchored edits are not practical.
@@ -27,9 +27,11 @@ Rules:
 - Copy anchors exactly from `read`. Never invent or reconstruct them.
 - `content` must be literal file content. Do not include `LINE#HASH:` prefixes or diff markers.
 - For `replace`, include only the new content for the targeted range. Do not repeat the line before or after the range.
+- If a change only inserts content next to existing lines, use `append`/`prepend` instead of `replace`.
+- If the new content would start or end with the same line that survives immediately outside the target range, the range is too narrow. Expand it or switch to `append`/`prepend`. Pay special attention to delimiter-only lines like `}`, `]`, `)`, `};`, `});`.
 - All edits in one call target the same pre-edit file state.
 - Do not emit overlapping or adjacent edits; merge them into one change.
-- Keep each edit as small as possible while still unique and correct.
+- Keep each edit as small as possible while still unique and correct, but not so small that boundary lines are duplicated.
 - If `replace_text` matches zero or multiple times, re-read and use anchors instead.
 
 Examples:

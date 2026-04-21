@@ -440,7 +440,7 @@ export function assertEditRequest(request: unknown): asserts request is EditRequ
 	}
 }
 
-type EditPreview = { diff: string } | { error: string };
+type EditPreview = { diff: string; warnings?: string[] } | { error: string };
 type EditRenderState = {
 	argsKey?: string;
 	preview?: EditPreview;
@@ -525,6 +525,13 @@ function formatPreviewSummary(diff: string, theme: { fg: (token: any, text: stri
 	].join(" ");
 }
 
+function formatPreviewWarnings(warnings: string[] | undefined): string | undefined {
+	if (!warnings?.length) {
+		return undefined;
+	}
+	return `Warnings:\n${warnings.join("\n")}`;
+}
+
 function getRenderedEditTextContent(result: { content?: Array<{ type: string; text?: string }> }): string | undefined {
 	const textContent = result.content?.find(
 		(entry): entry is { type: "text"; text: string } => entry.type === "text" && typeof entry.text === "string",
@@ -556,7 +563,10 @@ function isRenderedEditSectionBoundary(line: string): boolean {
 	);
 }
 
-function formatRenderedEditResultMarkdown(text: string, options: { expanded: boolean }): string {
+function formatRenderedEditResultMarkdown(
+	text: string,
+	options: { expanded: boolean; includeDiffPreview?: boolean },
+): string {
 	const lines = formatHashlineTextForDisplay(text).split("\n");
 	const maxLines = options.expanded ? 60 : 20;
 	const shownLines = lines.slice(0, maxLines);
@@ -583,7 +593,9 @@ function formatRenderedEditResultMarkdown(text: string, options: { expanded: boo
 				bodyLines.push(shownLines[index]!);
 				index++;
 			}
-			sections.push(["#### Diff preview", "```diff", ...trimEdgeEmptyLines(bodyLines), "```"].join("\n"));
+			if (options.includeDiffPreview !== false) {
+				sections.push(["#### Diff preview", "```diff", ...trimEdgeEmptyLines(bodyLines), "```"].join("\n"));
+			}
 			continue;
 		}
 
@@ -782,6 +794,10 @@ function formatEditCall(
 	if (showPreviewSummary && state.preview.diff) {
 		text += `\n\n${formatPreviewSummary(state.preview.diff, theme)}`;
 	}
+	const previewWarnings = showPreviewSummary ? formatPreviewWarnings(state.preview.warnings) : undefined;
+	if (previewWarnings) {
+		text += `\n\n${theme.fg("warning", previewWarnings)}`;
+	}
 	return text;
 }
 
@@ -807,6 +823,11 @@ function renderEditCallComponent(
 	container.addChild(
 		createEditDiffComponent({ diff: preview.diff }, theme, context.expanded, true, { showSummary: true }),
 	);
+	const previewWarnings = formatPreviewWarnings(preview.warnings);
+	if (previewWarnings) {
+		container.addChild(new Spacer(1));
+		container.addChild(new Text(theme.fg("warning", previewWarnings), 0, 0));
+	}
 	return container;
 }
 
@@ -859,9 +880,12 @@ export async function computeEditPreview(request: unknown, cwd: string): Promise
 
 		const originalNormalized = normalizeToLF(stripBom(file.text).text);
 		let result: string;
+		let warnings: string[] | undefined;
 		if (toolEdits.length > 0) {
 			const resolved = resolveEditAnchors(toolEdits);
-			result = applyHashlineEdits(originalNormalized, resolved).content;
+			const editResult = applyHashlineEdits(originalNormalized, resolved);
+			result = editResult.content;
+			warnings = editResult.warnings;
 		} else {
 			if (!legacy) return { error: "No edits provided." };
 			result = applyExactUniqueLegacyReplace(
@@ -877,7 +901,7 @@ export async function computeEditPreview(request: unknown, cwd: string): Promise
 			};
 		}
 
-		return { diff: generateDiffString(originalNormalized, result).diff };
+		return { diff: generateDiffString(originalNormalized, result).diff, ...(warnings ? { warnings } : {}) };
 	} catch (error: unknown) {
 		return { error: error instanceof Error ? error.message : String(error) };
 	}
@@ -902,7 +926,7 @@ export function registerEditTool(pi: ExtensionAPI): void {
 				context.state.argsKey = undefined;
 				context.state.preview = undefined;
 			} else {
-				const argsKey = JSON.stringify(previewInput);
+				const argsKey = JSON.stringify({ cwd: context.cwd, previewInput });
 				if (context.state.argsKey !== argsKey) {
 					context.state.argsKey = argsKey;
 					context.state.preview = undefined;
@@ -951,7 +975,20 @@ export function registerEditTool(pi: ExtensionAPI): void {
 
 			const details = result.details as HashlineEditToolDetails | undefined;
 			if (details?.diff) {
-				return createEditDiffComponent(details, theme as DiffTheme, expanded, isPartial);
+				const container = context.lastComponent instanceof Container ? context.lastComponent : new Container();
+				container.clear();
+				container.addChild(createEditDiffComponent(details, theme as DiffTheme, expanded, isPartial));
+				const supplementaryMarkdownText = formatRenderedEditResultMarkdown(renderedText, {
+					expanded,
+					includeDiffPreview: false,
+				});
+				if (supplementaryMarkdownText.trim().length > 0) {
+					container.addChild(new Spacer(1));
+					const markdown = new Markdown("", 0, 0, createRenderedEditMarkdownTheme(theme));
+					markdown.setText(supplementaryMarkdownText);
+					container.addChild(markdown);
+				}
+				return container;
 			}
 
 			const markdown =
