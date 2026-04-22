@@ -853,6 +853,26 @@ describe("pi-claude-code-use", () => {
 		}
 	});
 
+	it("merges USER_COMPANIONS entries into FLAT_TO_MCP and COMPANIONS", () => {
+		// Upstream entries still present
+		expect(_test.FLAT_TO_MCP.get("web_search_exa")).toBe("mcp__exa__web_search");
+		// Local repo aliases
+		expect(_test.FLAT_TO_MCP.get("subagent")).toBe("mcp__pi__subagent");
+		expect(_test.FLAT_TO_MCP.get("ask_master")).toBe("mcp__pi__ask_master");
+		expect(_test.FLAT_TO_MCP.get("interactive_shell")).toBe("mcp__pi__interactive_shell");
+		expect(_test.FLAT_TO_MCP.get("fetch_content")).toBe("mcp__pi__fetch_content");
+		expect(_test.FLAT_TO_MCP.get("upload_image_url")).toBe("mcp__pi__upload_image_url");
+		// npm-installed extensions
+		expect(_test.FLAT_TO_MCP.get("ask_user_question")).toBe("mcp__pi__ask_user_question");
+		expect(_test.FLAT_TO_MCP.get("recall")).toBe("mcp__pi__recall");
+		expect(_test.FLAT_TO_MCP.get("show_widget")).toBe("mcp__pi__show_widget");
+		expect(_test.FLAT_TO_MCP.get("todo_write")).toBe("mcp__pi__todo_write");
+		// COMPANIONS list contains user entries
+		const companionDirs = _test.COMPANIONS.map((c) => c.dirName);
+		expect(companionDirs).toContain("subagent");
+		expect(companionDirs).toContain("pi-extension-memory-layer");
+	});
+
 	it("refuses to alias tools from unrelated packages even if names match", async () => {
 		const pi = createMockPi();
 		pi.getAllTools.mockReturnValue([
