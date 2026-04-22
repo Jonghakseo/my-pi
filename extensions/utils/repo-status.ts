@@ -7,7 +7,7 @@ const PR_VIEW_ARGS = [
 	"pr",
 	"view",
 	"--json",
-	"number,title,url,reviewDecision,latestReviews,reviewRequests,statusCheckRollup",
+	"number,title,url,state,reviewDecision,latestReviews,reviewRequests,statusCheckRollup",
 ] as const;
 const GIT_POLL_INTERVAL_MS = 3000;
 const PR_POLL_INTERVAL_MS = 30_000;
@@ -38,11 +38,13 @@ export interface RepoStatusTracker {
 }
 
 type GithubReviewState = "APPROVED" | "CHANGES_REQUESTED" | "COMMENTED" | "DISMISSED" | "PENDING";
+type GithubPullRequestState = "OPEN" | "CLOSED" | "MERGED";
 
 type GhPrViewJson = {
 	number?: unknown;
 	title?: unknown;
 	url?: unknown;
+	state?: unknown;
 	latestReviews?: unknown;
 	reviewRequests?: unknown;
 	statusCheckRollup?: unknown;
@@ -200,11 +202,34 @@ function parseCheckSummary(statusCheckRollup: unknown): CheckSummary | null {
 	return summarizeChecks(checks);
 }
 
+function readPullRequestState(value: unknown): GithubPullRequestState | null {
+	if (value === "OPEN" || value === "CLOSED" || value === "MERGED") {
+		return value;
+	}
+	return null;
+}
+
+function emptyPrSnapshot(): Pick<
+	RepoStatusSnapshot,
+	"prNumber" | "prTitle" | "prUrl" | "review" | "checks" | "unresolvedInlineComments"
+> {
+	return {
+		prNumber: null,
+		prTitle: null,
+		prUrl: null,
+		review: null,
+		checks: null,
+		unresolvedInlineComments: null,
+	};
+}
+
 function parsePrSnapshot(
 	stdout: string,
 ): Pick<RepoStatusSnapshot, "prNumber" | "prTitle" | "prUrl" | "review" | "checks" | "unresolvedInlineComments"> {
 	try {
 		const parsed = JSON.parse(stdout) as GhPrViewJson;
+		const prState = readPullRequestState(parsed.state);
+		if (prState === "CLOSED" || prState === "MERGED") return emptyPrSnapshot();
 		return {
 			prNumber: readNumber(parsed.number),
 			prTitle: readString(parsed.title),
@@ -214,14 +239,7 @@ function parsePrSnapshot(
 			unresolvedInlineComments: null,
 		};
 	} catch {
-		return {
-			prNumber: null,
-			prTitle: null,
-			prUrl: null,
-			review: null,
-			checks: null,
-			unresolvedInlineComments: null,
-		};
+		return emptyPrSnapshot();
 	}
 }
 
