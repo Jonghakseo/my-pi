@@ -4,7 +4,6 @@
  */
 
 import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
-import { ELAPSED_STATUS_KEY } from "./utils/status-keys.ts";
 import { formatElapsedSince } from "./utils/time-utils.ts";
 
 const TIP_MESSAGES = [
@@ -52,7 +51,6 @@ export default function (pi: ExtensionAPI) {
 
 	pi.on("agent_start", async (_event, ctx) => {
 		latestCtx = ctx;
-		if (ctx.hasUI) ctx.ui.setStatus(ELAPSED_STATUS_KEY, undefined);
 		runStartedAt = Date.now();
 		currentMessage = pick(TIP_MESSAGES);
 		lastRotateAt = Date.now();
@@ -61,13 +59,7 @@ export default function (pi: ExtensionAPI) {
 
 	pi.on("agent_end", async (_event, ctx) => {
 		stopTimer();
-		if (ctx.hasUI) {
-			ctx.ui.setWorkingMessage();
-			if (runStartedAt > 0) {
-				const elapsed = formatElapsedSince(runStartedAt);
-				ctx.ui.setStatus(ELAPSED_STATUS_KEY, `✓ ${elapsed}`);
-			}
-		}
+		if (ctx.hasUI) ctx.ui.setWorkingMessage();
 		runStartedAt = 0;
 	});
 
