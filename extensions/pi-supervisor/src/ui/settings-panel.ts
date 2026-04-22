@@ -7,9 +7,9 @@
  * Opened via `/supervise` (no args) or `/supervise settings`.
  */
 
-import { SettingsList, type SettingItem, type SettingsListTheme } from "@mariozechner/pi-tui";
+import { SettingsList, type SettingItem, type SettingsListTheme, truncateToWidth } from "@mariozechner/pi-tui";
 import { ModelSelectorComponent, SettingsManager } from "@mariozechner/pi-coding-agent";
-import type { ExtensionContext } from "@mariozechner/pi-coding-agent";
+import type { ExtensionContext, Theme } from "@mariozechner/pi-coding-agent";
 import type { SupervisorState, Sensitivity } from "../types.js";
 import { isWidgetVisible } from "./status-widget.js";
 
@@ -26,6 +26,13 @@ export interface SettingsResult {
 	sensitivity?: Sensitivity;
 	widget?: boolean;
 	action?: "stop" | "start";
+}
+
+export function buildSettingsPanelTitle(theme: Pick<Theme, "fg" | "bold">, isActive: boolean, width: number): string {
+	const title = isActive
+		? `${theme.fg("accent", "◉")} ${theme.bold("Supervisor Settings")} ${theme.fg("dim", "(active)")}`
+		: `${theme.fg("dim", "○")} ${theme.bold("Supervisor Settings")}`;
+	return truncateToWidth(title, Math.max(0, width));
 }
 
 /**
@@ -145,10 +152,7 @@ export async function openSettings(
 		return {
 			render: (width: number) => {
 				const lines: string[] = [];
-				const title = isActive
-					? `${theme.fg("accent", "◉")} ${theme.bold("Supervisor Settings")} ${theme.fg("dim", "(active)")}`
-					: `${theme.fg("dim", "○")} ${theme.bold("Supervisor Settings")}`;
-				lines.push(title);
+				lines.push(buildSettingsPanelTitle(theme, isActive, width));
 				lines.push(theme.fg("dim", "─".repeat(Math.min(40, width))));
 				lines.push(...settingsList.render(width));
 				return lines;
