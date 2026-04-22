@@ -1,4 +1,5 @@
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
+import { fetchUnresolvedPullRequestReviewCommentsCount, isNoPullRequestError } from "./github-pr-review-comments.ts";
 import { type CheckSummary, parseGitStatusPorcelainV2, summarizeChecks } from "./git-utils.ts";
 
 const GIT_STATUS_ARGS = ["status", "--porcelain=v2", "--branch", "--untracked-files=normal"] as const;
@@ -91,10 +92,6 @@ function checkSummariesEqual(left: CheckSummary | null, right: CheckSummary | nu
 
 function normalizeExecText(text: string | undefined): string {
 	return (text ?? "").trim();
-}
-
-function isNoPullRequestError(text: string): boolean {
-	return text.toLowerCase().includes("no pull requests found");
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -201,87 +198,6 @@ function parseCheckSummary(statusCheckRollup: unknown): CheckSummary | null {
 		.filter(Boolean);
 	if (checks.length === 0) return null;
 	return summarizeChecks(checks);
-}
-
-function parseGitHubPullUrl(url: string | null): { owner: string; repo: string; number: number } | null {
-	if (!url) return null;
-	const match = url.match(/^https:\/\/github\.com\/([^/]+)\/([^/]+)\/pull\/(\d+)(?:\/.*)?$/u);
-	if (!match) return null;
-	return {
-		owner: match[1],
-		repo: match[2],
-		number: Number(match[3]),
-	};
-}
-
-function parseUnresolvedInlineComments(stdout: string): number | null {
-	try {
-		const parsed = JSON.parse(stdout) as {
-			data?: {
-				repository?: {
-					pullRequest?: {
-						reviewThreads?: {
-							nodes?: Array<{ isResolved?: unknown; isOutdated?: unknown; comments?: { totalCount?: unknown } }>;
-						};
-					};
-				};
-			};
-		};
-		const threads = asArray(parsed.data?.repository?.pullRequest?.reviewThreads?.nodes);
-		if (threads.length === 0) return 0;
-		let total = 0;
-		for (const thread of threads) {
-			if (!isRecord(thread)) continue;
-			if (thread.isResolved === true || thread.isOutdated === true) continue;
-			const comments = isRecord(thread.comments) ? readNumber(thread.comments.totalCount) : null;
-			total += comments ?? 0;
-		}
-		return total;
-	} catch {
-		return null;
-	}
-}
-
-async function fetchUnresolvedInlineComments(
-	pi: ExtensionAPI,
-	cwd: string,
-	prUrl: string | null,
-): Promise<number | null> {
-	const prInfo = parseGitHubPullUrl(prUrl);
-	if (!prInfo) return null;
-	const query = [
-		"query($owner:String!, $repo:String!, $number:Int!) {",
-		"  repository(owner:$owner, name:$repo) {",
-		"    pullRequest(number:$number) {",
-		"      reviewThreads(first:100) {",
-		"        nodes {",
-		"          isResolved",
-		"          isOutdated",
-		"          comments(first:100) { totalCount }",
-		"        }",
-		"      }",
-		"    }",
-		"  }",
-		"}",
-	].join("\n");
-	const result = await pi.exec(
-		"gh",
-		[
-			"api",
-			"graphql",
-			"-f",
-			`query=${query}`,
-			"-F",
-			`owner=${prInfo.owner}`,
-			"-F",
-			`repo=${prInfo.repo}`,
-			"-F",
-			`number=${prInfo.number}`,
-		],
-		{ cwd },
-	);
-	if (result.code !== 0) return null;
-	return parseUnresolvedInlineComments(result.stdout ?? "");
 }
 
 function parsePrSnapshot(
@@ -426,7 +342,11 @@ export function createRepoStatusTracker(pi: ExtensionAPI, cwd: string): RepoStat
 				return;
 			}
 			const nextPrSnapshot = parsePrSnapshot(result.stdout ?? "");
-			const unresolvedInlineComments = await fetchUnresolvedInlineComments(pi, cwd, nextPrSnapshot.prUrl);
+			const unresolvedInlineComments = await fetchUnresolvedPullRequestReviewCommentsCount(
+				pi,
+				cwd,
+				nextPrSnapshot.prUrl,
+			);
 			if (shouldDiscardPrResult(requestedBranch)) return;
 			setSnapshot({
 				...snapshot,
