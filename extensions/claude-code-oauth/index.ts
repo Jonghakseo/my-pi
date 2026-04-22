@@ -9,12 +9,13 @@ import * as piAiModule from "@mariozechner/pi-ai";
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import * as piCodingAgentModule from "@mariozechner/pi-coding-agent";
 import * as typeboxModule from "@sinclair/typebox";
+import { USER_COMPANIONS } from "./user-companions.js";
 
 // ============================================================================
 // Types
 // ============================================================================
 
-interface CompanionSpec {
+export interface CompanionSpec {
 	dirName: string;
 	packageName: string;
 	aliases: ReadonlyArray<readonly [flatName: string, mcpName: string]>;
@@ -52,19 +53,8 @@ const CORE_TOOL_NAMES = new Set([
 	"websearch",
 ]);
 
-/** Flat companion tool name → MCP-style alias. */
-const FLAT_TO_MCP = new Map<string, string>([
-	["web_search_exa", "mcp__exa__web_search"],
-	["get_code_context_exa", "mcp__exa__get_code_context"],
-	["firecrawl_scrape", "mcp__firecrawl__scrape"],
-	["firecrawl_map", "mcp__firecrawl__map"],
-	["firecrawl_search", "mcp__firecrawl__search"],
-	["generate_image", "mcp__antigravity__generate_image"],
-	["image_quota", "mcp__antigravity__image_quota"],
-]);
-
-/** Known companion extensions and the tools they provide. */
-const COMPANIONS: CompanionSpec[] = [
+/** Upstream companion extensions and the tools they provide. */
+const UPSTREAM_COMPANIONS: CompanionSpec[] = [
 	{
 		dirName: "pi-exa-mcp",
 		packageName: "@benvargas/pi-exa-mcp",
@@ -91,6 +81,14 @@ const COMPANIONS: CompanionSpec[] = [
 		],
 	},
 ];
+
+/** Merged companion list (upstream + user-defined). User entries extend, never overwrite. */
+const COMPANIONS: CompanionSpec[] = [...UPSTREAM_COMPANIONS, ...USER_COMPANIONS];
+
+/** Flat companion tool name → MCP-style alias. Derived from COMPANIONS. */
+const FLAT_TO_MCP = new Map<string, string>(
+	COMPANIONS.flatMap((spec) => spec.aliases.map(([flat, mcp]) => [flat, mcp] as const)),
+);
 
 /** Reverse lookup: flat tool name → its companion spec. */
 const TOOL_TO_COMPANION = new Map<string, CompanionSpec>(
