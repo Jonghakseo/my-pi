@@ -2,9 +2,9 @@
   "theme": "gruvbox",
   "quietStartup": true,
   "lastChangelogVersion": "0.68.1",
-  "defaultProvider": "anthropic",
-  "defaultModel": "claude-opus-4-6",
-  "defaultThinkingLevel": "medium",
+  "defaultProvider": "openai-codex",
+  "defaultModel": "gpt-5.4",
+  "defaultThinkingLevel": "high",
   "subagent": {
     "claudeRuntime": "cli"
   },
@@ -27,12 +27,14 @@
     "npm:@ryan_nookpi/pi-extension-claude-mcp-bridge",
     "npm:@ryan_nookpi/pi-extension-memory-layer",
     "npm:@ryan_nookpi/pi-extension-diff-review",
-    "npm:@ryan_nookpi/pi-extension-claude-spinner"
+    "npm:@ryan_nookpi/pi-extension-claude-spinner",
+    "npm:@ryan_nookpi/pi-extension-cc-system-prompt"
   ],
   "compaction": {
     "enabled": true
   },
-  "hideThinkingBlock": false,
+  "hideThinkingBlock": true,
   "collapseChangelog": true,
-  "doubleEscapeAction": "tree"
+  "doubleEscapeAction": "tree",
+  "autocompleteMaxVisible": 3
 }
