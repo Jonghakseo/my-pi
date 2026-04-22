@@ -3,12 +3,21 @@ import { truncateToWidth, visibleWidth } from "@mariozechner/pi-tui";
 
 import { formatNameStatus } from "../utils/auto-name-utils.ts";
 import { formatContextUsageBar } from "../utils/format-utils.ts";
+import type { CheckSummary } from "../utils/git-utils.ts";
 import type { RepoStatusSnapshot } from "../utils/repo-status.ts";
-import { ELAPSED_STATUS_KEY, NAME_STATUS_KEY } from "../utils/status-keys.ts";
+import { NAME_STATUS_KEY } from "../utils/status-keys.ts";
 import { type CustomStyleConfig, colorize } from "./config.ts";
 import { createFooterStateManager, type FooterStateManager } from "./footer-state.ts";
 
 const BAR_WIDTH = 10;
+const LINE1_SEPARATOR = " / ";
+const LINE2_RIGHT_SEPARATOR = " | ";
+const CONTEXT_SEPARATOR = "   ";
+const BRANCH_ICON = "";
+const REVIEW_ICON = "󰱼";
+const CI_PENDING_ICON = "󰑓";
+const CI_SUCCESS_ICON = "󰗠";
+const CI_FAILED_ICON = "󰄲";
 
 type StatusStyler = (theme: Theme, text: string) => string;
 
@@ -23,7 +32,6 @@ const STATUS_STYLE_MAP: Record<string, StatusStyler> = {
 		const chip = ` ${theme.fg("text", text)} `;
 		return theme.bg("selectedBg", chip);
 	},
-	[ELAPSED_STATUS_KEY]: (theme, text) => theme.fg("success", text),
 };
 
 function sanitizeStatusText(text: string): string {
@@ -40,7 +48,6 @@ function styleStatus(theme: Theme, key: string, text: string): string {
 
 function buildFooterStatusEntries(ctx: ExtensionContext, footerData: FooterStatusData) {
 	const statusEntries = Array.from(footerData.getExtensionStatuses().entries())
-		.filter(([key]) => key !== NAME_STATUS_KEY)
 		.map(([key, text]) => [key, sanitizeStatusText(text)] as const)
 		.filter(([, text]) => Boolean(text));
 	const sessionName = ctx.sessionManager.getSessionName();
@@ -66,18 +73,6 @@ function formatCwdLabel(cwd: string, cwdIcon: string): string {
 	return cwdIcon ? `${cwdIcon} ${last}` : last;
 }
 
-function buildGitStatusBlock(config: CustomStyleConfig, theme: Theme, repoStatus: RepoStatusSnapshot): string {
-	const gitStatusColor = (text: string) => colorize(theme, config.colors.gitStatus, text);
-	const parts = [
-		repoStatus.isDirty ? "*" : "",
-		repoStatus.prNumber !== null ? `#${repoStatus.prNumber}` : "",
-		repoStatus.ahead > 0 ? `${config.icons.ahead}${repoStatus.ahead}` : "",
-		repoStatus.behind > 0 ? `${config.icons.behind}${repoStatus.behind}` : "",
-	].filter(Boolean);
-
-	return parts.length > 0 ? gitStatusColor(`[${parts.join(" ")}]`) : "";
-}
-
 function getContextColor(config: CustomStyleConfig, percent: number): string {
 	const remaining = 100 - percent;
 	if (remaining <= 15) return config.colors.contextError;
@@ -85,56 +80,105 @@ function getContextColor(config: CustomStyleConfig, percent: number): string {
 	return config.colors.contextNormal;
 }
 
-function buildLeftSection(
+function buildLine1Left(
 	ctx: ExtensionContext,
 	config: CustomStyleConfig,
 	theme: Theme,
 	repoName: string | null,
-	repoStatus: RepoStatusSnapshot,
-	branch: string | null,
+	statusEntries: ReadonlyArray<readonly [string, string]>,
 ): string {
 	const cwd = ctx.sessionManager.getCwd();
 	const folder = getFolderName(cwd);
-	const displayName = repoName || folder;
 	const cwdLabel = colorize(theme, config.colors.cwdText, formatCwdLabel(cwd, config.icons.cwd));
-	const nameLabel = displayName !== folder ? colorize(theme, "accent", displayName) : "";
-	const gitColor = (text: string) => colorize(theme, config.colors.git, text);
-	const gitIcon = gitColor(config.icons.git);
-	const statusBlock = buildGitStatusBlock(config, theme, repoStatus);
-	const branchLabel = branch
-		? `${colorize(theme, "text", "on")} ${gitIcon} ${gitColor(branch)}${statusBlock ? ` ${statusBlock}` : ""}`
-		: "";
-
-	return [cwdLabel, nameLabel, branchLabel].filter(Boolean).join(" ");
+	const repoLabel = repoName && repoName !== folder ? theme.fg("accent", `(${repoName})`) : "";
+	const sessionLabel = statusEntries
+		.filter(([key]) => key === NAME_STATUS_KEY)
+		.map(([key, text]) => styleStatus(theme, key, text))[0];
+	return (
+		[cwdLabel, repoLabel].filter(Boolean).join(" ") +
+		(sessionLabel ? `${theme.fg("dim", LINE1_SEPARATOR)}${sessionLabel}` : "")
+	);
 }
 
-function buildRightSection(
+function splitContextBarParts(percent: number): { bar: string; percentLabel: string } {
+	const [bar = "", percentLabel = ""] = formatContextUsageBar(percent, BAR_WIDTH).split(/ (?=\d+%$)/u);
+	return { bar, percentLabel };
+}
+
+function buildLine1Right(
 	config: CustomStyleConfig,
 	theme: Theme,
-	separator: string,
 	statusEntries: ReadonlyArray<readonly [string, string]>,
 	percent: number,
 ): string {
 	const mcpStatusEntry = statusEntries.find(([, text]) => /\bMCP\b/i.test(text));
-	const bar = formatContextUsageBar(percent, BAR_WIDTH);
+	const { bar, percentLabel } = splitContextBarParts(percent);
 	const contextColor = getContextColor(config, percent);
-
-	return [mcpStatusEntry ? colorize(theme, "dim", mcpStatusEntry[1]) : "", colorize(theme, contextColor, bar)]
+	return [
+		mcpStatusEntry ? colorize(theme, "dim", mcpStatusEntry[1]) : "",
+		bar ? colorize(theme, contextColor, bar) : "",
+		percentLabel ? colorize(theme, contextColor, percentLabel) : "",
+	]
 		.filter(Boolean)
-		.join(separator);
+		.join(CONTEXT_SEPARATOR);
 }
 
-function buildSecondaryLine(
+function buildPrLabel(theme: Theme, repoStatus: RepoStatusSnapshot): string {
+	if (repoStatus.prNumber === null) return "";
+	const prText = `#${repoStatus.prNumber}${repoStatus.prTitle ? ` ${repoStatus.prTitle}` : ""}`;
+	return theme.fg("accent", `[${prText}]`);
+}
+
+function buildLine2Left(
+	config: CustomStyleConfig,
 	theme: Theme,
-	width: number,
-	statusEntries: ReadonlyArray<readonly [string, string]>,
-): string | null {
-	const renderedStatuses = statusEntries
-		.filter(([, text]) => !/\bMCP\b/i.test(text))
-		.map(([key, text]) => styleStatus(theme, key, text));
-	if (renderedStatuses.length === 0) return null;
-	const delimiter = theme.fg("dim", " · ");
-	return truncateToWidth(` ${renderedStatuses.join(delimiter)}`, width);
+	repoStatus: RepoStatusSnapshot,
+	branch: string | null,
+): string {
+	if (!branch && repoStatus.prNumber === null) return "";
+	const gitColor = (text: string) => colorize(theme, config.colors.git, text);
+	const branchLabel = branch ? `${gitColor(BRANCH_ICON)} ${gitColor(branch)}` : "";
+	const prLabel = buildPrLabel(theme, repoStatus);
+	return [`  ${branchLabel}`, prLabel].filter(Boolean).join(" ").trimEnd();
+}
+
+function buildReviewLabel(theme: Theme, repoStatus: RepoStatusSnapshot): string {
+	if (!repoStatus.review) return "";
+	const { approved, total } = repoStatus.review;
+	return `${theme.fg("warning", REVIEW_ICON)} ${theme.fg("text", `${approved}/${total}`)}`;
+}
+
+function buildCiSegment(theme: Theme, icon: string, color: "warning" | "success" | "error", count: number): string {
+	if (count <= 0) return "";
+	return `${theme.fg(color, icon)} ${theme.fg("text", String(count))}`;
+}
+
+function buildCiLabel(theme: Theme, checks: CheckSummary | null): string {
+	if (!checks) return "";
+	return [
+		buildCiSegment(theme, CI_PENDING_ICON, "warning", checks.pending),
+		buildCiSegment(theme, CI_SUCCESS_ICON, "success", checks.success),
+		buildCiSegment(theme, CI_FAILED_ICON, "error", checks.failed),
+	]
+		.filter(Boolean)
+		.join("  ");
+}
+
+function buildLine2Right(theme: Theme, repoStatus: RepoStatusSnapshot): string {
+	if (repoStatus.prNumber === null) return "";
+	const separator = theme.fg("dim", LINE2_RIGHT_SEPARATOR);
+	return [buildReviewLabel(theme, repoStatus), buildCiLabel(theme, repoStatus.checks)].filter(Boolean).join(separator);
+}
+
+function renderAlignedLine(width: number, left: string, right: string): string {
+	const innerWidth = Math.max(1, width - 2);
+	if (!right) return ` ${truncateToWidth(left, innerWidth)} `;
+	const rightWidth = visibleWidth(right);
+	if (rightWidth >= innerWidth) return ` ${truncateToWidth(right, innerWidth)} `;
+	const maxLeftWidth = Math.max(1, innerWidth - rightWidth - 1);
+	const renderedLeft = truncateToWidth(left, maxLeftWidth);
+	const paddingWidth = Math.max(1, innerWidth - visibleWidth(renderedLeft) - rightWidth);
+	return ` ${renderedLeft}${" ".repeat(paddingWidth)}${right} `;
 }
 
 export function installFooter(pi: ExtensionAPI, ctx: ExtensionContext, config: CustomStyleConfig) {
@@ -147,7 +191,6 @@ export function installFooter(pi: ExtensionAPI, ctx: ExtensionContext, config: C
 			() => tui.requestRender(),
 			(listener) => footerData.onBranchChange(listener),
 		);
-		const separator = colorize(theme, config.colors.separator, " | ");
 
 		return {
 			dispose() {
@@ -156,23 +199,17 @@ export function installFooter(pi: ExtensionAPI, ctx: ExtensionContext, config: C
 			invalidate() {},
 			render(width: number): string[] {
 				const state = stateManager.getState();
-				const branch = footerData.getGitBranch();
+				const branch = state.repoStatus.branch ?? footerData.getGitBranch();
 				const statusEntries = buildFooterStatusEntries(ctx, footerData);
-				const innerWidth = Math.max(1, width - 2);
 				const percent = clamp(Math.round(ctx.getContextUsage()?.percent ?? 0), 0, 100);
-				const left = buildLeftSection(ctx, config, theme, state.repoName, state.repoStatus, branch);
-				const right = buildRightSection(config, theme, separator, statusEntries, percent);
-				const leftWidth = visibleWidth(left);
-				const rightWidth = visibleWidth(right);
-				const content =
-					leftWidth >= innerWidth
-						? truncateToWidth(left, innerWidth)
-						: leftWidth + 1 + rightWidth <= innerWidth
-							? `${left}${" ".repeat(innerWidth - leftWidth - rightWidth)}${right}`
-							: left;
-				const lines = [` ${content} `];
-				const secondaryLine = buildSecondaryLine(theme, width, statusEntries);
-				if (secondaryLine) lines.push(secondaryLine);
+				const line1Left = buildLine1Left(ctx, config, theme, state.repoName, statusEntries);
+				const line1Right = buildLine1Right(config, theme, statusEntries, percent);
+				const line2Left = buildLine2Left(config, theme, state.repoStatus, branch);
+				const line2Right = buildLine2Right(theme, state.repoStatus);
+				const lines = [renderAlignedLine(width, line1Left, line1Right)];
+				if (line2Left || line2Right) {
+					lines.push(renderAlignedLine(width, line2Left, line2Right));
+				}
 				return lines;
 			},
 		};
