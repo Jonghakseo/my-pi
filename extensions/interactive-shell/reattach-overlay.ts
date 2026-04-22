@@ -21,6 +21,7 @@ import {
 	reattachedHint,
 	SCROLL_HINT_SHORT,
 } from "./strings.js";
+import { centerOverlayText, fitOverlayRowContent } from "./render-utils.js";
 import {
 	type DialogChoice,
 	FOOTER_LINES_COMPACT,
@@ -318,11 +319,7 @@ export class ReattachOverlay implements Component, Focusable {
 		const warning = (s: string) => th.fg("warning", s);
 
 		const innerWidth = width - 4;
-		const pad = (s: string, w: number) => {
-			const vis = visibleWidth(s);
-			return s + " ".repeat(Math.max(0, w - vis));
-		};
-		const row = (content: string) => border("│ ") + pad(content, innerWidth) + border(" │");
+		const row = (content: string) => border("│ ") + fitOverlayRowContent(content, innerWidth) + border(" │");
 		const emptyRow = () => row("");
 
 		const lines: string[] = [];
@@ -369,12 +366,7 @@ export class ReattachOverlay implements Component, Focusable {
 
 		if (this.session.isScrolledUp()) {
 			const hintText = SCROLL_HINT_SHORT;
-			const padLen = Math.max(0, Math.floor((width - 2 - visibleWidth(hintText)) / 2));
-			lines.push(
-				border("├") +
-					dim(" ".repeat(padLen) + hintText + " ".repeat(width - 2 - padLen - visibleWidth(hintText))) +
-					border("┤"),
-			);
+			lines.push(border("├") + dim(centerOverlayText(hintText, width - 2)) + border("┤"));
 		} else {
 			lines.push(border(`├${"─".repeat(width - 2)}┤`));
 		}
