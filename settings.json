@@ -2,17 +2,15 @@
   "theme": "gruvbox",
   "quietStartup": true,
   "lastChangelogVersion": "0.68.1",
-  "defaultProvider": "openai-codex",
-  "defaultModel": "gpt-5.4",
-  "defaultThinkingLevel": "high",
+  "defaultProvider": "anthropic",
+  "defaultModel": "claude-opus-4-6",
+  "defaultThinkingLevel": "medium",
   "subagent": {
     "claudeRuntime": "cli"
   },
   "enabledModels": [
     "openai-codex/gpt-5.4",
-    "google-gemini-cli/gemini-3.1-pro-preview",
-    "anthropic/claude-opus-4-7",
-    "google-gemini-cli/gemini-3-flash-preview"
+    "anthropic/claude-opus-4-6"
   ],
   "packages": [
     "npm:@ryan_nookpi/pi-extension-codex-fast-mode",
@@ -22,7 +20,6 @@
     "npm:@ryan_nookpi/pi-extension-delayed-action",
     "npm:@ryan_nookpi/pi-extension-idle-screensaver",
     "npm:@ryan_nookpi/pi-extension-todo-write",
-    "npm:@ryan_nookpi/pi-extension-cc-system-prompt",
     "npm:@ryan_nookpi/pi-extension-open-pr",
     "npm:@ryan_nookpi/pi-extension-generative-ui",
     "npm:@ryan_nookpi/pi-extension-cross-agent",
