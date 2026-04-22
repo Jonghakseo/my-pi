@@ -17,7 +17,9 @@
 | [`files.ts`](./files.ts) | 파일 피커 / Diff 뷰어 UI |
 | [`fork-panel.ts`](./fork-panel.ts) | 현재 세션을 Ghostty split panel로 포크 |
 | [`interactive-shell/`](./interactive-shell/index.ts) | 인터랙티브/핸즈프리/디스패치 모드의 셸 오버레이 |
-| [`pr-comments.ts`](./pr-comments.ts) | 현재 PR의 unresolved inline review comment를 에디터에 append |
+| [`pr-comments.ts`](./pr-comments.ts) | `/github:get-pr-comments` — 현재 PR의 unresolved inline review comment를 에디터에 append |
+| [`pr-review-re-request.ts`](./pr-review-re-request.ts) | `/github:pr-review-re-request` — 현재 PR의 미승인 리뷰어에게 review re-request 전송 |
+| [`github-pr-merge.ts`](./github-pr-merge.ts) | `/github:pr-merge` — 현재 PR을 gh CLI로 merge |
 | [`notify/`](./notify/index.ts) | `/notify`로 세션별 작업 완료 알림(OSC 777/99) + macOS `say` TTS |
 | [`footer.ts`](./footer.ts) | 커스텀 푸터 UI (모델, 브랜치, 컨텍스트 바) |
 | [`theme-cycler.ts`](./theme-cycler.ts) | `Ctrl+Shift+X`로 테마 순환 |

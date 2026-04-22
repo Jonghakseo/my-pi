@@ -18,8 +18,8 @@ function notify(ctx: ExtensionContext, message: string, level: "info" | "warning
 }
 
 export default function prComments(pi: ExtensionAPI) {
-	pi.registerCommand("pr-comments", {
-		description: "Append unresolved inline review comments from the current PR to the editor",
+	pi.registerCommand("github:get-pr-comments", {
+		description: "현재 PR의 unresolved inline review comments를 에디터에 추가",
 		handler: async (_args, ctx) => {
 			const currentPrResult = await fetchCurrentPullRequestInfo(pi, ctx.cwd);
 			if (!currentPrResult.ok) {
