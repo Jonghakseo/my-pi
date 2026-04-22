@@ -714,6 +714,72 @@ describe("pi-claude-code-use", () => {
 	// Capture shim
 	// ----------------------------------------------------------------
 
+	it("no-ops sendMessage/appendEntry during capture phase but forwards to realPi after phase flips", () => {
+		const pi = createMockPi();
+		const captured = new Map();
+		const phase = { capturing: true };
+		const shim = _test.buildCaptureShim(pi as unknown as ExtensionAPI, captured, phase);
+
+		// Capture phase: must not leak side effects to realPi
+		shim.sendMessage(
+			{ customType: "x", content: [{ type: "text", text: "hi" }], display: { collapsed: false } as never },
+			{ triggerTurn: true },
+		);
+		shim.appendEntry("foo", { bar: 1 });
+		shim.sendUserMessage("hello");
+		shim.setSessionName("capture-name");
+		shim.setLabel("entry-1", "label");
+		expect(pi.sendMessage).not.toHaveBeenCalled();
+		expect(pi.appendEntry).not.toHaveBeenCalled();
+		expect(pi.sendUserMessage).not.toHaveBeenCalled();
+		expect(pi.setSessionName).not.toHaveBeenCalled();
+		expect(pi.setLabel).not.toHaveBeenCalled();
+		expect(shim.getSessionName()).toBeUndefined();
+
+		// Flip to live phase
+		phase.capturing = false;
+
+		shim.sendMessage(
+			{ customType: "x", content: [{ type: "text", text: "bye" }], display: { collapsed: false } as never },
+			{ triggerTurn: true },
+		);
+		shim.appendEntry("foo", { bar: 2 });
+		shim.sendUserMessage("goodbye");
+		shim.setSessionName("live-name");
+		shim.setLabel("entry-1", "done");
+		expect(pi.sendMessage).toHaveBeenCalledTimes(1);
+		expect(pi.appendEntry).toHaveBeenCalledWith("foo", { bar: 2 });
+		expect(pi.sendUserMessage).toHaveBeenCalledWith("goodbye", undefined);
+		expect(pi.setSessionName).toHaveBeenCalledWith("live-name");
+		expect(pi.setLabel).toHaveBeenCalledWith("entry-1", "done");
+	});
+
+	it("keeps listener/command/provider registrations as no-ops in both phases", () => {
+		const pi = createMockPi();
+		const captured = new Map();
+		const phase = { capturing: true };
+		const shim = _test.buildCaptureShim(pi as unknown as ExtensionAPI, captured, phase);
+
+		shim.on("agent_end", () => {});
+		shim.registerCommand("x", { handler: () => {} } as never);
+		shim.registerShortcut("ctrl+x", { handler: () => {} } as never);
+		shim.registerMessageRenderer("t", () => ({}) as never);
+		shim.registerProvider("p", {} as never);
+		shim.unregisterProvider("p");
+
+		phase.capturing = false;
+		shim.on("agent_end", () => {});
+		shim.registerCommand("y", { handler: () => {} } as never);
+		shim.registerProvider("p2", {} as never);
+
+		expect(pi.on).not.toHaveBeenCalled();
+		expect(pi.registerCommand).not.toHaveBeenCalled();
+		expect(pi.registerShortcut).not.toHaveBeenCalled();
+		expect(pi.registerMessageRenderer).not.toHaveBeenCalled();
+		expect(pi.registerProvider).not.toHaveBeenCalled();
+		expect(pi.unregisterProvider).not.toHaveBeenCalled();
+	});
+
 	it("does not forward flag registration to realPi and gates flag access through the capture shim", () => {
 		const pi = {
 			...createMockPi(),
