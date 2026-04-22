@@ -8,7 +8,7 @@ pre-commit:
       priority: 1
       root: extensions/
       glob:
-        - "**/*.{js,cjs,mjs,jsx,ts,tsx,json,jsonc,md,yml,yaml}"
+        - "**/*.{js,cjs,mjs,jsx,ts,tsx,json,jsonc,yml,yaml}"
       run: pnpm exec biome format --write {staged_files}
       stage_fixed: true
       skip:
