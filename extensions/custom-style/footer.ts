@@ -15,6 +15,7 @@ const LINE2_RIGHT_SEPARATOR = " | ";
 const CONTEXT_SEPARATOR = "   ";
 const BRANCH_ICON = "";
 const REVIEW_ICON = "󰱼";
+const INLINE_COMMENT_ICON = "󰍡";
 const CI_PENDING_ICON = "󰑓";
 const CI_SUCCESS_ICON = "󰗠";
 const CI_FAILED_ICON = "󰄲";
@@ -112,9 +113,15 @@ function buildLine1Right(
 	percent: number,
 ): string {
 	const mcpStatusEntry = statusEntries.find(([, text]) => /\bMCP\b/i.test(text));
+	const auxiliaryStatuses = statusEntries
+		.filter(([key, text]) => key !== NAME_STATUS_KEY && !/\bMCP\b/i.test(text))
+		.map(([key, text]) => styleStatus(theme, key, text))
+		.filter(Boolean)
+		.join(theme.fg("dim", "  "));
 	const { bar, percentLabel } = splitContextBarParts(percent);
 	const contextColor = getContextColor(config, percent);
 	return [
+		auxiliaryStatuses,
 		mcpStatusEntry ? colorize(theme, "dim", mcpStatusEntry[1]) : "",
 		bar ? colorize(theme, contextColor, bar) : "",
 		percentLabel ? colorize(theme, contextColor, percentLabel) : "",
@@ -126,7 +133,7 @@ function buildLine1Right(
 function buildPrLabel(theme: Theme, repoStatus: RepoStatusSnapshot): string {
 	if (repoStatus.prNumber === null) return "";
 	const prText = `#${repoStatus.prNumber}${repoStatus.prTitle ? ` ${repoStatus.prTitle}` : ""}`;
-	return theme.fg("accent", `[${prText}]`);
+	return theme.fg("accent", prText);
 }
 
 function buildLine2Left(
@@ -137,9 +144,16 @@ function buildLine2Left(
 ): string {
 	if (!branch && repoStatus.prNumber === null) return "";
 	const gitColor = (text: string) => colorize(theme, config.colors.git, text);
-	const branchLabel = branch ? `${gitColor(BRANCH_ICON)} ${gitColor(branch)}` : "";
+	const branchStatusParts = [
+		repoStatus.isDirty ? "*" : "",
+		repoStatus.ahead > 0 ? `${config.icons.ahead}${repoStatus.ahead}` : "",
+		repoStatus.behind > 0 ? `${config.icons.behind}${repoStatus.behind}` : "",
+	].filter(Boolean);
+	const branchStatus = branchStatusParts.length > 0 ? ` ${branchStatusParts.join(" ")}` : "";
+	const branchLabel = branch ? `${gitColor(BRANCH_ICON)} ${gitColor(branch)}${gitColor(branchStatus)}` : "";
+	const branchPrefix = gitColor("└");
 	const prLabel = buildPrLabel(theme, repoStatus);
-	return [`  ${branchLabel}`, prLabel].filter(Boolean).join(" ").trimEnd();
+	return [`${branchPrefix} ${branchLabel}`, prLabel].filter(Boolean).join(" ").trimEnd();
 }
 
 function buildReviewLabel(theme: Theme, repoStatus: RepoStatusSnapshot): string {
@@ -164,10 +178,21 @@ function buildCiLabel(theme: Theme, checks: CheckSummary | null): string {
 		.join("  ");
 }
 
+function buildInlineCommentLabel(theme: Theme, repoStatus: RepoStatusSnapshot): string {
+	if (!repoStatus.unresolvedInlineComments || repoStatus.unresolvedInlineComments <= 0) return "";
+	return `${theme.fg("warning", INLINE_COMMENT_ICON)} ${theme.fg("text", String(repoStatus.unresolvedInlineComments))}`;
+}
+
 function buildLine2Right(theme: Theme, repoStatus: RepoStatusSnapshot): string {
 	if (repoStatus.prNumber === null) return "";
 	const separator = theme.fg("dim", LINE2_RIGHT_SEPARATOR);
-	return [buildReviewLabel(theme, repoStatus), buildCiLabel(theme, repoStatus.checks)].filter(Boolean).join(separator);
+	return [
+		buildReviewLabel(theme, repoStatus),
+		buildInlineCommentLabel(theme, repoStatus),
+		buildCiLabel(theme, repoStatus.checks),
+	]
+		.filter(Boolean)
+		.join(separator);
 }
 
 function renderAlignedLine(width: number, left: string, right: string): string {
