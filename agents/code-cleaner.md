@@ -2,7 +2,7 @@
 name: code-cleaner
 description: Code cleanup analyst — scans for code reuse opportunities, quality issues, and efficiency problems. Reports findings only (read-only).
 tools: read, grep, find, ls, bash
-model: anthropic/claude-opus-4-7
+model: anthropic/claude-opus-4-6
 thinking: xhigh
 ---
 
