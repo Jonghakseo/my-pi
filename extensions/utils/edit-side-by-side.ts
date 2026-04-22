@@ -232,14 +232,25 @@ function sideBgColor(type: EditDiffRowSide["type"]): EditDiffBgColor | undefined
 	return undefined;
 }
 
+function formatRowText(text: string, width: number): string {
+	const truncated = truncateToWidth(text, width, "");
+	return `${truncated}${" ".repeat(Math.max(0, width - visibleWidth(truncated)))}`;
+}
+
+function formatCompactSide(side: EditDiffRowSide, width: number, theme: EditDiffRenderTheme): string {
+	const prefix = side.type === "added" ? "+ " : side.type === "removed" ? "- " : "  ";
+	const padded = formatRowText(`${prefix}${side.content.replace(/\t/g, "    ")}`, width);
+	const colored = theme.fg(sideColor(side.type), padded);
+	const bgColor = sideBgColor(side.type);
+	return bgColor ? theme.bg(bgColor, colored) : colored;
+}
+
 function formatSide(side: EditDiffRowSide, width: number, numbersWidth: number, theme: EditDiffRenderTheme): string {
 	if (side.type === "empty") return " ".repeat(width);
 
 	const lineNumber = side.lineNum ? side.lineNum.padStart(numbersWidth) : " ".repeat(numbersWidth);
 	const prefix = side.type === "added" ? "+" : side.type === "removed" ? "-" : " ";
-	const rawLine = `${prefix}${lineNumber} ${side.content.replace(/\t/g, "    ")}`;
-	const truncated = truncateToWidth(rawLine, width, "");
-	const padded = `${truncated}${" ".repeat(Math.max(0, width - visibleWidth(truncated)))}`;
+	const padded = formatRowText(`${prefix}${lineNumber} ${side.content.replace(/\t/g, "    ")}`, width);
 	const colored = theme.fg(sideColor(side.type), padded);
 	const bgColor = sideBgColor(side.type);
 	return bgColor ? theme.bg(bgColor, colored) : colored;
@@ -262,13 +273,13 @@ export function renderEditSideBySide({ diff, width, theme, maxRows }: RenderEdit
 	if (width < MIN_SIDE_BY_SIDE_WIDTH * 2 + 1) {
 		for (const row of preview.rows) {
 			if (row.left.type === "removed") {
-				lines.push(theme.bg("toolErrorBg", theme.fg("toolDiffRemoved", `- ${row.left.content}`)));
+				lines.push(formatCompactSide(row.left, width, theme));
 			}
 			if (row.right.type === "added") {
-				lines.push(theme.bg("toolSuccessBg", theme.fg("toolDiffAdded", `+ ${row.right.content}`)));
+				lines.push(formatCompactSide(row.right, width, theme));
 			}
-			if (row.left.type === "context") lines.push(theme.fg("toolDiffContext", `  ${row.left.content}`));
-			if (row.left.type === "ellipsis") lines.push(theme.fg("muted", "  ..."));
+			if (row.left.type === "context") lines.push(formatCompactSide(row.left, width, theme));
+			if (row.left.type === "ellipsis") lines.push(formatCompactSide(row.left, width, theme));
 		}
 	} else {
 		const numbersWidth = lineNumberWidth(rows);
@@ -282,7 +293,7 @@ export function renderEditSideBySide({ diff, width, theme, maxRows }: RenderEdit
 	}
 
 	if (preview.hiddenCount > 0) {
-		lines.push(theme.fg("muted", `… +${preview.hiddenCount} more rows`));
+		lines.push(theme.fg("muted", formatRowText(`… +${preview.hiddenCount} more rows`, width)));
 	}
 
 	return lines;
