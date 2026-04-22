@@ -18,7 +18,7 @@ const REVIEW_ICON = "󰱼";
 const INLINE_COMMENT_ICON = "󰍡";
 const CI_PENDING_ICON = "󰑓";
 const CI_SUCCESS_ICON = "󰗠";
-const CI_FAILED_ICON = "󰄲";
+const CI_FAILED_ICON = "";
 
 type StatusStyler = (theme: Theme, text: string) => string;
 
@@ -162,7 +162,7 @@ function buildReviewLabel(theme: Theme, repoStatus: RepoStatusSnapshot): string 
 	return `${theme.fg("warning", REVIEW_ICON)} ${theme.fg("text", `${approved}/${total}`)}`;
 }
 
-function buildCiSegment(theme: Theme, icon: string, color: "warning" | "success" | "error", count: number): string {
+function buildCiSegment(theme: Theme, icon: string, color: "warning" | "success", count: number): string {
 	if (count <= 0) return "";
 	return `${theme.fg(color, icon)} ${theme.fg("text", String(count))}`;
 }
@@ -172,7 +172,7 @@ function buildCiLabel(theme: Theme, checks: CheckSummary | null): string {
 	return [
 		buildCiSegment(theme, CI_PENDING_ICON, "warning", checks.pending),
 		buildCiSegment(theme, CI_SUCCESS_ICON, "success", checks.success),
-		buildCiSegment(theme, CI_FAILED_ICON, "error", checks.failed),
+		buildCiSegment(theme, CI_FAILED_ICON, "success", checks.failed),
 	]
 		.filter(Boolean)
 		.join("  ");
