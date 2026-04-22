@@ -57,6 +57,9 @@ const TRANSIENT_FAILURE_PATTERNS: RegExp[] = [
 	/\boverloaded\b/i,
 	/\bover capacity\b/i,
 	/\bservice unavailable\b/i,
+	/\bserver_error\b/i,
+	/\bserver error\b/i,
+	/an error occurred while processing your request/i,
 	/\bupstream\b/i,
 	/\bTLS\b/i,
 ];
