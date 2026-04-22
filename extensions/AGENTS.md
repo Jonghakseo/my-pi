@@ -26,6 +26,7 @@ Custom extensions for the pi coding agent. All extensions are written in TypeScr
 │   └── status-keys.ts     #   Shared footer status key constants
 ├── archive-to-html.ts     # Auto-archive to-html skill output HTML to ~/Documents
 ├── bookmark.ts            # /bookmark add|list — save current session + cwd/branch, restore via switch or Ghostty panel
+├── claude-code-oauth/     # Anthropic OAuth(Claude subscription) 요청 payload 패치 + companion 툴 MCP alias 리매핑 (adapted from @benvargas/pi-claude-code-use, MIT)
 ├── command-typo-assist.ts # Slash command typo detection → suggest + editor prefill
 ├── context.ts             # /context — context window usage & session stats overlay
 ├── diff-overlay.ts        # /diff — Git diff split-pane overlay (file list + diff viewer)
