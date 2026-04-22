@@ -37,7 +37,7 @@ Custom extensions for the pi coding agent. All extensions are written in TypeScr
 ├── footer.ts              # Custom footer UI (model, branch, context bar)
 ├── working-text.ts              # Spinner working message (tip text + elapsed time)
 ├── theme-cycler.ts        # Ctrl+Shift+X to cycle through themes
-└── upload-image-url.ts    # Upload images to GitHub storage and return URLs
+└── upload-image-url/      # Upload images to GitHub storage and return URLs
 ```
 
 ## Key Patterns
