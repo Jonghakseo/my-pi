@@ -1,3 +1,4 @@
+import { visibleWidth } from "@mariozechner/pi-tui";
 import { describe, expect, it } from "vitest";
 import {
 	buildEditSideBySideRows,
@@ -137,5 +138,25 @@ describe("renderEditSideBySide", () => {
 		expect(lines[0]).toContain("+1 / -1");
 		expect(lines[0]).not.toContain("(preview)");
 		expect(lines.at(-1)).toContain("more rows");
+	});
+
+	it("truncates every narrow fallback row to terminal width", () => {
+		const plainTheme = {
+			fg: (_color: string, text: string) => text,
+			bg: (_color: string, text: string) => text,
+			bold: (text: string) => text,
+		};
+		const width = 12;
+		const lines = renderEditSideBySide({
+			diff: [
+				" 1 const parsed = JSON.parse(stdout) as GhPrViewJson;",
+				"-2 if (readPullRequestState(parsed.state) is not supported) return emptyPrSnapshot();",
+				'+2 if (readPullRequestState(parsed.state) !== "OPEN") return emptyPrSnapshot();',
+			].join("\n"),
+			width,
+			theme: plainTheme,
+		});
+
+		expect(lines.every((line) => visibleWidth(line) <= width)).toBe(true);
 	});
 });
