@@ -1,7 +1,7 @@
 {
   "theme": "gruvbox",
   "quietStartup": true,
-  "lastChangelogVersion": "0.68.0",
+  "lastChangelogVersion": "0.68.1",
   "defaultProvider": "openai-codex",
   "defaultModel": "gpt-5.4",
   "defaultThinkingLevel": "high",
