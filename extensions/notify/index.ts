@@ -47,7 +47,7 @@ export default function (pi: ExtensionAPI) {
 		if (!latestCtx?.hasUI) return;
 		const sessionId = readSessionId(latestCtx);
 		if (sessionId && isNotifyEnabled(sessionId)) {
-			latestCtx.ui.setStatus(STATUS_KEY, latestCtx.ui.theme.fg("accent", "🔔 notify"));
+			latestCtx.ui.setStatus(STATUS_KEY, latestCtx.ui.theme.fg("accent", "🔔 on"));
 		} else {
 			latestCtx.ui.setStatus(STATUS_KEY, undefined);
 		}

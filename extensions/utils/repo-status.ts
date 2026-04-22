@@ -6,7 +6,7 @@ const PR_VIEW_ARGS = [
 	"pr",
 	"view",
 	"--json",
-	"number,title,reviewDecision,latestReviews,reviewRequests,statusCheckRollup",
+	"number,title,url,reviewDecision,latestReviews,reviewRequests,statusCheckRollup",
 ] as const;
 const GIT_POLL_INTERVAL_MS = 3000;
 const PR_POLL_INTERVAL_MS = 30_000;
@@ -23,8 +23,10 @@ export interface RepoStatusSnapshot {
 	behind: number;
 	prNumber: number | null;
 	prTitle: string | null;
+	prUrl: string | null;
 	review: ReviewStatusSummary | null;
 	checks: CheckSummary | null;
+	unresolvedInlineComments: number | null;
 }
 
 export interface RepoStatusTracker {
@@ -39,6 +41,7 @@ type GithubReviewState = "APPROVED" | "CHANGES_REQUESTED" | "COMMENTED" | "DISMI
 type GhPrViewJson = {
 	number?: unknown;
 	title?: unknown;
+	url?: unknown;
 	latestReviews?: unknown;
 	reviewRequests?: unknown;
 	statusCheckRollup?: unknown;
@@ -51,8 +54,10 @@ const EMPTY_SNAPSHOT: RepoStatusSnapshot = {
 	behind: 0,
 	prNumber: null,
 	prTitle: null,
+	prUrl: null,
 	review: null,
 	checks: null,
+	unresolvedInlineComments: null,
 };
 
 function snapshotsEqual(left: RepoStatusSnapshot, right: RepoStatusSnapshot): boolean {
@@ -63,6 +68,8 @@ function snapshotsEqual(left: RepoStatusSnapshot, right: RepoStatusSnapshot): bo
 		left.behind === right.behind &&
 		left.prNumber === right.prNumber &&
 		left.prTitle === right.prTitle &&
+		left.prUrl === right.prUrl &&
+		left.unresolvedInlineComments === right.unresolvedInlineComments &&
 		reviewSummariesEqual(left.review, right.review) &&
 		checkSummariesEqual(left.checks, right.checks)
 	);
@@ -196,21 +203,108 @@ function parseCheckSummary(statusCheckRollup: unknown): CheckSummary | null {
 	return summarizeChecks(checks);
 }
 
-function parsePrSnapshot(stdout: string): Pick<RepoStatusSnapshot, "prNumber" | "prTitle" | "review" | "checks"> {
+function parseGitHubPullUrl(url: string | null): { owner: string; repo: string; number: number } | null {
+	if (!url) return null;
+	const match = url.match(/^https:\/\/github\.com\/([^/]+)\/([^/]+)\/pull\/(\d+)(?:\/.*)?$/u);
+	if (!match) return null;
+	return {
+		owner: match[1],
+		repo: match[2],
+		number: Number(match[3]),
+	};
+}
+
+function parseUnresolvedInlineComments(stdout: string): number | null {
+	try {
+		const parsed = JSON.parse(stdout) as {
+			data?: {
+				repository?: {
+					pullRequest?: {
+						reviewThreads?: {
+							nodes?: Array<{ isResolved?: unknown; isOutdated?: unknown; comments?: { totalCount?: unknown } }>;
+						};
+					};
+				};
+			};
+		};
+		const threads = asArray(parsed.data?.repository?.pullRequest?.reviewThreads?.nodes);
+		if (threads.length === 0) return 0;
+		let total = 0;
+		for (const thread of threads) {
+			if (!isRecord(thread)) continue;
+			if (thread.isResolved === true || thread.isOutdated === true) continue;
+			const comments = isRecord(thread.comments) ? readNumber(thread.comments.totalCount) : null;
+			total += comments ?? 0;
+		}
+		return total;
+	} catch {
+		return null;
+	}
+}
+
+async function fetchUnresolvedInlineComments(
+	pi: ExtensionAPI,
+	cwd: string,
+	prUrl: string | null,
+): Promise<number | null> {
+	const prInfo = parseGitHubPullUrl(prUrl);
+	if (!prInfo) return null;
+	const query = [
+		"query($owner:String!, $repo:String!, $number:Int!) {",
+		"  repository(owner:$owner, name:$repo) {",
+		"    pullRequest(number:$number) {",
+		"      reviewThreads(first:100) {",
+		"        nodes {",
+		"          isResolved",
+		"          isOutdated",
+		"          comments(first:100) { totalCount }",
+		"        }",
+		"      }",
+		"    }",
+		"  }",
+		"}",
+	].join("\n");
+	const result = await pi.exec(
+		"gh",
+		[
+			"api",
+			"graphql",
+			"-f",
+			`query=${query}`,
+			"-F",
+			`owner=${prInfo.owner}`,
+			"-F",
+			`repo=${prInfo.repo}`,
+			"-F",
+			`number=${prInfo.number}`,
+		],
+		{ cwd },
+	);
+	if (result.code !== 0) return null;
+	return parseUnresolvedInlineComments(result.stdout ?? "");
+}
+
+function parsePrSnapshot(
+	stdout: string,
+): Pick<RepoStatusSnapshot, "prNumber" | "prTitle" | "prUrl" | "review" | "checks" | "unresolvedInlineComments"> {
 	try {
 		const parsed = JSON.parse(stdout) as GhPrViewJson;
 		return {
 			prNumber: readNumber(parsed.number),
 			prTitle: readString(parsed.title),
+			prUrl: readString(parsed.url),
 			review: parseReviewSummary(parsed.reviewRequests, parsed.latestReviews),
 			checks: parseCheckSummary(parsed.statusCheckRollup),
+			unresolvedInlineComments: null,
 		};
 	} catch {
 		return {
 			prNumber: null,
 			prTitle: null,
+			prUrl: null,
 			review: null,
 			checks: null,
+			unresolvedInlineComments: null,
 		};
 	}
 }
@@ -243,7 +337,15 @@ export function createRepoStatusTracker(pi: ExtensionAPI, cwd: string): RepoStat
 	};
 
 	const clearPrData = () => {
-		setSnapshot({ ...snapshot, prNumber: null, prTitle: null, review: null, checks: null });
+		setSnapshot({
+			...snapshot,
+			prNumber: null,
+			prTitle: null,
+			prUrl: null,
+			review: null,
+			checks: null,
+			unresolvedInlineComments: null,
+		});
 	};
 
 	const clearSnapshot = () => {
@@ -295,8 +397,10 @@ export function createRepoStatusTracker(pi: ExtensionAPI, cwd: string): RepoStat
 			behind: nextBranch ? parsed.behind : 0,
 			prNumber: branchChanged ? null : snapshot.prNumber,
 			prTitle: branchChanged ? null : snapshot.prTitle,
+			prUrl: branchChanged ? null : snapshot.prUrl,
 			review: branchChanged ? null : snapshot.review,
 			checks: branchChanged ? null : snapshot.checks,
+			unresolvedInlineComments: branchChanged ? null : snapshot.unresolvedInlineComments,
 		});
 		return { branchChanged, nextBranch };
 	};
@@ -321,9 +425,13 @@ export function createRepoStatusTracker(pi: ExtensionAPI, cwd: string): RepoStat
 				handlePrFailure(result.stderr, result.stdout);
 				return;
 			}
+			const nextPrSnapshot = parsePrSnapshot(result.stdout ?? "");
+			const unresolvedInlineComments = await fetchUnresolvedInlineComments(pi, cwd, nextPrSnapshot.prUrl);
+			if (shouldDiscardPrResult(requestedBranch)) return;
 			setSnapshot({
 				...snapshot,
-				...parsePrSnapshot(result.stdout ?? ""),
+				...nextPrSnapshot,
+				unresolvedInlineComments,
 			});
 		} catch {
 			if (!shouldDiscardPrResult(requestedBranch)) {
