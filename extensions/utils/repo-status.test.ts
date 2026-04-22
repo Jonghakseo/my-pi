@@ -32,6 +32,11 @@ describe("createRepoStatusTracker", () => {
 			ahead: 0,
 			behind: 0,
 			prNumber: null,
+			prTitle: null,
+			prUrl: null,
+			review: null,
+			checks: null,
+			unresolvedInlineComments: null,
 		});
 		expect(exec).toHaveBeenCalledTimes(1);
 		expect(exec).toHaveBeenCalledWith("git", ["status", "--porcelain=v2", "--branch", "--untracked-files=normal"], {
