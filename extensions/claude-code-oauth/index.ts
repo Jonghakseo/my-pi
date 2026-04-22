@@ -394,7 +394,33 @@ function isCompanionSource(tool: ToolInfo | undefined, spec: CompanionSpec): boo
 	return normalized.includes(`/${spec.packageName}/`) || normalized.includes(`/${spec.dirName}/`);
 }
 
-function buildCaptureShim(realPi: ExtensionAPI, captured: Map<string, ToolRegistration>): ExtensionAPI {
+/**
+ * Phased capture shim.
+ *
+ * During the factory execution phase (phase.capturing === true) all write-style
+ * API calls that would produce user-visible side effects are no-ops, so that
+ * re-running a companion extension’s factory does not duplicate commands,
+ * listeners, or messages.
+ *
+ * Once capture finishes and the phase flips to "live", calls that originate
+ * from inside captured `execute` closures are forwarded to the real Pi API.
+ * This is required for extensions whose tool executes push asynchronous
+ * completion messages via `pi.sendMessage` / `pi.appendEntry` (e.g. subagent,
+ * interactive-shell, ask_master).
+ *
+ * Listener registration (`on`), slash commands, keyboard shortcuts, message
+ * renderers, and providers remain no-ops across both phases, because those
+ * are factory-setup concerns that would double-register if forwarded.
+ */
+interface CaptureShimPhase {
+	capturing: boolean;
+}
+
+function buildCaptureShim(
+	realPi: ExtensionAPI,
+	captured: Map<string, ToolRegistration>,
+	phase: CaptureShimPhase = { capturing: true },
+): ExtensionAPI {
 	const shimFlags = new Set<string>();
 	return {
 		registerTool(def) {
@@ -406,20 +432,37 @@ function buildCaptureShim(realPi: ExtensionAPI, captured: Map<string, ToolRegist
 		getFlag(name) {
 			return shimFlags.has(name) ? realPi.getFlag(name) : undefined;
 		},
+		// Factory-setup concerns: always no-op to avoid double registration
 		on() {},
 		registerCommand() {},
 		registerShortcut() {},
 		registerMessageRenderer() {},
 		registerProvider() {},
 		unregisterProvider() {},
-		sendMessage() {},
-		sendUserMessage() {},
-		appendEntry() {},
-		setSessionName() {},
-		getSessionName() {
-			return undefined;
+		// Execute-time side effects: forward to real pi once capture phase ends
+		sendMessage(message, options) {
+			if (phase.capturing) return;
+			realPi.sendMessage(message, options);
 		},
-		setLabel() {},
+		sendUserMessage(content, options) {
+			if (phase.capturing) return;
+			realPi.sendUserMessage(content, options);
+		},
+		appendEntry(customType, data) {
+			if (phase.capturing) return;
+			realPi.appendEntry(customType, data);
+		},
+		setSessionName(name) {
+			if (phase.capturing) return;
+			realPi.setSessionName(name);
+		},
+		getSessionName() {
+			return phase.capturing ? undefined : realPi.getSessionName();
+		},
+		setLabel(entryId, label) {
+			if (phase.capturing) return;
+			realPi.setLabel(entryId, label);
+		},
 		exec(command, args, options) {
 			return realPi.exec(command, args, options);
 		},
@@ -455,7 +498,12 @@ async function captureCompanionTools(baseDir: string, realPi: ExtensionAPI): Pro
 			const factory = await loadFactory(baseDir);
 			if (!factory) return new Map<string, ToolRegistration>();
 			const tools = new Map<string, ToolRegistration>();
-			await factory(buildCaptureShim(realPi, tools));
+			// The phase object is captured by closure inside buildCaptureShim, so flipping
+			// `capturing` to false after the factory resolves activates forwarding for any
+			// `execute` callbacks that retained a reference to this shim.
+			const phase: CaptureShimPhase = { capturing: true };
+			await factory(buildCaptureShim(realPi, tools, phase));
+			phase.capturing = false;
 			return tools;
 		})();
 		captureCache.set(baseDir, pending);
