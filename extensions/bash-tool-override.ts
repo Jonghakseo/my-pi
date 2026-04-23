@@ -91,7 +91,6 @@ To execute a command that doesn't need the user to see its output, prefix it wit
 
 			return { command, title, ...(timeout !== undefined ? { timeout } : {}) };
 		},
-		renderShell: "self",
 		renderCall(args, theme, context) {
 			const title = args.title as string | undefined;
 			const command = args.command as string;
@@ -107,9 +106,6 @@ To execute a command that doesn't need the user to see its output, prefix it wit
 			return text;
 		},
 		renderResult(result, { expanded, isPartial }, theme, context) {
-			// NOTE: renderResult component appears BELOW renderCall component.
-			// Header is in renderCall, so we only render output here.
-
 			if (isPartial) {
 				return reuseText(context, theme.fg("warning", "Running..."));
 			}

@@ -186,7 +186,7 @@ function getRenderedEditTextContent(result: { content?: Array<{ type: string; te
 export function registerEditTool(pi: ExtensionAPI): void {
 	pi.registerTool({
 		...BASE_EDIT_TOOL,
-		renderShell: "self",
+		renderShell: "default",
 		renderCall(args, theme, context) {
 			const previewInput = getRenderablePreviewInput(args);
 			if (!context.argsComplete || !previewInput) {
