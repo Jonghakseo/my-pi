@@ -67,15 +67,29 @@ export function renderSubagentToolResult(
 ) {
 	const details = result.details as SubagentDetails | undefined;
 	if (!details || details.results.length === 0) {
-		const text = result.content[0];
-		return new Text(text?.type === "text" ? text.text : "(no output)", 0, 0);
+		const raw = result.content[0];
+		const fullText = (raw?.type === "text" ? raw.text : undefined) ?? "(no output)";
+		if (!expanded) {
+			const firstLine = fullText.split("\n")[0] ?? "";
+			const lineCount = fullText.split("\n").length;
+			const suffix = lineCount > 1 ? theme.fg("muted", ` (+${lineCount - 1} lines)`) : "";
+			return new Text(firstLine + suffix, 0, 0);
+		}
+		return new Text(fullText, 0, 0);
 	}
 
 	const mdTheme = getMarkdownTheme();
 	const r = details.results[0];
 	if (!r) {
-		const text = result.content[0];
-		return new Text(text?.type === "text" ? text.text : "(no output)", 0, 0);
+		const raw2 = result.content[0];
+		const fullText2 = (raw2?.type === "text" ? raw2.text : undefined) ?? "(no output)";
+		if (!expanded) {
+			const firstLine = fullText2.split("\n")[0] ?? "";
+			const lineCount = fullText2.split("\n").length;
+			const suffix = lineCount > 1 ? theme.fg("muted", ` (+${lineCount - 1} lines)`) : "";
+			return new Text(firstLine + suffix, 0, 0);
+		}
+		return new Text(fullText2, 0, 0);
 	}
 
 	const isError = r.exitCode !== 0 || r.stopReason === "error" || r.stopReason === "aborted";
