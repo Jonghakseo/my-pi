@@ -1,7 +1,7 @@
-import { existsSync, readFileSync } from "node:fs";
-import { homedir } from "node:os";
-import { basename, join } from "node:path";
+import { readFileSync } from "node:fs";
+import { basename } from "node:path";
 import { type CookieMap, getGoogleCookies } from "./chrome-cookies.js";
+import { loadConfigSection, normalizeString } from "./config.js";
 
 const GEMINI_APP_URL = "https://gemini.google.com/app";
 const GEMINI_STREAM_GENERATE_URL =
@@ -22,13 +22,18 @@ const MODEL_HEADERS: Record<string, string> = {
 };
 
 const REQUIRED_COOKIES = ["__Secure-1PSID", "__Secure-1PSIDTS"];
-const CONFIG_PATH = join(homedir(), ".pi", "web-search.json");
 
 interface GeminiWebConfig {
-	chromeProfile?: string;
+	chromeProfile: string | undefined;
 }
 
-let cachedConfig: GeminiWebConfig | null = null;
+const GEMINI_WEB_DEFAULTS: GeminiWebConfig = { chromeProfile: undefined };
+
+function loadGeminiWebConfig(): GeminiWebConfig {
+	return loadConfigSection("gemini-web", GEMINI_WEB_DEFAULTS, (raw) => ({
+		chromeProfile: normalizeString(raw.chromeProfile, "").trim() || undefined,
+	}));
+}
 
 export interface GeminiWebOptions {
 	youtubeUrl?: string;
@@ -38,41 +43,15 @@ export interface GeminiWebOptions {
 	timeoutMs?: number;
 }
 
-function loadConfig(): GeminiWebConfig {
-	if (cachedConfig) return cachedConfig;
-	if (!existsSync(CONFIG_PATH)) {
-		cachedConfig = {};
-		return cachedConfig;
-	}
-
-	const rawText = readFileSync(CONFIG_PATH, "utf-8");
-	let raw: { chromeProfile?: unknown };
-	try {
-		raw = JSON.parse(rawText) as { chromeProfile?: unknown };
-	} catch (err) {
-		const message = err instanceof Error ? err.message : String(err);
-		throw new Error(`Failed to parse ${CONFIG_PATH}: ${message}`);
-	}
-
-	cachedConfig = {
-		chromeProfile: normalizeChromeProfile(raw.chromeProfile),
-	};
-	return cachedConfig;
-}
-
-function normalizeChromeProfile(value: unknown): string | undefined {
-	if (typeof value !== "string") return undefined;
-	const normalized = value.trim();
-	return normalized.length > 0 ? normalized : undefined;
-}
-
 function getChromeProfileFromConfig(): string | undefined {
-	return loadConfig().chromeProfile;
+	return loadGeminiWebConfig().chromeProfile;
 }
 
 export async function isGeminiWebAvailable(chromeProfile?: string): Promise<CookieMap | null> {
 	const result = await getGoogleCookies({
-		profile: normalizeChromeProfile(chromeProfile) ?? getChromeProfileFromConfig(),
+		profile:
+			(typeof chromeProfile === "string" ? chromeProfile.trim() || undefined : undefined) ??
+			getChromeProfileFromConfig(),
 		requiredCookies: REQUIRED_COOKIES,
 	});
 	if (!result) return null;
@@ -87,7 +66,7 @@ export async function getActiveGoogleEmail(cookies: CookieMap): Promise<string |
 		const html = await fetchWithCookieRedirects(GEMINI_APP_URL, cookieHeader, 10, AbortSignal.timeout(10000));
 		const email = extractEmailFromGeminiHtml(html);
 		if (email) return email;
-	} catch {}
+	} catch (_err) {}
 
 	try {
 		const response = await fetchWithCookieRedirects(
@@ -199,7 +178,9 @@ async function runGeminiWebOnce(
 		try {
 			const json = JSON.parse(trimJsonEnvelope(rawText));
 			errorCode = extractErrorCode(json);
-		} catch {}
+		} catch (_err) {
+			/* JSON parse for error code failed, non-critical */
+		}
 		return {
 			text: "",
 			errorCode,
@@ -409,7 +390,9 @@ function parseStreamGenerateResponse(rawText: string): GeminiWebResult {
 				body = parsed;
 				break;
 			}
-		} catch {}
+		} catch (_err) {
+			/* stream chunk parse failed, trying next */
+		}
 	}
 
 	const candidateList = getNestedValue(body, [4]);

@@ -1,32 +1,18 @@
-import { existsSync, readFileSync } from "node:fs";
-import { homedir } from "node:os";
-import { join } from "node:path";
+import { loadConfigSection, normalizeApiKey } from "./config.js";
 
 export const API_BASE = "https://generativelanguage.googleapis.com/v1beta";
-const CONFIG_PATH = join(homedir(), ".pi", "web-search.json");
 export const DEFAULT_MODEL = "gemini-3-flash-preview";
 
 interface GeminiApiConfig {
-	geminiApiKey?: unknown;
+	geminiApiKey: string | null;
 }
 
-let cachedConfig: GeminiApiConfig | null = null;
+const GEMINI_API_DEFAULTS: GeminiApiConfig = { geminiApiKey: null };
 
-function loadConfig(): GeminiApiConfig {
-	if (cachedConfig) return cachedConfig;
-	if (!existsSync(CONFIG_PATH)) {
-		cachedConfig = {};
-		return cachedConfig;
-	}
-
-	const raw = readFileSync(CONFIG_PATH, "utf-8");
-	try {
-		cachedConfig = JSON.parse(raw) as GeminiApiConfig;
-		return cachedConfig;
-	} catch (err) {
-		const message = err instanceof Error ? err.message : String(err);
-		throw new Error(`Failed to parse ${CONFIG_PATH}: ${message}`);
-	}
+function loadGeminiApiConfig(): GeminiApiConfig {
+	return loadConfigSection("gemini-api", GEMINI_API_DEFAULTS, (raw) => ({
+		geminiApiKey: normalizeApiKey(raw.geminiApiKey),
+	}));
 }
 
 function withTimeout(signal: AbortSignal | undefined, timeoutMs: number): AbortSignal {
@@ -34,14 +20,8 @@ function withTimeout(signal: AbortSignal | undefined, timeoutMs: number): AbortS
 	return signal ? AbortSignal.any([signal, timeout]) : timeout;
 }
 
-function normalizeApiKey(value: unknown): string | null {
-	if (typeof value !== "string") return null;
-	const normalized = value.trim();
-	return normalized.length > 0 ? normalized : null;
-}
-
 export function getApiKey(): string | null {
-	return normalizeApiKey(process.env.GEMINI_API_KEY) ?? normalizeApiKey(loadConfig().geminiApiKey);
+	return normalizeApiKey(process.env.GEMINI_API_KEY) ?? loadGeminiApiConfig().geminiApiKey;
 }
 
 export function isGeminiApiAvailable(): boolean {
