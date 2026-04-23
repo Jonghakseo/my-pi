@@ -131,12 +131,19 @@ function extractPaths(event: ToolResultEvent): string[] {
 	return extractPathsFromInput(input?.path);
 }
 
+const PREVIEW_LINES = 20;
+
 /** Format dynamic context blocks for LLM consumption. */
 function formatInjection(files: ContextFile[]): string {
-	const parts = files.map(
-		(f) =>
-			`\n\n${DYNAMIC_SCOPE_SENTINEL_START}\n📋 [Dynamic scope context: ${f.path}]\n\n${f.content}\n${DYNAMIC_SCOPE_SENTINEL_END}`,
-	);
+	const parts = files.map((f) => {
+		const lines = f.content.split("\n");
+		const preview = lines.slice(0, PREVIEW_LINES).join("\n");
+		const truncated = lines.length > PREVIEW_LINES;
+		const body = truncated
+			? `${preview}\n\n⚠️ Showing first ${PREVIEW_LINES} of ${lines.length} lines. Read the full file before modifying code in this scope:\n  → read path: ${f.path}`
+			: f.content;
+		return `\n\n${DYNAMIC_SCOPE_SENTINEL_START}\n📋 [Dynamic scope context: ${f.path}]\n\n${body}\n${DYNAMIC_SCOPE_SENTINEL_END}`;
+	});
 	return parts.join("");
 }
 
@@ -251,12 +258,9 @@ export default function (pi: ExtensionAPI) {
 		};
 	});
 
-	// ── Pre-emptive registration on exploratory tool results ──
-	// When grep/find/ls access files in new directories, register the
-	// AGENTS.md path so subsequent edit/write calls pass without blocking.
-	// Guard: only register when exactly 1 new AGENTS.md is found.
-	// Multiple new files means the path crosses many scopes — skip to
-	// avoid silently swallowing context the LLM hasn't seen yet.
+	// ── Inject scope context on exploratory tool results ──
+	// When grep/find/ls access files in new directories, discover and
+	// inject AGENTS.md content so the LLM sees the rules before any edit.
 	pi.on("tool_result", async (event, ctx): Promise<ToolResultEventResult | undefined> => {
 		const exploratoryTools = new Set(["grep", "find", "ls"]);
 		if (!exploratoryTools.has(event.toolName)) return;
@@ -268,10 +272,12 @@ export default function (pi: ExtensionAPI) {
 
 		const absPath = toAbsolute(rawPath, ctx.cwd);
 		const newFiles = discoverNewAgentsMd(absPath, injectedPaths, staticDirs);
-		if (newFiles.length !== 1) return;
+		if (newFiles.length === 0) return;
 
-		injectedPaths.add(newFiles[0].path);
-		return;
+		for (const file of newFiles) {
+			injectedPaths.add(file.path);
+		}
+		return appendInjectedContext(event, newFiles);
 	});
 
 	// Inject dynamic scope context when reading files in uncovered directories.
