@@ -442,6 +442,7 @@ export default function (pi: ExtensionAPI) {
 						taskId: task.id,
 						runCount: task.runCount,
 					},
+					terminate: true,
 				};
 			}
 
@@ -601,6 +602,11 @@ export default function (pi: ExtensionAPI) {
 
 	pi.registerCommand("until-cancel", {
 		description: "until 취소. 사용법: /until-cancel <id|all>",
+		getArgumentCompletions: (prefix: string) => {
+			const ids = Array.from(tasks.keys()).map(String);
+			const all = ["all", ...ids].filter((s) => s.startsWith(prefix));
+			return all.length > 0 ? all.map((value) => ({ value, label: value })) : null;
+		},
 		handler: async (args, ctx) => {
 			latestCtx = ctx;
 			const raw = (args ?? "").trim().toLowerCase();

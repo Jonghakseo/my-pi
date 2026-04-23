@@ -62,7 +62,7 @@ describe("subagent constants", () => {
 		expect(AGENT_SYMBOL_MAP["!"]).toBe("challenger");
 		expect(AGENT_SYMBOL_MAP["*"]).toBeUndefined();
 		expect(AGENT_SYMBOL_MAP["+"]).toBeUndefined();
-		expect(AGENT_SYMBOL_MAP["$"]).toBeUndefined();
+		expect(AGENT_SYMBOL_MAP.$).toBeUndefined();
 		expect(AGENT_SYMBOL_MAP["%"]).toBeUndefined();
 	});
 
