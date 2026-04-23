@@ -6,10 +6,10 @@ import {
 	DEFAULT_MAX_LINES,
 	formatSize,
 	truncateTail,
-	keyHint,
+	type Theme,
 } from "@mariozechner/pi-coding-agent";
 import { Type } from "typebox";
-import { Text } from "@mariozechner/pi-tui";
+import { Text, type Component } from "@mariozechner/pi-tui";
 
 const TAIL_LINES = 5;
 const MAX_COMMAND_PREVIEW = 120;
@@ -111,66 +111,21 @@ To execute a command that doesn't need the user to see its output, prefix it wit
 			// Header is in renderCall, so we only render output here.
 
 			if (isPartial) {
-				const text = (context.lastComponent as Text | undefined) ?? new Text("", 0, 0);
-				text.setText(theme.fg("warning", "Running..."));
-				return text;
+				return reuseText(context, theme.fg("warning", "Running..."));
 			}
 
 			const renderedText = getBashTextContent(result as { content?: Array<{ type: string; text?: string }> });
 			const details = result.details as BashToolDetails | undefined;
 
-			// Error
 			if (context.isError) {
-				const text = (context.lastComponent as Text | undefined) ?? new Text("", 0, 0);
-				text.setText(theme.fg("error", renderedText ?? "Command failed."));
-				return text;
+				return renderError(context, expanded, renderedText, theme);
 			}
 
-			// Collapsed: no output preview
 			if (!expanded) {
-				const expandHint = keyHint("app.tools.expand", "to expand");
-				const text = (context.lastComponent as Text | undefined) ?? new Text("", 0, 0);
-				text.setText(theme.fg("dim", expandHint));
-				return text;
+				return reuseText(context, "");
 			}
 
-			// Expanded: show last TAIL_LINES lines
-			if (!renderedText) {
-				const text = (context.lastComponent as Text | undefined) ?? new Text("", 0, 0);
-				text.setText("");
-				return text;
-			}
-
-			const contextTruncation = truncateTail(renderedText, {
-				maxLines: DEFAULT_MAX_LINES,
-				maxBytes: DEFAULT_MAX_BYTES,
-			});
-
-			const allLines = contextTruncation.content ? contextTruncation.content.split("\n") : [];
-			const tailLines = allLines.slice(-TAIL_LINES);
-			const hiddenCount = allLines.length - tailLines.length;
-
-			const body = tailLines.map((line: string) => theme.fg("muted", line)).join("\n");
-			const truncationWarning = formatTruncationWarning(details, theme);
-
-			const statusParts: string[] = [];
-			if (hiddenCount > 0) {
-				statusParts.push(
-					`${theme.fg("dim", `... ${hiddenCount} more lines above`)} (${keyHint("app.tools.expand", "to collapse")})`,
-				);
-			}
-			if (truncationWarning) {
-				statusParts.push(truncationWarning.trim());
-			}
-
-			let outputText = body;
-			if (statusParts.length > 0) {
-				outputText += `\n${statusParts.join("\n")}`;
-			}
-
-			const text = (context.lastComponent as Text | undefined) ?? new Text("", 0, 0);
-			text.setText(outputText);
-			return text;
+			return renderExpandedOutput(context, renderedText, details, theme);
 		},
 		async execute(toolCallId, params, signal, onUpdate, ctx) {
 			const { title: _title, ...bashParams } = params as { command: string; title: string; timeout?: number };
@@ -178,4 +133,60 @@ To execute a command that doesn't need the user to see its output, prefix it wit
 			return builtinTool.execute(toolCallId, bashParams, signal, onUpdate, ctx);
 		},
 	});
+}
+
+function reuseText(context: { lastComponent?: Component }, text: string): Text {
+	const component = (context.lastComponent as Text | undefined) ?? new Text("", 0, 0);
+	component.setText(text);
+	return component;
+}
+
+function renderError(
+	context: { lastComponent?: Component; isError: boolean },
+	expanded: boolean,
+	renderedText: string | undefined,
+	theme: Theme,
+): Text {
+	if (!expanded) {
+		return reuseText(context, theme.fg("error", "✗ Error"));
+	}
+	return reuseText(context, theme.fg("error", renderedText ?? "Command failed."));
+}
+
+function renderExpandedOutput(
+	context: { lastComponent?: Component },
+	renderedText: string | undefined,
+	details: BashToolDetails | undefined,
+	theme: Theme,
+): Text {
+	if (!renderedText) {
+		return reuseText(context, "");
+	}
+
+	const contextTruncation = truncateTail(renderedText, {
+		maxLines: DEFAULT_MAX_LINES,
+		maxBytes: DEFAULT_MAX_BYTES,
+	});
+
+	const allLines = contextTruncation.content ? contextTruncation.content.split("\n") : [];
+	const tailLines = allLines.slice(-TAIL_LINES);
+	const hiddenCount = allLines.length - tailLines.length;
+
+	const body = tailLines.map((line: string) => theme.fg("muted", line)).join("\n");
+	const truncationWarning = formatTruncationWarning(details, theme);
+
+	const statusParts: string[] = [];
+	if (hiddenCount > 0) {
+		statusParts.push(theme.fg("dim", `... ${hiddenCount} more lines above`));
+	}
+	if (truncationWarning) {
+		statusParts.push(truncationWarning.trim());
+	}
+
+	let outputText = body;
+	if (statusParts.length > 0) {
+		outputText += `\n${statusParts.join("\n")}`;
+	}
+
+	return reuseText(context, outputText);
 }
