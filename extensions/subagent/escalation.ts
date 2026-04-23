@@ -82,8 +82,16 @@ export function registerAskMasterTool(pi: ExtensionAPI): void {
 				const params = rawParams as { message: string; context?: string };
 				const activeSessionFile = sessionFile;
 				if (!activeSessionFile) {
-					process.stderr.write("[ask_master] Missing subagent session file.\n");
-					process.exit(ESCALATION_EXIT_CODE);
+					return {
+						content: [
+							{
+								type: "text" as const,
+								text: "[ask_master] Error: Missing subagent session file. Escalation not written.",
+							},
+						],
+						details: { message: params.message, context: params.context, error: true },
+						terminate: true,
+					};
 				}
 
 				try {
@@ -92,7 +100,11 @@ export function registerAskMasterTool(pi: ExtensionAPI): void {
 					process.stderr.write(`[ask_master] Failed to write escalation file: ${err}\n`);
 				}
 
-				process.exit(ESCALATION_EXIT_CODE);
+				return {
+					content: [{ type: "text" as const, text: `Escalated to master: ${params.message}` }],
+					details: { message: params.message, context: params.context, error: false },
+					terminate: true,
+				};
 			},
 		});
 	});
