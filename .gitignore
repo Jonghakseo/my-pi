@@ -40,6 +40,7 @@ tmp/daily-retro.svg
 
 # Internal pi data
 .pi/
+.pi-lens/
 state/
 .context/
 bookmarks.json

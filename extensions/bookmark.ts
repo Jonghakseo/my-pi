@@ -77,7 +77,7 @@ async function detectBranch(pi: ExtensionAPI, cwd: string): Promise<string | und
 			const branch = result.stdout.trim();
 			return branch || undefined;
 		}
-	} catch {}
+	} catch (_err) {}
 	return undefined;
 }
 

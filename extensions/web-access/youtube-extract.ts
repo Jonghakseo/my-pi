@@ -185,7 +185,7 @@ export async function fetchYouTubeThumbnail(videoId: string): Promise<{ data: st
 		const buffer = Buffer.from(await res.arrayBuffer());
 		if (buffer.length === 0) return null;
 		return { data: buffer.toString("base64"), mimeType: "image/jpeg" };
-	} catch {
+	} catch (_err) {
 		return null;
 	}
 }

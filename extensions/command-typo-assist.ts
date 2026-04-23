@@ -16,6 +16,7 @@
 
 import * as fs from "node:fs";
 import type { ExtensionAPI, ExtensionContext, InputEvent, InputEventResult } from "@mariozechner/pi-coding-agent";
+import { levenshtein, maxDistance } from "./utils/string-utils.js";
 
 // ─── Builtin commands (hardcoded — not exposed via pi.getCommands()) ─────────
 const BUILTIN_COMMANDS = [
@@ -41,38 +42,10 @@ const BUILTIN_COMMANDS = [
 	"debug",
 ] as const;
 
-// ─── Levenshtein distance ────────────────────────────────────────────────────
-function levenshtein(a: string, b: string): number {
-	const m = a.length;
-	const n = b.length;
-	if (m === 0) return n;
-	if (n === 0) return m;
+// ─── Levenshtein distance (imported from utils/string-utils.ts) ────────────────
 
-	// Single-row DP
-	const row = Array.from({ length: n + 1 }, (_, i) => i);
-	for (let i = 1; i <= m; i++) {
-		let prev = i;
-		for (let j = 1; j <= n; j++) {
-			const cost = a[i - 1] === b[j - 1] ? 0 : 1;
-			const val = Math.min(
-				row[j] + 1, // deletion
-				prev + 1, // insertion
-				row[j - 1] + cost, // substitution
-			);
-			row[j - 1] = prev;
-			prev = val;
-		}
-		row[n] = prev;
-	}
-	return row[n];
-}
-
-// ─── Threshold heuristic ─────────────────────────────────────────────────────
-// Scales with command length: short commands need closer matches.
-//   len 1–3 → max 1,  len 4–6 → max 2,  len 7+ → max 3
-function maxDistance(len: number): number {
-	return Math.min(3, Math.max(1, Math.ceil(len / 3)));
-}
+// ─── Threshold heuristic (imported from utils/string-utils.ts) ──────────────
+// maxDistance is imported from utils/string-utils.ts
 
 // ─── Extension entry point ───────────────────────────────────────────────────
 function shouldInterceptSlashCommand(text: string): boolean {

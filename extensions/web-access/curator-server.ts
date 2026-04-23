@@ -209,7 +209,7 @@ export function startCuratorServer(
 		if (sseResponse) {
 			try {
 				sseResponse.end();
-			} catch {}
+			} catch (_err) {}
 			sseResponse = null;
 		}
 		return true;
@@ -246,7 +246,7 @@ export function startCuratorServer(
 			try {
 				res.write(payload);
 				return;
-			} catch {}
+			} catch (_err) {}
 		}
 		sseBuffer.push(payload);
 	}
@@ -297,7 +297,7 @@ export function startCuratorServer(
 				if (sseResponse) {
 					try {
 						sseResponse.end();
-					} catch {}
+					} catch (_err) {}
 				}
 				res.writeHead(200, {
 					"Content-Type": "text/event-stream",
@@ -325,7 +325,7 @@ export function startCuratorServer(
 					if (sseResponse) {
 						try {
 							sseResponse.write(":keepalive\n\n");
-						} catch {}
+						} catch (_err) {}
 					}
 				}, 15000);
 				req.on("close", () => {
@@ -599,7 +599,7 @@ export function startCuratorServer(
 					const wasOpen = markCompleted();
 					try {
 						server.close();
-					} catch {}
+					} catch (_err) {}
 					if (wasOpen) {
 						setImmediate(() => callbacks.onCancel("stale"));
 					}

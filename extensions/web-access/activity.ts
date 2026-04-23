@@ -92,7 +92,7 @@ export class ActivityMonitor {
 		for (const cb of this.listeners) {
 			try {
 				cb();
-			} catch {}
+			} catch (_err) {}
 		}
 	}
 }

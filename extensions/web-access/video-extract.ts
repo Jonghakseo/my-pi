@@ -1,15 +1,14 @@
 import { execFileSync } from "node:child_process";
-import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { existsSync, readdirSync, statSync } from "node:fs";
 import { readFile } from "node:fs/promises";
-import { homedir } from "node:os";
 import { basename, dirname, extname, join, resolve } from "node:path";
 import { activityMonitor } from "./activity.js";
 import { type ExtractedContent, type ExtractOptions, extractHeadingTitle, type FrameResult } from "./extract.js";
 import { API_BASE, getApiKey, queryGeminiApiWithVideo } from "./gemini-api.js";
 import { isGeminiWebAvailable, queryWithCookies } from "./gemini-web.js";
+import { loadConfigSection, normalizeBoolean, normalizePositiveNumber, normalizeString } from "./config.js";
 import { mapFfmpegError, readExecError, trimErrorText } from "./utils.js";
 
-const CONFIG_PATH = join(homedir(), ".pi", "web-search.json");
 const UPLOAD_BASE = "https://generativelanguage.googleapis.com/upload/v1beta";
 
 const DEFAULT_VIDEO_PROMPT = `Extract the complete content of this video. Include:
@@ -50,21 +49,6 @@ interface VideoConfig {
 	maxSizeMB: number;
 }
 
-function normalizePreferredModel(value: unknown, fallback: string): string {
-	if (typeof value !== "string") return fallback;
-	const normalized = value.trim();
-	return normalized.length > 0 ? normalized : fallback;
-}
-
-function normalizeEnabled(value: unknown, fallback: boolean): boolean {
-	return typeof value === "boolean" ? value : fallback;
-}
-
-function normalizeMaxSizeMB(value: unknown, fallback: number): number {
-	if (typeof value !== "number" || !Number.isFinite(value)) return fallback;
-	return value > 0 ? value : fallback;
-}
-
 const VIDEO_CONFIG_DEFAULTS: VideoConfig = {
 	enabled: true,
 	preferredModel: "gemini-3-flash-preview",
@@ -75,26 +59,14 @@ let cachedVideoConfig: VideoConfig | null = null;
 
 function loadVideoConfig(): VideoConfig {
 	if (cachedVideoConfig) return cachedVideoConfig;
-	if (!existsSync(CONFIG_PATH)) {
-		cachedVideoConfig = { ...VIDEO_CONFIG_DEFAULTS };
-		return cachedVideoConfig;
-	}
-
-	const rawText = readFileSync(CONFIG_PATH, "utf-8");
-	let raw: { video?: { enabled?: boolean; preferredModel?: string; maxSizeMB?: number } };
-	try {
-		raw = JSON.parse(rawText) as { video?: { enabled?: boolean; preferredModel?: string; maxSizeMB?: number } };
-	} catch (err) {
-		const message = err instanceof Error ? err.message : String(err);
-		throw new Error(`Failed to parse ${CONFIG_PATH}: ${message}`);
-	}
-
-	const v = raw.video ?? {};
-	cachedVideoConfig = {
-		enabled: normalizeEnabled(v.enabled, VIDEO_CONFIG_DEFAULTS.enabled),
-		preferredModel: normalizePreferredModel(v.preferredModel, VIDEO_CONFIG_DEFAULTS.preferredModel),
-		maxSizeMB: normalizeMaxSizeMB(v.maxSizeMB, VIDEO_CONFIG_DEFAULTS.maxSizeMB),
-	};
+	cachedVideoConfig = loadConfigSection("video", VIDEO_CONFIG_DEFAULTS, (raw) => {
+		const v = raw.video ?? {};
+		return {
+			enabled: normalizeBoolean(v.enabled, VIDEO_CONFIG_DEFAULTS.enabled),
+			preferredModel: normalizeString(v.preferredModel, VIDEO_CONFIG_DEFAULTS.preferredModel),
+			maxSizeMB: normalizePositiveNumber(v.maxSizeMB, VIDEO_CONFIG_DEFAULTS.maxSizeMB),
+		};
+	});
 	return cachedVideoConfig;
 }
 

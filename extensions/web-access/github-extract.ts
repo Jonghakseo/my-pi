@@ -10,13 +10,11 @@ import {
 	rmSync,
 	statSync,
 } from "node:fs";
-import { homedir } from "node:os";
 import { extname, join, sep as pathSep, resolve as resolvePath } from "node:path";
 import { activityMonitor } from "./activity.js";
 import type { ExtractedContent } from "./extract.js";
 import { checkGhAvailable, checkRepoSize, fetchViaApi, showGhHint } from "./github-api.js";
-
-const CONFIG_PATH = join(homedir(), ".pi", "web-search.json");
+import { loadConfigSection, normalizeBoolean, normalizePositiveNumber, normalizeString } from "./config.js";
 
 const BINARY_EXTENSIONS = new Set([
 	".png",
@@ -128,56 +126,24 @@ const cloneCache = new Map<string, CachedClone>();
 
 let cachedConfig: GitHubCloneConfig | null = null;
 
-function normalizeEnabled(value: unknown, fallback: boolean): boolean {
-	return typeof value === "boolean" ? value : fallback;
-}
-
-function normalizePositiveNumber(value: unknown, fallback: number): number {
-	if (typeof value !== "number" || !Number.isFinite(value)) return fallback;
-	return value > 0 ? value : fallback;
-}
-
-function normalizeClonePath(value: unknown, fallback: string): string {
-	if (typeof value !== "string") return fallback;
-	const normalized = value.trim();
-	return normalized.length > 0 ? normalized : fallback;
-}
+const GITHUB_DEFAULTS: GitHubCloneConfig = {
+	enabled: true,
+	maxRepoSizeMB: 350,
+	cloneTimeoutSeconds: 30,
+	clonePath: "/tmp/pi-github-repos",
+};
 
 function loadGitHubConfig(): GitHubCloneConfig {
 	if (cachedConfig) return cachedConfig;
-
-	const defaults: GitHubCloneConfig = {
-		enabled: true,
-		maxRepoSizeMB: 350,
-		cloneTimeoutSeconds: 30,
-		clonePath: "/tmp/pi-github-repos",
-	};
-
-	if (!existsSync(CONFIG_PATH)) {
-		cachedConfig = defaults;
-		return cachedConfig;
-	}
-
-	const rawText = readFileSync(CONFIG_PATH, "utf-8");
-	let raw: {
-		githubClone?: { enabled?: unknown; maxRepoSizeMB?: unknown; cloneTimeoutSeconds?: unknown; clonePath?: unknown };
-	};
-	try {
-		raw = JSON.parse(rawText) as {
-			githubClone?: { enabled?: unknown; maxRepoSizeMB?: unknown; cloneTimeoutSeconds?: unknown; clonePath?: unknown };
+	cachedConfig = loadConfigSection("github-clone", GITHUB_DEFAULTS, (raw) => {
+		const gc = raw.githubClone ?? {};
+		return {
+			enabled: normalizeBoolean(gc.enabled, GITHUB_DEFAULTS.enabled),
+			maxRepoSizeMB: normalizePositiveNumber(gc.maxRepoSizeMB, GITHUB_DEFAULTS.maxRepoSizeMB),
+			cloneTimeoutSeconds: normalizePositiveNumber(gc.cloneTimeoutSeconds, GITHUB_DEFAULTS.cloneTimeoutSeconds),
+			clonePath: normalizeString(gc.clonePath, GITHUB_DEFAULTS.clonePath),
 		};
-	} catch (err) {
-		const message = err instanceof Error ? err.message : String(err);
-		throw new Error(`Failed to parse ${CONFIG_PATH}: ${message}`);
-	}
-
-	const gc = raw.githubClone ?? {};
-	cachedConfig = {
-		enabled: normalizeEnabled(gc.enabled, defaults.enabled),
-		maxRepoSizeMB: normalizePositiveNumber(gc.maxRepoSizeMB, defaults.maxRepoSizeMB),
-		cloneTimeoutSeconds: normalizePositiveNumber(gc.cloneTimeoutSeconds, defaults.cloneTimeoutSeconds),
-		clonePath: normalizeClonePath(gc.clonePath, defaults.clonePath),
-	};
+	});
 	return cachedConfig;
 }
 
