@@ -12,6 +12,7 @@ import { Type } from "typebox";
 import { Text } from "@mariozechner/pi-tui";
 
 const TAIL_LINES = 5;
+const MAX_COMMAND_PREVIEW = 120;
 
 type BashContent = { type: "text"; text: string };
 
@@ -100,8 +101,9 @@ To execute a command that doesn't need the user to see its output, prefix it wit
 				? `${theme.fg("toolTitle", theme.bold("bash"))} ${theme.fg("accent", title)}`
 				: theme.fg("toolTitle", theme.bold("bash"));
 
+			const cmdPreview = command.length > MAX_COMMAND_PREVIEW ? `${command.slice(0, MAX_COMMAND_PREVIEW)}…` : command;
 			const text = (context.lastComponent as Text | undefined) ?? new Text("", 0, 0);
-			text.setText(`${header}\n${theme.fg("dim", `$ ${command}`)}`);
+			text.setText(`${header}\n${theme.fg("dim", `$ ${cmdPreview}`)}`);
 			return text;
 		},
 		renderResult(result, { expanded, isPartial }, theme, context) {
