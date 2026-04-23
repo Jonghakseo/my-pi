@@ -7,7 +7,7 @@ import { join } from "node:path";
 import { complete, getModel, type Model, StringEnum } from "@mariozechner/pi-ai";
 import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
 import { Box, Text, truncateToWidth } from "@mariozechner/pi-tui";
-import { Type } from "@sinclair/typebox";
+import { Type } from "typebox";
 import { type ActivityEntry, activityMonitor } from "./activity.js";
 import { type CuratorServerHandle, startCuratorServer } from "./curator-server.js";
 import { isExaAvailable } from "./exa.js";

@@ -4,7 +4,7 @@
 
 import type { AgentToolResult } from "@mariozechner/pi-agent-core";
 import type { Message } from "@mariozechner/pi-ai";
-import { Type } from "@sinclair/typebox";
+import { Type } from "typebox";
 import type { AgentConfig, AgentRuntime } from "./agents.js";
 
 // ─── Interfaces ──────────────────────────────────────────────────────────────
