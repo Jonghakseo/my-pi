@@ -54,7 +54,7 @@ describe("edit tool UI override", () => {
 		const tool = getTool("edit");
 		expect(tool.description).toContain("exact text replacement");
 		expect(tool.promptSnippet).toContain("exact text replacement");
-		expect(tool.renderShell).toBe("self");
+		expect(tool.renderShell).toBe("default");
 	});
 
 	it("renders side-by-side previews before execution and collapses them once execution starts", async () => {
