@@ -2,8 +2,8 @@
   "theme": "zentui",
   "quietStartup": true,
   "lastChangelogVersion": "0.69.0",
-  "defaultProvider": "ollama-cloud",
-  "defaultModel": "glm-5.1:cloud",
+  "defaultProvider": "anthropic",
+  "defaultModel": "claude-opus-4-6",
   "defaultThinkingLevel": "high",
   "subagent": {
     "claudeRuntime": "cli"
