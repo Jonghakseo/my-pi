@@ -8,22 +8,14 @@
  * How it works:
  *   1. On session_start, record static AGENTS coverage
  *      (CWD→root + global agent dir) and mark those as already injected.
- *   2. On tool_call(edit/write), discover missing scoped AGENTS/CLAUDE files.
- *      If any are missing, block the tool call before modification.
- *   3. On tool_result(read), discover missing scoped AGENTS/CLAUDE files,
- *      append their content to the read result, and mark them as injected.
- *   4. On tool_result(grep/find/ls), pre-register AGENTS.md paths so that
- *      subsequent edit/write calls pass without blocking.
- *   5. Track injected paths to avoid duplicate injection.
+ *   2. On tool_result(read/edit/write), discover missing scoped AGENTS/CLAUDE
+ *      files. Append a preview (first 20 lines) to the result and mark as injected.
+ *   3. On tool_result(grep/find/ls), same discovery and injection.
+ *   4. Track injected paths to avoid duplicate injection.
  */
 
 import type { ImageContent, TextContent } from "@mariozechner/pi-ai";
-import {
-	type ExtensionAPI,
-	isToolCallEventType,
-	type ToolCallEventResult,
-	type ToolResultEvent,
-} from "@mariozechner/pi-coding-agent";
+import type { ExtensionAPI, ToolResultEvent } from "@mariozechner/pi-coding-agent";
 
 /** Matches pi core's ToolResultEventResult shape (not exported from top-level package). */
 interface ToolResultEventResult {
@@ -147,20 +139,6 @@ function formatInjection(files: ContextFile[]): string {
 	return parts.join("");
 }
 
-/** Build tool_call block reason for edit/write gate. */
-function formatBlockReason(targetPath: string, files: ContextFile[]): string {
-	const list = files.map((f) => `- read path: ${f.path}`).join("\n");
-	return [
-		"Blocked: scoped AGENTS context must be loaded before edit/write.",
-		`Target: ${targetPath}`,
-		"",
-		"Read these context files first:",
-		list,
-		"",
-		"Then retry the same edit/write.",
-	].join("\n");
-}
-
 function collectNewContextFiles(
 	rawPaths: string[],
 	cwd: string,
@@ -241,23 +219,6 @@ export default function (pi: ExtensionAPI) {
 		resetState(_event, ctx);
 	});
 
-	// Enforce scope context before first edit/write in a new directory scope.
-	pi.on("tool_call", async (event, ctx): Promise<ToolCallEventResult | undefined> => {
-		if (!(isToolCallEventType("edit", event) || isToolCallEventType("write", event))) return;
-
-		const rawPath = event.input.path;
-		if (typeof rawPath !== "string" || rawPath.length === 0) return;
-
-		const absPath = toAbsolute(rawPath, ctx.cwd);
-		const missing = discoverNewAgentsMd(dirname(absPath), injectedPaths, staticDirs);
-		if (missing.length === 0) return;
-
-		return {
-			block: true,
-			reason: formatBlockReason(absPath, missing),
-		};
-	});
-
 	// ── Inject scope context on exploratory tool results ──
 	// When grep/find/ls access files in new directories, discover and
 	// inject AGENTS.md content so the LLM sees the rules before any edit.
@@ -280,9 +241,10 @@ export default function (pi: ExtensionAPI) {
 		return appendInjectedContext(event, newFiles);
 	});
 
-	// Inject dynamic scope context when reading files in uncovered directories.
+	// ── Inject scope context on file tool results (read/edit/write) ──
 	pi.on("tool_result", async (event, ctx): Promise<ToolResultEventResult | undefined> => {
-		if (event.toolName !== "read" || event.isError) return;
+		const fileTools = new Set(["read", "edit", "write"]);
+		if (!fileTools.has(event.toolName) || event.isError) return;
 
 		const rawPaths = extractPaths(event);
 		if (rawPaths.length === 0) return;
@@ -290,7 +252,8 @@ export default function (pi: ExtensionAPI) {
 		const { allNewFiles, readAbsPaths } = collectNewContextFiles(rawPaths, ctx.cwd, injectedPaths, staticDirs);
 		if (allNewFiles.length === 0) return;
 
-		const toInject = allNewFiles.filter((file) => !readAbsPaths.has(resolve(file.path)));
+		const toInject =
+			event.toolName === "read" ? allNewFiles.filter((file) => !readAbsPaths.has(resolve(file.path))) : allNewFiles;
 		return appendInjectedContext(event, toInject);
 	});
 }
