@@ -46,7 +46,7 @@ function formatTruncationWarning(
  */
 function deriveTitle(command: string): string {
 	const trimmed = command.trim();
-	if (!trimmed) return "run command";
+	if (!trimmed) return "명령어 실행";
 
 	// Strip leading env vars (KEY=val ...) and common prefixes
 	const withoutEnv = trimmed.replace(/^[A-Za-z_][A-Za-z0-9_]*=\S*\s*/, "");
@@ -55,7 +55,7 @@ function deriveTitle(command: string): string {
 
 	// Extract the first word (the command)
 	const match = withoutFlags.match(/^\S+/);
-	if (!match) return "run command";
+	if (!match) return "명령어 실행";
 	return match[0];
 }
 
@@ -65,30 +65,30 @@ export default function bashToolOverride(pi: ExtensionAPI): void {
 		label: "Bash",
 		description: `Execute a bash command. The command will be executed in the current working directory.
 
-Title is a short one-sentence summary of what the command does, shown in the UI.
+Title is a short one-sentence summary in Korean of what the command does, shown in the UI. Always write the title in Korean.
 
 When running long-running commands, it is helpful to run a sleep command in the background first, and then check the output. This prevents the command from timing out.
 
 To execute a command that doesn't need the user to see its output, prefix it with "!!". The command will still be executed, but its output will be excluded from the conversation context.`,
 		parameters: Type.Object({
 			command: Type.String({ description: "The bash command to execute" }),
-			title: Type.Optional(
-				Type.String({ description: "A short one-sentence summary of what the command does, displayed in the UI" }),
-			),
+			title: Type.String({
+				description: "명령어가 수행하는 작업을 설명하는 짧은 한글 문장. 반드시 한국어로 작성할 것",
+			}),
 			timeout: Type.Optional(Type.Number({ description: "Optional timeout in milliseconds" })),
 		}),
 		promptSnippet: "Execute commands in a bash shell; use title to describe the command's purpose",
-		promptGuidelines: ["Always provide a concise title for bash commands describing what the command accomplishes."],
-		prepareArguments(args: unknown): { command: string; title?: string; timeout?: number } {
-			// If title is missing, derive it from command
+		promptGuidelines: [
+			"Always provide a concise title for bash commands describing what the command accomplishes. Write the title in Korean (한글).",
+		],
+		prepareArguments(args: unknown): { command: string; title: string; timeout?: number } {
 			if (!args || typeof args !== "object") return args as never;
 			const a = args as Record<string, unknown>;
 			const command = typeof a.command === "string" ? a.command : "";
-			const title = typeof a.title === "string" ? a.title : undefined;
+			const title = typeof a.title === "string" && a.title.length > 0 ? a.title : deriveTitle(command);
 			const timeout = typeof a.timeout === "number" ? a.timeout : undefined;
 
-			const derivedTitle = title && title.length > 0 ? title : deriveTitle(command);
-			return { command, title: derivedTitle, ...(timeout !== undefined ? { timeout } : {}) };
+			return { command, title, ...(timeout !== undefined ? { timeout } : {}) };
 		},
 		renderShell: "self",
 		renderCall(args, theme, context) {
@@ -171,7 +171,7 @@ To execute a command that doesn't need the user to see its output, prefix it wit
 			return text;
 		},
 		async execute(toolCallId, params, signal, onUpdate, ctx) {
-			const { title: _title, ...bashParams } = params as { command: string; title?: string; timeout?: number };
+			const { title: _title, ...bashParams } = params as { command: string; title: string; timeout?: number };
 			const builtinTool = createBashToolDefinition(ctx.cwd);
 			return builtinTool.execute(toolCallId, bashParams, signal, onUpdate, ctx);
 		},
