@@ -51,6 +51,39 @@ describe("createRepoStatusTracker", () => {
 		tracker.dispose();
 	});
 
+	it.each([
+		["APPROVED", [], "approved"],
+		["REVIEW_REQUIRED", [{ author: { login: "alice" }, state: "CHANGES_REQUESTED" }], "changes_requested"],
+		["REVIEW_REQUIRED", [{ author: { login: "alice" }, state: "COMMENTED" }], "commented"],
+		["REVIEW_REQUIRED", [{ author: { login: "alice" }, state: "APPROVED" }], "review"],
+		["REVIEW_REQUIRED", [], "review"],
+	] as const)("maps PR review status to %s / %s", async (reviewDecision, latestReviews, expectedState) => {
+		const exec = vi
+			.fn()
+			.mockResolvedValueOnce({
+				code: 0,
+				stdout: ["# branch.oid 89abcdef01234567", "# branch.head feature"].join("\n"),
+			})
+			.mockResolvedValueOnce({
+				code: 0,
+				stdout: JSON.stringify({
+					number: 42,
+					title: "Feature PR",
+					state: "OPEN",
+					reviewDecision,
+					latestReviews,
+				}),
+			});
+		const pi = { exec } as unknown as ExtensionAPI;
+		const tracker = createRepoStatusTracker(pi, "/tmp/repo");
+
+		await flushAsyncWork();
+
+		expect(tracker.getSnapshot().review).toEqual({ state: expectedState });
+
+		tracker.dispose();
+	});
+
 	it.each(["CLOSED", "MERGED"])("hides PR metadata when gh pr view reports %s", async (state) => {
 		const exec = vi
 			.fn()
@@ -88,7 +121,7 @@ describe("createRepoStatusTracker", () => {
 		expect(exec).toHaveBeenNthCalledWith(
 			2,
 			"gh",
-			["pr", "view", "--json", "number,title,url,state,reviewDecision,latestReviews,reviewRequests,statusCheckRollup"],
+			["pr", "view", "--json", "number,title,url,state,reviewDecision,latestReviews,statusCheckRollup"],
 			{ cwd: "/tmp/repo" },
 		);
 

@@ -15,6 +15,9 @@ const LINE2_RIGHT_SEPARATOR = " | ";
 const CONTEXT_SEPARATOR = "   ";
 const BRANCH_ICON = "";
 const REVIEW_ICON = "󰱼";
+const REVIEW_APPROVED_ICON = "󰄬";
+const REVIEW_CHANGES_REQUESTED_ICON = "󰅖";
+const REVIEW_COMMENTED_ICON = "󰆨";
 const INLINE_COMMENT_ICON = "󰍡";
 const CI_PENDING_ICON = "󰑓";
 const CI_SUCCESS_ICON = "󰗠";
@@ -158,8 +161,17 @@ function buildLine2Left(
 
 function buildReviewLabel(theme: Theme, repoStatus: RepoStatusSnapshot): string {
 	if (!repoStatus.review) return "";
-	const { approved, total } = repoStatus.review;
-	return `${theme.fg("warning", REVIEW_ICON)} ${theme.fg("text", `${approved}/${total}`)}`;
+	switch (repoStatus.review.state) {
+		case "approved":
+			return `${theme.fg("success", REVIEW_APPROVED_ICON)}  ${theme.fg("text", "Approved")}`;
+		case "changes_requested":
+			return `${theme.fg("error", REVIEW_CHANGES_REQUESTED_ICON)}  ${theme.fg("text", "Changes")}`;
+		case "commented":
+			return `${theme.fg("warning", REVIEW_COMMENTED_ICON)}  ${theme.fg("text", "Commented")}`;
+		case "review":
+			return `${theme.fg("warning", REVIEW_ICON)}  ${theme.fg("text", "Reviewing")}`;
+	}
+	return "";
 }
 
 function buildCiSegment(theme: Theme, icon: string, color: "warning" | "success", count: number): string {
