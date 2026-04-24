@@ -47,12 +47,26 @@ Pi 공식 문서는 auto-discovery 대상으로 `extensions/*.ts`와 `extensions
 ## 스크립트
 
 ```bash
-pnpm run typecheck            # 타입 체크 (web-access 제외 상태 유지)
-pnpm run typecheck:web-access # web-access 타입 오류 별도 확인용, Phase 2 known failing 가능
+pnpm run typecheck            # 전체 TypeScript 타입 체크 (web-access 포함)
+pnpm run typecheck:web-access # web-access focused 타입 체크
 pnpm test                     # extensions/**/*.test.ts 전체 실행
 pnpm run test:watch           # Vitest watch
 pnpm run test:coverage        # coverage 리포트
 pnpm exec biome check .       # Biome 검사만, 파일 변경 없음
 pnpm run lint                 # Biome 검사 + 자동 수정(--write)
 pnpm run format:write         # Biome 포맷 자동 적용
+```
+
+## 안전 리팩토링 체크리스트
+
+확장 엔트리포인트 구조나 타입 계약을 건드린 뒤에는 일반 검사와 함께 isolated headless Pi 로딩 검증을 실행한다.
+
+```bash
+cd /Users/creatrip/.pi/agent
+tmp=$(mktemp -d)
+exts=$(find extensions -mindepth 2 -maxdepth 2 -name index.ts | sort | awk '{printf " -e %s", $0}')
+PI_CODING_AGENT_DIR="$tmp" PI_OFFLINE=1 pi -p --no-session --no-tools --offline $exts
+code=$?
+rm -rf "$tmp"
+exit $code
 ```

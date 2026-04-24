@@ -47,8 +47,8 @@ Custom extensions for the pi coding agent. All extensions are written in TypeScr
 ## Tooling Standards
 - **Package manager**: pnpm
 - **Quality checks**:
-  - `pnpm run typecheck` — TypeScript 타입 검사 (오류만 출력, 파일 변경 없음)
-  - `pnpm run typecheck:web-access` — Phase 2 대상인 `web-access/` 타입 오류를 별도 확인 (현재 known failing 가능)
+  - `pnpm run typecheck` — TypeScript 타입 검사 (web-access 포함, 오류만 출력, 파일 변경 없음)
+  - `pnpm run typecheck:web-access` — `web-access/` focused 타입 검사
   - `pnpm test` — `tooling/vitest.config.ts` 기준으로 `extensions/**/*.test.ts` 전체 실행 (`tooling/`에 두어 Pi auto-discovery를 피함)
   - `pnpm run lint` — Biome lint + **자동 수정** (`biome check --write .`). 파일을 직접 고침.
   - `pnpm run format` — Biome 포맷 검사만 (파일 변경 없음)
@@ -77,6 +77,7 @@ When adding new features or refactoring, use this priority order:
 - [ ] **Module-scoped changes:** modify only one module (or a small unit) and avoid touching out-of-scope files.
 - [ ] **Respect single-writer boundaries:** in out-of-scope files/owned areas of other modules (for example, `subagent` core paths), allow only strictly minimal edits.
 - [ ] **Gate execution:** after changes run `test` → `typecheck` (and `coverage` when feasible) and then complete review before commit.
+- [ ] **Runtime load check:** after entrypoint/type-contract changes, run isolated headless Pi loading with a temporary `PI_CODING_AGENT_DIR` and explicit `-e extensions/*/index.ts` list.
 - [ ] **Baseline control:** even if known baseline failures exist, do not introduce new failures. (fix only deltas)
 
 ### Execution principles

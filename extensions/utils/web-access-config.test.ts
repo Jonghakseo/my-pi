@@ -2,6 +2,7 @@ import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import {
 	loadConfigSection,
 	invalidateConfig,
+	setConfigPathForTests,
 	normalizeApiKey,
 	normalizeBoolean,
 	normalizeString,
@@ -98,6 +99,7 @@ describe("loadConfigSection", () => {
 	});
 
 	afterEach(() => {
+		setConfigPathForTests(null);
 		invalidateConfig(); // Clean up
 	});
 
@@ -133,26 +135,45 @@ describe("loadConfigSection", () => {
 	});
 
 	it("should throw descriptive error for malformed JSON", () => {
-		invalidateConfig();
-		// We need to test the actual file reading path
-		// Create a temp config file with invalid JSON
-		const tempDir = join(tmpdir(), "pi-config-test");
+		const tempDir = join(tmpdir(), `pi-config-test-${Date.now()}`);
 		const tempFile = join(tempDir, "web-search.json");
 
-		try {
-			mkdirSync(tempDir, { recursive: true });
-			writeFileSync(tempFile, "{ invalid json");
+		mkdirSync(tempDir, { recursive: true });
+		writeFileSync(tempFile, "{ invalid json");
+		setConfigPathForTests(tempFile);
 
-			// This test would only work if we could override CONFIG_PATH
-			// Since CONFIG_PATH is const, we verify the error format instead
-			expect(() => {
-				JSON.parse("{ invalid json");
-			}).toThrow();
+		expect(() => loadConfigSection("invalid-json", { value: "default" }, () => ({ value: "unused" }))).toThrow(
+			new RegExp(`Failed to parse ${tempFile.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}:`),
+		);
 
-			rmSync(tempDir, { recursive: true, force: true });
-		} catch {
-			rmSync(tempDir, { recursive: true, force: true });
-		}
+		rmSync(tempDir, { recursive: true, force: true });
+	});
+
+	it("should reload from disk after cache invalidation", () => {
+		const tempDir = join(tmpdir(), `pi-config-cache-test-${Date.now()}`);
+		const tempFile = join(tempDir, "web-search.json");
+		mkdirSync(tempDir, { recursive: true });
+		setConfigPathForTests(tempFile);
+
+		writeFileSync(tempFile, JSON.stringify({ searchModel: "first" }));
+		const first = loadConfigSection("reload-test", { value: "default" }, (raw) => ({
+			value: normalizeString(raw.searchModel, "default"),
+		}));
+
+		writeFileSync(tempFile, JSON.stringify({ searchModel: "second" }));
+		const cached = loadConfigSection("reload-test", { value: "default" }, (raw) => ({
+			value: normalizeString(raw.searchModel, "default"),
+		}));
+		invalidateConfig("reload-test");
+		const reloaded = loadConfigSection("reload-test", { value: "default" }, (raw) => ({
+			value: normalizeString(raw.searchModel, "default"),
+		}));
+
+		expect(first.value).toBe("first");
+		expect(cached.value).toBe("first");
+		expect(reloaded.value).toBe("second");
+
+		rmSync(tempDir, { recursive: true, force: true });
 	});
 });
 
