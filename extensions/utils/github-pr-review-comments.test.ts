@@ -27,7 +27,7 @@ describe("github-pr-review-comments", () => {
 		});
 	});
 
-	it("fetches unresolved review threads across thread/comment pagination", async () => {
+	it("fetches unresolved review threads across thread/comment pagination, including outdated threads", async () => {
 		const exec = vi
 			.fn()
 			.mockResolvedValueOnce({
@@ -147,7 +147,14 @@ describe("github-pr-review-comments", () => {
 											comments: {
 												totalCount: 1,
 												pageInfo: { hasNextPage: false, endCursor: null },
-												nodes: [],
+												nodes: [
+													{
+														author: { login: "dave" },
+														body: "Still needs a reply even though the diff moved.",
+														url: "https://github.com/acme/pi/pull/123#discussion_r3",
+														createdAt: "2026-04-22T03:00:00Z",
+													},
+												],
 											},
 										},
 									],
@@ -207,8 +214,24 @@ describe("github-pr-review-comments", () => {
 					},
 				],
 			},
+			{
+				id: "thread-outdated",
+				path: "src/outdated.ts",
+				line: 1,
+				originalLine: 1,
+				startLine: null,
+				originalStartLine: null,
+				comments: [
+					{
+						author: "dave",
+						body: "Still needs a reply even though the diff moved.",
+						url: "https://github.com/acme/pi/pull/123#discussion_r3",
+						createdAt: "2026-04-22T03:00:00Z",
+					},
+				],
+			},
 		]);
-		expect(countUnresolvedReviewComments(summary?.threads ?? [])).toBe(3);
+		expect(countUnresolvedReviewComments(summary?.threads ?? [])).toBe(4);
 		expect(exec).toHaveBeenCalledTimes(3);
 		expect(exec.mock.calls[2]?.[1]).toContain("after=thread-page-2");
 	});
