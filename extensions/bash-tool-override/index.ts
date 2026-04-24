@@ -107,7 +107,7 @@ To execute a command that doesn't need the user to see its output, prefix it wit
 		},
 		renderResult(result, { expanded, isPartial }, theme, context) {
 			if (isPartial) {
-				return reuseText(context, theme.fg("warning", "Running..."));
+				return reuseText(context, "");
 			}
 
 			const renderedText = getBashTextContent(result as { content?: Array<{ type: string; text?: string }> });
