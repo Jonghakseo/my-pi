@@ -114,7 +114,7 @@ function loadConfigForExtensionInit(): WebSearchConfig {
 	}
 }
 
-function normalizeProviderInput(value: unknown): SearchProvider | undefined {
+export function normalizeProviderInput(value: unknown): SearchProvider | undefined {
 	if (value === undefined) return undefined;
 	if (typeof value !== "string") return "auto";
 	const normalized = value.trim().toLowerCase();
@@ -124,20 +124,20 @@ function normalizeProviderInput(value: unknown): SearchProvider | undefined {
 	return "auto";
 }
 
-function normalizeCuratorTimeoutSeconds(value: unknown): number | undefined {
+export function normalizeCuratorTimeoutSeconds(value: unknown): number | undefined {
 	if (typeof value !== "number" || !Number.isFinite(value)) return undefined;
 	const normalized = Math.floor(value);
 	if (normalized < 1) return undefined;
 	return Math.min(normalized, MAX_CURATOR_TIMEOUT_SECONDS);
 }
 
-function resolveWorkflow(input: unknown, hasUI: boolean): WebSearchWorkflow {
+export function resolveWorkflow(input: unknown, hasUI: boolean): WebSearchWorkflow {
 	if (!hasUI) return "none";
 	if (typeof input === "string" && input.trim().toLowerCase() === "none") return "none";
 	return "summary-review";
 }
 
-function normalizeQueryList(queryList: unknown[]): string[] {
+export function normalizeQueryList(queryList: unknown[]): string[] {
 	const normalized: string[] = [];
 	for (const query of queryList) {
 		if (typeof query !== "string") continue;

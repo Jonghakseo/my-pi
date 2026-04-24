@@ -14,6 +14,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 
 export const CONFIG_PATH = join(homedir(), ".pi", "web-search.json");
+let activeConfigPath = CONFIG_PATH;
 
 /** Raw JSON shape of `~/.pi/web-search.json` (all keys optional). */
 export interface WebSearchConfig {
@@ -51,18 +52,18 @@ export function loadConfigSection<T>(key: string, defaults: T, normalise: Config
 	const cached = configCache.get(key);
 	if (cached !== undefined) return cached as T;
 
-	if (!existsSync(CONFIG_PATH)) {
+	if (!existsSync(activeConfigPath)) {
 		configCache.set(key, defaults);
 		return defaults;
 	}
 
-	const rawText = readFileSync(CONFIG_PATH, "utf-8");
+	const rawText = readFileSync(activeConfigPath, "utf-8");
 	let raw: WebSearchConfig;
 	try {
 		raw = JSON.parse(rawText) as WebSearchConfig;
 	} catch (err) {
 		const message = err instanceof Error ? err.message : String(err);
-		throw new Error(`Failed to parse ${CONFIG_PATH}: ${message}`);
+		throw new Error(`Failed to parse ${activeConfigPath}: ${message}`);
 	}
 
 	const result = normalise(raw);
@@ -74,6 +75,11 @@ export function loadConfigSection<T>(key: string, defaults: T, normalise: Config
  * Invalidate a cached config section (or all sections).
  * Useful when a provider writes its own config and needs a fresh read.
  */
+export function setConfigPathForTests(path: string | null): void {
+	activeConfigPath = path ?? CONFIG_PATH;
+	invalidateConfig();
+}
+
 export function invalidateConfig(key?: string): void {
 	if (key) {
 		configCache.delete(key);
