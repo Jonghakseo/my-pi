@@ -23,6 +23,32 @@ function getBashTextContent(result: { content?: Array<{ type: string; text?: str
 	return textContent?.text;
 }
 
+function formatRunningDuration(ms: number): string {
+	const seconds = Math.max(1, Math.ceil(ms / 1000));
+	if (seconds < 60) return `${seconds}s`;
+
+	const minutes = Math.floor(seconds / 60);
+	const remainingSeconds = seconds % 60;
+	if (minutes < 60) return remainingSeconds > 0 ? `${minutes}m ${remainingSeconds}s` : `${minutes}m`;
+
+	const hours = Math.floor(minutes / 60);
+	const remainingMinutes = minutes % 60;
+	return remainingMinutes > 0 ? `${hours}h ${remainingMinutes}m` : `${hours}h`;
+}
+
+type RunningRenderState = {
+	bashStartedAt?: number;
+	bashTimer?: ReturnType<typeof setInterval>;
+};
+
+function clearRunningRenderTimer(state: RunningRenderState): void {
+	if (state.bashTimer) {
+		clearInterval(state.bashTimer);
+		state.bashTimer = undefined;
+	}
+	state.bashStartedAt = undefined;
+}
+
 function formatTruncationWarning(
 	details: BashToolDetails | undefined,
 	theme: { fg: (color: "warning", text: string) => string },
@@ -106,10 +132,20 @@ To execute a command that doesn't need the user to see its output, prefix it wit
 			return text;
 		},
 		renderResult(result, { expanded, isPartial }, theme, context) {
+			const runningState = context.state as RunningRenderState;
 			if (isPartial) {
-				return reuseText(context, "");
+				runningState.bashStartedAt ??= Date.now();
+				if (!runningState.bashTimer) {
+					runningState.bashTimer = setInterval(() => context.invalidate(), 1000);
+					runningState.bashTimer.unref?.();
+				}
+				return reuseText(
+					context,
+					theme.fg("warning", `~${formatRunningDuration(Date.now() - runningState.bashStartedAt)}`),
+				);
 			}
 
+			clearRunningRenderTimer(runningState);
 			const renderedText = getBashTextContent(result as { content?: Array<{ type: string; text?: string }> });
 			const details = result.details as BashToolDetails | undefined;
 
