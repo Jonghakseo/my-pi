@@ -35,6 +35,7 @@ export interface RepoStatusTracker {
 	getSnapshot(): RepoStatusSnapshot;
 	subscribe(listener: () => void): () => void;
 	refreshNow(): void;
+	resetPrStatus(): void;
 	dispose(): void;
 }
 
@@ -431,6 +432,10 @@ export function createRepoStatusTracker(pi: ExtensionAPI, cwd: string): RepoStat
 		},
 		refreshNow() {
 			void refreshGitState();
+			void refreshPrState();
+		},
+		resetPrStatus() {
+			clearPrData();
 			void refreshPrState();
 		},
 		dispose() {
