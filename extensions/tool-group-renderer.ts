@@ -2,7 +2,7 @@ import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import { Container, Spacer, Text } from "@mariozechner/pi-tui";
 
 const PATCH_STATE_KEY = Symbol.for("creatrip.tool-group-renderer.patch-state");
-const PATCH_VERSION = "2026-04-23-r2";
+const PATCH_VERSION = "2026-04-24-r1";
 const GROUP_STATE = Symbol("creatrip.tool-group-renderer.state");
 const PI_INTERACTIVE_BASE = "/usr/local/lib/node_modules/@mariozechner/pi-coding-agent/dist/modes/interactive";
 const BASH_PREVIEW_LIMIT = 56;
@@ -451,7 +451,7 @@ class GroupedBuiltinToolComponent extends Container {
 	}
 
 	private getBackgroundToken(): ThemeBg {
-		if (this.items.some((item) => item.isError)) return "toolErrorBg";
+		if (this.items.length > 0 && this.items.every((item) => item.isError)) return "toolErrorBg";
 		if (this.items.some((item) => item.isPartial || (item.executionStarted && !item.result))) return "toolPendingBg";
 		return "toolSuccessBg";
 	}
