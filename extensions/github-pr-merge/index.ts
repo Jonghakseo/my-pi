@@ -1,5 +1,6 @@
 import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
 import { fetchCurrentPullRequestInfo, type PullRequestInfo } from "../utils/github-pr-review-comments.ts";
+import { invalidateRepoStatus } from "../utils/repo-status-events.ts";
 import { fetchPullRequestMergeStatus, mergePullRequest } from "../utils/github-pr-merge.ts";
 
 function notify(ctx: ExtensionContext, message: string, level: "info" | "warning" | "error"): void {
@@ -55,6 +56,7 @@ export default function githubPrMerge(pi: ExtensionAPI) {
 				return;
 			}
 
+			invalidateRepoStatus();
 			notify(ctx, `PR #${pullRequest.number} 머지 완료`, "info");
 		},
 	});

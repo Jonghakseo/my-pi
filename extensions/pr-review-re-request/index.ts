@@ -1,5 +1,6 @@
 import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
 import { fetchCurrentPullRequestInfo, type PullRequestInfo } from "../utils/github-pr-review-comments.ts";
+import { invalidateRepoStatus } from "../utils/repo-status-events.ts";
 import {
 	fetchPullRequestReviewReRequestPlan,
 	requestPullRequestReviewReRequest,
@@ -78,6 +79,7 @@ export default function prReviewReRequest(pi: ExtensionAPI) {
 				return;
 			}
 
+			invalidateRepoStatus();
 			notifyRequestResult(ctx, plan);
 		},
 	});

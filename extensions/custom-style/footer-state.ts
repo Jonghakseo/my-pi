@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
+import { subscribeRepoStatusInvalidation } from "../utils/repo-status-events.ts";
 import { createRepoStatusTracker, type RepoStatusSnapshot } from "../utils/repo-status.ts";
 import { type RuntimeInfo, readRuntimeInfo } from "./runtime.ts";
 
@@ -103,6 +104,10 @@ export function createFooterStateManager(
 		void refreshProjectState();
 	});
 
+	const unsubscribeRepoStatusInvalidation = subscribeRepoStatusInvalidation(() => {
+		repoStatusTracker.resetPrStatus();
+	});
+
 	return {
 		getState(): FooterState {
 			return {
@@ -115,6 +120,7 @@ export function createFooterStateManager(
 		dispose() {
 			disposed = true;
 			unsubscribeBranch();
+			unsubscribeRepoStatusInvalidation();
 			unsubscribeRepoStatus();
 			repoStatusTracker.dispose();
 			clearInterval(stateTimer);
