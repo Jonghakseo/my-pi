@@ -1,4 +1,4 @@
-import { complete, getModel, type Message, type Model } from "@mariozechner/pi-ai";
+import { complete, getModel, type Api, type Message, type Model } from "@mariozechner/pi-ai";
 import type { ExtensionContext } from "@mariozechner/pi-coding-agent";
 import type { QueryResultData } from "./storage.js";
 
@@ -175,7 +175,7 @@ export function buildDeterministicSummary(results: QueryResultData[]): { summary
 async function resolveSummaryModel(
 	ctx: SummaryGenerationContext,
 	modelOverride?: string,
-): Promise<{ model: Model; apiKey: string }> {
+): Promise<{ model: Model<Api>; apiKey: string }> {
 	const normalizedOverride = typeof modelOverride === "string" ? modelOverride.trim() : "";
 	if (normalizedOverride.length > 0) {
 		const slashIndex = normalizedOverride.indexOf("/");
@@ -195,8 +195,9 @@ async function resolveSummaryModel(
 		return { model: selectedModel, apiKey: selectedAuth.apiKey };
 	}
 
+	const lookupModel = getModel as (provider: string, modelId: string) => Model<Api> | undefined;
 	for (const { provider, id } of PREFERRED_SUMMARY_MODELS) {
-		const model = getModel(provider, id);
+		const model = lookupModel(provider, id);
 		if (!model) continue;
 		const auth = await ctx.modelRegistry.getApiKeyAndHeaders(model);
 		if (auth.ok && auth.apiKey) return { model, apiKey: auth.apiKey };
