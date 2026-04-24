@@ -52,12 +52,16 @@ describe("createRepoStatusTracker", () => {
 	});
 
 	it.each([
-		["APPROVED", [], "approved"],
-		["REVIEW_REQUIRED", [{ author: { login: "alice" }, state: "CHANGES_REQUESTED" }], "changes_requested"],
-		["REVIEW_REQUIRED", [{ author: { login: "alice" }, state: "COMMENTED" }], "commented"],
-		["REVIEW_REQUIRED", [{ author: { login: "alice" }, state: "APPROVED" }], "review"],
-		["REVIEW_REQUIRED", [], "review"],
-	] as const)("maps PR review status to %s / %s", async (reviewDecision, latestReviews, expectedState) => {
+		["APPROVED", [], [], "approved"],
+		["REVIEW_REQUIRED", [{ author: { login: "alice" }, state: "CHANGES_REQUESTED" }], [], "changes_requested"],
+		["REVIEW_REQUIRED", [{ author: { login: "alice" }, state: "COMMENTED" }], [], "commented"],
+		["REVIEW_REQUIRED", [{ author: { login: "alice" }, state: "APPROVED" }], [], "review"],
+		["REVIEW_REQUIRED", [], [], "review"],
+		["CHANGES_REQUESTED", [{ author: { login: "alice" }, state: "CHANGES_REQUESTED" }], [{ login: "bob" }], "review"],
+		["APPROVED", [{ author: { login: "alice" }, state: "APPROVED" }], [{ login: "bob" }], "review"],
+		["REVIEW_REQUIRED", [{ author: { login: "alice" }, state: "COMMENTED" }], [{ login: "bob" }], "review"],
+		["CHANGES_REQUESTED", [{ author: { login: "alice" }, state: "PENDING" }], [], "review"],
+	] as const)("maps PR review status to %s / %s / %s", async (reviewDecision, latestReviews, reviewRequests, expectedState) => {
 		const exec = vi
 			.fn()
 			.mockResolvedValueOnce({
@@ -72,6 +76,7 @@ describe("createRepoStatusTracker", () => {
 					state: "OPEN",
 					reviewDecision,
 					latestReviews,
+					reviewRequests,
 				}),
 			});
 		const pi = { exec } as unknown as ExtensionAPI;
@@ -121,7 +126,7 @@ describe("createRepoStatusTracker", () => {
 		expect(exec).toHaveBeenNthCalledWith(
 			2,
 			"gh",
-			["pr", "view", "--json", "number,title,url,state,reviewDecision,latestReviews,statusCheckRollup"],
+			["pr", "view", "--json", "number,title,url,state,reviewDecision,latestReviews,reviewRequests,statusCheckRollup"],
 			{ cwd: "/tmp/repo" },
 		);
 

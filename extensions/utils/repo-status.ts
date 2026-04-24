@@ -7,7 +7,7 @@ const PR_VIEW_ARGS = [
 	"pr",
 	"view",
 	"--json",
-	"number,title,url,state,reviewDecision,latestReviews,statusCheckRollup",
+	"number,title,url,state,reviewDecision,latestReviews,reviewRequests,statusCheckRollup",
 ] as const;
 const GIT_POLL_INTERVAL_MS = 3000;
 const PR_POLL_INTERVAL_MS = 30_000;
@@ -49,6 +49,7 @@ type GhPrViewJson = {
 	state?: unknown;
 	reviewDecision?: unknown;
 	latestReviews?: unknown;
+	reviewRequests?: unknown;
 	statusCheckRollup?: unknown;
 };
 
@@ -137,12 +138,20 @@ function readReviewDecision(value: unknown): GithubReviewDecision | null {
 	return null;
 }
 
-function parseReviewSummary(reviewDecision: unknown, latestReviews: unknown): ReviewStatusSummary {
+function parseReviewSummary(
+	reviewDecision: unknown,
+	latestReviews: unknown,
+	reviewRequests: unknown,
+): ReviewStatusSummary {
 	const decision = readReviewDecision(reviewDecision);
 	const reviewStates = asArray(latestReviews)
 		.map(extractReviewState)
 		.filter((state): state is GithubReviewState => Boolean(state));
+	const hasPendingReview = asArray(reviewRequests).length > 0 || reviewStates.includes("PENDING");
 
+	if (hasPendingReview) {
+		return { state: "review" };
+	}
 	if (decision === "CHANGES_REQUESTED") {
 		return { state: "changes_requested" };
 	}
@@ -228,7 +237,7 @@ function parsePrSnapshot(
 			prNumber: readNumber(parsed.number),
 			prTitle: readString(parsed.title),
 			prUrl: readString(parsed.url),
-			review: parseReviewSummary(parsed.reviewDecision, parsed.latestReviews),
+			review: parseReviewSummary(parsed.reviewDecision, parsed.latestReviews, parsed.reviewRequests),
 			checks: parseCheckSummary(parsed.statusCheckRollup),
 			unresolvedInlineComments: null,
 		};
