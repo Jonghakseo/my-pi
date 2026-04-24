@@ -1,7 +1,7 @@
 {
 	"compilerOptions": {
 		"target": "ES2022",
-		"lib": ["ES2022"],
+		"lib": ["ES2022", "DOM"],
 		"module": "NodeNext",
 		"moduleResolution": "NodeNext",
 		"noEmit": true,
@@ -14,5 +14,5 @@
 		"types": ["node"]
 	},
 	"include": ["**/*.ts"],
-	"exclude": ["node_modules", "web-access/**/*"]
+	"exclude": ["node_modules"]
 }
