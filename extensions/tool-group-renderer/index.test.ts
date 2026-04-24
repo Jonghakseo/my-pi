@@ -114,6 +114,27 @@ describe("tool-group-renderer lazy grouping", () => {
 		expect(mode.chatContainer.children[0]).not.toBeInstanceOf(DummyToolExecutionComponent);
 	});
 
+	it("promotes consecutive mixed groupable tool calls to one grouped renderer", () => {
+		(globalThis as typeof globalThis & { [patchStateKey]?: unknown })[patchStateKey] = {
+			toolExecutionComponent: DummyToolExecutionComponent,
+		};
+		const mode = createMockMode();
+
+		__test__.ensureToolHandle(mode as never, "bash", "call-1", {
+			title: "first",
+			command: "echo first",
+		});
+		__test__.ensureToolHandle(mode as never, "read", "call-2", {
+			path: "README.md",
+		});
+		__test__.ensureToolHandle(mode as never, "edit", "call-3", {
+			path: "README.md",
+		});
+
+		expect(mode.chatContainer.children).toHaveLength(1);
+		expect(mode.chatContainer.children[0]).not.toBeInstanceOf(DummyToolExecutionComponent);
+	});
+
 	it("keeps separated same-tool singleton calls on the normal renderer", () => {
 		(globalThis as typeof globalThis & { [patchStateKey]?: unknown })[patchStateKey] = {
 			toolExecutionComponent: DummyToolExecutionComponent,

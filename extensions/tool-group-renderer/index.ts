@@ -2,7 +2,7 @@ import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import { Container, Spacer, Text } from "@mariozechner/pi-tui";
 
 const PATCH_STATE_KEY = Symbol.for("creatrip.tool-group-renderer.patch-state");
-const PATCH_VERSION = "2026-04-24-r2";
+const PATCH_VERSION = "2026-04-24-r3";
 const GROUP_STATE = Symbol("creatrip.tool-group-renderer.state");
 const PI_INTERACTIVE_BASE = "/usr/local/lib/node_modules/@mariozechner/pi-coding-agent/dist/modes/interactive";
 const BASH_PREVIEW_LIMIT = 56;
@@ -239,14 +239,11 @@ function isVisuallyEmptyChild(child: unknown): boolean {
 	}
 }
 
-function findAppendableGroup(
-	mode: InteractiveModeLike,
-	toolName: GroupableToolName,
-): GroupedBuiltinToolComponent | null {
+function findAppendableGroup(mode: InteractiveModeLike): GroupedBuiltinToolComponent | null {
 	for (let index = mode.chatContainer.children.length - 1; index >= 0; index--) {
 		const child = mode.chatContainer.children[index];
 		if (child instanceof GroupedBuiltinToolComponent) {
-			return child.toolName === toolName ? child : null;
+			return child;
 		}
 		if (isVisuallyEmptyChild(child)) continue;
 		return null;
@@ -254,12 +251,7 @@ function findAppendableGroup(
 	return null;
 }
 
-function isAppendableTailCandidate(
-	mode: InteractiveModeLike,
-	candidate: TailCandidate,
-	toolName: GroupableToolName,
-): boolean {
-	if (candidate.toolName !== toolName) return false;
+function isAppendableTailCandidate(mode: InteractiveModeLike, candidate: TailCandidate): boolean {
 	for (let index = mode.chatContainer.children.length - 1; index >= 0; index--) {
 		const child = mode.chatContainer.children[index];
 		if (child === candidate.component) return true;
@@ -464,22 +456,20 @@ function updateGroupItemResult(item: GroupItem, result: ToolResultLike, isPartia
 }
 
 class GroupedBuiltinToolComponent extends Container {
-	readonly toolName: GroupableToolName;
 	private readonly content: Text;
 	private items: GroupItem[] = [];
 	private expanded = false;
 
-	constructor(toolName: GroupableToolName) {
+	constructor() {
 		super();
-		this.toolName = toolName;
 		this.addChild(new Spacer(1));
 		this.content = new Text("", 1, 1);
 		this.addChild(this.content);
 		this.refreshDisplay();
 	}
 
-	appendItem(toolCallId: string, args: unknown): ToolHandle {
-		return this.appendExistingItem(createGroupItem(this.toolName, toolCallId, args));
+	appendItem(toolName: GroupableToolName, toolCallId: string, args: unknown): ToolHandle {
+		return this.appendExistingItem(createGroupItem(toolName, toolCallId, args));
 	}
 
 	appendExistingItem(item: GroupItem): ToolHandle {
@@ -543,12 +533,29 @@ class GroupedBuiltinToolComponent extends Container {
 		return [line, ...formatExpandedDetail(item)];
 	}
 
+	private formatGroupedLines(): string[] {
+		const theme = getTheme();
+		const lines: string[] = [];
+		let previousToolName: GroupableToolName | undefined;
+
+		for (const item of this.items) {
+			if (item.toolName !== previousToolName) {
+				if (previousToolName !== undefined) {
+					lines.push("");
+				}
+				lines.push(theme.fg("toolTitle", theme.bold(item.toolName)));
+				previousToolName = item.toolName;
+			}
+			lines.push(...this.formatItemLine(item));
+		}
+
+		return lines;
+	}
+
 	private refreshDisplay(): void {
 		const theme = getTheme();
 		this.content.setCustomBgFn((text) => theme.bg(this.getBackgroundToken(), text));
-		const header = theme.fg("toolTitle", theme.bold(this.toolName));
-		const lines = [header, ...this.items.flatMap((item) => this.formatItemLine(item))];
-		this.content.setText(lines.join("\n"));
+		this.content.setText(this.formatGroupedLines().join("\n"));
 	}
 }
 
@@ -634,7 +641,7 @@ function createTailCandidate(
 }
 
 function promoteTailCandidateToGroup(mode: InteractiveModeLike, candidate: TailCandidate): GroupedBuiltinToolComponent {
-	const group = new GroupedBuiltinToolComponent(candidate.toolName);
+	const group = new GroupedBuiltinToolComponent();
 	group.setExpanded(mode.toolOutputExpanded);
 	const firstHandle = group.appendExistingItem(candidate.item);
 	replaceChildInContainer(mode.chatContainer, candidate.component, group);
@@ -689,20 +696,20 @@ function ensureToolHandle(mode: InteractiveModeLike, toolName: string, toolCallI
 	}
 
 	const state = ensureGroupState(mode);
-	let group = findAppendableGroup(mode, toolName);
+	let group = findAppendableGroup(mode);
 	if (group) {
 		state.tailGroup = group;
 		state.tailCandidate = null;
-		const handle = group.appendItem(toolCallId, args);
+		const handle = group.appendItem(toolName, toolCallId, args);
 		mode.pendingTools.set(toolCallId, handle);
 		return handle;
 	}
 
-	if (state.tailCandidate && isAppendableTailCandidate(mode, state.tailCandidate, toolName)) {
+	if (state.tailCandidate && isAppendableTailCandidate(mode, state.tailCandidate)) {
 		group = promoteTailCandidateToGroup(mode, state.tailCandidate);
 		state.tailGroup = group;
 		state.tailCandidate = null;
-		const handle = group.appendItem(toolCallId, args);
+		const handle = group.appendItem(toolName, toolCallId, args);
 		mode.pendingTools.set(toolCallId, handle);
 		return handle;
 	}
