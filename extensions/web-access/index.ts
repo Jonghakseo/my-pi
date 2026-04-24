@@ -4,9 +4,17 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { homedir, platform } from "node:os";
 import { join } from "node:path";
-import { complete, getModel, type Model, StringEnum } from "@mariozechner/pi-ai";
-import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
-import { Box, Text, truncateToWidth } from "@mariozechner/pi-tui";
+import {
+	complete,
+	getModel,
+	type Api,
+	type ImageContent,
+	type Model,
+	StringEnum,
+	type TextContent,
+} from "@mariozechner/pi-ai";
+import type { AgentToolResult, ExtensionAPI, ExtensionContext, Theme } from "@mariozechner/pi-coding-agent";
+import { Box, type KeyId, Text, truncateToWidth } from "@mariozechner/pi-tui";
 import { Type } from "typebox";
 import { type ActivityEntry, activityMonitor } from "./activity.js";
 import { type CuratorServerHandle, startCuratorServer } from "./curator-server.js";
@@ -187,6 +195,11 @@ function resolveProvider(requested: unknown, available: ProviderAvailability): R
 	return provider;
 }
 
+const textContent = (text: string): TextContent => ({ type: "text", text });
+const imageContent = (data: string, mimeType: string): ImageContent => ({ type: "image", data, mimeType });
+const isRecencyFilter = (value: unknown): value is "day" | "week" | "month" | "year" =>
+	value === "day" || value === "week" || value === "month" || value === "year";
+
 const pendingFetches = new Map<string, AbortController>();
 let sessionActive = false;
 let widgetVisible = false;
@@ -215,7 +228,7 @@ interface PendingCurate {
 		| undefined;
 	signal: AbortSignal | undefined;
 	abortSearches: () => void;
-	finish: (value: unknown) => void;
+	finish: (value: AgentToolResult<Record<string, unknown>>) => void;
 	cancel: (reason?: "user" | "stale") => void;
 	browserPromise?: Promise<void>;
 }
@@ -414,10 +427,10 @@ function updateWidget(ctx: ExtensionContext): void {
 			(resetMs > 0 ? theme.fg("dim", ` (resets in ${resetSec}s)`) : ""),
 	);
 
-	ctx.ui.setWidget("web-activity", new Text(lines.join("\n"), 0, 0));
+	ctx.ui.setWidget("web-activity", () => new Text(lines.join("\n"), 0, 0));
 }
 
-function formatEntryLine(entry: ActivityEntry, theme: { fg: (color: string, text: string) => string }): string {
+function formatEntryLine(entry: ActivityEntry, theme: Pick<Theme, "fg">): string {
 	const typeStr = entry.type === "api" ? "API" : "GET";
 	const target =
 		entry.type === "api"
@@ -570,7 +583,7 @@ export default function (pi: ExtensionAPI) {
 		};
 	}
 
-	function buildCurationCancelledReturn(reason: "user" | "stale") {
+	function buildCurationCancelledReturn(reason: "user" | "stale"): AgentToolResult<Record<string, unknown>> {
 		const message = `Search curation cancelled (${reason}).`;
 		return {
 			content: [{ type: "text", text: message }],
@@ -585,9 +598,10 @@ export default function (pi: ExtensionAPI) {
 	async function resolveFirstAvailableModel(
 		ctx: SummaryGenerationContext,
 		candidates: Array<{ provider: string; id: string }>,
-	): Promise<{ model: Model; apiKey: string }> {
+	): Promise<{ model: Model<Api>; apiKey: string }> {
+		const lookupModel = getModel as (provider: string, modelId: string) => Model<Api> | undefined;
 		for (const { provider, id } of candidates) {
-			const model = getModel(provider, id);
+			const model = lookupModel(provider, id);
 			if (!model) continue;
 			const auth = await ctx.modelRegistry.getApiKeyAndHeaders(model);
 			if (auth.ok && auth.apiKey) return { model, apiKey: auth.apiKey };
@@ -628,7 +642,7 @@ export default function (pi: ExtensionAPI) {
 		const text = contentParts
 			.map((p) => {
 				if (!p || typeof p !== "object") return "";
-				const part = p as Record<string, unknown>;
+				const part = p as unknown as Record<string, unknown>;
 				return typeof part.text === "string" ? part.text : "";
 			})
 			.join("")
@@ -738,14 +752,14 @@ export default function (pi: ExtensionAPI) {
 	}
 
 	// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: search output formatting handles curated and non-curated response variants in one place.
-	function buildSearchReturn(opts: SearchReturnOptions) {
+	function buildSearchReturn(opts: SearchReturnOptions): AgentToolResult<Record<string, unknown>> {
 		const sc = opts.results.filter((r) => !r.error).length;
 		const tr = opts.results.reduce((sum, r) => sum + r.results.length, 0);
 
 		const hasApprovedSummary = typeof opts.approvedSummary === "string" && opts.approvedSummary.trim().length > 0;
 		let output = "";
 		if (hasApprovedSummary) {
-			output = opts.approvedSummary?.trim();
+			output = opts.approvedSummary?.trim() ?? "";
 		} else {
 			if (opts.curated) {
 				output +=
@@ -1067,7 +1081,7 @@ export default function (pi: ExtensionAPI) {
 		}
 	}
 
-	pi.registerShortcut(curateKey, {
+	pi.registerShortcut(curateKey as KeyId, {
 		description: "Review search results",
 		handler: async (ctx) => {
 			if (!pendingCurate) return;
@@ -1080,7 +1094,7 @@ export default function (pi: ExtensionAPI) {
 		},
 	});
 
-	pi.registerShortcut(activityKey, {
+	pi.registerShortcut(activityKey as KeyId, {
 		description: "Toggle web search activity",
 		handler: async (ctx) => {
 			widgetVisible = !widgetVisible;
@@ -1090,7 +1104,7 @@ export default function (pi: ExtensionAPI) {
 			} else {
 				widgetUnsubscribe?.();
 				widgetUnsubscribe = null;
-				ctx.ui.setWidget("web-activity", null);
+				ctx.ui.setWidget("web-activity", undefined);
 			}
 		},
 	});
@@ -1173,8 +1187,8 @@ export default function (pi: ExtensionAPI) {
 			if (shouldCurate) {
 				closeCurator();
 
-				let resolvePromise: (value: unknown) => void = () => {};
-				const promise = new Promise<unknown>((resolve) => {
+				let resolvePromise: (value: AgentToolResult<Record<string, unknown>>) => void = () => {};
+				const promise = new Promise<AgentToolResult<Record<string, unknown>>>((resolve) => {
 					resolvePromise = resolve;
 				});
 				const includeContent = params.includeContent ?? false;
@@ -1205,7 +1219,7 @@ export default function (pi: ExtensionAPI) {
 					queryList,
 					includeContent,
 					numResults: params.numResults,
-					recencyFilter: params.recencyFilter,
+					recencyFilter: isRecencyFilter(params.recencyFilter) ? params.recencyFilter : undefined,
 					domainFilter: params.domainFilter,
 					availableProviders,
 					defaultProvider,
@@ -1221,7 +1235,7 @@ export default function (pi: ExtensionAPI) {
 					cancel: () => {},
 				};
 
-				const finish = (value: unknown) => {
+				const finish = (value: AgentToolResult<Record<string, unknown>>) => {
 					if (cancelled) return;
 					cancelled = true;
 					pc.abortSearches();
@@ -1254,7 +1268,7 @@ export default function (pi: ExtensionAPI) {
 						const { answer, results, inlineContent, provider } = await search(queryList[qi], {
 							provider: requestedProvider,
 							numResults: params.numResults,
-							recencyFilter: params.recencyFilter,
+							recencyFilter: isRecencyFilter(params.recencyFilter) ? params.recencyFilter : undefined,
 							domainFilter: params.domainFilter,
 							includeContent: params.includeContent,
 							signal: searchSignal,
@@ -1319,7 +1333,7 @@ export default function (pi: ExtensionAPI) {
 					const { answer, results, inlineContent, provider } = await search(query, {
 						provider: resolvedProvider,
 						numResults: params.numResults,
-						recencyFilter: params.recencyFilter,
+						recencyFilter: isRecencyFilter(params.recencyFilter) ? params.recencyFilter : undefined,
 						domainFilter: params.domainFilter,
 						includeContent: params.includeContent,
 						signal,
@@ -1686,16 +1700,16 @@ export default function (pi: ExtensionAPI) {
 						`Use get_search_content({ responseId: "${responseId}", urlIndex: 0 }) for full content.`;
 				}
 
-				const content: Array<{ type: string; text?: string; data?: string; mimeType?: string }> = [];
+				const content: Array<TextContent | ImageContent> = [];
 				if (result.frames?.length) {
 					for (const frame of result.frames) {
-						content.push({ type: "image", data: frame.data, mimeType: frame.mimeType });
-						content.push({ type: "text", text: `Frame at ${frame.timestamp}` });
+						content.push(imageContent(frame.data, frame.mimeType));
+						content.push(textContent(`Frame at ${frame.timestamp}`));
 					}
 				} else if (result.thumbnail) {
-					content.push({ type: "image", data: result.thumbnail.data, mimeType: result.thumbnail.mimeType });
+					content.push(imageContent(result.thumbnail.data, result.thumbnail.mimeType));
 				}
-				content.push({ type: "text", text: output });
+				content.push(textContent(output));
 
 				const imageCount = (result.frames?.length ?? 0) + (result.thumbnail ? 1 : 0);
 				return {
@@ -1873,7 +1887,7 @@ export default function (pi: ExtensionAPI) {
 		}),
 
 		// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: get_search_content must resolve multiple selector modes against stored search and fetch payloads.
-		async execute(_toolCallId, params) {
+		async execute(_toolCallId, params): Promise<AgentToolResult<Record<string, unknown>>> {
 			const data = getResult(params.responseId);
 			if (!data) {
 				return {
@@ -2065,7 +2079,7 @@ export default function (pi: ExtensionAPI) {
 					{
 						customType: "web-search-results",
 						content: payload.content,
-						display: "tool",
+						display: true,
 						details: payload.details,
 					},
 					{ triggerTurn: true, deliverAs: "followUp" },
@@ -2309,7 +2323,7 @@ export default function (pi: ExtensionAPI) {
 				{
 					customType: "curator-config",
 					content: [{ type: "text", text: label }],
-					display: "tool",
+					display: true,
 					details: { workflow: newWorkflow },
 				},
 				{ triggerTurn: false, deliverAs: "followUp" },
@@ -2331,7 +2345,7 @@ export default function (pi: ExtensionAPI) {
 								text: "Gemini Web is unavailable. Sign into gemini.google.com in a supported Chromium-based browser.",
 							},
 						],
-						display: "tool",
+						display: true,
 						details: { available: false },
 					},
 					{ triggerTurn: true, deliverAs: "followUp" },
@@ -2348,7 +2362,7 @@ export default function (pi: ExtensionAPI) {
 				{
 					customType: "google-account",
 					content: [{ type: "text", text }],
-					display: "tool",
+					display: true,
 					details: { available: true, email: email ?? null },
 				},
 				{ triggerTurn: true, deliverAs: "followUp" },

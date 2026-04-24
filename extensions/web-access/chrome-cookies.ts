@@ -220,7 +220,7 @@ async function importSqlite(): Promise<typeof import("node:sqlite") | null> {
 	process.emitWarning = ((warning: string | Error, ...args: unknown[]) => {
 		const msg = typeof warning === "string" ? warning : (warning?.message ?? "");
 		if (msg.includes("SQLite is an experimental feature")) return;
-		return (orig as (...a: never) => unknown)(warning, ...args);
+		return (orig as (warning: string | Error, ...args: unknown[]) => void)(warning, ...args);
 	}) as typeof process.emitWarning;
 	try {
 		sqliteModule = await import("node:sqlite");
