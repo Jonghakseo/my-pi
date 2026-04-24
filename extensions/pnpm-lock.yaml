@@ -66,6 +66,9 @@ importers:
       '@types/node':
         specifier: ^25.3.1
         version: 25.3.1
+      '@types/turndown':
+        specifier: ^5.0.6
+        version: 5.0.6
       '@types/xxhashjs':
         specifier: ^0.2.4
         version: 0.2.4
@@ -1143,6 +1146,9 @@ packages:
 
   '@types/retry@0.12.0':
     resolution: {integrity: sha512-wWKOClTTiizcZhXnPY4wikVAwmdYHp8q6DmC+EJUzAMsycb7HB32Kh9RN4+0gExjmPmZSAQjgURXIGATPegAvA==}
+
+  '@types/turndown@5.0.6':
+    resolution: {integrity: sha512-ru00MoyeeouE5BX4gRL+6m/BsDfbRayOskWqUvh7CLGW+UXxHQItqALa38kKnOiZPqJrtzJUgAC2+F0rL1S4Pg==}
 
   '@types/xxhashjs@0.2.4':
     resolution: {integrity: sha512-E2+ZoJY2JjmVPN0iQM5gJvZkk98O2PYXSi6HrciEk3EKF34+mauEk/HgwTeCz+2r8HXHMKpucrwy4qTT12OPaQ==}
@@ -3666,6 +3672,8 @@ snapshots:
       undici-types: 7.18.2
 
   '@types/retry@0.12.0': {}
+
+  '@types/turndown@5.0.6': {}
 
   '@types/xxhashjs@0.2.4':
     dependencies:
