@@ -112,13 +112,17 @@ function inferReadLineRange(args: ReadToolInput, renderedText: string, details: 
 }
 
 function formatReadRangeFooter(
-	args: ReadToolInput,
+	args: ReadToolInput | undefined,
 	result: { content?: Array<{ type: string; text?: string }> },
 	renderedText: string | undefined,
 	details: ReadToolDetails | undefined,
 	theme: ReadRenderTheme,
 ): string {
-	if (renderedText === undefined || result.content?.some((entry) => entry.type === "image")) {
+	if (
+		args?.path === undefined ||
+		renderedText === undefined ||
+		result.content?.some((entry) => entry.type === "image")
+	) {
 		return "";
 	}
 

@@ -76,7 +76,7 @@ describe("read tool UI override", () => {
 			{ content: [{ type: "text", text: content }], details: {} },
 			{ expanded: true, isPartial: false },
 			theme,
-			{ lastComponent: undefined, isError: false },
+			{ args: { path: "example.txt" }, lastComponent: undefined, isError: false },
 		);
 		const rendered = expanded.render(120).join("\n");
 
@@ -84,6 +84,7 @@ describe("read tool UI override", () => {
 		expect(rendered).toContain("line 10");
 		expect(rendered).not.toContain("line 11");
 		expect(rendered).toContain("... (2 more lines, expand keeps preview compact)");
+		expect(rendered).toContain("example.txt:1-12");
 	});
 
 	it("keeps read errors visible", () => {
