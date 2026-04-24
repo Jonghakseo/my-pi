@@ -2,7 +2,7 @@ import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import { Container, Spacer, Text } from "@mariozechner/pi-tui";
 
 const PATCH_STATE_KEY = Symbol.for("creatrip.tool-group-renderer.patch-state");
-const PATCH_VERSION = "2026-04-24-r1";
+const PATCH_VERSION = "2026-04-24-r2";
 const GROUP_STATE = Symbol("creatrip.tool-group-renderer.state");
 const PI_INTERACTIVE_BASE = "/usr/local/lib/node_modules/@mariozechner/pi-coding-agent/dist/modes/interactive";
 const BASH_PREVIEW_LIMIT = 56;
@@ -43,8 +43,18 @@ type ToolHandle = {
 	updateResult: (result: ToolResultLike, isPartial?: boolean) => void;
 };
 
+type ToolComponentHandle = ToolHandle & { setExpanded?: (expanded: boolean) => void };
+
+type TailCandidate = {
+	toolName: GroupableToolName;
+	toolCallId: string;
+	item: GroupItem;
+	component: ToolComponentHandle;
+};
+
 type GroupRuntimeState = {
 	tailGroup: GroupedBuiltinToolComponent | null;
+	tailCandidate: TailCandidate | null;
 };
 
 type InteractiveModeLike = {
@@ -179,7 +189,7 @@ function isGroupableTool(toolName: string): toolName is GroupableToolName {
 function ensureGroupState(mode: InteractiveModeLike): GroupRuntimeState {
 	const target = mode as InteractiveModeLike & { [GROUP_STATE]?: GroupRuntimeState };
 	if (!target[GROUP_STATE]) {
-		target[GROUP_STATE] = { tailGroup: null };
+		target[GROUP_STATE] = { tailGroup: null, tailCandidate: null };
 	}
 	return target[GROUP_STATE];
 }
@@ -244,8 +254,31 @@ function findAppendableGroup(
 	return null;
 }
 
+function isAppendableTailCandidate(
+	mode: InteractiveModeLike,
+	candidate: TailCandidate,
+	toolName: GroupableToolName,
+): boolean {
+	if (candidate.toolName !== toolName) return false;
+	for (let index = mode.chatContainer.children.length - 1; index >= 0; index--) {
+		const child = mode.chatContainer.children[index];
+		if (child === candidate.component) return true;
+		if (isVisuallyEmptyChild(child)) continue;
+		return false;
+	}
+	return false;
+}
+
 function truncatePreview(value: string, maxLength: number): string {
 	return value.length > maxLength ? `${value.slice(0, maxLength)}…` : value;
+}
+
+function normalizeInlinePreview(value: string): string {
+	return value.replace(/\r\n|\r|\n/g, " ");
+}
+
+function formatBashCommandPreview(command: string): string {
+	return truncatePreview(normalizeInlinePreview(`$ ${command}`), BASH_PREVIEW_LIMIT);
 }
 
 function deriveBashTitle(command: string): string {
@@ -309,7 +342,7 @@ function formatBashLine(args: unknown, item: GroupItem): string {
 	const title = typeof params.title === "string" && params.title.length > 0 ? params.title : undefined;
 	const command = typeof params.command === "string" ? params.command : "";
 	const label = title ?? deriveBashTitle(command);
-	const commandPreview = command ? ` (${truncatePreview(`$ ${command}`, BASH_PREVIEW_LIMIT)})` : "";
+	const commandPreview = command ? ` (${formatBashCommandPreview(command)})` : "";
 	const duration = formatBashDuration(item);
 	const content = `${label}${commandPreview}${duration}`;
 
@@ -405,6 +438,31 @@ function formatExpandedDetail(item: GroupItem): string[] {
 	return formatExpandedTextDetail(item);
 }
 
+function createGroupItem(toolName: GroupableToolName, toolCallId: string, args: unknown): GroupItem {
+	return {
+		toolCallId,
+		toolName,
+		args,
+		executionStarted: false,
+		argsComplete: false,
+		isPartial: false,
+		isError: false,
+	};
+}
+
+function updateGroupItemResult(item: GroupItem, result: ToolResultLike, isPartial = false): void {
+	item.result = result;
+	item.isPartial = isPartial;
+	item.isError = !!result?.isError;
+	if (isPartial) {
+		item.startedAt ??= Date.now();
+		item.finishedAt = undefined;
+	} else {
+		item.startedAt ??= Date.now();
+		item.finishedAt = Date.now();
+	}
+}
+
 class GroupedBuiltinToolComponent extends Container {
 	readonly toolName: GroupableToolName;
 	private readonly content: Text;
@@ -421,15 +479,10 @@ class GroupedBuiltinToolComponent extends Container {
 	}
 
 	appendItem(toolCallId: string, args: unknown): ToolHandle {
-		const item: GroupItem = {
-			toolCallId,
-			toolName: this.toolName,
-			args,
-			executionStarted: false,
-			argsComplete: false,
-			isPartial: false,
-			isError: false,
-		};
+		return this.appendExistingItem(createGroupItem(this.toolName, toolCallId, args));
+	}
+
+	appendExistingItem(item: GroupItem): ToolHandle {
 		this.items.push(item);
 		this.refreshDisplay();
 		return {
@@ -447,16 +500,7 @@ class GroupedBuiltinToolComponent extends Container {
 				this.refreshDisplay();
 			},
 			updateResult: (result: ToolResultLike, isPartial = false) => {
-				item.result = result;
-				item.isPartial = isPartial;
-				item.isError = !!result?.isError;
-				if (isPartial) {
-					item.startedAt ??= Date.now();
-					item.finishedAt = undefined;
-				} else {
-					item.startedAt ??= Date.now();
-					item.finishedAt = Date.now();
-				}
+				updateGroupItemResult(item, result, isPartial);
 				this.refreshDisplay();
 			},
 		};
@@ -513,7 +557,7 @@ function createNormalToolInstance(
 	toolName: string,
 	toolCallId: string,
 	args: unknown,
-): ToolHandle & { setExpanded?: (expanded: boolean) => void } {
+): ToolComponentHandle {
 	const ToolExecutionComponentCtor = (
 		globalThis as typeof globalThis & {
 			[PATCH_STATE_KEY]?: PatchState;
@@ -550,6 +594,56 @@ function createNormalToolComponent(
 	return component;
 }
 
+function createRecordingToolHandle(delegate: ToolComponentHandle, item: GroupItem): ToolComponentHandle {
+	return {
+		updateArgs: (args: unknown) => {
+			item.args = args;
+			delegate.updateArgs(args);
+		},
+		markExecutionStarted: () => {
+			item.executionStarted = true;
+			item.startedAt ??= Date.now();
+			delegate.markExecutionStarted();
+		},
+		setArgsComplete: () => {
+			item.argsComplete = true;
+			delegate.setArgsComplete();
+		},
+		updateResult: (result: ToolResultLike, isPartial = false) => {
+			updateGroupItemResult(item, result, isPartial);
+			delegate.updateResult(result, isPartial);
+		},
+		setExpanded: (expanded: boolean) => delegate.setExpanded?.(expanded),
+	};
+}
+
+function createTailCandidate(
+	mode: InteractiveModeLike,
+	toolName: GroupableToolName,
+	toolCallId: string,
+	args: unknown,
+): { candidate: TailCandidate; handle: ToolComponentHandle } {
+	const component = createNormalToolInstance(mode, toolName, toolCallId, args);
+	const item = createGroupItem(toolName, toolCallId, args);
+	const handle = createRecordingToolHandle(component, item);
+	mode.chatContainer.addChild(component);
+	return {
+		candidate: { toolName, toolCallId, item, component },
+		handle,
+	};
+}
+
+function promoteTailCandidateToGroup(mode: InteractiveModeLike, candidate: TailCandidate): GroupedBuiltinToolComponent {
+	const group = new GroupedBuiltinToolComponent(candidate.toolName);
+	group.setExpanded(mode.toolOutputExpanded);
+	const firstHandle = group.appendExistingItem(candidate.item);
+	replaceChildInContainer(mode.chatContainer, candidate.component, group);
+	if (mode.pendingTools.has(candidate.toolCallId)) {
+		mode.pendingTools.set(candidate.toolCallId, firstHandle);
+	}
+	return group;
+}
+
 function materializeSingletonGroup(mode: InteractiveModeLike, group: GroupedBuiltinToolComponent): void {
 	const item = group.getSingletonItem();
 	if (!item) return;
@@ -581,7 +675,9 @@ function finalizeTailGroup(mode: InteractiveModeLike): void {
 }
 
 function breakGroup(mode: InteractiveModeLike): void {
+	const state = ensureGroupState(mode);
 	finalizeTailGroup(mode);
+	state.tailCandidate = null;
 }
 
 function ensureToolHandle(mode: InteractiveModeLike, toolName: string, toolCallId: string, args: unknown): ToolHandle {
@@ -594,17 +690,27 @@ function ensureToolHandle(mode: InteractiveModeLike, toolName: string, toolCallI
 
 	const state = ensureGroupState(mode);
 	let group = findAppendableGroup(mode, toolName);
-	if (!group) {
-		if (state.tailGroup && state.tailGroup.toolName !== toolName) {
-			finalizeTailGroup(mode);
-		}
-		group = new GroupedBuiltinToolComponent(toolName);
-		group.setExpanded(mode.toolOutputExpanded);
-		mode.chatContainer.addChild(group);
+	if (group) {
+		state.tailGroup = group;
+		state.tailCandidate = null;
+		const handle = group.appendItem(toolCallId, args);
+		mode.pendingTools.set(toolCallId, handle);
+		return handle;
 	}
-	state.tailGroup = group;
 
-	const handle = group.appendItem(toolCallId, args);
+	if (state.tailCandidate && isAppendableTailCandidate(mode, state.tailCandidate, toolName)) {
+		group = promoteTailCandidateToGroup(mode, state.tailCandidate);
+		state.tailGroup = group;
+		state.tailCandidate = null;
+		const handle = group.appendItem(toolCallId, args);
+		mode.pendingTools.set(toolCallId, handle);
+		return handle;
+	}
+
+	finalizeTailGroup(mode);
+	state.tailCandidate = null;
+	const { candidate, handle } = createTailCandidate(mode, toolName, toolCallId, args);
+	state.tailCandidate = candidate;
 	mode.pendingTools.set(toolCallId, handle);
 	return handle;
 }
@@ -684,6 +790,11 @@ function renderSessionContextPatched(
 	breakGroup(mode);
 	mode.ui.requestRender();
 }
+
+export const __test__ = {
+	formatBashCommandPreview,
+	ensureToolHandle,
+};
 
 export default async function toolGroupRenderer(_pi: ExtensionAPI): Promise<void> {
 	const globalState = globalThis as typeof globalThis & {
