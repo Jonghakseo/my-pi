@@ -33,7 +33,7 @@ function installEditor(pi: ExtensionAPI, ctx: ExtensionContext, getState: () => 
 			ctx.ui.theme,
 			() => {
 				const state = getState();
-				const modelLabel = shouldUseCodexFastBadge(ctx.model?.provider, ctx.model?.id, isCodexFastModeEnabled())
+				const modelLabel = shouldUseCodexFastBadge(ctx.model?.provider, isCodexFastModeEnabled())
 					? `${state.modelLabel} ⚡`
 					: state.modelLabel;
 				return ctx.ui.theme.fg("accent", modelLabel);

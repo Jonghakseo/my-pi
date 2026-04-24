@@ -7,7 +7,6 @@ import { type RuntimeInfo, readRuntimeInfo } from "./runtime.ts";
 
 const CODEX_FAST_STATE_FILE = join(homedir(), ".pi", "agent", "state", "codex-fast-mode.json");
 const CODEX_FAST_SUPPORTED_PROVIDER = "openai-codex";
-const CODEX_FAST_SUPPORTED_MODEL_ID = "gpt-5.4";
 const FOOTER_STATE_REFRESH_INTERVAL_MS = 3000;
 
 type FastModeState = { enabled: boolean };
@@ -32,12 +31,8 @@ export function isCodexFastModeEnabled(): boolean {
 	return loadCodexFastModeState().enabled;
 }
 
-export function shouldUseCodexFastBadge(
-	provider: string | undefined,
-	modelId: string | undefined,
-	isFastModeEnabled: boolean,
-): boolean {
-	return isFastModeEnabled && provider === CODEX_FAST_SUPPORTED_PROVIDER && modelId === CODEX_FAST_SUPPORTED_MODEL_ID;
+export function shouldUseCodexFastBadge(provider: string | undefined, isFastModeEnabled: boolean): boolean {
+	return isFastModeEnabled && provider === CODEX_FAST_SUPPORTED_PROVIDER;
 }
 
 export interface FooterState {
