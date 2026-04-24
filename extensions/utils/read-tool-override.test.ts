@@ -1,7 +1,7 @@
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import readToolOverride from "../read-tool-override.ts";
+import readToolOverride from "../read-tool-override/index.ts";
 import { registerReadTool } from "./read-tool-ui.ts";
 
 async function withTempFile(

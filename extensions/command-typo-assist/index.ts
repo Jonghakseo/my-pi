@@ -16,7 +16,7 @@
 
 import * as fs from "node:fs";
 import type { ExtensionAPI, ExtensionContext, InputEvent, InputEventResult } from "@mariozechner/pi-coding-agent";
-import { levenshtein, maxDistance } from "./utils/string-utils.js";
+import { levenshtein, maxDistance } from "../utils/string-utils.js";
 
 // ─── Builtin commands (hardcoded — not exposed via pi.getCommands()) ─────────
 const BUILTIN_COMMANDS = [

@@ -21,33 +21,35 @@ Custom extensions for the pi coding agent. All extensions are written in TypeScr
 │   ├── constants.ts       #   Constants
 │   ├── format.ts          #   Formatting utilities
 │   └── run-utils.ts       #   Run management utilities
-├── utils/                 # Shared utility functions
+├── utils/                 # Shared utility functions and many colocated tests
 │   ├── time-utils.ts      #   Time/duration formatting helpers
 │   └── status-keys.ts     #   Shared footer status key constants
-├── archive-to-html.ts     # Auto-archive to-html skill output HTML to ~/Documents
-├── bookmark.ts            # /bookmark add|list — save current session + cwd/branch, restore via switch or Ghostty panel
-├── command-typo-assist.ts # Slash command typo detection → suggest + editor prefill
-├── context.ts             # /context — context window usage & session stats overlay
-├── diff-overlay.ts        # /diff — Git diff split-pane overlay (file list + diff viewer)
-├── dynamic-agents-md.ts   # Dynamic AGENTS.md loading per directory scope
-├── files.ts               # File picker / diff viewer UI
+├── archive-to-html/       # Auto-archive to-html skill output HTML to ~/Documents
+├── bookmark/              # /bookmark add|list — save current session + cwd/branch, restore via switch or Ghostty panel
+├── command-typo-assist/   # Slash command typo detection → suggest + editor prefill
+├── diff-overlay/          # /diff — Git diff split-pane overlay (file list + diff viewer)
+├── dynamic-agents-md/     # Dynamic AGENTS.md loading per directory scope
+├── files/                 # File picker / diff viewer UI
 ├── interactive-shell/     # Interactive shell overlay (interactive/hands-free/dispatch)
 ├── notify/                # /notify session-toggle: OSC 777/99 alert + macOS say TTS on agent_end
-├── footer.ts              # Custom footer UI (model, branch, context bar)
-├── working-text.ts              # Spinner working message (tip text + elapsed time)
-├── theme-cycler.ts        # Ctrl+Shift+X to cycle through themes
+├── footer/                # Custom footer UI facade for custom-style/main.ts
+├── working-text/          # Spinner working message (tip text + elapsed time)
+├── theme-cycler/          # Ctrl+Shift+X to cycle through themes
 └── upload-image-url/      # Upload images to GitHub storage and return URLs
 ```
 
 ## Key Patterns
-- **Extension entry point**: Each `.ts` file or `directory/index.ts` is auto-loaded by pi.
+- **Extension entry point**: Pi auto-discovers both root `*.ts` files and `directory/index.ts` files, but this repo standardizes on `extensions/<name>/index.ts` only to avoid duplicate loading.
+- **New extensions**: Do not add root-level `.ts` entrypoints. Create `extensions/<name>/index.ts` and keep support modules inside that directory or `utils/`.
 - **Dependencies**: `@mariozechner/pi-coding-agent`, `@mariozechner/pi-ai`, `@mariozechner/pi-tui`.
-- **Themes**: `theme-cycler.ts` provides runtime theme switching.
+- **Themes**: `theme-cycler/index.ts` provides runtime theme switching.
 
 ## Tooling Standards
 - **Package manager**: pnpm
 - **Quality checks**:
   - `pnpm run typecheck` — TypeScript 타입 검사 (오류만 출력, 파일 변경 없음)
+  - `pnpm run typecheck:web-access` — Phase 2 대상인 `web-access/` 타입 오류를 별도 확인 (현재 known failing 가능)
+  - `pnpm test` — `tooling/vitest.config.ts` 기준으로 `extensions/**/*.test.ts` 전체 실행 (`tooling/`에 두어 Pi auto-discovery를 피함)
   - `pnpm run lint` — Biome lint + **자동 수정** (`biome check --write .`). 파일을 직접 고침.
   - `pnpm run format` — Biome 포맷 검사만 (파일 변경 없음)
   - `pnpm run format:write` — Biome 포맷 자동 적용 (파일 변경 있음)

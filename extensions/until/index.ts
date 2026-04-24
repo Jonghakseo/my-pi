@@ -19,7 +19,7 @@ import { fileURLToPath } from "node:url";
 import { type ExtensionAPI, type ExtensionContext, getMarkdownTheme } from "@mariozechner/pi-coding-agent";
 import { Box, Markdown, Spacer, Text } from "@mariozechner/pi-tui";
 import { Type } from "typebox";
-import { formatClock, formatKoreanDuration } from "./utils/time-utils.ts";
+import { formatClock, formatKoreanDuration } from "../utils/time-utils.ts";
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 

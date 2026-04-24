@@ -1,6 +1,6 @@
 import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
-import { fetchCurrentPullRequestInfo, type PullRequestInfo } from "./utils/github-pr-review-comments.ts";
-import { fetchPullRequestMergeStatus, mergePullRequest } from "./utils/github-pr-merge.ts";
+import { fetchCurrentPullRequestInfo, type PullRequestInfo } from "../utils/github-pr-review-comments.ts";
+import { fetchPullRequestMergeStatus, mergePullRequest } from "../utils/github-pr-merge.ts";
 
 function notify(ctx: ExtensionContext, message: string, level: "info" | "warning" | "error"): void {
 	if (!ctx.hasUI) return;

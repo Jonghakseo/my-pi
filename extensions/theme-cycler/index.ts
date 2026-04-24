@@ -13,7 +13,7 @@
  *   - Color swatch widget flashes briefly after each switch
  *   - Auto-dismisses swatch after 3 seconds
  *
- * Usage: pi -e extensions/theme-cycler.ts -e extensions/minimal.ts
+ * Usage: pi -e extensions/theme-cycler/index.ts
  */
 
 import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";

@@ -3,7 +3,7 @@ import {
 	fetchCurrentPullRequestInfo,
 	fetchUnresolvedPullRequestReviewComments,
 	formatUnresolvedReviewCommentsForEditor,
-} from "./utils/github-pr-review-comments.ts";
+} from "../utils/github-pr-review-comments.ts";
 
 function buildAppendedEditorText(current: string, addition: string): string {
 	if (!current.trim()) return addition;

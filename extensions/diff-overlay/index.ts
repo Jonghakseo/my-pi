@@ -36,7 +36,7 @@ import {
 	parsePorcelainStatusZ,
 	toggleOverlayViewMode,
 	type VisibleRow,
-} from "./utils/diff-overlay-utils.ts";
+} from "../utils/diff-overlay-utils.ts";
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 

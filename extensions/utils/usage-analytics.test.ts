@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { __test__ } from "../usage-analytics.ts";
+import { __test__ } from "../usage-analytics/index.ts";
 
 function iso(epoch: number): string {
 	return new Date(epoch).toISOString();

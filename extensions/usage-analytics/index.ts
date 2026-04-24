@@ -27,7 +27,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import { Container, Key, matchesKey, Spacer, Text, truncateToWidth } from "@mariozechner/pi-tui";
-import { parseSubagentCommandVerb } from "./subagent/cli.ts";
+import { parseSubagentCommandVerb } from "../subagent/cli.ts";
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 

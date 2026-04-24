@@ -4,7 +4,7 @@
  */
 
 import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
-import { formatElapsedSince } from "./utils/time-utils.ts";
+import { formatElapsedSince } from "../utils/time-utils.ts";
 
 const TIP_MESSAGES = [
 	"tips: /files 로 현재 작업 파일을 빠르게 탐색할 수 있습니다",
