@@ -2,6 +2,7 @@ import {
 	createReadToolDefinition,
 	type ExtensionAPI,
 	type ReadToolDetails,
+	type ReadToolInput,
 	DEFAULT_MAX_BYTES,
 	DEFAULT_MAX_LINES,
 	formatSize,
@@ -17,7 +18,7 @@ type ReadTextContent = {
 };
 
 type ReadRenderTheme = {
-	fg: (token: "error" | "muted" | "toolOutput" | "warning", text: string) => string;
+	fg: (token: "dim" | "error" | "muted" | "toolOutput" | "warning", text: string) => string;
 };
 
 function trimTrailingEmptyLines(lines: string[]): string[] {
@@ -65,6 +66,66 @@ function formatPreviewBody(text: string, theme: ReadRenderTheme): string {
 	return rendered;
 }
 
+function getReadDisplayName(rawPath: string): string {
+	const normalized = rawPath.startsWith("@") ? rawPath.slice(1) : rawPath;
+	const segments = normalized.split(/[\\/]+/).filter(Boolean);
+	return segments.length > 0 ? segments[segments.length - 1] : normalized;
+}
+
+function getStartLine(args: ReadToolInput): number {
+	if (typeof args.offset !== "number" || !Number.isFinite(args.offset)) {
+		return 1;
+	}
+
+	const offset = Math.trunc(args.offset);
+	return offset > 1 ? offset : 1;
+}
+
+function inferReadLineRange(args: ReadToolInput, renderedText: string, details: ReadToolDetails | undefined) {
+	const explicitShowingRange = renderedText.match(/\[Showing lines (\d+)-(\d+) of \d+/);
+	if (explicitShowingRange) {
+		return { start: Number(explicitShowingRange[1]), end: Number(explicitShowingRange[2]) };
+	}
+
+	const firstLineExceedsLimit = renderedText.match(/^\[Line (\d+) is .+ exceeds /m);
+	if (firstLineExceedsLimit) {
+		const line = Number(firstLineExceedsLimit[1]);
+		return { start: line, end: line };
+	}
+
+	const nextOffset = renderedText.match(/\[\d+ more lines in file\. Use offset=(\d+) to continue\.\]\s*$/);
+	if (nextOffset) {
+		return { start: getStartLine(args), end: Number(nextOffset[1]) - 1 };
+	}
+
+	const start = getStartLine(args);
+	const truncation = details?.truncation;
+	if (truncation?.firstLineExceedsLimit) {
+		return { start, end: start };
+	}
+	if (truncation?.truncated && typeof truncation.outputLines === "number") {
+		return { start, end: start + Math.max(1, truncation.outputLines) - 1 };
+	}
+
+	const outputLineCount = renderedText.split("\n").length;
+	return { start, end: start + Math.max(1, outputLineCount) - 1 };
+}
+
+function formatReadRangeFooter(
+	args: ReadToolInput,
+	result: { content?: Array<{ type: string; text?: string }> },
+	renderedText: string | undefined,
+	details: ReadToolDetails | undefined,
+	theme: ReadRenderTheme,
+): string {
+	if (renderedText === undefined || result.content?.some((entry) => entry.type === "image")) {
+		return "";
+	}
+
+	const range = inferReadLineRange(args, renderedText, details);
+	return `\n${theme.fg("dim", `${getReadDisplayName(args.path)}:${range.start}-${range.end}`)}`;
+}
+
 export function registerReadTool(pi: ExtensionAPI): void {
 	pi.registerTool({
 		...BASE_READ_TOOL,
@@ -86,8 +147,9 @@ export function registerReadTool(pi: ExtensionAPI): void {
 				return text;
 			}
 
+			const details = result.details as ReadToolDetails | undefined;
 			text.setText(
-				`${formatPreviewBody(renderedText ?? "", theme)}${formatTruncationWarning(result.details as ReadToolDetails | undefined, theme)}`,
+				`${formatPreviewBody(renderedText ?? "", theme)}${formatTruncationWarning(details, theme)}${formatReadRangeFooter(context.args, result, renderedText, details, theme)}`,
 			);
 			return text;
 		},
