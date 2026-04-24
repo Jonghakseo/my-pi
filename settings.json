@@ -1,17 +1,17 @@
 {
   "theme": "zentui",
   "quietStartup": true,
-  "lastChangelogVersion": "0.69.0",
-  "defaultProvider": "anthropic",
-  "defaultModel": "claude-opus-4-6",
+  "lastChangelogVersion": "0.70.0",
+  "defaultProvider": "openai-codex",
+  "defaultModel": "gpt-5.5",
   "defaultThinkingLevel": "high",
   "subagent": {
     "claudeRuntime": "cli"
   },
   "enabledModels": [
-    "openai-codex/gpt-5.4",
     "anthropic/claude-opus-4-6",
-    "ollama-cloud/glm-5.1:cloud"
+    "ollama-cloud/glm-5.1:cloud",
+    "openai-codex/gpt-5.5"
   ],
   "packages": [
     "npm:@ryan_nookpi/pi-extension-codex-fast-mode",
