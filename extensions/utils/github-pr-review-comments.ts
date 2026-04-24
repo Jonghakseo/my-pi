@@ -401,7 +401,7 @@ async function toUnresolvedReviewThread(
 	cwd: string,
 	thread: ParsedReviewThreadsPage["threads"][number],
 ): Promise<PullRequestReviewThread | null> {
-	if (thread.isResolved || thread.isOutdated) return null;
+	if (thread.isResolved) return null;
 	const comments = await fetchRemainingReviewThreadComments(
 		pi,
 		cwd,
@@ -437,7 +437,7 @@ export async function fetchUnresolvedPullRequestReviewThreads(
 
 		for (const thread of page.threads) {
 			const unresolvedThread = await toUnresolvedReviewThread(pi, cwd, thread);
-			if (thread.isResolved || thread.isOutdated) continue;
+			if (thread.isResolved) continue;
 			if (!unresolvedThread) return null;
 			unresolvedThreads.push(unresolvedThread);
 		}
