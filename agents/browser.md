@@ -2,7 +2,7 @@
 name: browser
 description: Browser automation specialist — use for UI testing, visual verification, and web interaction via playwright-cli
 tools: read, grep, find, ls, bash, edit, write
-model: openai-codex/gpt-5.4
+model: openai-codex/gpt-5.5
 thinking: high
 ---
 
