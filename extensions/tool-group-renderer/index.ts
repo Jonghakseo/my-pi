@@ -362,7 +362,7 @@ function formatWriteLine(args: unknown, item: GroupItem): string {
 	return formatPlainPathLine(path, item);
 }
 
-function formatExpandedDetail(item: GroupItem): string[] {
+function formatExpandedTextDetail(item: GroupItem): string[] {
 	const theme = getTheme();
 	const text = extractTextContent(item.result);
 	if (!text) return [];
@@ -373,6 +373,36 @@ function formatExpandedDetail(item: GroupItem): string[] {
 	const summary = truncatePreview(firstLine.trim(), 96);
 	const color: ThemeColor = item.isError ? "error" : item.isPartial ? "warning" : "dim";
 	return [`  ${theme.fg(color, summary)}`];
+}
+
+function formatExpandedEditDetail(item: GroupItem): string[] {
+	const theme = getTheme();
+	const details = isRecord(item.result?.details) ? item.result?.details : undefined;
+	const diff = typeof details?.diff === "string" ? details.diff : undefined;
+	if (!diff) return formatExpandedTextDetail(item);
+
+	const changedLines = diff
+		.split("\n")
+		.filter(
+			(line) => (line.startsWith("+") || line.startsWith("-")) && !line.startsWith("+++") && !line.startsWith("---"),
+		);
+	if (changedLines.length === 0) return formatExpandedTextDetail(item);
+
+	const previewLimit = 6;
+	const preview = changedLines.slice(0, previewLimit).map((line) => {
+		const color: ThemeColor = line.startsWith("+") ? "success" : "error";
+		return `  ${theme.fg(color, truncatePreview(line, 96))}`;
+	});
+	const hidden = changedLines.length - preview.length;
+	if (hidden > 0) {
+		preview.push(`  ${theme.fg("dim", `… ${hidden} more changed lines`)}`);
+	}
+	return preview;
+}
+
+function formatExpandedDetail(item: GroupItem): string[] {
+	if (item.toolName === "edit" && !item.isError) return formatExpandedEditDetail(item);
+	return formatExpandedTextDetail(item);
 }
 
 class GroupedBuiltinToolComponent extends Container {
