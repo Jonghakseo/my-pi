@@ -7,14 +7,15 @@ const PR_VIEW_ARGS = [
 	"pr",
 	"view",
 	"--json",
-	"number,title,url,state,reviewDecision,latestReviews,reviewRequests,statusCheckRollup",
+	"number,title,url,state,reviewDecision,latestReviews,statusCheckRollup",
 ] as const;
 const GIT_POLL_INTERVAL_MS = 3000;
 const PR_POLL_INTERVAL_MS = 30_000;
 
+export type ReviewStatusState = "approved" | "changes_requested" | "commented" | "review";
+
 export interface ReviewStatusSummary {
-	approved: number;
-	total: number;
+	state: ReviewStatusState;
 }
 
 export interface RepoStatusSnapshot {
@@ -38,6 +39,7 @@ export interface RepoStatusTracker {
 }
 
 type GithubReviewState = "APPROVED" | "CHANGES_REQUESTED" | "COMMENTED" | "DISMISSED" | "PENDING";
+type GithubReviewDecision = "APPROVED" | "CHANGES_REQUESTED" | "REVIEW_REQUIRED";
 type GithubPullRequestState = "OPEN" | "CLOSED" | "MERGED";
 
 type GhPrViewJson = {
@@ -45,8 +47,8 @@ type GhPrViewJson = {
 	title?: unknown;
 	url?: unknown;
 	state?: unknown;
+	reviewDecision?: unknown;
 	latestReviews?: unknown;
-	reviewRequests?: unknown;
 	statusCheckRollup?: unknown;
 };
 
@@ -79,7 +81,7 @@ function snapshotsEqual(left: RepoStatusSnapshot, right: RepoStatusSnapshot): bo
 }
 
 function reviewSummariesEqual(left: ReviewStatusSummary | null, right: ReviewStatusSummary | null): boolean {
-	return left?.approved === right?.approved && left?.total === right?.total;
+	return left?.state === right?.state;
 }
 
 function checkSummariesEqual(left: CheckSummary | null, right: CheckSummary | null): boolean {
@@ -121,17 +123,6 @@ function readNestedString(record: Record<string, unknown>, ...keys: string[]): s
 	return readString(current);
 }
 
-function extractReviewerKey(review: unknown): string | null {
-	if (!isRecord(review)) return null;
-	return (
-		readNestedString(review, "author", "login") ??
-		readNestedString(review, "requestedReviewer", "login") ??
-		readNestedString(review, "requestedReviewer", "name") ??
-		readNestedString(review, "login") ??
-		readNestedString(review, "name")
-	);
-}
-
 function extractReviewState(review: unknown): GithubReviewState | null {
 	if (!isRecord(review)) return null;
 	const state =
@@ -139,32 +130,35 @@ function extractReviewState(review: unknown): GithubReviewState | null {
 	return state as GithubReviewState | null;
 }
 
-function parseReviewSummary(reviewRequests: unknown, latestReviews: unknown): ReviewStatusSummary | null {
-	const requestedReviewerKeys = new Set<string>();
-	for (const request of asArray(reviewRequests)) {
-		const reviewerKey = extractReviewerKey(request);
-		if (reviewerKey) requestedReviewerKeys.add(reviewerKey);
+function readReviewDecision(value: unknown): GithubReviewDecision | null {
+	if (value === "APPROVED" || value === "CHANGES_REQUESTED" || value === "REVIEW_REQUIRED") {
+		return value;
 	}
+	return null;
+}
 
-	const latestReviewByReviewer = new Map<string, GithubReviewState>();
-	for (const review of asArray(latestReviews)) {
-		const reviewerKey = extractReviewerKey(review);
-		const state = extractReviewState(review);
-		if (!reviewerKey || !state) continue;
-		latestReviewByReviewer.set(reviewerKey, state);
+function parseReviewSummary(reviewDecision: unknown, latestReviews: unknown): ReviewStatusSummary {
+	const decision = readReviewDecision(reviewDecision);
+	const reviewStates = asArray(latestReviews)
+		.map(extractReviewState)
+		.filter((state): state is GithubReviewState => Boolean(state));
+
+	if (decision === "CHANGES_REQUESTED") {
+		return { state: "changes_requested" };
 	}
-
-	const approvedReviewers = new Set<string>();
-	for (const [reviewerKey, state] of latestReviewByReviewer) {
-		if (state === "APPROVED") approvedReviewers.add(reviewerKey);
+	if (decision === "APPROVED") {
+		return { state: "approved" };
 	}
-
-	const totalReviewers = new Set([...requestedReviewerKeys, ...latestReviewByReviewer.keys()]);
-	if (totalReviewers.size === 0) return null;
-	return {
-		approved: approvedReviewers.size,
-		total: totalReviewers.size,
-	};
+	if (reviewStates.includes("CHANGES_REQUESTED")) {
+		return { state: "changes_requested" };
+	}
+	if (reviewStates.includes("COMMENTED")) {
+		return { state: "commented" };
+	}
+	if (!decision && reviewStates.includes("APPROVED")) {
+		return { state: "approved" };
+	}
+	return { state: "review" };
 }
 
 function parseCheckState(check: unknown): "success" | "failed" | "pending" | "neutral" {
@@ -234,7 +228,7 @@ function parsePrSnapshot(
 			prNumber: readNumber(parsed.number),
 			prTitle: readString(parsed.title),
 			prUrl: readString(parsed.url),
-			review: parseReviewSummary(parsed.reviewRequests, parsed.latestReviews),
+			review: parseReviewSummary(parsed.reviewDecision, parsed.latestReviews),
 			checks: parseCheckSummary(parsed.statusCheckRollup),
 			unresolvedInlineComments: null,
 		};
