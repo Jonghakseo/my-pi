@@ -27,7 +27,7 @@ interface ToolResultEventResult {
 import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, isAbsolute, join, resolve } from "node:path";
-import { extractPathsFromInput } from "./utils/path-utils.js";
+import { extractPathsFromInput } from "../utils/path-utils.js";
 
 // --- Configuration ---
 const CANDIDATES = ["AGENTS.md", "CLAUDE.md"] as const;

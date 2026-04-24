@@ -1,7 +1,7 @@
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import editToolOverride from "../edit-tool-override.ts";
+import editToolOverride from "../edit-tool-override/index.ts";
 import { registerEditTool } from "./edit-tool-ui.ts";
 
 async function withTempFile(

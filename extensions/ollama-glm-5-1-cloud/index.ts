@@ -1,6 +1,6 @@
 import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
 import type { Api, AssistantMessageEventStream, Model, SimpleStreamOptions } from "@mariozechner/pi-ai";
-import { streamOllamaNative as streamOllamaNativeBase } from "./utils/ollama-utils.js";
+import { streamOllamaNative as streamOllamaNativeBase } from "../utils/ollama-utils.js";
 
 const PROVIDER_ID = "ollama-cloud";
 const MODEL_ID = "glm-5.1:cloud";

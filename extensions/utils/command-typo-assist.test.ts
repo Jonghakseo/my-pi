@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { shouldInterceptSlashCommand } from "../command-typo-assist.ts";
+import { shouldInterceptSlashCommand } from "../command-typo-assist/index.ts";
 
 describe("shouldInterceptSlashCommand", () => {
 	it("intercepts actual slash commands", () => {

@@ -1,0 +1,5 @@
+{
+	"extends": "./tsconfig.json",
+	"include": ["web-access/**/*.ts"],
+	"exclude": ["node_modules"]
+}

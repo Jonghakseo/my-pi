@@ -7,13 +7,14 @@
 	"scripts": {
 		"check": "biome check .",
 		"typecheck": "tsc -p tsconfig.json --noEmit",
+		"typecheck:web-access": "tsc -p tsconfig.web-access.json --noEmit",
 		"typecheck:watch": "tsc -p tsconfig.json --noEmit --watch",
 		"lint": "biome check --write .",
 		"format": "biome format .",
 		"format:write": "biome format --write .",
-		"test": "vitest run --config utils/vitest.config.ts",
-		"test:watch": "vitest --config utils/vitest.config.ts",
-		"test:coverage": "vitest run --config utils/vitest.config.ts --coverage"
+		"test": "vitest run --config tooling/vitest.config.ts",
+		"test:watch": "vitest --config tooling/vitest.config.ts",
+		"test:coverage": "vitest run --config tooling/vitest.config.ts --coverage"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "^2.4.4",

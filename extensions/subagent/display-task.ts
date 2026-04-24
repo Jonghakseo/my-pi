@@ -48,14 +48,17 @@ export function buildSubagentDisplayTaskFallback(task: string): string {
 		.replace(/^[:;,.\-–—|/\\]+\s*/, "")
 		.replace(/\s+[:;,.\-–—|/\\]+$/g, "")
 		.replace(/\s{2,}/g, " ")
-		.trim();
+		.trim()
+		.replace(/^\bthen\b\s+/i, "");
 
-	if (normalized) return normalized.slice(0, MAX_NAME_LENGTH);
+	if (normalized) return normalized.slice(0, MAX_NAME_LENGTH).replace(/[\s:;,.\-–—|/\\]+$/g, "");
 
 	const heading = normalizeSubagentTaskText(task).match(/#{1,6}\s+([^\n]+)/);
 	if (heading?.[1]) return normalizeWhitespace(heading[1]).slice(0, MAX_NAME_LENGTH);
 
-	return normalizeSubagentTaskText(task).slice(0, MAX_NAME_LENGTH);
+	return normalizeSubagentTaskText(task)
+		.slice(0, MAX_NAME_LENGTH)
+		.replace(/[\s:;,.\-–—|/\\]+$/g, "");
 }
 
 export function shouldSummarizeSubagentTask(task: string, fallback: string): boolean {

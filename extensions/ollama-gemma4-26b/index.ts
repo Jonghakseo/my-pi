@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process";
 import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
 import type { Api, AssistantMessageEventStream, Model, SimpleStreamOptions } from "@mariozechner/pi-ai";
-import { streamOllamaNative as streamOllamaNativeBase } from "./utils/ollama-utils.js";
+import { streamOllamaNative as streamOllamaNativeBase } from "../utils/ollama-utils.js";
 
 const PROVIDER_ID = "ollama-local";
 const MODEL_ID = "gemma4:26b";
