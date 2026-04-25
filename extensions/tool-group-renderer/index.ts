@@ -1,11 +1,14 @@
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
-import { Container, Spacer, Text } from "@mariozechner/pi-tui";
+import { Container, Spacer, Text, truncateToWidth, visibleWidth } from "@mariozechner/pi-tui";
+import { truncatePlainToWidth } from "../utils/format-utils.js";
 
 const PATCH_STATE_KEY = Symbol.for("creatrip.tool-group-renderer.patch-state");
-const PATCH_VERSION = "2026-04-24-r3";
+const PATCH_VERSION = "2026-04-25-r1";
 const GROUP_STATE = Symbol("creatrip.tool-group-renderer.state");
 const PI_INTERACTIVE_BASE = "/usr/local/lib/node_modules/@mariozechner/pi-coding-agent/dist/modes/interactive";
 const BASH_PREVIEW_LIMIT = 56;
+const MIN_BASH_LINE_WIDTH_WITH_COMMAND = 36;
+const MIN_BASH_COMMAND_PREVIEW_WIDTH = 12;
 
 type GroupableToolName = "bash" | "read" | "edit" | "write";
 type ThemeColor = "accent" | "dim" | "error" | "muted" | "success" | "text" | "toolTitle" | "warning";
@@ -269,8 +272,8 @@ function normalizeInlinePreview(value: string): string {
 	return value.replace(/\r\n|\r|\n/g, " ");
 }
 
-function formatBashCommandPreview(command: string): string {
-	return truncatePreview(normalizeInlinePreview(`$ ${command}`), BASH_PREVIEW_LIMIT);
+function formatBashCommandPreview(command: string, maxWidth = BASH_PREVIEW_LIMIT): string {
+	return truncatePlainToWidth(normalizeInlinePreview(`$ ${command}`), maxWidth);
 }
 
 function deriveBashTitle(command: string): string {
@@ -328,21 +331,45 @@ function formatBashDuration(item: GroupItem): string {
 	return ` ${theme.fg("warning", `[~${seconds}s]`)}`;
 }
 
-function formatBashLine(args: unknown, item: GroupItem): string {
+function formatBashLine(args: unknown, item: GroupItem, maxWidth?: number): string {
 	const theme = getTheme();
 	const params = isRecord(args) ? args : {};
 	const title = typeof params.title === "string" && params.title.length > 0 ? params.title : undefined;
 	const command = typeof params.command === "string" ? params.command : "";
 	const label = title ?? deriveBashTitle(command);
-	const commandPreview = command ? ` (${formatBashCommandPreview(command)})` : "";
+	const prefix = theme.fg("muted", "ㄴ ");
+	const prefixWidth = visibleWidth("ㄴ ");
+	const contentWidth = maxWidth === undefined ? undefined : Math.max(1, maxWidth - prefixWidth);
 	const duration = formatBashDuration(item);
-	const content = `${label}${commandPreview}${duration}`;
+	let commandPreview = "";
+	let durationPreview = duration;
 
-	if (item.isError) return `${theme.fg("muted", "ㄴ ")}${theme.fg("error", content)}`;
-	if (item.isPartial || (!item.result && item.executionStarted)) {
-		return `${theme.fg("muted", "ㄴ ")}${theme.fg("warning", content)}`;
+	if (command && (contentWidth === undefined || contentWidth >= MIN_BASH_LINE_WIDTH_WITH_COMMAND)) {
+		const fixedWidth = visibleWidth(label) + visibleWidth(duration) + visibleWidth(" ()");
+		const commandWidth = contentWidth === undefined ? BASH_PREVIEW_LIMIT : contentWidth - fixedWidth;
+		if (commandWidth >= MIN_BASH_COMMAND_PREVIEW_WIDTH) {
+			commandPreview = ` (${formatBashCommandPreview(command, Math.min(BASH_PREVIEW_LIMIT, commandWidth))})`;
+		} else if (contentWidth !== undefined) {
+			durationPreview = "";
+		}
+	} else if (contentWidth !== undefined) {
+		durationPreview = "";
 	}
-	return `${theme.fg("muted", "ㄴ ")}${theme.fg("text", label)}${theme.fg("dim", commandPreview)}${duration}`;
+
+	const content = `${label}${commandPreview}${durationPreview}`;
+	const color: ThemeColor = item.isError
+		? "error"
+		: item.isPartial || (!item.result && item.executionStarted)
+			? "warning"
+			: "text";
+	const line =
+		color === "text"
+			? `${prefix}${theme.fg("text", label)}${theme.fg("dim", commandPreview)}${durationPreview}`
+			: `${prefix}${theme.fg(color, content)}`;
+
+	return maxWidth === undefined
+		? line
+		: truncateToWidth(line, maxWidth, theme.fg(color === "text" ? "dim" : color, "..."));
 }
 
 function formatPlainPathLine(path: string, item: GroupItem): string {
@@ -459,6 +486,7 @@ class GroupedBuiltinToolComponent extends Container {
 	private readonly content: Text;
 	private items: GroupItem[] = [];
 	private expanded = false;
+	private renderContentWidth: number | undefined;
 
 	constructor() {
 		super();
@@ -523,7 +551,7 @@ class GroupedBuiltinToolComponent extends Container {
 	private formatItemLine(item: GroupItem): string[] {
 		const line =
 			item.toolName === "bash"
-				? formatBashLine(item.args, item)
+				? formatBashLine(item.args, item, this.renderContentWidth)
 				: item.toolName === "read"
 					? formatReadLine(item.args, item)
 					: item.toolName === "edit"
@@ -550,6 +578,15 @@ class GroupedBuiltinToolComponent extends Container {
 		}
 
 		return lines;
+	}
+
+	override render(width: number): string[] {
+		const nextContentWidth = Math.max(1, width - 2);
+		if (this.renderContentWidth !== nextContentWidth) {
+			this.renderContentWidth = nextContentWidth;
+			this.refreshDisplay();
+		}
+		return super.render(width);
 	}
 
 	private refreshDisplay(): void {
@@ -800,6 +837,7 @@ function renderSessionContextPatched(
 
 export const __test__ = {
 	formatBashCommandPreview,
+	formatBashLine,
 	ensureToolHandle,
 };
 

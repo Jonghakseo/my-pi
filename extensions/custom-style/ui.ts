@@ -41,10 +41,11 @@ export class PolishedEditor extends CustomEditor {
 	}
 
 	private joinLine(left: string, right: string, width: number): string {
-		const truncatedRight = truncateToWidth(right, width, "…");
+		const ellipsis = this.uiTheme.fg("dim", "…");
+		const truncatedRight = truncateToWidth(right, width, ellipsis);
 		const rightWidth = visibleWidth(truncatedRight);
 		const leftWidth = Math.max(0, width - rightWidth - (left && right ? 1 : 0));
-		const truncatedLeft = leftWidth > 0 ? truncateToWidth(left, leftWidth, "…") : "";
+		const truncatedLeft = leftWidth > 0 ? truncateToWidth(left, leftWidth, ellipsis) : "";
 		const gap = " ".repeat(Math.max(0, width - visibleWidth(truncatedLeft) - rightWidth));
 		return `${truncatedLeft}${gap}${truncatedRight}`;
 	}

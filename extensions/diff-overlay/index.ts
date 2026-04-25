@@ -12,6 +12,7 @@ import path from "node:path";
 import type { ExtensionAPI, ExtensionCommandContext, ThemeColor } from "@mariozechner/pi-coding-agent";
 import { DynamicBorder, getLanguageFromPath, highlightCode } from "@mariozechner/pi-coding-agent";
 import { Key, matchesKey, truncateToWidth, visibleWidth, wrapTextWithAnsi } from "@mariozechner/pi-tui";
+import { truncatePlainToWidth } from "../utils/format-utils.js";
 import {
 	applyHighlightToDiff,
 	type BranchCommitEntry,
@@ -691,13 +692,10 @@ function renderFiles(t: Theme, st: DiffState, w: number, h: number): string[] {
 			const foldColored = row.expanded ? t.fg("accent", fold) : t.fg("dim", fold);
 			const prefix = `${cursor} ${indent}${foldColored} `;
 			const nameW = Math.max(4, w - visibleWidth(prefix) - 1);
+			const dirLabel = truncatePlainToWidth(`${row.name}/`, nameW);
 			const dirName =
-				sel && active
-					? t.fg("accent", t.bold(truncateToWidth(`${row.name}/`, nameW)))
-					: sel
-						? t.fg("muted", truncateToWidth(`${row.name}/`, nameW))
-						: t.fg("muted", truncateToWidth(`${row.name}/`, nameW));
-			lines.push(truncateToWidth(`${prefix}${dirName}`, w));
+				sel && active ? t.fg("accent", t.bold(dirLabel)) : sel ? t.fg("muted", dirLabel) : t.fg("muted", dirLabel);
+			lines.push(truncateToWidth(`${prefix}${dirName}`, w, ""));
 		} else {
 			const file = fileByPath.get(row.fullPath);
 			const reviewCount = file ? st.reviewDrafts.filter((draft) => draft.filePath === file.path).length : 0;
@@ -709,14 +707,15 @@ function renderFiles(t: Theme, st: DiffState, w: number, h: number): string[] {
 			const fileName = file ? fileTreeLabel(file, row.name) : row.name;
 
 			let label: string;
+			const fileLabel = truncatePlainToWidth(fileName, nameW);
 			if (sel && active) {
-				label = t.fg("accent", truncateToWidth(fileName, nameW));
+				label = t.fg("accent", fileLabel);
 			} else if (sel) {
-				label = t.fg("muted", truncateToWidth(fileName, nameW));
+				label = t.fg("muted", fileLabel);
 			} else {
-				label = t.fg("text", truncateToWidth(fileName, nameW));
+				label = t.fg("text", fileLabel);
 			}
-			lines.push(truncateToWidth(`${prefix}${label}`, w));
+			lines.push(truncateToWidth(`${prefix}${label}`, w, ""));
 		}
 	}
 
@@ -755,20 +754,16 @@ function renderCommits(t: Theme, st: DiffState, w: number, h: number): string[] 
 			const marker = t.fg(sel && active ? "accent" : "warning", "●●●");
 			const prefix = `${cursor} ${marker} `;
 			const subjectW = Math.max(4, w - visibleWidth(prefix));
-			const subject =
-				sel && active
-					? t.fg("accent", truncateToWidth(c.subject, subjectW))
-					: t.fg("warning", truncateToWidth(c.subject, subjectW));
-			lines.push(truncateToWidth(`${prefix}${subject}`, w));
+			const subjectText = truncatePlainToWidth(c.subject, subjectW);
+			const subject = sel && active ? t.fg("accent", subjectText) : t.fg("warning", subjectText);
+			lines.push(truncateToWidth(`${prefix}${subject}`, w, ""));
 		} else {
 			const hash = t.fg(sel && active ? "accent" : "muted", c.shortHash);
 			const prefix = `${cursor} ${hash} `;
 			const subjectW = Math.max(4, w - visibleWidth(prefix));
-			const subject =
-				sel && active
-					? t.fg("accent", truncateToWidth(c.subject, subjectW))
-					: t.fg("text", truncateToWidth(c.subject, subjectW));
-			lines.push(truncateToWidth(`${prefix}${subject}`, w));
+			const subjectText = truncatePlainToWidth(c.subject, subjectW);
+			const subject = sel && active ? t.fg("accent", subjectText) : t.fg("text", subjectText);
+			lines.push(truncateToWidth(`${prefix}${subject}`, w, ""));
 		}
 	}
 
@@ -828,7 +823,7 @@ function renderDiff(t: Theme, st: DiffState, w: number, h: number): string[] {
 	if (rendered.length > max) {
 		const pct = maxOffset > 0 ? Math.round((st.diffScrollOffset / maxOffset) * 100) : 0;
 		const indicator = t.fg("dim", `${pct}% (${start + 1}–${end}/${rendered.length})`);
-		lines[max - 1] = truncateToWidth(` ${indicator}`, w);
+		lines[max - 1] = truncateToWidth(` ${indicator}`, w, t.fg("dim", "..."));
 	}
 
 	return lines;
@@ -869,9 +864,9 @@ function renderCommitFiles(t: Theme, st: DiffState, w: number, h: number): strin
 		const prefix = `${cursor} ${fold} ${ic} `;
 		const nameW = Math.max(4, w - visibleWidth(prefix));
 
-		const fileName = truncateToWidth(fileDisplayPath(file), nameW);
+		const fileName = truncatePlainToWidth(fileDisplayPath(file), nameW);
 		const label = selected ? (active ? t.fg("accent", fileName) : t.fg("muted", fileName)) : t.fg("text", fileName);
-		rows.push(truncateToWidth(`${prefix}${label}`, w));
+		rows.push(truncateToWidth(`${prefix}${label}`, w, ""));
 
 		if (!expanded.has(file.path)) continue;
 
@@ -879,7 +874,7 @@ function renderCommitFiles(t: Theme, st: DiffState, w: number, h: number): strin
 		const raw = st.commitFileDiffCache.get(diffKey);
 		if (raw === undefined) {
 			const loading = st.commitFileDiffLoading.has(diffKey) ? "    Loading diff…" : "    (no diff loaded)";
-			rows.push(t.fg("muted", truncateToWidth(loading, w)));
+			rows.push(t.fg("muted", truncatePlainToWidth(loading, w)));
 			continue;
 		}
 
@@ -1606,7 +1601,9 @@ class DiffOverlay {
 		}
 
 		const rightHeader = st.viewMode === "diff" ? `${rightTitle} ${fileLabel}` : `${rightTitle} ${commitLabel}`;
-		const titleLine = `${truncateToWidth(leftTitle, leftW)}${" ".repeat(Math.max(0, leftW - visibleWidth(leftTitle)))} ${t.fg("dim", "│")} ${truncateToWidth(rightHeader, rightW)}`;
+		const fittedLeftTitle = truncateToWidth(leftTitle, leftW, "");
+		const fittedRightHeader = truncateToWidth(rightHeader, rightW, t.fg("muted", "..."));
+		const titleLine = `${fittedLeftTitle}${" ".repeat(Math.max(0, leftW - visibleWidth(fittedLeftTitle)))} ${t.fg("dim", "│")} ${fittedRightHeader}`;
 
 		const separatorLine = `${t.fg("dim", "─".repeat(leftW))} ${t.fg("dim", "┼")} ${t.fg("dim", "─".repeat(rightW))}`;
 		const contentH = Math.max(1, bodyH - 2);
@@ -1620,13 +1617,13 @@ class DiffOverlay {
 
 		const body: string[] = [titleLine, separatorLine];
 		for (let i = 0; i < contentH; i++) {
-			const l = truncateToWidth(left[i] ?? "", leftW);
+			const l = truncateToWidth(left[i] ?? "", leftW, "");
 			const pad = Math.max(0, leftW - visibleWidth(l));
-			const r = truncateToWidth(right[i] ?? "", rightW);
+			const r = truncateToWidth(right[i] ?? "", rightW, "");
 			body.push(`${l}${" ".repeat(pad)} ${t.fg("dim", "│")} ${r}`);
 		}
 
-		return [...header, ...body, ...footer].map((line) => truncateToWidth(expandTabs(line), w));
+		return [...header, ...body, ...footer].map((line) => truncateToWidth(expandTabs(line), w, ""));
 	}
 }
 

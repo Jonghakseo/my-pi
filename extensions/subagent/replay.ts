@@ -5,7 +5,16 @@
  */
 
 import * as fs from "node:fs";
-import { Container, Key, matchesKey, Spacer, Text, truncateToWidth, wrapTextWithAnsi } from "@mariozechner/pi-tui";
+import {
+	Container,
+	Key,
+	matchesKey,
+	Spacer,
+	Text,
+	truncateToWidth,
+	visibleWidth,
+	wrapTextWithAnsi,
+} from "@mariozechner/pi-tui";
 import { formatDuration, formatDurationBetween } from "../utils/time-utils.js";
 import {
 	DEFAULT_TURN_COUNT,
@@ -25,12 +34,10 @@ import {
 	MIN_INNER_WIDTH,
 	MIN_LIST_ROWS,
 	MIN_PAGE_SIZE,
-	MIN_PREVIEW_WIDTH,
 	MIN_SEPARATOR_WIDTH,
 	MIN_TASK_WIDTH,
 	MIN_TERMINAL_ROWS,
 	OVERLAY_HORIZONTAL_MARGIN,
-	PREVIEW_WIDTH_DIVISOR,
 	REPLAY_CONTENT_MAX_CHARS,
 	RESERVED_LAYOUT_ROWS,
 	TASK_WIDTH_PADDING,
@@ -38,7 +45,7 @@ import {
 	TOOL_RESULT_DETAILS_SUMMARY_MAX_CHARS,
 	USAGE_EXTRA_ROWS,
 } from "./constants.js";
-import { formatUsageStats } from "./format.js";
+import { formatUsageStats, truncatePlainToWidth } from "./format.js";
 import type { CommandRunState, SessionReplayItem } from "./types.js";
 
 // ─── Replay Helpers ──────────────────────────────────────────────────────────
@@ -331,6 +338,13 @@ export class SubagentSessionReplayOverlay {
 		this.ensureListVisible(listViewport);
 
 		const contextLabel = this.run.contextMode === "main" ? "main" : "isolated";
+		const formatFooterLine = (helpText: string, rangeText: string) => {
+			const rangeWidth = visibleWidth(rangeText);
+			const gap = rangeWidth > 0 ? 2 : 0;
+			const helpWidth = Math.max(0, innerWidth - rangeWidth - gap);
+			const help = truncatePlainToWidth(helpText, helpWidth);
+			return `${theme.fg("dim", help)}${" ".repeat(gap)}${theme.fg("accent", rangeText)}`;
+		};
 
 		container.addChild(new Spacer(1));
 		container.addChild(
@@ -384,15 +398,10 @@ export class SubagentSessionReplayOverlay {
 					.replace(/\s*\n+\s*/g, " ")
 					.replace(/\s{2,}/g, " ")
 					.trim() || "(empty)";
-			let line =
-				`${marker} ${theme.fg(color, icon)} ${theme.bold(item.title)} ` +
-				theme.fg("dim", timeLabel) +
-				" " +
-				theme.fg(
-					"muted",
-					truncateSingleLine(preview, Math.max(MIN_PREVIEW_WIDTH, Math.floor(innerWidth / PREVIEW_WIDTH_DIVISOR))),
-				);
-			line = truncateToWidth(line, innerWidth);
+			const fixed = `${marker} ${theme.fg(color, icon)} ${theme.bold(item.title)} ${theme.fg("dim", timeLabel)} `;
+			const previewWidth = Math.max(0, innerWidth - visibleWidth(fixed));
+			let line = `${fixed}${theme.fg("muted", truncatePlainToWidth(preview, previewWidth))}`;
+			line = truncateToWidth(line, innerWidth, "");
 			if (isSelected) line = theme.bg("selectedBg", line);
 			container.addChild(new Text(pad + line, 0, 0));
 		}
@@ -430,7 +439,7 @@ export class SubagentSessionReplayOverlay {
 						pad +
 							theme.fg(
 								"toolOutput",
-								`  ${truncateToWidth(line, Math.max(MIN_DETAIL_WIDTH, innerWidth - DETAIL_LINE_PADDING))}`,
+								`  ${truncatePlainToWidth(line, Math.max(MIN_DETAIL_WIDTH, innerWidth - DETAIL_LINE_PADDING))}`,
 							),
 						0,
 						0,
@@ -446,13 +455,7 @@ export class SubagentSessionReplayOverlay {
 		const helpText = hasDetailOpen
 			? "↑↓/jk list · Enter close detail · ←/→ or h/l detail scroll · Ctrl+u/d detail page · PgUp/Dn list · Esc close"
 			: "↑↓/jk navigate · Enter open detail · PgUp/Dn page · g/G top/end · Esc close";
-		container.addChild(
-			new Text(
-				pad + truncateToWidth(`${theme.fg("dim", helpText)}  ${theme.fg("accent", listRange)}`, innerWidth),
-				0,
-				0,
-			),
-		);
+		container.addChild(new Text(pad + formatFooterLine(helpText, listRange), 0, 0));
 		container.addChild(new Spacer(1));
 
 		return container.render(width);

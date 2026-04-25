@@ -207,13 +207,14 @@ function buildLine2Right(theme: Theme, repoStatus: RepoStatusSnapshot): string {
 		.join(separator);
 }
 
-function renderAlignedLine(width: number, left: string, right: string): string {
+function renderAlignedLine(theme: Theme, width: number, left: string, right: string): string {
 	const innerWidth = Math.max(1, width - 2);
-	if (!right) return ` ${truncateToWidth(left, innerWidth)} `;
+	const ellipsis = theme.fg("dim", "...");
+	if (!right) return ` ${truncateToWidth(left, innerWidth, ellipsis)} `;
 	const rightWidth = visibleWidth(right);
-	if (rightWidth >= innerWidth) return ` ${truncateToWidth(right, innerWidth)} `;
+	if (rightWidth >= innerWidth) return ` ${truncateToWidth(right, innerWidth, ellipsis)} `;
 	const maxLeftWidth = Math.max(1, innerWidth - rightWidth - 1);
-	const renderedLeft = truncateToWidth(left, maxLeftWidth);
+	const renderedLeft = truncateToWidth(left, maxLeftWidth, ellipsis);
 	const paddingWidth = Math.max(1, innerWidth - visibleWidth(renderedLeft) - rightWidth);
 	return ` ${renderedLeft}${" ".repeat(paddingWidth)}${right} `;
 }
@@ -243,9 +244,9 @@ export function installFooter(pi: ExtensionAPI, ctx: ExtensionContext, config: C
 				const line1Right = buildLine1Right(config, theme, statusEntries, percent);
 				const line2Left = buildLine2Left(config, theme, state.repoStatus, branch);
 				const line2Right = buildLine2Right(theme, state.repoStatus);
-				const lines = [renderAlignedLine(width, line1Left, line1Right)];
+				const lines = [renderAlignedLine(theme, width, line1Left, line1Right)];
 				if (line2Left || line2Right) {
-					lines.push(renderAlignedLine(width, line2Left, line2Right));
+					lines.push(renderAlignedLine(theme, width, line2Left, line2Right));
 				}
 				return lines;
 			},

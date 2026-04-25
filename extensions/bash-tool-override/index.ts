@@ -9,10 +9,12 @@ import {
 	type Theme,
 } from "@mariozechner/pi-coding-agent";
 import { Type } from "typebox";
-import { Text, type Component } from "@mariozechner/pi-tui";
+import { Text, truncateToWidth, type Component } from "@mariozechner/pi-tui";
+import { truncatePlainToWidth } from "../utils/format-utils.js";
 
 const TAIL_LINES = 5;
 const MAX_COMMAND_PREVIEW = 120;
+const MIN_COMMAND_PREVIEW_WIDTH = 16;
 
 type BashContent = { type: "text"; text: string };
 
@@ -21,6 +23,36 @@ function getBashTextContent(result: { content?: Array<{ type: string; text?: str
 		(entry): entry is BashContent => entry.type === "text" && typeof entry.text === "string",
 	);
 	return textContent?.text;
+}
+
+function normalizeInlinePreview(value: string): string {
+	return value.replace(/\r\n|\r|\n/g, " ");
+}
+
+class BashCallPreview implements Component {
+	private readonly text = new Text("", 0, 0);
+
+	constructor(
+		private readonly header: string,
+		private readonly command: string,
+		private readonly theme: Theme,
+	) {}
+
+	render(width: number): string[] {
+		const header = truncateToWidth(this.header, width, this.theme.fg("accent", "..."));
+		const commandPreview = this.formatCommandPreview(width);
+		this.text.setText(commandPreview ? `${header}\n${this.theme.fg("dim", commandPreview)}` : header);
+		return this.text.render(width);
+	}
+
+	invalidate(): void {
+		this.text.invalidate();
+	}
+
+	private formatCommandPreview(width: number): string {
+		if (!this.command || width < MIN_COMMAND_PREVIEW_WIDTH) return "";
+		return truncatePlainToWidth(normalizeInlinePreview(`$ ${this.command}`), Math.min(width, MAX_COMMAND_PREVIEW));
+	}
 }
 
 function formatRunningDuration(ms: number): string {
@@ -117,7 +149,7 @@ To execute a command that doesn't need the user to see its output, prefix it wit
 
 			return { command, title, ...(timeout !== undefined ? { timeout } : {}) };
 		},
-		renderCall(args, theme, context) {
+		renderCall(args, theme, _context) {
 			const title = args.title as string | undefined;
 			const command = args.command as string;
 			const showTitle = typeof title === "string" && title.length > 0;
@@ -126,10 +158,7 @@ To execute a command that doesn't need the user to see its output, prefix it wit
 				? `${theme.fg("toolTitle", theme.bold("bash"))} ${theme.fg("accent", title)}`
 				: theme.fg("toolTitle", theme.bold("bash"));
 
-			const cmdPreview = command.length > MAX_COMMAND_PREVIEW ? `${command.slice(0, MAX_COMMAND_PREVIEW)}…` : command;
-			const text = (context.lastComponent as Text | undefined) ?? new Text("", 0, 0);
-			text.setText(`${header}\n${theme.fg("dim", `$ ${cmdPreview}`)}`);
-			return text;
+			return new BashCallPreview(header, command, theme);
 		},
 		renderResult(result, { expanded, isPartial }, theme, context) {
 			const runningState = context.state as RunningRenderState;
