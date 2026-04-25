@@ -20,7 +20,6 @@
     "npm:@ryan_nookpi/pi-extension-auto-name",
     "npm:@ryan_nookpi/pi-extension-delayed-action",
     "npm:@ryan_nookpi/pi-extension-idle-screensaver",
-    "npm:@ryan_nookpi/pi-extension-todo-write",
     "npm:@ryan_nookpi/pi-extension-open-pr",
     "npm:@ryan_nookpi/pi-extension-generative-ui",
     "npm:@ryan_nookpi/pi-extension-cross-agent",
@@ -30,7 +29,8 @@
     "npm:@ryan_nookpi/pi-extension-diff-review",
     "npm:@ryan_nookpi/pi-extension-claude-spinner",
     "npm:@ryan_nookpi/pi-extension-cc-system-prompt",
-    "npm:@ryan_nookpi/pi-extension-codex-large-context"
+    "npm:@ryan_nookpi/pi-extension-codex-large-context",
+    "npm:@ryan_nookpi/pi-extension-todo-write-overlay"
   ],
   "compaction": {
     "enabled": true
