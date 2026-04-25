@@ -206,13 +206,21 @@ function hasVisibleAssistantContent(message: AssistantMessageLike): boolean {
 	});
 }
 
+function hasToolCallContent(message: AssistantMessageLike): boolean {
+	return message.content.some((content) => isAssistantToolCallContent(content));
+}
+
 function shouldBreakGroupForMessage(message: SessionMessageLike): boolean {
 	if (isAssistantMessage(message)) {
-		const hasToolCalls = message.content.some((content) => isAssistantToolCallContent(content));
+		const hasToolCalls = hasToolCallContent(message);
 		if (hasVisibleAssistantContent(message)) return true;
 		return !hasToolCalls && (message.stopReason === "aborted" || message.stopReason === "error");
 	}
 	return message.role !== "toolResult";
+}
+
+function shouldBreakGroupForMessageUpdate(message: AssistantMessageLike): boolean {
+	return hasVisibleAssistantContent(message) && !hasToolCallContent(message);
 }
 
 function replaceChildInContainer(
@@ -364,7 +372,7 @@ function formatBashLine(args: unknown, item: GroupItem, maxWidth?: number): stri
 			: "text";
 	const line =
 		color === "text"
-			? `${prefix}${theme.fg("text", label)}${theme.fg("dim", commandPreview)}${durationPreview}`
+			? `${prefix}${theme.fg("accent", label)}${theme.fg("dim", commandPreview)}${durationPreview}`
 			: `${prefix}${theme.fg(color, content)}`;
 
 	return maxWidth === undefined
@@ -839,6 +847,11 @@ export const __test__ = {
 	formatBashCommandPreview,
 	formatBashLine,
 	ensureToolHandle,
+	setRuntimeThemeForTest: (theme?: RuntimeTheme) => {
+		runtimeTheme = theme;
+	},
+	shouldBreakGroupForMessageUpdate,
+	updateStreamingAssistantToolCalls,
 };
 
 export default async function toolGroupRenderer(_pi: ExtensionAPI): Promise<void> {
@@ -887,7 +900,7 @@ export default async function toolGroupRenderer(_pi: ExtensionAPI): Promise<void
 		}
 
 		if (event.type === "message_update" && isAssistantMessage(event.message)) {
-			if (hasVisibleAssistantContent(event.message)) {
+			if (shouldBreakGroupForMessageUpdate(event.message)) {
 				breakGroup(this);
 			}
 			if (!this.isInitialized) {
