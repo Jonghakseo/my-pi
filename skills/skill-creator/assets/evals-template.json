@@ -1,0 +1,24 @@
+{
+  "skill_name": "example-skill",
+  "evals": [
+    {
+      "id": "basic-happy-path",
+      "prompt": "A realistic user request that should activate and benefit from the skill.",
+      "expected_output": "What a good result should include.",
+      "files": [],
+      "assertions": [
+        {
+          "text": "The output follows the required structure.",
+          "type": "qualitative"
+        }
+      ]
+    },
+    {
+      "id": "edge-case",
+      "prompt": "A realistic edge case, ambiguity, or near-miss request.",
+      "expected_output": "How the skill should handle the edge case.",
+      "files": [],
+      "assertions": []
+    }
+  ]
+}
