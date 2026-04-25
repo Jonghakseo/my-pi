@@ -164,17 +164,6 @@ The following reusable packages are currently listed in `settings.json`.
 
 ---
 
-## Session Name
-
-`/name` is a built-in command, not a prompt template.
-
-```
-/name <session name>   # set name
-/name                  # show current name
-```
-
----
-
 ## Themes
 
 The setup currently ships with 8 themes, hot-swappable with `Ctrl+Shift+X` / `Ctrl+Q` or selectable with `/theme`:
