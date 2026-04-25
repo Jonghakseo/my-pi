@@ -7,14 +7,8 @@ import {
 	formatAgentList,
 	formatCommandRunSummary,
 	formatContextUsageBar,
-	formatPriority,
 	formatPurposeStatus,
 	formatStateLabel,
-	formatTodoHeading,
-	formatTodoId,
-	formatTodoList,
-	formatTodoMetadataParts,
-	formatTodoMetadataSuffix,
 	formatTokens,
 	formatUsageStats,
 	formatUsd,
@@ -22,7 +16,6 @@ import {
 	getRemainingContextPercent,
 	getUsedContextPercent,
 	normalizeModelRef,
-	type TodoFrontMatterLike,
 	truncateLines,
 	truncateToWidthWithEllipsis,
 } from "./format-utils.js";
@@ -444,153 +437,6 @@ describe("formatStateLabel", () => {
 
 	it("handles already uppercase", () => {
 		expect(formatStateLabel("MERGED")).toBe("MERGED");
-	});
-});
-
-// ─── formatTodoId ────────────────────────────────────────────────────────────
-
-describe("formatTodoId", () => {
-	it("prepends TODO- prefix", () => {
-		expect(formatTodoId("deadbeef")).toBe("TODO-deadbeef");
-	});
-
-	it("handles empty string", () => {
-		expect(formatTodoId("")).toBe("TODO-");
-	});
-});
-
-// ─── formatPriority ──────────────────────────────────────────────────────────
-
-describe("formatPriority", () => {
-	it("returns Korean labels for known priorities", () => {
-		expect(formatPriority("high")).toBe("상");
-		expect(formatPriority("medium")).toBe("중");
-		expect(formatPriority("low")).toBe("하");
-	});
-
-	it("returns 'none' for undefined", () => {
-		expect(formatPriority(undefined)).toBe("none");
-	});
-});
-
-// ─── formatTodoMetadataParts ─────────────────────────────────────────────────
-
-describe("formatTodoMetadataParts", () => {
-	it("returns empty for no metadata", () => {
-		expect(formatTodoMetadataParts({})).toEqual([]);
-	});
-
-	it("includes all present metadata", () => {
-		const parts = formatTodoMetadataParts({
-			priority: "high",
-			due_date: "2026-01-01",
-			estimate: "2h",
-		});
-		expect(parts).toEqual(["P:상", "due:2026-01-01", "est:2h"]);
-	});
-
-	it("includes only provided fields", () => {
-		expect(formatTodoMetadataParts({ priority: "low" })).toEqual(["P:하"]);
-	});
-});
-
-// ─── formatTodoMetadataSuffix ────────────────────────────────────────────────
-
-describe("formatTodoMetadataSuffix", () => {
-	it("returns empty for no metadata", () => {
-		const todo: TodoFrontMatterLike = {
-			id: "abc",
-			title: "test",
-			tags: [],
-			status: "open",
-		};
-		expect(formatTodoMetadataSuffix(todo)).toBe("");
-	});
-
-	it("wraps in parentheses", () => {
-		const todo: TodoFrontMatterLike = {
-			id: "abc",
-			title: "test",
-			tags: [],
-			status: "open",
-			priority: "high",
-		};
-		expect(formatTodoMetadataSuffix(todo)).toBe(" (P:상)");
-	});
-});
-
-// ─── formatTodoHeading ───────────────────────────────────────────────────────
-
-describe("formatTodoHeading", () => {
-	it("formats a basic heading", () => {
-		const todo: TodoFrontMatterLike = {
-			id: "deadbeef",
-			title: "Fix bug",
-			tags: [],
-			status: "open",
-		};
-		expect(formatTodoHeading(todo)).toBe("TODO-deadbeef Fix bug");
-	});
-
-	it("includes tags and metadata", () => {
-		const todo: TodoFrontMatterLike = {
-			id: "abc",
-			title: "Task",
-			tags: ["qa", "urgent"],
-			status: "open",
-			priority: "high",
-		};
-		const heading = formatTodoHeading(todo);
-		expect(heading).toContain("[qa, urgent]");
-		expect(heading).toContain("P:상");
-	});
-
-	it("shows (untitled) for empty title", () => {
-		const todo: TodoFrontMatterLike = {
-			id: "abc",
-			title: "",
-			tags: [],
-			status: "open",
-		};
-		expect(formatTodoHeading(todo)).toContain("(untitled)");
-	});
-
-	it("includes assignment suffix", () => {
-		const todo: TodoFrontMatterLike = {
-			id: "abc",
-			title: "Task",
-			tags: [],
-			status: "open",
-			assigned_to_session: "session.json",
-		};
-		expect(formatTodoHeading(todo)).toContain("(assigned: session.json)");
-	});
-});
-
-// ─── formatTodoList ──────────────────────────────────────────────────────────
-
-describe("formatTodoList", () => {
-	it("returns 'No todos.' for empty list", () => {
-		expect(formatTodoList([])).toBe("No todos.");
-	});
-
-	it("groups by assigned/open/closed", () => {
-		const todos: TodoFrontMatterLike[] = [
-			{ id: "1", title: "Assigned task", tags: [], status: "open", assigned_to_session: "s.json" },
-			{ id: "2", title: "Open task", tags: [], status: "open" },
-			{ id: "3", title: "Done task", tags: [], status: "done" },
-		];
-		const result = formatTodoList(todos);
-		expect(result).toContain("Assigned todos (1):");
-		expect(result).toContain("Open todos (1):");
-		expect(result).toContain("Closed todos (1):");
-	});
-
-	it("shows 'none' for empty sections", () => {
-		const todos: TodoFrontMatterLike[] = [{ id: "1", title: "Open", tags: [], status: "open" }];
-		const result = formatTodoList(todos);
-		expect(result).toContain("Assigned todos (0):");
-		expect(result).toContain("  none");
 	});
 });
 

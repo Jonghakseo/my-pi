@@ -7,11 +7,10 @@
 
 import { visibleWidth } from "@mariozechner/pi-tui";
 import type { AgentConfigLike } from "./agent-utils.ts";
-import type { TodoPriority } from "./todo-utils.ts";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
-export type { AgentConfigLike, TodoPriority };
+export type { AgentConfigLike };
 
 export interface UsageStats {
 	input: number;
@@ -33,30 +32,9 @@ export interface CommandRunSummaryInput {
 	toolCalls: number;
 }
 
-export interface TodoMetadataLike {
-	priority?: TodoPriority;
-	due_date?: string;
-	estimate?: string;
-}
-
-export interface TodoFrontMatterLike extends TodoMetadataLike {
-	id: string;
-	title: string;
-	tags: string[];
-	status: string;
-	assigned_to_session?: string;
-}
-
 // ─── Constants ───────────────────────────────────────────────────────────────
 
-const TODO_ID_PREFIX = "TODO-";
 const graphemeSegmenter = new Intl.Segmenter(undefined, { granularity: "grapheme" });
-
-const TODO_PRIORITY_LABEL: Record<TodoPriority, string> = {
-	high: "상",
-	medium: "중",
-	low: "하",
-};
 
 /** Vibrant ANSI-256 foreground colors for per-agent name coloring. */
 export const AGENT_NAME_PALETTE = [39, 208, 114, 204, 220, 141, 81, 209, 156, 177];
@@ -262,87 +240,6 @@ export function formatAgentList(agents: AgentConfigLike[], maxItems: number): { 
 export function formatStateLabel(value: string | null): string {
 	if (!value) return "UNKNOWN";
 	return value.replace(/_/g, " ").toUpperCase();
-}
-
-// ─── Todo Formatting ─────────────────────────────────────────────────────────
-
-/** Format a todo ID with the standard prefix. */
-export function formatTodoId(id: string): string {
-	return `${TODO_ID_PREFIX}${id}`;
-}
-
-/** Format a priority value to its Korean label. */
-export function formatPriority(priority: TodoPriority | undefined): string {
-	if (!priority) return "none";
-	return TODO_PRIORITY_LABEL[priority] ?? priority;
-}
-
-/** Build metadata display parts like `P:상`, `due:2026-01-01`, `est:2h`. */
-export function formatTodoMetadataParts(todo: Pick<TodoMetadataLike, "priority" | "due_date" | "estimate">): string[] {
-	const parts: string[] = [];
-	if (todo.priority) {
-		parts.push(`P:${formatPriority(todo.priority)}`);
-	}
-	if (todo.due_date) {
-		parts.push(`due:${todo.due_date}`);
-	}
-	if (todo.estimate) {
-		parts.push(`est:${todo.estimate}`);
-	}
-	return parts;
-}
-
-/** Build a parenthesized metadata suffix string (empty if no metadata). */
-export function formatTodoMetadataSuffix(todo: TodoFrontMatterLike): string {
-	const parts = formatTodoMetadataParts(todo);
-	if (!parts.length) return "";
-	return ` (${parts.join(", ")})`;
-}
-
-/** Format a full todo heading line with id, title, metadata, tags, assignment. */
-export function formatTodoHeading(todo: TodoFrontMatterLike): string {
-	const title = todo.title || "(untitled)";
-	const metadataText = formatTodoMetadataSuffix(todo);
-	const tagText = todo.tags.length ? ` [${todo.tags.join(", ")}]` : "";
-	const assignmentSuffix = todo.assigned_to_session ? ` (assigned: ${todo.assigned_to_session})` : "";
-	return `${formatTodoId(todo.id)} ${title}${metadataText}${tagText}${assignmentSuffix}`;
-}
-
-/** Format a complete todo list grouped by assignment status. */
-export function formatTodoList(todos: TodoFrontMatterLike[]): string {
-	if (!todos.length) return "No todos.";
-
-	const assignedTodos: TodoFrontMatterLike[] = [];
-	const openTodos: TodoFrontMatterLike[] = [];
-	const closedTodos: TodoFrontMatterLike[] = [];
-
-	for (const todo of todos) {
-		const isClosed = ["closed", "done"].includes((todo.status || "open").toLowerCase());
-		if (isClosed) {
-			closedTodos.push(todo);
-		} else if (todo.assigned_to_session) {
-			assignedTodos.push(todo);
-		} else {
-			openTodos.push(todo);
-		}
-	}
-
-	const lines: string[] = [];
-	const pushSection = (label: string, sectionTodos: TodoFrontMatterLike[]) => {
-		lines.push(`${label} (${sectionTodos.length}):`);
-		if (!sectionTodos.length) {
-			lines.push("  none");
-			return;
-		}
-		for (const todo of sectionTodos) {
-			lines.push(`  ${formatTodoHeading(todo)}`);
-		}
-	};
-
-	pushSection("Assigned todos", assignedTodos);
-	pushSection("Open todos", openTodos);
-	pushSection("Closed todos", closedTodos);
-	return lines.join("\n");
 }
 
 // ─── Purpose Formatting ──────────────────────────────────────────────────────
