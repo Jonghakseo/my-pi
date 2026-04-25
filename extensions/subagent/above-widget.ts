@@ -1,7 +1,7 @@
 /**
- * Above-editor subagent widget is disabled.
+ * Legacy above-editor pixel subagent widget is disabled.
  *
- * All subagent runs are rendered in the below-editor widget regardless of launch source.
+ * All subagent runs are rendered by widget.ts in the above-editor run status widget regardless of launch source.
  */
 
 import type { SubagentStore } from "./store.js";
@@ -15,6 +15,6 @@ export function updatePixelWidget(store: SubagentStore, ctx?: Pick<WidgetRenderC
 }
 
 export function cleanupPixelTimer(): void {
-	// no-op: above-editor widget is disabled
+	// no-op: legacy pixel widget is disabled
 	return;
 }

@@ -21,7 +21,7 @@ export interface SubagentStore {
 	renderedRunWidgetIds: Set<number>;
 	nextCommandRunId: number;
 	commandWidgetCtx: WidgetRenderCtx | null;
-	/** Context reference for the above-editor run status widget (tool-invoked runs). */
+	/** Context reference for the legacy above-editor pixel widget. */
 	pixelWidgetCtx: Pick<WidgetRenderCtx, "hasUI" | "ui"> | null;
 	/** @deprecated Kept for backward compat; persistent parent link now used instead. */
 	sessionStack: string[];

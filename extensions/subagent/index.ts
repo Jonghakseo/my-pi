@@ -15,7 +15,7 @@
  *   session.ts  — Session file management and context helpers
  *   runner.ts   — Subagent process execution, agent matching, concurrency
  *   replay.ts   — Session replay viewer (TUI overlay)
- *   widget.ts   — Run status widget (below-editor display)
+ *   widget.ts   — Run status widget (above-editor display)
  *   commands.ts — Tool handler, slash-commands, event handlers
  *   index.ts    — Orchestrator (this file)
  */
