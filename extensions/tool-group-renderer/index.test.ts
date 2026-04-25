@@ -1,3 +1,4 @@
+import { visibleWidth } from "@mariozechner/pi-tui";
 import { describe, expect, it } from "vitest";
 import { __test__ } from "./index.ts";
 
@@ -74,6 +75,62 @@ describe("tool-group-renderer bash preview", () => {
 		expect(preview).toBe("$ echo one echo two");
 		expect(preview).not.toContain("\r");
 		expect(preview).not.toContain("\n");
+	});
+
+	it("truncates bash command previews to a requested visual width", () => {
+		const preview = __test__.formatBashCommandPreview("find /usr/local/lib/node_modules -type f -name '*.js'", 24);
+
+		expect(visibleWidth(preview)).toBeLessThanOrEqual(24);
+		expect(preview).toContain("...");
+		expect(preview).not.toContain("\n");
+	});
+
+	it("keeps grouped bash lines to one visual row at the render width", () => {
+		const line = __test__.formatBashLine(
+			{
+				title: "askUserQuestion 관련 파일 검색",
+				command: "find /usr/local/lib/node_modules/@mariozechner/pi-coding-agent -type f -name '*.js'",
+			},
+			{
+				toolName: "bash",
+				toolCallId: "call-1",
+				args: {},
+				executionStarted: true,
+				argsComplete: true,
+				isPartial: false,
+				isError: false,
+			},
+			70,
+		);
+
+		expect(visibleWidth(line)).toBeLessThanOrEqual(70);
+		expect(line).toContain("...");
+		expect(line).toContain("$ find");
+		expect(line).not.toContain("\n");
+	});
+
+	it("hides grouped bash command previews when the row is too narrow", () => {
+		const line = __test__.formatBashLine(
+			{
+				title: "askUserQuestion 관련 파일 검색",
+				command: "find /usr/local/lib/node_modules/@mariozechner/pi-coding-agent -type f -name '*.js'",
+			},
+			{
+				toolName: "bash",
+				toolCallId: "call-1",
+				args: {},
+				executionStarted: true,
+				argsComplete: true,
+				isPartial: false,
+				isError: false,
+			},
+			32,
+		);
+
+		expect(visibleWidth(line)).toBeLessThanOrEqual(32);
+		expect(line).not.toContain("$ find");
+		expect(line).not.toContain("(");
+		expect(line).toContain("askUserQuestion");
 	});
 });
 

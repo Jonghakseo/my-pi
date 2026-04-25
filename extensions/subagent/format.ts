@@ -16,6 +16,7 @@ export {
 	getRemainingContextPercent,
 	getUsedContextPercent,
 	truncateLines,
+	truncatePlainToWidth,
 	truncateToWidthWithEllipsis,
 } from "../utils/format-utils.js";
 export const normalizeModelRef = normalizeModelRefUtil;

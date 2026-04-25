@@ -33,7 +33,7 @@ import {
 	shouldSummarizeSubagentTask,
 	summarizeSubagentDisplayTask,
 } from "./display-task.js";
-import { AGENT_NAME_PALETTE, agentBgIndex, formatUsageStats, truncateLines } from "./format.js";
+import { AGENT_NAME_PALETTE, agentBgIndex, formatUsageStats, truncateLines, truncatePlainToWidth } from "./format.js";
 import {
 	clearPendingGroupCompletion,
 	consumePendingGroupCompletionsForSession,
@@ -168,6 +168,14 @@ class SubagentHistoryOverlay {
 
 		this.ensureVisible();
 
+		const formatFooterLine = (helpText: string, rangeText: string) => {
+			const rangeWidth = visibleWidth(rangeText);
+			const gap = rangeWidth > 0 ? 2 : 0;
+			const helpWidth = Math.max(0, innerWidth - rangeWidth - gap);
+			const help = truncatePlainToWidth(helpText, helpWidth);
+			return `${theme.fg("dim", help)}${" ".repeat(gap)}${theme.fg("accent", rangeText)}`;
+		};
+
 		container.addChild(new Spacer(1));
 		container.addChild(
 			new Text(pad + theme.bold("Subagent Run History") + theme.fg("dim", `  (${total} total)`), 0, 0),
@@ -206,11 +214,11 @@ class SubagentHistoryOverlay {
 				.trim()
 				.slice(0, COMMAND_TASK_PREVIEW_CHARS);
 
-			let line =
-				`${marker} #${run.id} ${statusStr}${removedBadge} ${agentStr}  ` +
-				`${theme.fg("dim", timeLabel)}  ${theme.fg("muted", taskPreview)}`;
+			const fixed = `${marker} #${run.id} ${statusStr}${removedBadge} ${agentStr}  ${theme.fg("dim", timeLabel)}  `;
+			const taskWidth = Math.max(0, innerWidth - visibleWidth(fixed));
+			let line = `${fixed}${theme.fg("muted", truncatePlainToWidth(taskPreview, taskWidth))}`;
 
-			line = truncateToWidth(line, innerWidth);
+			line = truncateToWidth(line, innerWidth, "");
 			if (run.removed) line = theme.fg("dim", line);
 			if (isSelected) line = theme.bg("selectedBg", line);
 
@@ -222,17 +230,7 @@ class SubagentHistoryOverlay {
 		const listStart = total === 0 ? 0 : this.scrollOffset + 1;
 		const listEnd = Math.min(total, this.scrollOffset + viewport);
 		const range = `${listStart}-${listEnd}/${total}`;
-		container.addChild(
-			new Text(
-				pad +
-					truncateToWidth(
-						`${theme.fg("dim", "↑↓/jk navigate · Enter inspect · q/Esc close")}  ${theme.fg("accent", range)}`,
-						innerWidth,
-					),
-				0,
-				0,
-			),
-		);
+		container.addChild(new Text(pad + formatFooterLine("↑↓/jk navigate · Enter inspect · q/Esc close", range), 0, 0));
 		container.addChild(new Spacer(1));
 
 		return container.render(width);
@@ -308,27 +306,30 @@ class SubagentLastResponseOverlay {
 		const separator = theme.fg("borderMuted", `├${"─".repeat(boxWidth - 2)}┤`);
 		const bottom = theme.fg("border", `└${"─".repeat(boxWidth - 2)}┘`);
 		const fill = (text: string) => {
-			const truncated = truncateToWidth(text, contentWidth, "…");
+			const truncated = truncatePlainToWidth(text, contentWidth, "…");
 			return `${truncated}${" ".repeat(Math.max(0, contentWidth - visibleWidth(truncated)))}`;
 		};
-		const frame = (text: string) => `${theme.fg("border", "│")} ${fill(text)} ${theme.fg("border", "│")}`;
+		const frame = (text: string, style: (value: string) => string = (value) => value) =>
+			`${theme.fg("border", "│")} ${style(fill(text))} ${theme.fg("border", "│")}`;
 
 		container.addChild(new Spacer(1));
 		container.addChild(new Text(`${pad + top} ${shadow}`, 0, 0));
-		container.addChild(new Text(`${pad + frame(theme.bold(this.title))} ${shadow}`, 0, 0));
-		container.addChild(new Text(`${pad + frame(theme.fg("muted", this.subtitle))} ${shadow}`, 0, 0));
+		container.addChild(new Text(`${pad + frame(this.title, (text) => theme.bold(text))} ${shadow}`, 0, 0));
+		container.addChild(new Text(`${pad + frame(this.subtitle, (text) => theme.fg("muted", text))} ${shadow}`, 0, 0));
 		container.addChild(new Text(`${pad + separator} ${shadow}`, 0, 0));
 		for (const line of visibleLines) {
-			container.addChild(new Text(`${pad + frame(theme.fg("toolOutput", line))} ${shadow}`, 0, 0));
+			container.addChild(new Text(`${pad + frame(line, (text) => theme.fg("toolOutput", text))} ${shadow}`, 0, 0));
 		}
 		if (visibleLines.length === 0) {
-			container.addChild(new Text(`${pad + frame(theme.fg("muted", "(no response)"))} ${shadow}`, 0, 0));
+			container.addChild(
+				new Text(`${pad + frame("(no response)", (text) => theme.fg("muted", text))} ${shadow}`, 0, 0),
+			);
 		}
 		container.addChild(new Text(`${pad + separator} ${shadow}`, 0, 0));
 		container.addChild(
 			new Text(
 				pad +
-					frame(theme.fg("muted", `↑↓/jk scroll · a attach to editor · Enter/Esc/q close  ${range}`)) +
+					frame(`↑↓/jk scroll · a attach to editor · Enter/Esc/q close  ${range}`, (text) => theme.fg("muted", text)) +
 					` ${shadow}`,
 				0,
 				0,

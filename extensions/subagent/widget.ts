@@ -12,6 +12,7 @@ import {
 	getRemainingContextPercent,
 	getUsedContextPercent,
 	resolveContextWindow,
+	truncatePlainToWidth,
 } from "./format.js";
 
 const SPINNER_FRAMES = ["◐", "◓", "◑", "◒"] as const;
@@ -188,7 +189,7 @@ function composeRunLine(run: CommandRunState, ctx: WidgetRenderCtx, theme: Widge
 	const right = getContextShort(run, ctx, theme);
 	if (!right) return buildStatusLeft(run, theme, innerWidth);
 
-	const fittedRight = truncateToWidth(right, innerWidth);
+	const fittedRight = truncateToWidth(right, innerWidth, theme.fg("dim", "..."));
 	const rightWidth = visibleWidth(fittedRight);
 	const leftBudget = Math.max(0, innerWidth - rightWidth - (innerWidth > rightWidth ? 1 : 0));
 	const left = buildStatusLeft(run, theme, leftBudget);
@@ -215,7 +216,7 @@ export function updateCommandRunsWidget(store: SubagentStore, ctx?: WidgetRender
 				return {
 					render(width: number): string[] {
 						const innerWidth = Math.max(1, width - 2);
-						content.setText(truncateToWidth(theme.fg("accent", PARENT_HINT), innerWidth));
+						content.setText(theme.fg("accent", truncatePlainToWidth(PARENT_HINT, innerWidth)));
 						return box.render(width);
 					},
 					invalidate() {

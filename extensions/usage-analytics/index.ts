@@ -673,7 +673,7 @@ class AnalyticsOverlay {
 
 		const visible = lines.slice(this.scrollOffset, this.scrollOffset + viewport);
 		for (const line of visible) {
-			container.addChild(new Text(pad + truncateToWidth(line, innerWidth), 0, 0));
+			container.addChild(new Text(pad + truncateToWidth(line, innerWidth, theme.fg("dim", "...")), 0, 0));
 		}
 
 		if (lines.length > viewport) {

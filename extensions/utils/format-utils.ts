@@ -210,6 +210,20 @@ function sliceToDisplayWidth(value: string, maxWidth: number): string {
 }
 
 /**
+ * Truncate plain text to display width and append an ellipsis when truncation occurs.
+ * Apply terminal styles after calling this helper so the ellipsis inherits the intended style.
+ */
+export function truncatePlainToWidth(value: string, maxWidth: number, ellipsis = "..."): string {
+	if (maxWidth <= 0) return "";
+	if (visibleWidth(value) <= maxWidth) return value;
+	if (!ellipsis) return sliceToDisplayWidth(value, maxWidth);
+
+	const ellipsisWidth = visibleWidth(ellipsis);
+	if (ellipsisWidth >= maxWidth) return sliceToDisplayWidth(ellipsis, maxWidth);
+	return `${sliceToDisplayWidth(value, maxWidth - ellipsisWidth)}${ellipsis}`;
+}
+
+/**
  * Truncate a single line to display width and append "..." when truncation occurs.
  * Uses terminal display width (CJK-aware) rather than string length.
  */
@@ -217,7 +231,7 @@ export function truncateToWidthWithEllipsis(value: string, maxWidth: number): st
 	if (maxWidth <= 0) return "";
 	if (visibleWidth(value) <= maxWidth) return value;
 	if (maxWidth <= 3) return sliceToDisplayWidth(value, maxWidth);
-	return `${sliceToDisplayWidth(value, maxWidth - 3)}...`;
+	return truncatePlainToWidth(value, maxWidth, "...");
 }
 
 /**
