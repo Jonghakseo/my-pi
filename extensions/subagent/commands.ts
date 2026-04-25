@@ -587,7 +587,7 @@ function restoreRunsFromSession(store: SubagentStore, ctx: any, pi?: ExtensionAP
 
 			const finalStatus = statusFromDetails ?? statusFromExitCode ?? statusFromErrorField ?? legacyStatusFromContent;
 
-			// Derive source from customType so tool-invoked runs keep their pixel widget placement after reload.
+			// Derive source from customType for backward-compatible restored run metadata.
 			const restoredSource: "tool" | "command" = cm.customType === "subagent-tool" ? "tool" : "command";
 
 			if (finalStatus) {

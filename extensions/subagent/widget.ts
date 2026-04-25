@@ -1,5 +1,5 @@
 /**
- * Subagent run status widget — renders per-run status boxes below the editor.
+ * Subagent run status widget — renders per-run status boxes above the editor.
  */
 
 import type { Theme, ThemeColor } from "@mariozechner/pi-coding-agent";
@@ -224,7 +224,7 @@ export function updateCommandRunsWidget(store: SubagentStore, ctx?: WidgetRender
 					},
 				};
 			},
-			{ placement: "belowEditor" },
+			{ placement: "aboveEditor" },
 		);
 	} else {
 		ui.setWidget("sub-parent", undefined);
@@ -232,7 +232,7 @@ export function updateCommandRunsWidget(store: SubagentStore, ctx?: WidgetRender
 
 	const statusPriority = (status: "running" | "done" | "error") =>
 		status === "running" ? 0 : status === "done" ? 1 : 2;
-	// Show all subagent runs in the belowEditor widget, regardless of how they were launched.
+	// Show all subagent runs in the aboveEditor widget, regardless of how they were launched.
 	const runs = Array.from(store.commandRuns.values())
 		.filter((r) => !r.removed)
 		.sort((a, b) => {
@@ -280,7 +280,7 @@ export function updateCommandRunsWidget(store: SubagentStore, ctx?: WidgetRender
 					},
 				};
 			},
-			{ placement: "belowEditor" },
+			{ placement: "aboveEditor" },
 		);
 	}
 
