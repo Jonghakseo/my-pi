@@ -29,7 +29,8 @@
     "npm:@ryan_nookpi/pi-extension-memory-layer",
     "npm:@ryan_nookpi/pi-extension-diff-review",
     "npm:@ryan_nookpi/pi-extension-claude-spinner",
-    "npm:@ryan_nookpi/pi-extension-cc-system-prompt"
+    "npm:@ryan_nookpi/pi-extension-cc-system-prompt",
+    "npm:@ryan_nookpi/pi-extension-codex-large-context"
   ],
   "compaction": {
     "enabled": true
