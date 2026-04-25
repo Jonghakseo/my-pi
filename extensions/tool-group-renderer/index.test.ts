@@ -109,6 +109,36 @@ describe("tool-group-renderer bash preview", () => {
 		expect(line).not.toContain("\n");
 	});
 
+	it("uses the same accent color as read and edit for completed bash titles", () => {
+		__test__.setRuntimeThemeForTest({
+			fg: (color, text) => `<${color}>${text}</${color}>`,
+			bg: (_color, text) => text,
+			bold: (text) => text,
+		});
+		try {
+			const line = __test__.formatBashLine(
+				{
+					title: "interactive-mode addMessageToChat 위치 검색",
+					command: "rg -n addMessageToChat interactive-mode.js",
+				},
+				{
+					toolName: "bash",
+					toolCallId: "call-1",
+					args: {},
+					executionStarted: true,
+					argsComplete: true,
+					isPartial: false,
+					isError: false,
+					result: { content: [{ type: "text", text: "ok" }] },
+				},
+			);
+
+			expect(line).toContain("<accent>interactive-mode addMessageToChat 위치 검색</accent>");
+		} finally {
+			__test__.setRuntimeThemeForTest(undefined);
+		}
+	});
+
 	it("hides grouped bash command previews when the row is too narrow", () => {
 		const line = __test__.formatBashLine(
 			{
@@ -135,6 +165,59 @@ describe("tool-group-renderer bash preview", () => {
 });
 
 describe("tool-group-renderer lazy grouping", () => {
+	it("does not break a streaming group when visible assistant text has tool calls", () => {
+		const message = {
+			role: "assistant",
+			content: [
+				{ type: "text", text: "커밋하겠습니다." },
+				{ type: "toolCall", id: "call-1", name: "bash", arguments: { command: "git status" } },
+			],
+		};
+
+		expect(__test__.shouldBreakGroupForMessageUpdate(message as never)).toBe(false);
+	});
+
+	it("still breaks a streaming group for visible assistant text without tool calls", () => {
+		const message = {
+			role: "assistant",
+			content: [{ type: "text", text: "중간 설명입니다." }],
+		};
+
+		expect(__test__.shouldBreakGroupForMessageUpdate(message as never)).toBe(true);
+	});
+
+	it("groups streamed bash tool calls even when the assistant message has visible text", () => {
+		(globalThis as typeof globalThis & { [patchStateKey]?: unknown })[patchStateKey] = {
+			toolExecutionComponent: DummyToolExecutionComponent,
+		};
+		const mode = createMockMode();
+
+		__test__.updateStreamingAssistantToolCalls(
+			mode as never,
+			{
+				role: "assistant",
+				content: [
+					{ type: "text", text: "커밋하겠습니다." },
+					{ type: "toolCall", id: "call-1", name: "bash", arguments: { title: "first", command: "git status" } },
+				],
+			} as never,
+		);
+		__test__.updateStreamingAssistantToolCalls(
+			mode as never,
+			{
+				role: "assistant",
+				content: [
+					{ type: "text", text: "커밋하겠습니다." },
+					{ type: "toolCall", id: "call-1", name: "bash", arguments: { title: "first", command: "git status" } },
+					{ type: "toolCall", id: "call-2", name: "bash", arguments: { title: "second", command: "git diff" } },
+				],
+			} as never,
+		);
+
+		expect(mode.chatContainer.children).toHaveLength(1);
+		expect(mode.chatContainer.children[0]).not.toBeInstanceOf(DummyToolExecutionComponent);
+	});
+
 	it("renders a single groupable tool call with the normal renderer first", () => {
 		(globalThis as typeof globalThis & { [patchStateKey]?: unknown })[patchStateKey] = {
 			toolExecutionComponent: DummyToolExecutionComponent,
