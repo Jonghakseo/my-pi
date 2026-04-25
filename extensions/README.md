@@ -2,7 +2,7 @@
 
 [pi 코딩 에이전트](https://github.com/mariozechner/pi-coding-agent)용 커스텀 확장 모음.
 
-> 참고: 일부 확장(`codex-fast-mode`, `clipboard`, `ask-user-question`, `auto-name`, `delayed-action`, `idle-screensaver`, `todo-write`, `open-pr`, `generative-ui`, `cross-agent`, `claude-hooks-bridge`, `claude-mcp-bridge`, `memory-layer`)은 이제 로컬 파일이 아니라 설치형 npm 패키지로 사용한다. 나머지 커스텀 확장들도 점진적으로 패키지화해 옮길 계획이다.
+> 참고: 일부 확장(`codex-fast-mode`, `clipboard`, `ask-user-question`, `auto-name`, `delayed-action`, `idle-screensaver`, `todo-write`, `open-pr`, `generative-ui`, `cross-agent`, `claude-hooks-bridge`, `claude-mcp-bridge`, `memory-layer`, `diff-review`, `claude-spinner`, `cc-system-prompt`, `codex-large-context`)은 이제 로컬 파일이 아니라 설치형 npm 패키지로 사용한다. 나머지 커스텀 확장들도 점진적으로 패키지화해 옮길 계획이다.
 
 ## 엔트리포인트 규칙
 
@@ -17,7 +17,7 @@ Pi 공식 문서는 auto-discovery 대상으로 `extensions/*.ts`와 `extensions
 | 확장 | 설명 |
 |------|------|
 | [`subagent/`](./subagent/index.ts) | 서브에이전트 위임 시스템 (프로세스 실행, 세션 관리, 상태 위젯, 서브세션 전용 `ask_master`) |
-| [`archive-to-html/`](./archive-to-html/index.ts) | to-html 스킬 출력 HTML 자동 아카이브 |
+| [`archive-to-html/`](./archive-to-html/index.ts) | 조건에 맞는 임시 HTML 출력과 `show_widget` 렌더링 자동 아카이브 |
 | [`command-typo-assist/`](./command-typo-assist/index.ts) | 슬래시 커맨드 오타 감지 → 제안 + 에디터 프리필 |
 | [`diff-overlay/`](./diff-overlay/index.ts) | Diff 뷰어 오버레이 |
 | [`dynamic-agents-md/`](./dynamic-agents-md/index.ts) | 디렉토리 스코프별 동적 AGENTS.md 로딩 |
