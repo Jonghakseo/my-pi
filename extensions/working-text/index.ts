@@ -23,12 +23,15 @@ function pick(messages: readonly string[]): string {
 	return messages[Math.floor(Math.random() * messages.length)] ?? messages[0];
 }
 
+const PAUSE_TOOLS = new Set(["ask_user_question"]);
+
 export default function (pi: ExtensionAPI) {
 	let runStartedAt = 0;
 	let currentMessage = "";
 	let lastRotateAt = 0;
 	let timer: ReturnType<typeof setInterval> | null = null;
 	let latestCtx: ExtensionContext | undefined;
+	let pauseDepth = 0;
 
 	const stopTimer = () => {
 		if (!timer) return;
@@ -39,7 +42,7 @@ export default function (pi: ExtensionAPI) {
 	const startTimer = (_ctx: ExtensionContext) => {
 		stopTimer();
 		timer = setInterval(() => {
-			if (!latestCtx?.hasUI || runStartedAt <= 0) return;
+			if (!latestCtx?.hasUI || runStartedAt <= 0 || pauseDepth > 0) return;
 			const now = Date.now();
 			if (now - lastRotateAt >= ROTATE_MS) {
 				currentMessage = pick(TIP_MESSAGES);
@@ -54,18 +57,29 @@ export default function (pi: ExtensionAPI) {
 		runStartedAt = Date.now();
 		currentMessage = pick(TIP_MESSAGES);
 		lastRotateAt = Date.now();
+		pauseDepth = 0;
 		startTimer(ctx);
 	});
 
 	pi.on("agent_end", async (_event, ctx) => {
 		stopTimer();
+		pauseDepth = 0;
 		if (ctx.hasUI) ctx.ui.setWorkingMessage();
 		runStartedAt = 0;
+	});
+
+	pi.on("tool_execution_start", async (event) => {
+		if (PAUSE_TOOLS.has(event.toolName)) pauseDepth++;
+	});
+
+	pi.on("tool_execution_end", async (event) => {
+		if (PAUSE_TOOLS.has(event.toolName) && pauseDepth > 0) pauseDepth--;
 	});
 
 	pi.on("session_start", async (_event) => {
 		stopTimer();
 		runStartedAt = 0;
+		pauseDepth = 0;
 	});
 
 	pi.on("session_shutdown", async (_event) => {
