@@ -59,6 +59,9 @@ extensions/pi-session-*.html
 # until presets (personal)
 extensions/until-presets/
 
+# usage reporter (personal)
+extensions/usage-reporter/
+
 # claude-mcp-bridge local runtime settings
 claude-mcp-bridge-tools.json
 claude-mcp-bridge-cache.json
