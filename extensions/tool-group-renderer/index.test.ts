@@ -275,6 +275,45 @@ describe("tool-group-renderer lazy grouping", () => {
 		expect(mode.chatContainer.children[0]).not.toBeInstanceOf(DummyToolExecutionComponent);
 	});
 
+	it("keeps image read tool calls on the normal renderer", () => {
+		(globalThis as typeof globalThis & { [patchStateKey]?: unknown })[patchStateKey] = {
+			toolExecutionComponent: DummyToolExecutionComponent,
+		};
+		const mode = createMockMode();
+
+		__test__.ensureToolHandle(mode as never, "bash", "call-1", {
+			title: "first",
+			command: "echo first",
+		});
+		__test__.ensureToolHandle(mode as never, "read", "call-2", {
+			path: "/tmp/screenshot.PNG",
+		});
+
+		expect(mode.chatContainer.children).toHaveLength(2);
+		expect(mode.chatContainer.children[0]).toBeInstanceOf(DummyToolExecutionComponent);
+		expect(mode.chatContainer.children[1]).toBeInstanceOf(DummyToolExecutionComponent);
+	});
+
+	it("does not promote a read candidate after its path updates to an image extension", () => {
+		(globalThis as typeof globalThis & { [patchStateKey]?: unknown })[patchStateKey] = {
+			toolExecutionComponent: DummyToolExecutionComponent,
+		};
+		const mode = createMockMode();
+
+		const firstHandle = __test__.ensureToolHandle(mode as never, "read", "call-1", {
+			path: "README.md",
+		});
+		firstHandle.updateArgs({ path: "/tmp/photo.webp" });
+		__test__.ensureToolHandle(mode as never, "bash", "call-2", {
+			title: "second",
+			command: "echo second",
+		});
+
+		expect(mode.chatContainer.children).toHaveLength(2);
+		expect(mode.chatContainer.children[0]).toBeInstanceOf(DummyToolExecutionComponent);
+		expect(mode.chatContainer.children[1]).toBeInstanceOf(DummyToolExecutionComponent);
+	});
+
 	it("keeps separated same-tool singleton calls on the normal renderer", () => {
 		(globalThis as typeof globalThis & { [patchStateKey]?: unknown })[patchStateKey] = {
 			toolExecutionComponent: DummyToolExecutionComponent,

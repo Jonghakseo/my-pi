@@ -3,12 +3,13 @@ import { Container, Spacer, Text, truncateToWidth, visibleWidth } from "@marioze
 import { truncatePlainToWidth } from "../utils/format-utils.js";
 
 const PATCH_STATE_KEY = Symbol.for("creatrip.tool-group-renderer.patch-state");
-const PATCH_VERSION = "2026-04-25-r1";
+const PATCH_VERSION = "2026-04-27-r1";
 const GROUP_STATE = Symbol("creatrip.tool-group-renderer.state");
 const PI_INTERACTIVE_BASE = "/usr/local/lib/node_modules/@mariozechner/pi-coding-agent/dist/modes/interactive";
 const BASH_PREVIEW_LIMIT = 56;
 const MIN_BASH_LINE_WIDTH_WITH_COMMAND = 36;
 const MIN_BASH_COMMAND_PREVIEW_WIDTH = 12;
+const IMAGE_READ_EXTENSIONS = [".gif", ".jpeg", ".jpg", ".png", ".webp"] as const;
 
 type GroupableToolName = "bash" | "read" | "edit" | "write";
 type ThemeColor = "accent" | "dim" | "error" | "muted" | "success" | "text" | "toolTitle" | "warning";
@@ -187,6 +188,25 @@ function getTheme(): RuntimeTheme {
 
 function isGroupableTool(toolName: string): toolName is GroupableToolName {
 	return toolName === "bash" || toolName === "read" || toolName === "edit" || toolName === "write";
+}
+
+function hasImageReadExtension(path: string): boolean {
+	const lowerPath = path.trim().toLowerCase();
+	return IMAGE_READ_EXTENSIONS.some((extension) => lowerPath.endsWith(extension));
+}
+
+function isImageReadToolCall(toolName: string, args: unknown): boolean {
+	if (toolName !== "read") return false;
+	const params = isRecord(args) ? args : {};
+	return typeof params.path === "string" && hasImageReadExtension(params.path);
+}
+
+function isGroupableToolCall(toolName: string, args: unknown): toolName is GroupableToolName {
+	return isGroupableTool(toolName) && !isImageReadToolCall(toolName, args);
+}
+
+function isGroupableItem(item: Pick<GroupItem, "toolName" | "args">): boolean {
+	return isGroupableToolCall(item.toolName, item.args);
 }
 
 function ensureGroupState(mode: InteractiveModeLike): GroupRuntimeState {
@@ -733,7 +753,7 @@ function breakGroup(mode: InteractiveModeLike): void {
 }
 
 function ensureToolHandle(mode: InteractiveModeLike, toolName: string, toolCallId: string, args: unknown): ToolHandle {
-	if (!isGroupableTool(toolName)) {
+	if (!isGroupableToolCall(toolName, args)) {
 		breakGroup(mode);
 		const component = createNormalToolComponent(mode, toolName, toolCallId, args);
 		mode.pendingTools.set(toolCallId, component);
@@ -750,7 +770,11 @@ function ensureToolHandle(mode: InteractiveModeLike, toolName: string, toolCallI
 		return handle;
 	}
 
-	if (state.tailCandidate && isAppendableTailCandidate(mode, state.tailCandidate)) {
+	if (
+		state.tailCandidate &&
+		isGroupableItem(state.tailCandidate.item) &&
+		isAppendableTailCandidate(mode, state.tailCandidate)
+	) {
 		group = promoteTailCandidateToGroup(mode, state.tailCandidate);
 		state.tailGroup = group;
 		state.tailCandidate = null;
