@@ -181,23 +181,59 @@ export default function uploadImageUrl(pi: ExtensionAPI) {
 		name: "upload_image_url",
 		label: "Upload Image from URL",
 		description:
-			"Upload an image to GitHub storage and return a permanent raw URL. " +
+			"Upload an image to a GitHub storage repo and return a permanent raw URL. " +
 			"Accepts a URL or a local file path. " +
-			"Useful for embedding Figma exports, screenshots, or any external image into GitHub content. " +
-			"Requires PI_STORAGE_OWNER and PI_STORAGE_REPO environment variables.",
+			"USAGE: Only call this tool when the user has EXPLICITLY asked to upload an image / attach a screenshot / embed an image into GitHub content. " +
+			"Do NOT call it proactively or as a side-effect of other work (e.g. PR creation, reports). " +
+			"At runtime the tool will show a user confirmation dialog before performing the upload; if the user declines, the call returns without uploading.",
+		promptGuidelines: [
+			"Use upload_image_url ONLY when the user explicitly requests an image upload. The tool itself prompts the user for confirmation before each upload.",
+		],
 		parameters: Type.Object({
 			url: Type.String({ description: "Image URL or local file path to upload" }),
 			filename: Type.Optional(
 				Type.String({ description: "Optional custom filename without extension. Defaults to a UUID." }),
 			),
 		}),
-		async execute(_toolCallId, params, _signal, _onUpdate, _ctx) {
+		async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
 			const validationError = validateUploadRequest(params.url);
 			if (validationError) {
 				return validationError;
 			}
 
 			const { url, filename } = params;
+
+			if (!ctx?.hasUI) {
+				return buildUploadError(
+					"upload_image_url requires an interactive UI to confirm the upload. " +
+						"Re-run the request from an interactive pi session.",
+				);
+			}
+
+			const displaySource = url.length > 80 ? `${url.slice(0, 77)}...` : url;
+			const confirmMessage = [
+				`업로드 대상: ${STORAGE_OWNER}/${STORAGE_REPO}`,
+				`이미지 소스: ${displaySource}`,
+				filename ? `파일명: ${filename}` : null,
+				"",
+				"이 이미지를 GitHub 저장소에 업로드할까요?",
+			]
+				.filter((line) => line !== null)
+				.join("\n");
+			const confirmed = await ctx.ui.confirm("이미지를 GitHub에 업로드할까요?", confirmMessage);
+			if (!confirmed) {
+				return {
+					content: [
+						{
+							type: "text",
+							text: "사용자가 업로드를 취소했습니다.",
+						},
+					],
+					details: undefined,
+					isError: true,
+				};
+			}
+
 			try {
 				const { buffer, ext } = await loadImageBuffer(url);
 				const { name, storagePath } = buildStoragePath(filename, ext);
@@ -205,19 +241,15 @@ export default function uploadImageUrl(pi: ExtensionAPI) {
 
 				const rawUrl = `https://github.com/${STORAGE_OWNER}/${STORAGE_REPO}/blob/${STORAGE_BRANCH}/${storagePath}?raw=true`;
 				const markdown = `![${name}](${rawUrl})`;
+				const summary = [`✅ 업로드 완료: ${storagePath}`, `URL: ${rawUrl}`, `Markdown: ${markdown}`].join("\n");
 				return {
-					content: [
-						{
-							type: "text",
-							text: JSON.stringify({ success: true, url: rawUrl, storagePath, markdown }, null, 2),
-						},
-					],
+					content: [{ type: "text", text: summary }],
 					details: undefined,
 				};
 			} catch (error) {
 				const msg = error instanceof Error ? error.message : String(error);
 				return {
-					content: [{ type: "text", text: JSON.stringify({ success: false, error: msg }) }],
+					content: [{ type: "text", text: `❌ 업로드 실패: ${msg}` }],
 					details: undefined,
 					isError: true,
 				};
