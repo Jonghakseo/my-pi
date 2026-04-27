@@ -30,8 +30,7 @@
     "npm:@ryan_nookpi/pi-extension-claude-spinner",
     "npm:@ryan_nookpi/pi-extension-cc-system-prompt",
     "npm:@ryan_nookpi/pi-extension-codex-large-context",
-    "npm:@ryan_nookpi/pi-extension-todo-write-overlay",
-    "npm:@ryan_nookpi/pi-extension-setup-sh@0.1.1"
+    "npm:@ryan_nookpi/pi-extension-todo-write-overlay"
   ],
   "compaction": {
     "enabled": true
