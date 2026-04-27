@@ -4,14 +4,14 @@
   "lastChangelogVersion": "0.70.2",
   "defaultProvider": "openai-codex",
   "defaultModel": "gpt-5.5",
-  "defaultThinkingLevel": "high",
+  "defaultThinkingLevel": "xhigh",
   "subagent": {
     "claudeRuntime": "cli"
   },
   "enabledModels": [
-    "anthropic/claude-opus-4-6",
     "ollama-cloud/glm-5.1:cloud",
-    "openai-codex/gpt-5.5"
+    "openai-codex/gpt-5.5",
+    "anthropic/claude-opus-4-7"
   ],
   "packages": [
     "npm:@ryan_nookpi/pi-extension-codex-fast-mode",
@@ -30,7 +30,8 @@
     "npm:@ryan_nookpi/pi-extension-claude-spinner",
     "npm:@ryan_nookpi/pi-extension-cc-system-prompt",
     "npm:@ryan_nookpi/pi-extension-codex-large-context",
-    "npm:@ryan_nookpi/pi-extension-todo-write-overlay"
+    "npm:@ryan_nookpi/pi-extension-todo-write-overlay",
+    "npm:@ryan_nookpi/pi-extension-setup-sh@0.1.1"
   ],
   "compaction": {
     "enabled": true
