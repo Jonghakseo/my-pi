@@ -37,6 +37,13 @@ type TextBlock = {
 	text: string;
 };
 
+type MessageLike = {
+	role?: string;
+	content?: unknown;
+	toolName?: unknown;
+	name?: unknown;
+};
+
 const AUTO_COMMIT_STATE_ENTRY_TYPE = "auto-commit-state";
 const AUTO_COMMIT_OVERLAY_WIDTH = 34;
 const GIT_TIMEOUT_MS = 120_000;
@@ -244,23 +251,61 @@ function truncateContext(text: string, maxChars: number): string {
 	return `${text.slice(0, maxChars)}\n\n[truncated ${text.length - maxChars} chars]`;
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+	return typeof value === "object" && value !== null;
+}
+
 function extractText(content: unknown): string {
 	if (!Array.isArray(content)) return "";
 	return content
-		.filter((block): block is TextBlock => block?.type === "text" && typeof block.text === "string")
+		.filter((block): block is TextBlock => isRecord(block) && block.type === "text" && typeof block.text === "string")
 		.map((block) => block.text)
 		.join("\n")
 		.trim();
+}
+
+function getStringField(value: Record<string, unknown>, key: string): string | null {
+	const field = value[key];
+	return typeof field === "string" && field.trim().length > 0 ? field.trim() : null;
+}
+
+function extractToolCallNames(content: unknown): string[] {
+	if (!Array.isArray(content)) return [];
+	const names: string[] = [];
+	for (const block of content) {
+		if (!isRecord(block)) continue;
+		const type = getStringField(block, "type");
+		if (type !== "toolCall" && type !== "tool_call" && type !== "toolUse" && type !== "tool_use") continue;
+		const name = getStringField(block, "name") ?? getStringField(block, "toolName");
+		if (name) names.push(name);
+	}
+	return Array.from(new Set(names));
+}
+
+function extractToolResultName(message: MessageLike): string | null {
+	if (typeof message.toolName === "string" && message.toolName.trim().length > 0) return message.toolName.trim();
+	if (typeof message.name === "string" && message.name.trim().length > 0) return message.name.trim();
+	return null;
 }
 
 function extractRecentConversation(ctx: ExtensionContext): string {
 	const lines: string[] = [];
 	for (const entry of ctx.sessionManager.getEntries()) {
 		if (!entry || entry.type !== "message") continue;
-		const message = entry.message as { role?: string; content?: unknown };
-		if (message.role !== "user" && message.role !== "assistant") continue;
-		const text = extractText(message.content);
-		if (text.length > 0) lines.push(`${message.role}: ${text}`);
+		const message = entry.message as MessageLike;
+		if (message.role === "user" || message.role === "assistant") {
+			const text = extractText(message.content);
+			if (text.length > 0) lines.push(`${message.role}: ${text}`);
+
+			const toolNames = message.role === "assistant" ? extractToolCallNames(message.content) : [];
+			if (toolNames.length > 0) lines.push(`assistant tools: ${toolNames.join(", ")}`);
+			continue;
+		}
+
+		if (message.role === "toolResult") {
+			const toolName = extractToolResultName(message);
+			if (toolName) lines.push(`tool: ${toolName}`);
+		}
 	}
 
 	const joined = lines.join("\n");
