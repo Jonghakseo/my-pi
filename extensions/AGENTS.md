@@ -25,6 +25,7 @@ Custom extensions for the pi coding agent. All extensions are written in TypeScr
 │   ├── time-utils.ts      #   Time/duration formatting helpers
 │   └── status-keys.ts     #   Shared footer status key constants
 ├── archive-to-html/       # Auto-archive to-html skill output HTML to ~/Documents
+├── auto-commit/           # /auto-commit:on — commit dirty working tree on agent_end
 ├── bookmark/              # /bookmark add|list — save current session + cwd/branch, restore via switch or Ghostty panel
 ├── command-typo-assist/   # Slash command typo detection → suggest + editor prefill
 ├── diff-overlay/          # /diff — Git diff split-pane overlay (file list + diff viewer)

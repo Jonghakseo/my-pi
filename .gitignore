@@ -62,6 +62,13 @@ extensions/until-presets/
 # usage reporter (personal)
 extensions/usage-reporter/
 
+# Local/custom skills
+skills/creatrip-db-query/
+skills/hotfix-flow/
+skills/notion-context/
+skills/sentry-investigate/
+skills/slack-thread-context/
+
 # claude-mcp-bridge local runtime settings
 claude-mcp-bridge-tools.json
 claude-mcp-bridge-cache.json
