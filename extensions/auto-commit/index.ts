@@ -52,6 +52,7 @@ const GIT_TIMEOUT_MS = 120_000;
 const LLM_TIMEOUT_MS = 120_000;
 const MAX_DIFF_CONTEXT_CHARS = 12_000;
 const MAX_CONVERSATION_CONTEXT_CHARS = 3_000;
+const RECENT_COMMIT_SUBJECT_LIMIT = 20;
 const MIN_PHASE_VISIBLE_MS = 1_000;
 
 const stateStore = new Map<string, AutoCommitState>();
@@ -355,23 +356,40 @@ async function readStagedDiffContext(pi: ExtensionAPI, repoRoot: string): Promis
 	].join("\n");
 }
 
+async function readRecentCommitSubjects(pi: ExtensionAPI, repoRoot: string): Promise<string> {
+	const result = await exec(
+		pi,
+		"git",
+		["log", `--format=%s`, `-n`, String(RECENT_COMMIT_SUBJECT_LIMIT)],
+		repoRoot,
+		GIT_TIMEOUT_MS,
+	);
+	if (result.code !== 0) return "";
+	return result.stdout.trim();
+}
+
 async function generateCommitMessage(
 	pi: ExtensionAPI,
 	ctx: ExtensionContext,
 	repoRoot: string,
 ): Promise<string | null> {
-	const [diffContext, conversation] = await Promise.all([
+	const [diffContext, conversation, recentCommits] = await Promise.all([
 		readStagedDiffContext(pi, repoRoot),
 		Promise.resolve(extractRecentConversation(ctx)),
+		readRecentCommitSubjects(pi, repoRoot),
 	]);
 	const prompt = `You are a git commit message assistant. Generate one concise commit subject for the staged changes.
 
 Requirements:
 - Use Conventional Commits style: type(scope optional): summary
+- Follow the style, language, prefix, scope usage, and granularity of recent commit subjects when they are consistent.
 - Prefer the language/style implied by the repository and change context.
 - Keep it under 72 characters when possible.
 - Do not include markdown, quotes, bullets, or explanation.
 - Your final output MUST be exactly one line in this format: COMMIT_MESSAGE=<subject>
+
+Recent commit subjects:
+${recentCommits || "(none)"}
 
 Recent conversation context:
 ${conversation || "(none)"}
