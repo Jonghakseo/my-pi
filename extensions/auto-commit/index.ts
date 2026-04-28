@@ -12,6 +12,8 @@ type AutoCommitStateEntryData = AutoCommitState & {
 
 type AutoCommitPhase = "커밋 필요 내역 확인중" | "커밋 시도" | "커밋 메시지 생성중" | "precommit 동작중";
 
+type PhaseUpdater = (phase: AutoCommitPhase) => Promise<void>;
+
 type OverlayRecord = {
 	opening: boolean;
 	phase: AutoCommitPhase;
@@ -50,6 +52,7 @@ const GIT_TIMEOUT_MS = 120_000;
 const LLM_TIMEOUT_MS = 120_000;
 const MAX_DIFF_CONTEXT_CHARS = 12_000;
 const MAX_CONVERSATION_CONTEXT_CHARS = 3_000;
+const MIN_PHASE_VISIBLE_MS = 1_000;
 
 const stateStore = new Map<string, AutoCommitState>();
 const overlayStore = new Map<string, OverlayRecord>();
@@ -100,6 +103,10 @@ function restoreState(ctx: Pick<ExtensionContext, "cwd" | "sessionManager">): Au
 	const empty = defaultState();
 	writeState(ctx, empty);
 	return empty;
+}
+
+function sleep(ms: number): Promise<void> {
+	return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function padAnsi(text: string, width: number): string {
@@ -394,13 +401,13 @@ ${diffContext}`;
 async function attemptCommit(
 	pi: ExtensionAPI,
 	ctx: ExtensionContext,
-	key: string,
 	repoRoot: string,
+	showPhase: PhaseUpdater,
 ): Promise<CommitAttempt> {
 	await exec(pi, "git", ["add", "-A"], repoRoot, GIT_TIMEOUT_MS);
 	if (!(await hasStagedDiff(pi, repoRoot))) return { kind: "no-changes" };
 
-	showOrUpdateOverlay(ctx, key, "커밋 메시지 생성중");
+	await showPhase("커밋 메시지 생성중");
 	const message = await generateCommitMessage(pi, ctx, repoRoot);
 	if (!message) {
 		return {
@@ -411,7 +418,7 @@ async function attemptCommit(
 		};
 	}
 
-	showOrUpdateOverlay(ctx, key, "precommit 동작중");
+	await showPhase("precommit 동작중");
 	const result = await exec(pi, "git", ["commit", "-m", message], repoRoot, GIT_TIMEOUT_MS);
 	if (result.code === 0) return { kind: "success", message };
 
@@ -424,14 +431,33 @@ async function attemptCommit(
 }
 
 async function runAutoCommit(pi: ExtensionAPI, ctx: ExtensionContext, key: string): Promise<void> {
-	showOrUpdateOverlay(ctx, key, "커밋 필요 내역 확인중");
+	let phaseStartedAt = 0;
+	let hasVisiblePhase = false;
+	const waitForCurrentPhase = async () => {
+		if (!ctx.hasUI || !hasVisiblePhase) return;
+		const remainingMs = MIN_PHASE_VISIBLE_MS - (Date.now() - phaseStartedAt);
+		if (remainingMs > 0) await sleep(remainingMs);
+	};
+	const showPhase: PhaseUpdater = async (phase) => {
+		await waitForCurrentPhase();
+		showOrUpdateOverlay(ctx, key, phase);
+		if (!ctx.hasUI) return;
+		hasVisiblePhase = true;
+		phaseStartedAt = Date.now();
+	};
 
-	const repoRoot = await findGitRoot(pi, ctx.cwd);
-	if (!repoRoot) return;
-	if (!(await hasWorkingTreeChanges(pi, repoRoot))) return;
+	try {
+		await showPhase("커밋 필요 내역 확인중");
 
-	showOrUpdateOverlay(ctx, key, "커밋 시도");
-	await attemptCommit(pi, ctx, key, repoRoot);
+		const repoRoot = await findGitRoot(pi, ctx.cwd);
+		if (!repoRoot) return;
+		if (!(await hasWorkingTreeChanges(pi, repoRoot))) return;
+
+		await showPhase("커밋 시도");
+		await attemptCommit(pi, ctx, repoRoot, showPhase);
+	} finally {
+		await waitForCurrentPhase();
+	}
 }
 
 function setEnabled(pi: Pick<ExtensionAPI, "appendEntry">, ctx: ExtensionContext, enabled: boolean): void {
