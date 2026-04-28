@@ -3,6 +3,7 @@ import type { EditorTheme, TUI } from "@mariozechner/pi-tui";
 import { type CustomStyleConfig, ensureConfigExists, loadConfig } from "./config.ts";
 import { installFooter } from "./footer.ts";
 import { isCodexFastModeEnabled, shouldUseCodexFastBadge } from "./footer-state.ts";
+import { promptSuggestLiteStore } from "../prompt-suggest-lite/shared.ts";
 import { PolishedEditor } from "./ui.ts";
 
 type SyncedState = {
@@ -15,10 +16,11 @@ function syncState(ctx: ExtensionContext): SyncedState {
 	};
 }
 
+let currentEditor: PolishedEditor | undefined;
+
 function installEditor(pi: ExtensionAPI, ctx: ExtensionContext, getState: () => SyncedState) {
 	if (!ctx.hasUI) return;
 
-	let currentEditor: PolishedEditor | undefined;
 	let autocompleteFixed = false;
 
 	type AutocompleteEditorInternals = {
@@ -26,6 +28,7 @@ function installEditor(pi: ExtensionAPI, ctx: ExtensionContext, getState: () => 
 	};
 
 	const editorFactory = (tui: TUI, theme: EditorTheme, keybindings: KeybindingsManager) => {
+		currentEditor?.dispose();
 		const editor = new PolishedEditor(
 			tui,
 			theme,
@@ -39,6 +42,12 @@ function installEditor(pi: ExtensionAPI, ctx: ExtensionContext, getState: () => 
 				return ctx.ui.theme.fg("accent", modelLabel);
 			},
 			() => pi.getThinkingLevel(),
+			{
+				getSuggestion: () => promptSuggestLiteStore.getSuggestion(),
+				getSuggestionRevision: () => promptSuggestLiteStore.getRevision(),
+				getAcceptKeys: () => promptSuggestLiteStore.getAcceptKeys(),
+				subscribe: (listener) => promptSuggestLiteStore.subscribe(listener),
+			},
 		);
 		currentEditor = editor;
 
@@ -112,6 +121,8 @@ export default function (pi: ExtensionAPI) {
 	});
 
 	pi.on("session_shutdown", async (_event, ctx) => {
+		currentEditor?.dispose();
+		currentEditor = undefined;
 		if (!ctx.hasUI) return;
 		ctx.ui.setFooter(undefined);
 		ctx.ui.setEditorComponent(undefined);
