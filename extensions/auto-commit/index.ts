@@ -128,12 +128,13 @@ class AutoCommitOverlayComponent {
 		const innerWidth = Math.max(1, outerWidth - 2);
 		const border = (text: string) => this.theme.fg("borderAccent", text);
 		const row = (text: string) => `${border("│")}${padAnsi(text, innerWidth)}${border("│")}`;
-		const title = this.theme.fg("accent", this.theme.bold("자동 커밋 활성화"));
+		const title = this.theme.fg("accent", this.theme.bold(" 자동 커밋 활성화 "));
+		const titleWidth = visibleWidth(title);
+		const titlePad = Math.max(0, innerWidth - titleWidth);
 		const phase = this.theme.fg("toolOutput", this.phase);
 
 		return [
-			`${border("╭")}${border("─".repeat(innerWidth))}${border("╮")}`,
-			row(` ${title}`),
+			`${border("╭")}${title}${border("─".repeat(titlePad))}${border("╮")}`,
 			row(` ${phase}`),
 			`${border("╰")}${border("─".repeat(innerWidth))}${border("╯")}`,
 		];
@@ -188,7 +189,7 @@ function showOrUpdateOverlay(ctx: ExtensionContext, key: string, phase: AutoComm
 			overlayOptions: {
 				anchor: "top-left",
 				width: AUTO_COMMIT_OVERLAY_WIDTH,
-				maxHeight: 4,
+				maxHeight: 3,
 				margin: { top: 1, left: 2 },
 				nonCapturing: true,
 				visible: (termWidth) => termWidth >= 50,
