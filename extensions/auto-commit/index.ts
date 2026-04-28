@@ -1,4 +1,3 @@
-import { basename } from "node:path";
 import type { ExtensionAPI, ExtensionContext, Theme } from "@mariozechner/pi-coding-agent";
 import type { OverlayHandle, TUI } from "@mariozechner/pi-tui";
 import { truncateToWidth, visibleWidth } from "@mariozechner/pi-tui";
@@ -11,7 +10,7 @@ type AutoCommitStateEntryData = AutoCommitState & {
 	updatedAt: number;
 };
 
-type AutoCommitPhase = "커밋 필요 내역 확인중" | "커밋 시도" | "precommit 동작중";
+type AutoCommitPhase = "커밋 필요 내역 확인중" | "커밋 시도" | "커밋 메시지 생성중" | "precommit 동작중";
 
 type OverlayRecord = {
 	opening: boolean;
@@ -33,9 +32,17 @@ type CommitAttempt =
 	| { kind: "no-changes" }
 	| { kind: "failed"; stdout: string; stderr: string; code: number };
 
+type TextBlock = {
+	type: "text";
+	text: string;
+};
+
 const AUTO_COMMIT_STATE_ENTRY_TYPE = "auto-commit-state";
 const AUTO_COMMIT_OVERLAY_WIDTH = 34;
 const GIT_TIMEOUT_MS = 120_000;
+const LLM_TIMEOUT_MS = 120_000;
+const MAX_DIFF_CONTEXT_CHARS = 12_000;
+const MAX_CONVERSATION_CONTEXT_CHARS = 3_000;
 
 const stateStore = new Map<string, AutoCommitState>();
 const overlayStore = new Map<string, OverlayRecord>();
@@ -222,26 +229,9 @@ async function hasWorkingTreeChanges(pi: ExtensionAPI, repoRoot: string): Promis
 	return result.code === 0 && result.stdout.trim().length > 0;
 }
 
-async function getStagedFiles(pi: ExtensionAPI, repoRoot: string): Promise<string[]> {
-	const result = await exec(pi, "git", ["diff", "--cached", "--name-only", "-z"], repoRoot, GIT_TIMEOUT_MS);
-	if (result.code !== 0) return [];
-	return result.stdout.split("\0").filter((file) => file.length > 0);
-}
-
 async function hasStagedDiff(pi: ExtensionAPI, repoRoot: string): Promise<boolean> {
 	const result = await exec(pi, "git", ["diff", "--cached", "--quiet", "--exit-code"], repoRoot, GIT_TIMEOUT_MS);
 	return result.code === 1;
-}
-
-export function buildCommitMessage(files: string[]): string {
-	if (files.length === 0) return "chore: auto-commit changes";
-
-	const sorted = [...files].sort();
-	const allDocs = sorted.every((file) => /(^|\/)(README|CHANGELOG|docs?\/)|\.(md|mdx|txt)$/i.test(file));
-	const allTests = sorted.every((file) => /(^|\/)(test|tests|__tests__)\/|\.(test|spec)\.[cm]?[jt]sx?$/i.test(file));
-	const type = allDocs ? "docs" : allTests ? "test" : "chore";
-	const target = sorted.length === 1 ? basename(sorted[0] ?? "changes") : `${sorted.length} files`;
-	return truncateCommitSubject(`${type}: auto-commit ${target}`);
 }
 
 function truncateCommitSubject(subject: string): string {
@@ -249,12 +239,133 @@ function truncateCommitSubject(subject: string): string {
 	return `${subject.slice(0, 71)}…`;
 }
 
-async function attemptCommit(pi: ExtensionAPI, repoRoot: string): Promise<CommitAttempt> {
+function truncateContext(text: string, maxChars: number): string {
+	if (text.length <= maxChars) return text;
+	return `${text.slice(0, maxChars)}\n\n[truncated ${text.length - maxChars} chars]`;
+}
+
+function extractText(content: unknown): string {
+	if (!Array.isArray(content)) return "";
+	return content
+		.filter((block): block is TextBlock => block?.type === "text" && typeof block.text === "string")
+		.map((block) => block.text)
+		.join("\n")
+		.trim();
+}
+
+function extractRecentConversation(ctx: ExtensionContext): string {
+	const lines: string[] = [];
+	for (const entry of ctx.sessionManager.getEntries()) {
+		if (!entry || entry.type !== "message") continue;
+		const message = entry.message as { role?: string; content?: unknown };
+		if (message.role !== "user" && message.role !== "assistant") continue;
+		const text = extractText(message.content);
+		if (text.length > 0) lines.push(`${message.role}: ${text}`);
+	}
+
+	const joined = lines.join("\n");
+	if (joined.length <= MAX_CONVERSATION_CONTEXT_CHARS) return joined;
+	return joined.slice(joined.length - MAX_CONVERSATION_CONTEXT_CHARS);
+}
+
+function parseCommitMessage(output: string): string | null {
+	const explicit = output.match(/COMMIT_MESSAGE=(.+)/);
+	const raw = explicit?.[1] ?? output.split("\n").find((line) => line.trim().length > 0);
+	if (!raw) return null;
+
+	const subject = raw
+		.trim()
+		.replace(/^[-*]\s+/, "")
+		.replace(/^`+|`+$/g, "")
+		.replace(/^['"]|['"]$/g, "")
+		.trim();
+	if (!subject || subject.includes("\n")) return null;
+	return truncateCommitSubject(subject);
+}
+
+async function readStagedDiffContext(pi: ExtensionAPI, repoRoot: string): Promise<string> {
+	const [nameStatus, stat, diff] = await Promise.all([
+		exec(pi, "git", ["diff", "--cached", "--name-status"], repoRoot, GIT_TIMEOUT_MS),
+		exec(pi, "git", ["diff", "--cached", "--stat", "--no-color"], repoRoot, GIT_TIMEOUT_MS),
+		exec(pi, "git", ["diff", "--cached", "--no-color", "--unified=3"], repoRoot, GIT_TIMEOUT_MS),
+	]);
+
+	return [
+		"Changed files:",
+		nameStatus.stdout.trim() || "(none)",
+		"",
+		"Diff stat:",
+		stat.stdout.trim() || "(none)",
+		"",
+		"Diff:",
+		truncateContext(diff.stdout.trim() || "(none)", MAX_DIFF_CONTEXT_CHARS),
+	].join("\n");
+}
+
+async function generateCommitMessage(
+	pi: ExtensionAPI,
+	ctx: ExtensionContext,
+	repoRoot: string,
+): Promise<string | null> {
+	const [diffContext, conversation] = await Promise.all([
+		readStagedDiffContext(pi, repoRoot),
+		Promise.resolve(extractRecentConversation(ctx)),
+	]);
+	const prompt = `You are a git commit message assistant. Generate one concise commit subject for the staged changes.
+
+Requirements:
+- Use Conventional Commits style: type(scope optional): summary
+- Prefer the language/style implied by the repository and change context.
+- Keep it under 72 characters when possible.
+- Do not include markdown, quotes, bullets, or explanation.
+- Your final output MUST be exactly one line in this format: COMMIT_MESSAGE=<subject>
+
+Recent conversation context:
+${conversation || "(none)"}
+
+${diffContext}`;
+
+	const result = await exec(
+		pi,
+		"pi",
+		[
+			"--no-session",
+			"--no-tools",
+			"--no-extensions",
+			"--no-skills",
+			"--no-prompt-templates",
+			"--no-context-files",
+			"-p",
+			prompt,
+		],
+		repoRoot,
+		LLM_TIMEOUT_MS,
+	);
+	if (result.code !== 0) return null;
+	return parseCommitMessage(result.stdout);
+}
+
+async function attemptCommit(
+	pi: ExtensionAPI,
+	ctx: ExtensionContext,
+	key: string,
+	repoRoot: string,
+): Promise<CommitAttempt> {
 	await exec(pi, "git", ["add", "-A"], repoRoot, GIT_TIMEOUT_MS);
 	if (!(await hasStagedDiff(pi, repoRoot))) return { kind: "no-changes" };
 
-	const files = await getStagedFiles(pi, repoRoot);
-	const message = buildCommitMessage(files);
+	showOrUpdateOverlay(ctx, key, "커밋 메시지 생성중");
+	const message = await generateCommitMessage(pi, ctx, repoRoot);
+	if (!message) {
+		return {
+			kind: "failed",
+			stdout: "",
+			stderr: "Failed to generate commit message with LLM.",
+			code: 1,
+		};
+	}
+
+	showOrUpdateOverlay(ctx, key, "precommit 동작중");
 	const result = await exec(pi, "git", ["commit", "-m", message], repoRoot, GIT_TIMEOUT_MS);
 	if (result.code === 0) return { kind: "success", message };
 
@@ -274,8 +385,7 @@ async function runAutoCommit(pi: ExtensionAPI, ctx: ExtensionContext, key: strin
 	if (!(await hasWorkingTreeChanges(pi, repoRoot))) return;
 
 	showOrUpdateOverlay(ctx, key, "커밋 시도");
-	showOrUpdateOverlay(ctx, key, "precommit 동작중");
-	await attemptCommit(pi, repoRoot);
+	await attemptCommit(pi, ctx, key, repoRoot);
 }
 
 function setEnabled(pi: Pick<ExtensionAPI, "appendEntry">, ctx: ExtensionContext, enabled: boolean): void {
