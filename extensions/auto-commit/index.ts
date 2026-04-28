@@ -500,19 +500,19 @@ export default function autoCommitExtension(pi: ExtensionAPI): void {
 		restoreState(ctx);
 	});
 
-	pi.on("agent_end", async (_event, ctx) => {
+	pi.on("agent_end", (_event, ctx) => {
 		const state = readState(ctx);
 		if (!state.enabled) return;
 
 		const key = getStateKey(ctx);
 		if (runningStore.get(key)) return;
 		runningStore.set(key, true);
-		try {
-			await runAutoCommit(pi, ctx, key);
-		} finally {
-			runningStore.delete(key);
-			hideOverlay(key);
-		}
+		void runAutoCommit(pi, ctx, key)
+			.catch(() => {})
+			.finally(() => {
+				runningStore.delete(key);
+				hideOverlay(key);
+			});
 	});
 
 	pi.on("session_shutdown", async (_event, ctx) => {
