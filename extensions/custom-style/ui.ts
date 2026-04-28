@@ -1,5 +1,13 @@
 import { CustomEditor, type KeybindingsManager, type Theme } from "@mariozechner/pi-coding-agent";
-import { type Component, type EditorTheme, type TUI, truncateToWidth, visibleWidth } from "@mariozechner/pi-tui";
+import {
+	type Component,
+	type EditorTheme,
+	matchesKey,
+	truncateToWidth,
+	type TUI,
+	visibleWidth,
+	wrapTextWithAnsi,
+} from "@mariozechner/pi-tui";
 import { AGENT_SYMBOL_MAP, formatSymbolHints } from "../subagent/constants.ts";
 
 type AutocompleteEditorInternals = {
@@ -13,11 +21,38 @@ type EditorMode = {
 	labelToken: "muted" | "bashMode" | "dim" | "accent";
 };
 
+type PromptSuggestionAcceptKey = "space" | "right";
+
+type PromptSuggestionEditorBridge = {
+	getSuggestion: () => string | undefined;
+	getSuggestionRevision: () => number;
+	getAcceptKeys: () => readonly PromptSuggestionAcceptKey[];
+	subscribe?: (listener: () => void) => () => void;
+};
+
+type GhostState = {
+	text: string;
+	suggestion: string;
+	suffix: string;
+	suffixLines: string[];
+};
+
+// Cursor rendering varies across themes/terminal modes. Match any ANSI-styled
+// single-space cursor block plus common block cursor glyphs.
+const END_CURSOR_PATTERN = "(?:\\x1b\\[[0-9;]*m \\x1b\\[[0-9;]*m|█|▌|▋|▉|▓)";
+const END_CURSOR = new RegExp(END_CURSOR_PATTERN);
+
 export class PolishedEditor extends CustomEditor {
 	private readonly getModelMeta: () => string;
 	private readonly getThinkingLevel: () => string | undefined;
+	private readonly promptSuggestion?: PromptSuggestionEditorBridge;
+	private readonly unsubscribePromptSuggestion?: () => void;
 	private readonly uiTheme: Theme;
 	private readonly reset = "\x1b[0m";
+	private suppressGhost = false;
+	private suppressGhostArmedByNonEmptyText = false;
+	private lastSuggestion: string | undefined;
+	private lastSuggestionRevision = -1;
 
 	constructor(
 		tui: TUI,
@@ -26,18 +61,93 @@ export class PolishedEditor extends CustomEditor {
 		uiTheme: Theme,
 		getModelMeta: () => string,
 		getThinkingLevel: () => string | undefined,
+		promptSuggestion?: PromptSuggestionEditorBridge,
 	) {
 		super(tui, theme, keybindings, { paddingX: 0 });
 		this.borderColor = (text: string) => uiTheme.fg("border", text);
 		this.uiTheme = uiTheme;
 		this.getModelMeta = getModelMeta;
 		this.getThinkingLevel = getThinkingLevel;
+		this.promptSuggestion = promptSuggestion;
+		this.unsubscribePromptSuggestion = promptSuggestion?.subscribe?.(() => tui.requestRender());
+	}
+
+	public dispose(): void {
+		this.unsubscribePromptSuggestion?.();
+	}
+
+	public override handleInput(data: string): void {
+		const ghost = this.getGhostState();
+		if (ghost && !this.isAutocompleteVisible() && this.shouldAcceptGhost(data, ghost)) {
+			this.setText(ghost.suggestion);
+			return;
+		}
+
+		if (ghost && ghost.text.length === 0 && !this.isAutocompleteVisible()) {
+			this.suppressGhost = true;
+			this.suppressGhostArmedByNonEmptyText = false;
+		}
+
+		super.handleInput(data);
+		this.updateGhostSuppressionLifecycle();
 	}
 
 	private fillLine(content: string, width: number): string {
 		const truncated = truncateToWidth(content, width, "");
 		const pad = " ".repeat(Math.max(0, width - visibleWidth(truncated)));
 		return `${truncated}${pad}`;
+	}
+
+	private isAutocompleteVisible(): boolean {
+		const editorInternals = this as unknown as AutocompleteEditorInternals;
+		return (
+			typeof editorInternals.isShowingAutocomplete === "function" && Boolean(editorInternals.isShowingAutocomplete())
+		);
+	}
+
+	private shouldAcceptGhost(data: string, ghost: GhostState): boolean {
+		const keys = this.promptSuggestion?.getAcceptKeys() ?? [];
+		return keys.some((key) => {
+			if (!matchesKey(data, key)) return false;
+			return key === "right" || ghost.text.length === 0;
+		});
+	}
+
+	private updateGhostSuppressionLifecycle(): void {
+		if (!this.suppressGhost) return;
+		const text = this.getText();
+		if (text.length > 0) {
+			this.suppressGhostArmedByNonEmptyText = true;
+			return;
+		}
+		if (this.suppressGhostArmedByNonEmptyText) {
+			this.suppressGhost = false;
+			this.suppressGhostArmedByNonEmptyText = false;
+		}
+	}
+
+	private getGhostState(): GhostState | undefined {
+		if (!this.promptSuggestion) return undefined;
+		const revision = this.promptSuggestion.getSuggestionRevision();
+		const suggestion = this.promptSuggestion.getSuggestion()?.trim();
+		if (revision !== this.lastSuggestionRevision || suggestion !== this.lastSuggestion) {
+			this.lastSuggestionRevision = revision;
+			this.lastSuggestion = suggestion;
+			this.suppressGhost = false;
+			this.suppressGhostArmedByNonEmptyText = false;
+		}
+
+		if (!suggestion || this.suppressGhost) return undefined;
+		const text = this.getText();
+		const cursor = this.getCursor();
+		if (text.includes("\n")) return undefined;
+		if (cursor.line !== 0 || cursor.col !== text.length) return undefined;
+		if (!suggestion.startsWith(text)) return undefined;
+		const suffix = suggestion.slice(text.length);
+		if (!suffix) return undefined;
+		const suffixLines = suffix.split("\n");
+		if (suffixLines.length > 1 && text.length > 0) return undefined;
+		return { text, suggestion, suffix, suffixLines };
 	}
 
 	private joinLine(left: string, right: string, width: number): string {
@@ -130,7 +240,7 @@ export class PolishedEditor extends CustomEditor {
 	}
 
 	private getStatusLabel(text: string, mode: EditorMode): string {
-		const baseLabel = this.uiTheme.fg(mode.labelToken, mode.label);
+		const baseLabel = mode.label ? this.uiTheme.fg(mode.labelToken, mode.label) : "";
 		const trimmed = text.trimEnd();
 		if (trimmed === ">>") {
 			return `${baseLabel}${this.uiTheme.fg("muted", ` · ${formatSymbolHints()}`)}`;
@@ -146,6 +256,73 @@ export class PolishedEditor extends CustomEditor {
 		}
 
 		return baseLabel;
+	}
+
+	private renderGhostLineAtColumn(text: string, col: number, width: number): string {
+		const available = Math.max(0, width - col);
+		const truncated = truncateToWidth(text, available, "");
+		const used = col + visibleWidth(truncated);
+		const padding = " ".repeat(Math.max(0, width - used));
+		return truncateToWidth(`${" ".repeat(col)}${truncated}${padding}`, width, "");
+	}
+
+	private renderGhostFallback(lines: string[], ghost: GhostState, width: number): string[] {
+		if (ghost.text.length > 0 || lines.length < 3) return lines;
+		const nextLines = [...lines];
+		const ghostLines = ghost.suggestion
+			.split("\n")
+			.flatMap((line) => wrapTextWithAnsi(this.uiTheme.fg("dim", line), Math.max(1, width)));
+		const renderedGhostLines = (ghostLines.length > 0 ? ghostLines : [this.uiTheme.fg("dim", ghost.suggestion)]).map(
+			(line) => this.renderGhostLineAtColumn(line, 0, width),
+		);
+		const bottomBorderIndex = nextLines.length - 1;
+		nextLines.splice(1, Math.max(1, bottomBorderIndex - 1), ...renderedGhostLines);
+		return nextLines;
+	}
+
+	private renderGhostInEditorFrame(lines: string[], width: number): string[] {
+		const ghost = this.getGhostState();
+		if (!ghost || this.isAutocompleteVisible()) return lines;
+		if (lines.length < 3) return lines;
+
+		const nextLines = [...lines];
+		const contentLineIndex = 1;
+		const firstContentLine = nextLines[contentLineIndex];
+		if (!firstContentLine) return lines;
+		const match = END_CURSOR.exec(firstContentLine);
+		if (!match) return this.renderGhostFallback(lines, ghost, width);
+
+		const cursorCol = visibleWidth(firstContentLine.slice(0, match.index));
+		const lineStartCol = Math.max(0, cursorCol - visibleWidth(ghost.text));
+		const firstSuffixLine = ghost.suffixLines[0] ?? "";
+		const firstLineAvailable = Math.max(1, width - (cursorCol + 1));
+		const firstSuffixWrapped = wrapTextWithAnsi(this.uiTheme.fg("dim", firstSuffixLine), firstLineAvailable);
+		const firstLineGhost = firstSuffixWrapped[0] ?? "";
+
+		nextLines[contentLineIndex] = truncateToWidth(
+			firstContentLine.replace(END_CURSOR, (cursor) => `${cursor}${firstLineGhost}`),
+			width,
+			"",
+		);
+
+		const continuationLines: string[] = [];
+		continuationLines.push(...firstSuffixWrapped.slice(1));
+		for (let index = 1; index < ghost.suffixLines.length; index += 1) {
+			continuationLines.push(
+				...wrapTextWithAnsi(this.uiTheme.fg("dim", ghost.suffixLines[index] ?? ""), Math.max(1, width - lineStartCol)),
+			);
+		}
+		if (continuationLines.length === 0) return nextLines;
+
+		for (let index = 0; index < continuationLines.length; index += 1) {
+			const ghostLine = this.renderGhostLineAtColumn(continuationLines[index] ?? "", lineStartCol, width);
+			const targetIndex = contentLineIndex + 1 + index;
+			const bottomBorderIndex = nextLines.length - 1;
+			if (targetIndex < bottomBorderIndex) nextLines[targetIndex] = ghostLine;
+			else nextLines.splice(bottomBorderIndex, 0, ghostLine);
+		}
+
+		return nextLines;
 	}
 
 	render(width: number): string[] {
@@ -175,7 +352,7 @@ export class PolishedEditor extends CustomEditor {
 			return rendered;
 		}
 
-		const editorLines = editorFrame.slice(1, -1);
+		const editorLines = this.renderGhostInEditorFrame(editorFrame, innerWidth).slice(1, -1);
 		const text = this.getText().trimStart();
 		const metaParts = [this.getModelMeta()];
 		const thinkingLevel = this.getThinkingLevel();

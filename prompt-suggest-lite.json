@@ -1,0 +1,20 @@
+{
+	"enabled": true,
+	"modelRef": "session-default",
+	"thinking": "session-default",
+	"customInstruction": "",
+	"noSuggestionToken": "[no suggestion]",
+	"fastPathContinueOnError": true,
+	"maxSuggestionChars": 180,
+	"maxAssistantTurnChars": 12000,
+	"maxRecentConversationMessages": 4,
+	"maxRecentConversationMessageChars": 4000,
+	"maxRecentUserPrompts": 10,
+	"maxRecentUserPromptChars": 500,
+	"maxToolSignals": 8,
+	"maxToolSignalChars": 220,
+	"maxTouchedFiles": 8,
+	"maxUnresolvedQuestions": 6,
+	"acceptKeys": ["right"],
+	"steeringHistoryWindow": 20
+}
