@@ -1,6 +1,6 @@
 ---
 name: auto-update
-description: pi 릴리즈 업데이트 시 현재 버전/최신 버전 확인, CHANGELOG 검토, extensions 영향 분석, extensions 내 pi 관련 의존성 업데이트, 호환성 대응까지 순서대로 수행하는 워크플로우.
+description: pi 릴리즈 업데이트 시 현재 버전/최신 버전 확인, CHANGELOG 검토, extensions 영향 분석, extensions 내 pi 관련 의존성 업데이트, 호환성 대응, 업데이트 내역 시각화까지 순서대로 수행하는 워크플로우.
 argument-hint: "pi 업데이트해줘 | 이번 릴리즈 반영하자 | /auto-update"
 disable-model-invocation: false
 ---
@@ -9,13 +9,14 @@ disable-model-invocation: false
 
 `$ARGUMENTS`가 없으면 **현재 레포 기준 pi 업데이트 작업**으로 간주한다.
 
-목표는 아래 5단계를 **순서대로** 수행하는 것이다.
+목표는 아래 6단계를 **순서대로** 수행하는 것이다.
 
 1. `pi -v` 로 현재 설치 버전과 설치 가능한 최신 버전 확인
 2. 공식 CHANGELOG에서 업데이트 내역 확인
 3. `extensions/`에서 영향받는 코드와 의존성 위치 확인
 4. `extensions/` 내부의 pi 관련 의존성 업데이트
 5. 필요한 대응 코드 수정 및 검증
+6. 업데이트 내역을 시각화하고 최종 보고
 
 ---
 
@@ -29,7 +30,8 @@ disable-model-invocation: false
 4. **Dependency updates** — 어떤 `package.json`을 어떻게 바꿨는지
 5. **Code changes** — 실제 대응한 파일과 이유
 6. **Validation** — typecheck/test 결과
-7. **Follow-ups** — 남은 수동 확인 사항
+7. **Visualization** — 버전 변화, CHANGELOG 영향, 변경 파일, 검증 결과를 한눈에 볼 수 있는 시각화
+8. **Follow-ups** — 남은 수동 확인 사항
 
 공식 근거가 있으면 반드시 링크를 포함한다.
 
@@ -226,6 +228,32 @@ pi -v
 
 ---
 
+## Step 7. 업데이트 내역 시각화
+
+최종 응답 전, 시각화 도구를 사용할 수 있으면 반드시 `show_widget`으로 업데이트 결과를 보여준다.
+
+첫 `show_widget` 호출 전에는 내부 준비 단계로 `visualize_read_me`를 한 번 호출한다.
+
+### 시각화에 반드시 포함할 내용
+
+- 버전 변화: 현재 버전 → 최신/적용 버전, 업데이트 필요 여부
+- CHANGELOG 핵심 항목: provider/API/runtime/security/UI 등 영향 카테고리
+- Impact scan 결과: 영향받은 `extensions/` 패키지/기능과 코드 수정 필요 여부
+- Dependency updates: 변경된 `package.json` / lockfile / pi 관련 패키지 버전
+- Validation 상태: typecheck/test 성공·실패와 테스트 개수
+- Follow-ups: 수동 확인이 필요한 항목이나 범위 밖 변경사항
+
+### 권장 시각화 구성
+
+- 상단 metric cards: 버전, 변경 패키지 수, 코드 수정 수, 검증 상태
+- 중간 flow/diagram: Version → Changelog → Impact → Update → Validation
+- 하단 detail cards: 실제 CHANGELOG 항목별 영향과 조치
+- 변경 파일은 `extensions/package.json`, `extensions/pnpm-lock.yaml`처럼 명확한 경로로 표시
+
+시각화는 보조 산출물이므로, 최종 텍스트 보고도 기존 출력 원칙 순서대로 반드시 제공한다.
+
+---
+
 ## 체크리스트
 
 작업 종료 전 반드시 확인:
@@ -236,6 +264,7 @@ pi -v
 - [ ] 버전 업데이트와 코드 대응을 분리해서 설명했는가
 - [ ] `extensions` 기준 `pnpm run typecheck`를 실행했는가
 - [ ] 가능하면 `pnpm run test`도 실행했는가
+- [ ] 업데이트 내역 시각화를 제공했는가
 - [ ] 남은 수동 확인 항목을 적었는가
 
 ---
@@ -246,6 +275,7 @@ pi -v
 - `extensions/` 영향 스캔 없이 일괄 수정하기
 - 범위 외 파일까지 광범위하게 수정하기
 - 검증 없이 "업데이트 완료"라고 말하기
+- 시각화 도구가 사용 가능한데도 업데이트 요약 시각화를 생략하기
 
 ---
 
@@ -277,6 +307,10 @@ Auto-update complete.
 ## Validation
 - `cd extensions && pnpm run typecheck` → ...
 - `cd extensions && pnpm run test` → ...
+
+## Visualization
+- widget: shown/not shown
+- summary: version flow, impact categories, changed files, validation state
 
 ## Follow-ups
 - ...
