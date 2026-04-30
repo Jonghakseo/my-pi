@@ -169,49 +169,6 @@ function verbToMode(verb: string | null): SubagentStartEntry["mode"] {
 	return "unknown";
 }
 
-/**
- * Extract agent name(s) from a subagent CLI command string.
- * Returns an array because batch/chain can launch multiple agents.
- *
- * For `continue`, returns `["_continue"]` as a placeholder — the actual
- * agent name will come from `subagent_end`. This ensures the mode is logged.
- */
-function extractAgentNames(command: string, verb: string | null): string[] {
-	if (verb === "run") {
-		// subagent run [--main|--isolated] <agent> [--main|--isolated] -- <task>
-		// Tokens after "run" before "--" may include --main/--isolated flags.
-		// Find the first non-flag token as the agent name.
-		const afterRun = command.replace(/^.*?\brun\b\s*/i, "");
-		const tokens = afterRun.split(/\s+/);
-		for (const token of tokens) {
-			if (token === "--") break;
-			if (token.startsWith("--")) continue; // skip flags
-			return [token];
-		}
-		return ["unknown"];
-	}
-	if (verb === "continue") {
-		// subagent continue <runId> [--agent <agent>] -- <task>
-		// We can't resolve agent from runId at this layer. Log start with
-		// placeholder so that mode="continue" is tracked. The subagent_end
-		// will carry the correct agent name.
-		const agentFlag = /--agent\s+(\S+)/i.exec(command);
-		return [agentFlag?.[1] ?? "_continue"];
-	}
-	if (verb === "batch" || verb === "chain") {
-		// subagent batch/chain [--main|--isolated] --agent <name> --task "..." ...
-		const agents: string[] = [];
-		const regex = /--agent\s+(\S+)/gi;
-		let match = regex.exec(command);
-		while (match !== null) {
-			agents.push(match[1]);
-			match = regex.exec(command);
-		}
-		return agents.length > 0 ? agents : ["unknown"];
-	}
-	return ["unknown"];
-}
-
 function getRunAnalyticsKeys(entry: {
 	runId?: number;
 	batchId?: string;
@@ -410,12 +367,8 @@ function computeStats(entries: LogEntry[], period: Period): PeriodStats[] {
 				agent.durations.push(entry.elapsedMs);
 			}
 		} else if (entry.type === "subagent_start") {
-			const start = entry as SubagentStartEntry;
-			if ((start.mode === "batch" || start.mode === "chain") && start.agent !== "_continue") {
-				const keys = getRunAnalyticsKeys(start);
-				if (keys.some((key) => completedKeys.has(key))) continue;
-				const agent = getAgent(p, start.agent);
-				agent.total++;
+			if (shouldCountFallbackStart(entry as SubagentStartEntry, completedKeys)) {
+				getAgent(p, entry.agent).total++;
 			}
 		} else if (entry.type === "skill_read") {
 			const skill = getSkill(p, entry.skill);
@@ -496,11 +449,23 @@ function updateOverallSkillSummary(
 	skillMap.set(entry.skill, skill);
 }
 
+/**
+ * Decide whether an unmatched batch/chain `subagent_start` should be counted
+ * as a fallback (interrupted run with no completion event).
+ *
+ * Excludes:
+ *   - non-batch/chain starts (run/continue handled via subagent_end)
+ *   - `_continue` placeholder records
+ *   - phantom starts with no runId/batchId/stepIndex (legacy logging bug)
+ *   - starts whose run/group step already has a matching subagent_end
+ */
 function shouldCountFallbackStart(start: SubagentStartEntry, completedKeys: Set<string>): boolean {
 	if ((start.mode !== "batch" && start.mode !== "chain") || start.agent === "_continue") {
 		return false;
 	}
-	return !getRunAnalyticsKeys(start).some((key) => completedKeys.has(key));
+	const keys = getRunAnalyticsKeys(start);
+	if (keys.length === 0) return false;
+	return !keys.some((key) => completedKeys.has(key));
 }
 
 function computeOverall(entries: LogEntry[]): {
@@ -798,7 +763,16 @@ export const __test__ = {
 
 const SKILL_DEBOUNCE_MS = 10_000; // 같은 스킬의 10초 내 중복 read를 무시
 
-// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: launch logging intentionally supports both detailed and legacy subagent result payloads.
+/**
+ * Log subagent launches from `tool_result` events.
+ *
+ * Only logs when `details.launches` is populated by the subagent runner.
+ * Empty launches indicates a rejected/error result (e.g. "batch supports at
+ * most 12 runs"); pi-agent-core does not propagate the tool's `isError: true`
+ * because `AgentToolResult` has no `isError` field, so we cannot rely on
+ * `event.isError` to filter rejections. Trusting `launches` as the single
+ * source of truth avoids phantom starts from command-line fallback parsing.
+ */
 function logSubagentLaunch(event: { input?: unknown; details?: unknown; toolName: string; isError?: boolean }): void {
 	if (event.toolName !== "subagent" || event.isError) return;
 	const input = event.input as Record<string, unknown> | undefined;
@@ -806,30 +780,24 @@ function logSubagentLaunch(event: { input?: unknown; details?: unknown; toolName
 	const verb = parseSubagentCommandVerb(input?.command);
 	if (verb !== "run" && verb !== "continue" && verb !== "batch" && verb !== "chain") return;
 
+	const launches = Array.isArray(details?.launches) ? details.launches : [];
+	if (launches.length === 0) return;
+
 	const mode = verbToMode(verb);
 	const { ts, epoch } = now();
-	const launches = Array.isArray(details?.launches) ? details.launches : [];
-	if (launches.length > 0) {
-		for (const launch of launches) {
-			if (!launch || typeof launch !== "object") continue;
-			appendLog({
-				type: "subagent_start",
-				ts,
-				epoch,
-				agent: typeof launch.agent === "string" ? launch.agent : "unknown",
-				mode,
-				runId: typeof launch.runId === "number" ? launch.runId : undefined,
-				batchId: typeof launch.batchId === "string" ? launch.batchId : undefined,
-				pipelineId: typeof launch.pipelineId === "string" ? launch.pipelineId : undefined,
-				stepIndex: typeof launch.stepIndex === "number" ? launch.stepIndex : undefined,
-			});
-		}
-		return;
-	}
-
-	const command = String(input?.command ?? "");
-	for (const agent of extractAgentNames(command, verb)) {
-		appendLog({ type: "subagent_start", ts, epoch, agent, mode });
+	for (const launch of launches) {
+		if (!launch || typeof launch !== "object") continue;
+		appendLog({
+			type: "subagent_start",
+			ts,
+			epoch,
+			agent: typeof launch.agent === "string" ? launch.agent : "unknown",
+			mode,
+			runId: typeof launch.runId === "number" ? launch.runId : undefined,
+			batchId: typeof launch.batchId === "string" ? launch.batchId : undefined,
+			pipelineId: typeof launch.pipelineId === "string" ? launch.pipelineId : undefined,
+			stepIndex: typeof launch.stepIndex === "number" ? launch.stepIndex : undefined,
+		});
 	}
 }
 
