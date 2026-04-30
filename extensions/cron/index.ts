@@ -350,8 +350,8 @@ const commandHandlers = {
 		const result = stopDaemon();
 		notify(ctx, result.message, result.ok ? "info" : "error");
 	},
-	list: async (_id: string | undefined, _ctx: ExtensionCommandContext, pi: ExtensionAPI) => {
-		pi.sendMessage({ customType: "cron", content: formatJobList(), display: true, details: { jobs: loadJobs() } });
+	list: async (_id: string | undefined, ctx: ExtensionCommandContext, _pi: ExtensionAPI) => {
+		notify(ctx, formatJobList());
 	},
 	run: async (id: string | undefined, ctx: ExtensionCommandContext) => {
 		if (!id) return notify(ctx, "Usage: /cron run <id>", "warning");
