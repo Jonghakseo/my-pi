@@ -32,9 +32,9 @@ export const CRON_CLI_HELP_TEXT = [
 	"   • `kind at` and `kind delay` are one-shot automatically.",
 	"   • For a cron expression that should run once, pass `--once`.",
 	"",
-	"5. Destructive actions require user confirmation:",
-	"   • cron remove <id>",
-	"   • cron uninstall-launchd",
+	"5. Destructive actions:",
+	"   • cron remove <id> requires user confirmation",
+	"   • cron uninstall-launchd --yes explicitly confirms launchd uninstall without an extra UI dialog",
 	"",
 	"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
 	"COMMANDS",
@@ -57,7 +57,7 @@ export const CRON_CLI_HELP_TEXT = [
 	"    cron start-daemon        (alias: cron start)",
 	"    cron stop-daemon         (alias: cron stop)",
 	"    cron install-launchd     (alias: cron install)",
-	"    cron uninstall-launchd   (alias: cron uninstall)",
+	"    cron uninstall-launchd [--yes]  (alias: cron uninstall)",
 	"",
 	"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
 	"EXAMPLES",
@@ -265,6 +265,9 @@ function parseOptions(args: string[], options: { allowPrompt: boolean }): Parsed
 			case "include-prompt":
 				params.includePrompt = true;
 				break;
+			case "yes":
+				params.yes = true;
+				break;
 			default:
 				return { error: `❌ Unknown option: --${rawName}\n\nTry: cron help` };
 		}
@@ -383,8 +386,17 @@ export function parseCronToolCommand(command: unknown): CronCliParseResult {
 		case "install-launchd":
 			return { type: "params", params: { action: "install_launchd" } };
 		case "uninstall":
-		case "uninstall-launchd":
-			return { type: "params", params: { action: "uninstall_launchd" } };
+		case "uninstall-launchd": {
+			const parsed = parseOptions(args, { allowPrompt: false });
+			if ("error" in parsed) return { type: "error", message: parsed.error };
+			if (parsed.positional.length > 0) {
+				return {
+					type: "error",
+					message: `❌ ${verb} does not accept positional arguments: ${parsed.positional.join(" ")}`,
+				};
+			}
+			return { type: "params", params: { action: "uninstall_launchd", ...parsed.params } };
+		}
 		default:
 			return {
 				type: "error",

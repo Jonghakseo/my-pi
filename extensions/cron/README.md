@@ -9,7 +9,7 @@ Persistent scheduler for Pi.
 - Runs jobs through a headless Pi process: `pi -p --no-session --no-extensions @prompt.md`.
 - Uses a detached daemon and macOS `launchd` LaunchAgent so jobs continue after Pi exits and after reboot/login.
 - Keeps one-shot jobs as disabled history after they run.
-- Requires user confirmation before deleting jobs or uninstalling the LaunchAgent.
+- Requires user confirmation before deleting jobs. LaunchAgent uninstall can be explicitly confirmed with `cron uninstall-launchd --yes`.
 
 ## Files
 
@@ -48,7 +48,7 @@ cron remove <id>       # confirm required
 cron start-daemon      # alias: cron start
 cron stop-daemon       # alias: cron stop
 cron install-launchd   # alias: cron install
-cron uninstall-launchd # confirm required; alias: cron uninstall
+cron uninstall-launchd [--yes] # --yes skips extra UI confirm; alias: cron uninstall
 ```
 
 Human-facing slash commands are still available for convenience:
@@ -56,7 +56,7 @@ Human-facing slash commands are still available for convenience:
 ```text
 /cron status
 /cron install       # install launchd LaunchAgent and start daemon
-/cron uninstall     # confirm, then remove LaunchAgent
+/cron uninstall     # confirm, then remove LaunchAgent (`/cron uninstall --yes` skips extra UI confirm)
 /cron start         # start daemon for current boot
 /cron stop          # stop daemon
 /cron list
@@ -85,7 +85,7 @@ This keeps the job visible for later audit while preventing future execution.
 ## Safety
 
 - Removing a job requires `ctx.ui.confirm()`.
-- Uninstalling launchd requires `ctx.ui.confirm()`.
+- Uninstalling launchd requires `ctx.ui.confirm()` unless explicitly confirmed with `--yes`.
 - In non-UI contexts, destructive actions are denied by default.
 - Job IDs are restricted to `[a-zA-Z0-9._-]`.
 - Prompt files are written only under `~/.pi/agent/cron/prompts/`.

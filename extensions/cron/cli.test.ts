@@ -49,6 +49,10 @@ describe("cron CLI parser", () => {
 			type: "params",
 			params: { action: "start_daemon" },
 		});
+		expect(parseCronToolCommand("cron uninstall-launchd --yes")).toEqual({
+			type: "params",
+			params: { action: "uninstall_launchd", yes: true },
+		});
 	});
 
 	it("rejects update without id", () => {
