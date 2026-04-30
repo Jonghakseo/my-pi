@@ -31,9 +31,27 @@ Persistent scheduler for Pi.
 매주 월요일 오전 9시에 PR 리뷰 상태 요약해줘
 ```
 
-The agent should call the `cron` tool and include a self-contained `promptMarkdown`. This is important because scheduled runs are headless and do not have access to the original session history.
+The LLM-facing `cron` tool intentionally exposes only one parameter: `command`. Agents should call `cron help` when they need the grammar, then pass a CLI-style command string. Scheduled prompts must be self-contained because headless runs do not have access to the original session history.
 
-## Commands
+## Tool commands
+
+```text
+cron help
+cron status
+cron list [--include-prompt]
+cron upsert [<id>] --name <name> --kind <cron|at|delay> (--schedule <expr>|--run-at <iso>) [--cwd <path>] [--enabled <true|false>] [--once] -- <promptMarkdown>
+cron update <id> [--name <name>] [--kind <cron|at|delay>] [--schedule <expr>] [--run-at <iso>] [--cwd <path>] [--enabled <true|false>] [--once|--once=false] [-- <promptMarkdown>]
+cron run <id>
+cron enable <id>
+cron disable <id>
+cron remove <id>       # confirm required
+cron start-daemon      # alias: cron start
+cron stop-daemon       # alias: cron stop
+cron install-launchd   # alias: cron install
+cron uninstall-launchd # confirm required; alias: cron uninstall
+```
+
+Human-facing slash commands are still available for convenience:
 
 ```text
 /cron status
