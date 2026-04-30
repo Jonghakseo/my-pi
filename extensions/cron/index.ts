@@ -402,8 +402,28 @@ export default function (pi: ExtensionAPI) {
 
 		renderCall(args, theme) {
 			const params = args as Partial<CronCliToolParams>;
-			const command = params.command ?? "";
-			return new Text(theme.fg("toolTitle", theme.bold("cron ")) + theme.fg("muted", command), 0, 0);
+			const raw = typeof params.command === "string" ? params.command.trim() : "";
+			const command = raw || "cron help";
+			const maxCallLines = 5;
+			const commandLines = command.split("\n");
+			const truncated = commandLines.length > maxCallLines;
+			const preview = truncated ? commandLines.slice(0, maxCallLines).join("\n") : command;
+
+			let text = theme.fg("toolTitle", theme.bold("cron ")) + theme.fg("accent", "cli");
+			text += `\n  ${theme.fg("dim", preview)}`;
+			if (truncated) text += `\n  ${theme.fg("muted", `... +${commandLines.length - maxCallLines} more lines`)}`;
+			return new Text(text, 0, 0);
+		},
+
+		renderResult(result, { expanded }, theme) {
+			const raw = result.content[0];
+			const fullText = (raw?.type === "text" ? raw.text : undefined) ?? "(no output)";
+			if (expanded) return new Text(fullText, 0, 0);
+
+			const lines = fullText.split("\n");
+			const firstLine = lines[0] ?? "";
+			const suffix = lines.length > 1 ? theme.fg("muted", ` (+${lines.length - 1} lines)`) : "";
+			return new Text(firstLine + suffix, 0, 0);
 		},
 	});
 
