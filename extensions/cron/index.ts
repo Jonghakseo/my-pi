@@ -437,18 +437,4 @@ export default function (pi: ExtensionAPI) {
 			await handler(id, ctx, pi);
 		},
 	});
-
-	pi.on("session_start", async (_event, ctx) => {
-		if (!ctx.hasUI) return;
-		const daemon = getDaemonStatus();
-		const launchd = getLaunchdStatus();
-		const active = loadJobs().filter((job) => job.enabled).length;
-		if (active === 0 && !daemon.running) {
-			ctx.ui.setStatus("cron", undefined);
-			return;
-		}
-		const daemonText = daemon.running ? "on" : "off";
-		const launchdText = launchd.installed ? "launchd" : "manual";
-		ctx.ui.setStatus("cron", `⏰ cron ${daemonText}/${launchdText} · ${active}`);
-	});
 }
