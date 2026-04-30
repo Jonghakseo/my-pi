@@ -1,7 +1,7 @@
-import { StringEnum } from "@mariozechner/pi-ai";
 import type { ExtensionAPI, ExtensionCommandContext, ExtensionContext } from "@mariozechner/pi-coding-agent";
 import { Text } from "@mariozechner/pi-tui";
 import { Type } from "typebox";
+import { CRON_CLI_HELP_TEXT, parseCronToolCommand } from "./cli.ts";
 import { getDaemonStatus, startDaemon, stopDaemon } from "./daemon-client.ts";
 import { getLaunchdStatus, installLaunchAgent, uninstallLaunchAgent } from "./launchd.ts";
 import { calculateNextRun, validateCron } from "./schedule.ts";
@@ -51,33 +51,15 @@ interface CronToolResult {
 }
 
 const CronParamsSchema = Type.Object({
-	action: StringEnum([
-		"list",
-		"status",
-		"upsert",
-		"update",
-		"remove",
-		"enable",
-		"disable",
-		"run",
-		"start_daemon",
-		"stop_daemon",
-		"install_launchd",
-		"uninstall_launchd",
-	] as const),
-	id: Type.Optional(Type.String({ description: "Cron job id" })),
-	name: Type.Optional(Type.String({ description: "Human-readable job name" })),
-	kind: Type.Optional(StringEnum(["cron", "at", "delay"] as const)),
-	schedule: Type.Optional(Type.String({ description: "5-field cron expression, e.g. '0 10 * * *'" })),
-	runAt: Type.Optional(Type.String({ description: "ISO timestamp for at/delay jobs" })),
-	promptMarkdown: Type.Optional(
-		Type.String({ description: "Self-contained markdown prompt file content to execute headlessly" }),
-	),
-	cwd: Type.Optional(Type.String({ description: "Working directory for the scheduled pi run" })),
-	enabled: Type.Optional(Type.Boolean({ description: "Whether the job should be active" })),
-	once: Type.Optional(Type.Boolean({ description: "For cron jobs, disable automatically after the first run" })),
-	includePrompt: Type.Optional(Type.Boolean({ description: "Include prompt markdown in list/detail responses" })),
+	command: Type.String({
+		description:
+			"CLI-style cron command. Always start with 'cron help' to discover commands. Examples: 'cron status', 'cron list --include-prompt', 'cron upsert --name daily --kind cron --schedule \"0 10 * * *\" -- <self-contained promptMarkdown>', 'cron update daily --schedule \"30 9 * * 1-5\"', 'cron run daily', 'cron enable daily', 'cron disable daily', 'cron remove daily', 'cron install-launchd'. Scheduled prompts are headless, so promptMarkdown after `--` must include all required context.",
+	}),
 });
+
+interface CronCliToolParams {
+	command: string;
+}
 
 function localTimezone(): string {
 	return Intl.DateTimeFormat().resolvedOptions().timeZone || "local";
@@ -385,19 +367,33 @@ export default function (pi: ExtensionAPI) {
 		name: "cron",
 		label: "Cron",
 		description:
-			"Manage persistent scheduled pi jobs. Jobs are stored as markdown prompts and run headlessly via a launchd-backed daemon.",
-		promptSnippet: "Schedule, list, update, run, enable/disable, or remove persistent cron jobs.",
+			'CLI-style interface for persistent scheduled pi jobs. Always start with `cron help` to learn available commands, then call via `{ command: "cron ..." }`. Jobs are stored as markdown prompts and run headlessly via a launchd-backed daemon; prompt markdown after `--` must be self-contained.',
+		promptSnippet:
+			"Schedule, list, update, run, enable/disable, or remove persistent cron jobs via `cron help` commands.",
 		promptGuidelines: [
 			"Use cron when the user asks to run something later, repeatedly, at a specific date/time, after a delay, or on a schedule.",
-			"When the user says '방금 한 것', '이 작업', '아까 정리한 것', or otherwise references current session context, cron must create a self-contained promptMarkdown that includes all necessary context because scheduled runs are headless and separate from this session history.",
-			"cron upsert should translate natural-language schedules into kind plus either a standard 5-field cron schedule or an ISO runAt timestamp.",
-			"cron should use kind 'at' or 'delay' for one-shot jobs. For a cron expression that should run only once, set once: true. One-shot jobs are automatically disabled after execution and remain visible in history.",
-			"cron remove and cron uninstall_launchd require explicit user confirmation. Do not delete jobs without confirmation.",
+			"Always start with `cron help` if you need to learn the command grammar; the tool accepts only a single `command` string.",
+			'For upsert/update with a prompt, put the self-contained promptMarkdown after `--`, e.g. `cron upsert --name daily --kind cron --schedule "0 10 * * *" -- <promptMarkdown>`.',
+			"When the user says '방금 한 것', '이 작업', '아까 정리한 것', or otherwise references current session context, include all necessary context in the promptMarkdown because scheduled runs are headless and separate from this session history.",
+			"Translate natural-language schedules into kind plus either a standard 5-field cron schedule or an ISO runAt timestamp. Use kind `at` or `delay` for one-shot jobs; for a cron expression that should run once, pass `--once`.",
+			"`cron remove <id>` and `cron uninstall-launchd` require explicit user confirmation. Do not delete jobs or uninstall launchd without confirmation.",
 		],
 		parameters: CronParamsSchema,
 
 		async execute(_toolCallId, rawParams, _signal, _onUpdate, ctx) {
-			const params = rawParams as CronToolParams;
+			const parsedCommand = parseCronToolCommand((rawParams as CronCliToolParams).command);
+			if (parsedCommand.type === "error") {
+				return {
+					content: [{ type: "text" as const, text: `${parsedCommand.message}\n\n${CRON_CLI_HELP_TEXT}` }],
+					details: {},
+					isError: true,
+				};
+			}
+			if (parsedCommand.type === "help") {
+				return { content: [{ type: "text" as const, text: CRON_CLI_HELP_TEXT }], details: {} };
+			}
+
+			const params = parsedCommand.params as unknown as CronToolParams;
 			const handler = toolHandlers[params.action];
 			if (!handler) throw new Error(`Unknown cron action: ${params.action}`);
 			const result = await handler(params, ctx);
@@ -405,11 +401,9 @@ export default function (pi: ExtensionAPI) {
 		},
 
 		renderCall(args, theme) {
-			const params = args as Partial<CronToolParams>;
-			let text = theme.fg("toolTitle", theme.bold("cron ")) + theme.fg("muted", params.action ?? "");
-			if (params.id) text += ` ${theme.fg("accent", params.id)}`;
-			if (params.name && !params.id) text += ` ${theme.fg("dim", params.name)}`;
-			return new Text(text, 0, 0);
+			const params = args as Partial<CronCliToolParams>;
+			const command = params.command ?? "";
+			return new Text(theme.fg("toolTitle", theme.bold("cron ")) + theme.fg("muted", command), 0, 0);
 		},
 	});
 
