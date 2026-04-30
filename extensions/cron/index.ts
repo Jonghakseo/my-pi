@@ -43,6 +43,7 @@ interface CronToolParams {
 	enabled?: boolean;
 	once?: boolean;
 	includePrompt?: boolean;
+	yes?: boolean;
 }
 
 interface CronToolResult {
@@ -280,9 +281,11 @@ const toolHandlers: Record<
 		const result = installLaunchAgent();
 		return { text: result.message, details: { result, launchd: getLaunchdStatus() } };
 	},
-	uninstall_launchd: async (_params, ctx) => {
-		const ok = await confirmDangerous(ctx, "Cron launchd 해제", "재부팅 후 cron daemon 자동 실행 등록을 제거할까요?");
-		if (!ok) return { text: "launchd uninstall cancelled." };
+	uninstall_launchd: async (params, ctx) => {
+		if (!params.yes) {
+			const ok = await confirmDangerous(ctx, "Cron launchd 해제", "재부팅 후 cron daemon 자동 실행 등록을 제거할까요?");
+			if (!ok) return { text: "launchd uninstall cancelled." };
+		}
 		const result = uninstallLaunchAgent();
 		return { text: result.message, details: { result, launchd: getLaunchdStatus() } };
 	},
@@ -318,9 +321,11 @@ const commandHandlers = {
 		const result = installLaunchAgent();
 		notify(ctx, result.message, result.ok ? "info" : "error");
 	},
-	uninstall: async (_id: string | undefined, ctx: ExtensionCommandContext) => {
-		const ok = await confirmDangerous(ctx, "Cron launchd 해제", "재부팅 후 cron daemon 자동 실행 등록을 제거할까요?");
-		if (!ok) return notify(ctx, "launchd uninstall cancelled", "warning");
+	uninstall: async (id: string | undefined, ctx: ExtensionCommandContext) => {
+		if (id !== "--yes") {
+			const ok = await confirmDangerous(ctx, "Cron launchd 해제", "재부팅 후 cron daemon 자동 실행 등록을 제거할까요?");
+			if (!ok) return notify(ctx, "launchd uninstall cancelled", "warning");
+		}
 		const result = uninstallLaunchAgent();
 		notify(ctx, result.message, result.ok ? "info" : "error");
 	},
@@ -376,7 +381,7 @@ export default function (pi: ExtensionAPI) {
 			'For upsert/update with a prompt, put the self-contained promptMarkdown after `--`, e.g. `cron upsert --name daily --kind cron --schedule "0 10 * * *" -- <promptMarkdown>`.',
 			"When the user says '방금 한 것', '이 작업', '아까 정리한 것', or otherwise references current session context, include all necessary context in the promptMarkdown because scheduled runs are headless and separate from this session history.",
 			"Translate natural-language schedules into kind plus either a standard 5-field cron schedule or an ISO runAt timestamp. Use kind `at` or `delay` for one-shot jobs; for a cron expression that should run once, pass `--once`.",
-			"`cron remove <id>` and `cron uninstall-launchd` require explicit user confirmation. Do not delete jobs or uninstall launchd without confirmation.",
+			"`cron remove <id>` requires user confirmation. `cron uninstall-launchd --yes` explicitly confirms launchd uninstall without an extra UI dialog.",
 		],
 		parameters: CronParamsSchema,
 
