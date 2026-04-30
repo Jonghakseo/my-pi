@@ -55,6 +55,7 @@ node_modules/
 extensions/.context/
 extensions/.gw/
 extensions/pi-session-*.html
+/cron/
 
 # until presets (personal)
 extensions/until-presets/
