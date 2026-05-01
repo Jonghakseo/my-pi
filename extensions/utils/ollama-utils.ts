@@ -6,8 +6,8 @@
  * `flattenTextContent` and `extractImages` are helper functions for
  * message content normalisation.
  *
- * Both `ollama-gemma4-26b/index.ts` and `ollama-glm-5-1-cloud/index.ts` share
- * identical implementations — they are consolidated here.
+ * Ollama-backed model extensions share identical implementations — they are
+ * consolidated here.
  */
 import {
 	calculateCost,

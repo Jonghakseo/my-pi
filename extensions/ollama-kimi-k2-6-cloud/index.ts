@@ -2,9 +2,9 @@ import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-age
 import type { Api, AssistantMessageEventStream, Model, SimpleStreamOptions } from "@mariozechner/pi-ai";
 import { streamOllamaNative as streamOllamaNativeBase } from "../utils/ollama-utils.js";
 
-const PROVIDER_ID = "ollama-cloud";
-const MODEL_ID = "glm-5.1:cloud";
-const MODEL_NAME = "GLM 5.1 Cloud (via Ollama)";
+const PROVIDER_ID = "ollama-kimi-cloud";
+const MODEL_ID = "kimi-k2.6:cloud";
+const MODEL_NAME = "Kimi K2.6 Cloud (via Ollama)";
 const OLLAMA_BASE_URL = "http://127.0.0.1:11434";
 const OLLAMA_API = "ollama-native-chat";
 
@@ -32,16 +32,16 @@ export default function (pi: ExtensionAPI) {
 				id: MODEL_ID,
 				name: MODEL_NAME,
 				reasoning: true,
-				input: ["text"],
+				input: ["text", "image"],
 				cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-				contextWindow: 200000,
+				contextWindow: 262144,
 				maxTokens: 131072,
 			},
 		],
 	});
 
-	pi.registerCommand("ollama-glm-cloud-status", {
-		description: "Show Ollama GLM 5.1 Cloud provider configuration",
+	pi.registerCommand("ollama-kimi-cloud-status", {
+		description: "Show Ollama Kimi K2.6 Cloud provider configuration",
 		handler: async (_args: string, ctx: ExtensionContext) => {
 			const message = [
 				`provider: ${PROVIDER_ID}`,
