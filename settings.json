@@ -2,9 +2,9 @@
   "theme": "zentui",
   "quietStartup": true,
   "lastChangelogVersion": "0.71.0",
-  "defaultProvider": "ollama-kimi-cloud",
-  "defaultModel": "kimi-k2.6:cloud",
-  "defaultThinkingLevel": "high",
+  "defaultProvider": "openai-codex",
+  "defaultModel": "gpt-5.5",
+  "defaultThinkingLevel": "xhigh",
   "subagent": {
     "claudeRuntime": "cli"
   },
