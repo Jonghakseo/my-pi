@@ -64,7 +64,7 @@ The current setup has 11 agent definitions, OpenAI/Anthropic agent models, and a
 - **openai-codex/gpt-5.5** — General-purpose execution & review (implementation, testing, reviewing, security review, browser automation)
 - **anthropic/claude-sonnet-4-6** — Fast exploration & research (file search, web research, code simplification)
 - **anthropic/claude-opus-4-6 / 4-7** — Deep reasoning tasks (strategic planning, verification, cleanup analysis)
-- **ollama-cloud/glm-5.1:cloud** — Enabled provider option via local extension; not currently used by the checked-in agent definitions
+- **ollama-kimi-cloud/kimi-k2.6:cloud** — Enabled Ollama Cloud Kimi K2.6 provider option with text/image input support
 
 The main agent default is `openai-codex/gpt-5.5` with high thinking.
 
@@ -95,7 +95,7 @@ Pi can auto-discover both `extensions/*.ts` and `extensions/*/index.ts`, but thi
 | [`interactive-shell/`](./extensions/interactive-shell/index.ts) | `interactive_shell` tool plus `/attach` and `/dismiss` for interactive, hands-free, dispatch, background, and reattachable shell sessions |
 | [`web-access/`](./extensions/web-access/index.ts) | Local web research/content extraction tools: `web_search`, `fetch_content`, `get_search_content`, curator workflow, GitHub/PDF/video/YouTube extraction |
 | [`ollama-gemma4-26b/`](./extensions/ollama-gemma4-26b/index.ts) | Ollama provider wiring for Gemma 4 26B |
-| [`ollama-glm-5-1-cloud/`](./extensions/ollama-glm-5-1-cloud/index.ts) | Ollama Cloud provider wiring for GLM 5.1 |
+| [`ollama-kimi-k2-6-cloud/`](./extensions/ollama-kimi-k2-6-cloud/index.ts) | Ollama Cloud provider wiring for Kimi K2.6 |
 
 #### Tool overrides / rendering
 
