@@ -32,9 +32,7 @@
     "npm:@ryan_nookpi/pi-extension-todo-write-overlay"
   ],
   "compaction": {
-    "enabled": true,
-    "reserveTokens": 128000,
-    "keepRecentTokens": 100000
+    "enabled": true
   },
   "hideThinkingBlock": true,
   "collapseChangelog": true,
