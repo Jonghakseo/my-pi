@@ -1,7 +1,7 @@
 {
   "theme": "zentui",
   "quietStartup": true,
-  "lastChangelogVersion": "0.71.0",
+  "lastChangelogVersion": "0.72.0",
   "defaultProvider": "openai-codex",
   "defaultModel": "gpt-5.5",
   "defaultThinkingLevel": "xhigh",
@@ -37,5 +37,8 @@
   "hideThinkingBlock": true,
   "collapseChangelog": true,
   "doubleEscapeAction": "tree",
-  "autocompleteMaxVisible": 3
+  "autocompleteMaxVisible": 3,
+  "terminal": {
+    "showImages": false
+  }
 }
