@@ -5,6 +5,7 @@
   "defaultProvider": "openai-codex",
   "defaultModel": "gpt-5.5",
   "defaultThinkingLevel": "xhigh",
+  "transport": "sse",
   "subagent": {
     "claudeRuntime": "cli"
   },
