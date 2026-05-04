@@ -63,6 +63,9 @@ extensions/until-presets/
 # usage reporter (personal)
 extensions/usage-reporter/
 
+# picky-handoff (symlink to separate repo)
+extensions/picky-handoff
+
 # Local/custom skills
 skills/creatrip-db-query/
 skills/hotfix-flow/
@@ -71,6 +74,7 @@ skills/release-audit/
 skills/sentry-investigate/
 skills/slack-thread-context/
 skills/gw-worktree-cleanup/
+skills/worktree-handoff/
 
 # claude-mcp-bridge local runtime settings
 claude-mcp-bridge-tools.json
