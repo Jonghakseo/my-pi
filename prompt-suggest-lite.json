@@ -1,6 +1,6 @@
 {
 	"enabled": true,
-	"modelRef": "session-default",
+	"modelRef": "ollama-kimi-cloud/kimi-k2.6:cloud",
 	"thinking": "session-default",
 	"customInstruction": "",
 	"noSuggestionToken": "[no suggestion]",
@@ -16,5 +16,6 @@
 	"maxTouchedFiles": 8,
 	"maxUnresolvedQuestions": 6,
 	"acceptKeys": ["right"],
-	"steeringHistoryWindow": 20
+	"steeringHistoryWindow": 20,
+	"logSteeringEvents": true
 }
