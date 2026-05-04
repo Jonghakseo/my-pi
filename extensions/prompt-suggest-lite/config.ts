@@ -24,6 +24,7 @@ export type PromptSuggestLiteConfig = {
 	maxUnresolvedQuestions: number;
 	acceptKeys: PromptSuggestLiteAcceptKey[];
 	steeringHistoryWindow: number;
+	logSteeringEvents: boolean;
 };
 
 export const promptSuggestLiteConfigPath = join(getAgentDir(), "prompt-suggest-lite.json");
@@ -47,6 +48,7 @@ export const defaultPromptSuggestLiteConfig: PromptSuggestLiteConfig = {
 	maxUnresolvedQuestions: 6,
 	acceptKeys: ["right"],
 	steeringHistoryWindow: 20,
+	logSteeringEvents: true,
 };
 
 const VALID_THINKING = new Set<PromptSuggestLiteThinking>([
@@ -111,6 +113,7 @@ export function normalizePromptSuggestLiteConfig(input: unknown): PromptSuggestL
 		maxUnresolvedQuestions: numberWithDefault(raw.maxUnresolvedQuestions, defaults.maxUnresolvedQuestions, 0),
 		acceptKeys: acceptKeys.length > 0 ? acceptKeys : defaults.acceptKeys,
 		steeringHistoryWindow: numberWithDefault(raw.steeringHistoryWindow, defaults.steeringHistoryWindow, 0),
+		logSteeringEvents: booleanWithDefault(raw.logSteeringEvents, defaults.logSteeringEvents),
 	};
 }
 
