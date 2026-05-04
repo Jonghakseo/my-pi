@@ -1,9 +1,9 @@
 {
   "theme": "zentui",
   "quietStartup": true,
-  "lastChangelogVersion": "0.72.0",
-  "defaultProvider": "openai-codex",
-  "defaultModel": "gpt-5.5",
+  "lastChangelogVersion": "0.72.1",
+  "defaultProvider": "anthropic",
+  "defaultModel": "claude-opus-4-7",
   "defaultThinkingLevel": "xhigh",
   "transport": "sse",
   "subagent": {
@@ -41,5 +41,8 @@
   "autocompleteMaxVisible": 3,
   "terminal": {
     "showImages": false
+  },
+  "images": {
+    "blockImages": false
   }
 }
