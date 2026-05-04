@@ -6,7 +6,7 @@
   "defaultModel": "claude-opus-4-7",
   "defaultThinkingLevel": "xhigh",
   "warnings": {
-    "anthropicExtraUsage": true
+    "anthropicExtraUsage": false
   },
   "subagent": {
     "claudeRuntime": "cli"
