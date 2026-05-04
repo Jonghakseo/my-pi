@@ -1,11 +1,13 @@
 {
   "theme": "zentui",
   "quietStartup": true,
-  "lastChangelogVersion": "0.72.1",
+  "lastChangelogVersion": "0.73.0",
   "defaultProvider": "anthropic",
   "defaultModel": "claude-opus-4-7",
   "defaultThinkingLevel": "xhigh",
-  "transport": "sse",
+  "warnings": {
+    "anthropicExtraUsage": true
+  },
   "subagent": {
     "claudeRuntime": "cli"
   },
