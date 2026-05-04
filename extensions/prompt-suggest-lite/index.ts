@@ -20,18 +20,76 @@ import { classifySteering } from "./steering.ts";
 import { promptSuggestLiteStore, type PromptSuggestLiteSource } from "./shared.ts";
 
 const STATUS_KEY = "prompt-suggest-lite";
+const SESSION_DEFAULT_REF = "session-default";
 
 const PROMPT_SUGGEST_SUBCOMMANDS = [
 	{ value: "status", label: "status", description: "현재 상태와 마지막 suggestion 확인" },
 	{ value: "on", label: "on", description: "prompt-suggest-lite 활성화" },
 	{ value: "off", label: "off", description: "prompt-suggest-lite 비활성화" },
 	{ value: "reload", label: "reload", description: "prompt-suggest-lite.json 다시 읽기" },
+	{ value: "model", label: "model", description: "suggest 모델 변경 (인자 없으면 현재 값 표시)" },
 ] as const satisfies readonly AutocompleteItem[];
 
+let latestCtxForCompletions: ExtensionContext | undefined;
+
+function buildModelRefCompletions(modelArg: string): AutocompleteItem[] {
+	const registry = latestCtxForCompletions?.modelRegistry;
+	if (!registry) return [];
+	const available = (() => {
+		try {
+			return registry.getAvailable();
+		} catch {
+			return registry.getAll();
+		}
+	})();
+	const items: AutocompleteItem[] = [
+		{
+			value: `model ${SESSION_DEFAULT_REF}`,
+			label: SESSION_DEFAULT_REF,
+			description: "현재 세션 모델을 그대로 사용",
+		},
+		...available.map((m) => ({
+			value: `model ${m.provider}/${m.id}`,
+			label: `${m.provider}/${m.id}`,
+			description: m.name || undefined,
+		})),
+	];
+	const prefix = modelArg.trim().toLowerCase();
+	if (!prefix) return items;
+	return items.filter(
+		(item) => item.label.toLowerCase().includes(prefix) || item.description?.toLowerCase().includes(prefix),
+	);
+}
+
 function getPromptSuggestArgumentCompletions(argumentPrefix: string): AutocompleteItem[] | null {
-	const prefix = argumentPrefix.trimStart().toLowerCase();
+	const text = argumentPrefix.trimStart();
+	const modelArgMatch = text.match(/^model\s+(.*)$/i);
+	if (modelArgMatch) {
+		const items = buildModelRefCompletions(modelArgMatch[1] ?? "");
+		return items.length > 0 ? items : null;
+	}
+	const prefix = text.toLowerCase();
 	const filtered = PROMPT_SUGGEST_SUBCOMMANDS.filter((item) => item.label.toLowerCase().startsWith(prefix));
 	return filtered.length > 0 ? filtered.map((item) => ({ ...item })) : null;
+}
+
+function resolveModelRefInput(
+	rawRef: string,
+	registry: ExtensionContext["modelRegistry"],
+): { ok: true; ref: string } | { ok: false; error: string } {
+	const nextRef = rawRef === "default" ? SESSION_DEFAULT_REF : rawRef;
+	if (nextRef === SESSION_DEFAULT_REF) return { ok: true, ref: nextRef };
+	const all = registry.getAll();
+	const exists = nextRef.includes("/")
+		? all.some((m) => `${m.provider}/${m.id}` === nextRef)
+		: all.some((m) => m.id === nextRef);
+	if (!exists) {
+		return {
+			ok: false,
+			error: `Unknown model: ${nextRef}. Use provider/id (e.g. openai/gpt-5-mini) or 'session-default'.`,
+		};
+	}
+	return { ok: true, ref: nextRef };
 }
 
 function clearFooterStatus(ctx: ExtensionContext): void {
@@ -167,6 +225,7 @@ export default function promptSuggestLite(pi: ExtensionAPI) {
 	}
 
 	pi.on("session_start", async (_event, ctx) => {
+		latestCtxForCompletions = ctx;
 		reloadConfig();
 		const currentGeneration = ++generationId;
 		promptSuggestLiteStore.clearSuggestion();
@@ -232,11 +291,12 @@ export default function promptSuggestLite(pi: ExtensionAPI) {
 	});
 
 	pi.registerCommand("prompt-suggest", {
-		description: "Lightweight next-prompt suggestion controls: status | on | off | reload",
+		description: "Lightweight next-prompt suggestion controls: status | on | off | reload | model",
 		getArgumentCompletions: getPromptSuggestArgumentCompletions,
 		handler: async (args, ctx) => {
+			latestCtxForCompletions = ctx;
 			const trimmed = args.trim();
-			const [command = "status"] = trimmed ? trimmed.split(/\s+/) : ["status"];
+			const [command = "status", ...rest] = trimmed ? trimmed.split(/\s+/) : ["status"];
 			if (command === "on") {
 				saveAndApply({ ...config, enabled: true });
 				ctx.ui.notify("prompt-suggest-lite enabled", "info");
@@ -257,9 +317,28 @@ export default function promptSuggestLite(pi: ExtensionAPI) {
 				clearFooterStatus(ctx);
 				return;
 			}
+			if (command === "model") {
+				const rawRef = rest.join(" ").trim();
+				if (!rawRef) {
+					ctx.ui.notify(`prompt-suggest-lite modelRef: ${config.modelRef}`, "info");
+					return;
+				}
+				const resolved = resolveModelRefInput(rawRef, ctx.modelRegistry);
+				if (!resolved.ok) {
+					ctx.ui.notify(resolved.error, "warning");
+					return;
+				}
+				saveAndApply({ ...config, modelRef: resolved.ref });
+				ctx.ui.notify(`prompt-suggest-lite modelRef set to ${resolved.ref}`, "info");
+				clearFooterStatus(ctx);
+				return;
+			}
 
 			if (command !== "status") {
-				ctx.ui.notify(`Unknown prompt-suggest command: ${command}. Available: status, on, off, reload`, "warning");
+				ctx.ui.notify(
+					`Unknown prompt-suggest command: ${command}. Available: status, on, off, reload, model`,
+					"warning",
+				);
 				return;
 			}
 
