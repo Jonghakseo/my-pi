@@ -19,6 +19,10 @@ export type PromptSuggestLiteSteeringEvent = {
 	classification: SteeringClassification;
 	similarity: number;
 	timestamp: string;
+	source?: PromptSuggestLiteSource;
+	modelRef?: string;
+	shownAt?: string;
+	sessionId?: string;
 };
 
 type PromptSuggestLiteStatusSnapshot = {

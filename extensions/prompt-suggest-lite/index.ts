@@ -18,6 +18,7 @@ import { generatePromptSuggestion } from "./model.ts";
 import { normalizeSuggestionText, renderPromptSuggestLitePrompt } from "./prompt.ts";
 import { classifySteering } from "./steering.ts";
 import { promptSuggestLiteStore, type PromptSuggestLiteSource } from "./shared.ts";
+import { appendSteeringEventToLog } from "./logger.ts";
 
 const STATUS_KEY = "prompt-suggest-lite";
 const SESSION_DEFAULT_REF = "session-default";
@@ -146,6 +147,7 @@ function renderStatus(config: PromptSuggestLiteConfig): string {
 		status.lastGeneratedAt ? `- lastGeneratedAt: ${status.lastGeneratedAt}` : undefined,
 		status.lastError ? `- lastError: ${status.lastError}` : undefined,
 		`- steering events: ${steering.length}`,
+		`- logSteeringEvents: ${config.logSteeringEvents}`,
 		suggestion ? `- current suggestion: ${JSON.stringify(suggestion.text)}` : "- current suggestion: (none)",
 	]
 		.filter((line): line is string => typeof line === "string")
@@ -252,14 +254,23 @@ export default function promptSuggestLite(pi: ExtensionAPI) {
 		promptSuggestLiteStore.clearSuggestion();
 		if (suggestion && submitted && !submitted.startsWith("/")) {
 			const result = classifySteering(suggestion.text, submitted);
-			promptSuggestLiteStore.recordSteering({
+			const status = promptSuggestLiteStore.getStatus();
+			const event = {
 				turnId: suggestion.turnId,
 				suggestedPrompt: suggestion.text,
 				actualUserPrompt: submitted,
 				classification: result.classification,
 				similarity: result.similarity,
 				timestamp: new Date().toISOString(),
-			});
+				source: suggestion.source,
+				modelRef: status.lastModelRef,
+				shownAt: suggestion.shownAt,
+				sessionId: ctx.sessionManager.getSessionId(),
+			};
+			promptSuggestLiteStore.recordSteering(event);
+			if (config.logSteeringEvents) {
+				void appendSteeringEventToLog(event);
+			}
 		}
 		cancelPendingGenerationStatus(ctx);
 		return { action: "continue" as const };
