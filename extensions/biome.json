@@ -80,7 +80,8 @@
 			"!**/dist",
 			"!**/web-dist",
 			"!utils/coverage",
-			"!pi-session-*.html"
+			"!pi-session-*.html",
+			"!picky-handoff"
 		]
 	},
 	"overrides": [
