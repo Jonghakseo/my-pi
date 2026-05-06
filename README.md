@@ -125,7 +125,6 @@ Pi can auto-discover both `extensions/*.ts` and `extensions/*/index.ts`, but thi
 | [`github-pr-merge/`](./extensions/github-pr-merge/index.ts) | `/github:pr-merge` — merge the current branch PR through `gh` |
 | [`pr-comments/`](./extensions/pr-comments/index.ts) | `/github:get-pr-comments` — append unresolved inline review comments from the current PR |
 | [`pr-review-re-request/`](./extensions/pr-review-re-request/index.ts) | `/github:pr-review-re-request` — re-request reviews from pending reviewers |
-| [`branch-rename/`](./extensions/branch-rename/index.ts) | `/auto-branch` — analyze context and rename the current branch in the background |
 | [`notify/`](./extensions/notify/index.ts) | `/notify` and `/notify-off` for session completion notifications and macOS TTS |
 | [`until/`](./extensions/until/index.ts) | `/until`, `/untils`, `/until-cancel`, and `until_report` for repeat-until-condition workflows |
 | [`upload-image-url/`](./extensions/upload-image-url/index.ts) | `upload_image_url` — upload local/remote images to GitHub-backed storage for embedding |
