@@ -6,7 +6,8 @@ Persistent scheduler for Pi.
 
 - Lets the agent register scheduled work from natural language.
 - Stores each job as metadata plus a self-contained Markdown prompt.
-- Runs jobs through a headless Pi process: `pi -p --no-session --no-extensions @prompt.md`.
+- Runs jobs through a headless Pi process: `pi -p --no-session @prompt.md`.
+- Extensions and MCP tools are loaded as in interactive mode so scheduled prompts can call MCP tools (Slack, Jira, etc.).
 - Uses a detached daemon and macOS `launchd` LaunchAgent so jobs continue after Pi exits and after reboot/login.
 - Keeps one-shot jobs as disabled history after they run.
 - Requires user confirmation before deleting jobs. LaunchAgent uninstall can be explicitly confirmed with `cron uninstall-launchd --yes`.

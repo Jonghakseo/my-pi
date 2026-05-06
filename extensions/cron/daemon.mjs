@@ -225,7 +225,7 @@ function resolvePiBinary() {
 function runJobProcess(job, runLogPath) {
 	return new Promise((resolve) => {
 		const piBin = resolvePiBinary();
-		const args = ["-p", "--no-session", "--no-extensions", `@${job.promptFile}`];
+		const args = ["-p", "--no-session", `@${job.promptFile}`];
 		const child = spawn(piBin, args, {
 			cwd: job.cwd || agentDir,
 			stdio: ["ignore", "pipe", "pipe"],

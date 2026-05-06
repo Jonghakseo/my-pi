@@ -116,7 +116,8 @@ describe("cron daemon e2e", () => {
 		expect(existsSync(finalJob.lastRunLog as string)).toBe(true);
 
 		const argsLog = readFileSync(join(tempAgentDir, "fake-pi-args.log"), "utf-8");
-		expect(argsLog).toContain("-p --no-session --no-extensions");
+		expect(argsLog).toContain("-p --no-session");
+		expect(argsLog).not.toContain("--no-extensions");
 		expect(argsLog).toContain(`@${job.promptFile}`);
 		expect(readFileSync(join(tempAgentDir, "fake-pi-prompt.log"), "utf-8")).toContain("Say hello from cron");
 	});
