@@ -6,6 +6,18 @@ const mockDiscoverAgents = vi.fn();
 const mockEnqueueSubagentInvocation = vi.fn();
 const mockRunSingleAgent = vi.fn();
 const mockUpdateCommandRunsWidget = vi.fn();
+const originalStdinIsTTY = process.stdin.isTTY;
+const originalStdoutIsTTY = process.stdout.isTTY;
+
+function setStdioTty(isTTY: boolean): void {
+	Object.defineProperty(process.stdin, "isTTY", { configurable: true, value: isTTY });
+	Object.defineProperty(process.stdout, "isTTY", { configurable: true, value: isTTY });
+}
+
+function restoreStdioTty(): void {
+	Object.defineProperty(process.stdin, "isTTY", { configurable: true, value: originalStdinIsTTY });
+	Object.defineProperty(process.stdout, "isTTY", { configurable: true, value: originalStdoutIsTTY });
+}
 
 vi.mock("../subagent/agents.js", () => ({
 	discoverAgents: (...args: unknown[]) => mockDiscoverAgents(...args),
@@ -80,7 +92,7 @@ function createPi(sent: SentCall[]) {
 function createCtx(): ToolCtx {
 	return {
 		cwd: process.cwd(),
-		hasUI: false,
+		hasUI: true,
 		sessionManager: {
 			getSessionFile: () => "/tmp/main-session.jsonl",
 			getEntries: () => [],
@@ -88,8 +100,16 @@ function createCtx(): ToolCtx {
 	};
 }
 
+function createNonTuiCtx(): ToolCtx {
+	return {
+		...createCtx(),
+		hasUI: false,
+	};
+}
+
 describe("early agent name validation", () => {
 	beforeEach(() => {
+		setStdioTty(true);
 		mockDiscoverAgents.mockReset();
 		mockEnqueueSubagentInvocation.mockReset();
 		mockRunSingleAgent.mockReset();
@@ -106,6 +126,7 @@ describe("early agent name validation", () => {
 	});
 
 	afterEach(() => {
+		restoreStdioTty();
 		vi.clearAllMocks();
 	});
 
@@ -157,6 +178,33 @@ describe("early agent name validation", () => {
 
 		expect(result.isError).not.toBe(true);
 		expect(result.content[0]?.text).toContain("Started async subagent run");
+	});
+
+	it("returns the final result synchronously outside TUI interactive mode", async () => {
+		setStdioTty(false);
+		mockRunSingleAgent.mockImplementation(async (_cwd: unknown, _agents: unknown, agentName: string, task: string) => {
+			return makeResult(agentName, task, "SYNC_OK");
+		});
+		const { createSubagentToolExecute } = await loadToolExecute();
+		const store = createStore();
+		const sent: SentCall[] = [];
+		const pi = createPi(sent);
+		const execute = createSubagentToolExecute(pi as never, store);
+		const ctx = createNonTuiCtx();
+
+		const result = await execute(
+			"call-2b",
+			{ command: "subagent run worker -- do something" },
+			undefined,
+			undefined,
+			ctx,
+		);
+
+		expect(result.isError).not.toBe(true);
+		expect(result.content[0]?.text).toContain("[subagent:worker#1] completed");
+		expect(result.content[0]?.text).toContain("SYNC_OK");
+		expect(result.details.results).toHaveLength(1);
+		expect(sent).toHaveLength(0);
 	});
 
 	// ── batch ───────────────────────────────────────────────────
