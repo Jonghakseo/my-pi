@@ -5,8 +5,6 @@ import {
 	isLikelySessionId,
 	joinComma,
 	joinCommaStyled,
-	levenshtein,
-	maxDistance,
 	normalizeRemoteUrl,
 	normalizeSkillName,
 	normalizeText,
@@ -262,59 +260,6 @@ describe("joinCommaStyled", () => {
 	it("should handle empty array", () => {
 		const result = joinCommaStyled([], (s) => s, ", ");
 		expect(result).toBe("");
-	});
-});
-
-// ── levenshtein ──────────────────────────────────────────────────────────────
-
-describe("levenshtein", () => {
-	it("should return 0 for identical strings", () => {
-		expect(levenshtein("abc", "abc")).toBe(0);
-	});
-
-	it("should handle empty strings", () => {
-		expect(levenshtein("", "abc")).toBe(3);
-		expect(levenshtein("abc", "")).toBe(3);
-		expect(levenshtein("", "")).toBe(0);
-	});
-
-	it("should compute single substitution", () => {
-		expect(levenshtein("cat", "hat")).toBe(1);
-	});
-
-	it("should compute insertion/deletion", () => {
-		expect(levenshtein("abc", "abcd")).toBe(1);
-		expect(levenshtein("abcd", "abc")).toBe(1);
-	});
-
-	it("should compute for typos", () => {
-		expect(levenshtein("reload", "relod")).toBe(1);
-		expect(levenshtein("settings", "settigns")).toBe(2);
-	});
-});
-
-// ── maxDistance ───────────────────────────────────────────────────────────────
-
-describe("maxDistance", () => {
-	it("should return 1 for short commands (1-3)", () => {
-		expect(maxDistance(1)).toBe(1);
-		expect(maxDistance(2)).toBe(1);
-		expect(maxDistance(3)).toBe(1);
-	});
-
-	it("should return 2 for medium commands (4-6)", () => {
-		expect(maxDistance(4)).toBe(2);
-		expect(maxDistance(5)).toBe(2);
-		expect(maxDistance(6)).toBe(2);
-	});
-
-	it("should cap at 3 for long commands", () => {
-		expect(maxDistance(7)).toBe(3);
-		expect(maxDistance(100)).toBe(3);
-	});
-
-	it("should handle 0 length", () => {
-		expect(maxDistance(0)).toBe(1);
 	});
 });
 
