@@ -131,12 +131,6 @@ Pi can auto-discover both `extensions/*.ts` and `extensions/*/index.ts`, but thi
 | [`usage-analytics/`](./extensions/usage-analytics/index.ts) | `/analytics` — subagent and skill usage analytics overlay |
 | [`archive-to-html/`](./extensions/archive-to-html/index.ts) | Archives matching temporary HTML outputs and `show_widget` renderings into `~/Documents/agent-history/분류 전` |
 
-#### Safety
-
-| Extension | Description |
-|---|---|
-| [`command-typo-assist/`](./extensions/command-typo-assist/index.ts) | Intercepts unknown slash commands, suggests the closest known command, and prefills the editor |
-
 ### Installed npm extension packages
 
 The following reusable packages are currently listed in `settings.json`.

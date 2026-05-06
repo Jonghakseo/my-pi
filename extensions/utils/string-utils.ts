@@ -159,50 +159,6 @@ export function joinCommaStyled(items: string[], renderItem: (item: string) => s
 	return items.map(renderItem).join(sep);
 }
 
-// ── Distance / Matching ──────────────────────────────────────────────────────
-
-/**
- * Compute the Levenshtein distance between two strings.
- * Uses single-row DP for efficiency.
- *
- * Source: command-typo-assist.ts
- */
-export function levenshtein(a: string, b: string): number {
-	const m = a.length;
-	const n = b.length;
-	if (m === 0) return n;
-	if (n === 0) return m;
-
-	// Single-row DP
-	const row = Array.from({ length: n + 1 }, (_, i) => i);
-	for (let i = 1; i <= m; i++) {
-		let prev = i;
-		for (let j = 1; j <= n; j++) {
-			const cost = a[i - 1] === b[j - 1] ? 0 : 1;
-			const val = Math.min(
-				row[j] + 1, // deletion
-				prev + 1, // insertion
-				row[j - 1] + cost, // substitution
-			);
-			row[j - 1] = prev;
-			prev = val;
-		}
-		row[n] = prev;
-	}
-	return row[n];
-}
-
-/**
- * Threshold heuristic for Levenshtein distance.
- * Scales with command length: short commands need closer matches.
- *   len 1–3 → max 1,  len 4–6 → max 2,  len 7+ → max 3
- *
- * Source: command-typo-assist.ts
- */
-export function maxDistance(len: number): number {
-	return Math.min(3, Math.max(1, Math.ceil(len / 3)));
-}
-
 // ── Whitespace / Tab ─────────────────────────────────────────────────────────
 
 /**
