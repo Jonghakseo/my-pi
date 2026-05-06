@@ -6,6 +6,18 @@ const mockDiscoverAgents = vi.fn();
 const mockEnqueueSubagentInvocation = vi.fn();
 const mockRunSingleAgent = vi.fn();
 const mockUpdateCommandRunsWidget = vi.fn();
+const originalStdinIsTTY = process.stdin.isTTY;
+const originalStdoutIsTTY = process.stdout.isTTY;
+
+function setStdioTty(isTTY: boolean): void {
+	Object.defineProperty(process.stdin, "isTTY", { configurable: true, value: isTTY });
+	Object.defineProperty(process.stdout, "isTTY", { configurable: true, value: isTTY });
+}
+
+function restoreStdioTty(): void {
+	Object.defineProperty(process.stdin, "isTTY", { configurable: true, value: originalStdinIsTTY });
+	Object.defineProperty(process.stdout, "isTTY", { configurable: true, value: originalStdoutIsTTY });
+}
 
 vi.mock("../subagent/agents.js", () => ({
 	discoverAgents: (...args: unknown[]) => mockDiscoverAgents(...args),
@@ -84,7 +96,7 @@ function createPi(sent: SentCall[]) {
 function createCtx(): ToolCtx {
 	return {
 		cwd: "/tmp/test-project",
-		hasUI: false,
+		hasUI: true,
 		sessionManager: {
 			getSessionFile: () => "/tmp/main-session.jsonl",
 			getEntries: () => [],
@@ -112,6 +124,7 @@ async function waitForAssertion(assertion: () => void, attempts = 30): Promise<v
 
 describe("T09: command/tool runtime metadata integration", () => {
 	beforeEach(() => {
+		setStdioTty(true);
 		mockDiscoverAgents.mockReset();
 		mockEnqueueSubagentInvocation.mockReset();
 		mockRunSingleAgent.mockReset();
@@ -128,6 +141,7 @@ describe("T09: command/tool runtime metadata integration", () => {
 	});
 
 	afterEach(() => {
+		restoreStdioTty();
 		vi.clearAllMocks();
 	});
 

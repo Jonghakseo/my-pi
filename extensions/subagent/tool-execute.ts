@@ -587,6 +587,22 @@ function makePendingCompletion(message: PendingCompletion["message"], triggerTur
 	};
 }
 
+function isInteractiveTuiContext(ctx: SubagentToolExecuteContext): boolean {
+	return Boolean(ctx.hasUI && process.stdin.isTTY && process.stdout.isTTY);
+}
+
+function finalizeRunError(runState: CommandRunState, error: unknown): FinalizedRun {
+	runState.status = "error";
+	runState.elapsedMs = Date.now() - runState.startedAt;
+	runState.lastLine = error instanceof Error ? error.message : "Subagent execution failed";
+	runState.lastOutput = runState.lastLine;
+	return {
+		runState,
+		isError: true,
+		rawOutput: runState.lastLine,
+	};
+}
+
 // biome-ignore lint/complexity/noExcessiveLinesPerFunction: factory intentionally co-locates the subagent tool lifecycle for shared closures and messaging.
 export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore) {
 	// biome-ignore lint/complexity/noExcessiveLinesPerFunction: execute handler coordinates validation, launch, and completion delivery across single/batch/chain modes.
@@ -686,6 +702,7 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 		const hasChain = asyncAction === "chain";
 		const hasSingle = asyncAction === "run" || asyncAction === "continue";
 		const mode: LaunchMode = hasBatch ? "batch" : hasChain ? "chain" : "single";
+		const shouldRunAsync = isInteractiveTuiContext(ctx);
 		const makeDetails = (
 			modeOverride: LaunchMode = mode,
 			results: SingleResult[] = [],
@@ -1203,7 +1220,40 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 				continuedFromRunId: continuationRunId,
 				existingRunState: continueFromRun,
 			});
+			const launchSummary = toLaunchSummary(runState, continueFromRun ? "continue" : "run");
 			const startedState = continueFromRun ? "resumed" : "started";
+
+			if (!shouldRunAsync) {
+				let finalized: FinalizedRun;
+				try {
+					finalized = await launchRunInBackground(runState, taskForAgent);
+				} catch (error: unknown) {
+					finalized = finalizeRunError(runState, error);
+				} finally {
+					runState.abortController = undefined;
+				}
+
+				const message =
+					finalized.result?.exitCode === ESCALATION_EXIT_CODE
+						? buildEscalationMessage(runState, finalized.rawOutput.replace(/^\[ESCALATION\]\s*/, ""), finalized.result)
+						: buildRunCompletionMessage(finalized);
+				cleanupRunAfterFinalDelivery(runState.id);
+				trimCommandRunHistory(store, {
+					maxRuns: 10,
+					ctx,
+					pi,
+					updateWidget: false,
+					removalReason: "trim",
+				});
+				updateCommandRunsWidget(store);
+
+				return {
+					content: [{ type: "text", text: withIdleRunWarning(message.content) }],
+					details: makeDetails("single", finalized.result ? [finalized.result] : [], [launchSummary]),
+					isError: finalized.isError,
+				};
+			}
+
 			pi.sendMessage(buildRunStartMessage(runState, startedState), { deliverAs: "followUp", triggerTurn: false });
 			ctx.ui?.notify?.(
 				`${continueFromRun ? `Resumed subagent #${runState.id}` : `Started subagent #${runState.id}`}: ${resolvedAgent}`,
@@ -1246,15 +1296,8 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 					);
 				} catch (error: unknown) {
 					if (runState.removed) return;
-					runState.status = "error";
-					runState.elapsedMs = Date.now() - runState.startedAt;
-					runState.lastLine = error instanceof Error ? error.message : "Subagent execution failed";
-					runState.lastOutput = runState.lastLine;
-					const errorMessage = buildRunCompletionMessage({
-						runState,
-						isError: true,
-						rawOutput: runState.lastLine,
-					});
+					const finalized = finalizeRunError(runState, error);
+					const errorMessage = buildRunCompletionMessage(finalized);
 					if (isInOriginSession(ctx, originSessionFile)) {
 						pi.sendMessage(errorMessage, { deliverAs: "followUp", triggerTurn: true });
 						cleanupRunAfterFinalDelivery(runState.id);
@@ -1286,7 +1329,7 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 						),
 					},
 				],
-				details: makeDetails("single", [], [toLaunchSummary(runState, continueFromRun ? "continue" : "run")]),
+				details: makeDetails("single", [], [launchSummary]),
 			};
 		}
 
@@ -1336,6 +1379,46 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 				pendingResults: new Map(),
 			});
 			updateCommandRunsWidget(store, ctx as WidgetRenderCtx);
+
+			if (!shouldRunAsync) {
+				const finalizedRuns = await Promise.all(
+					runStates.map(async ({ runState, taskForAgent }) => {
+						try {
+							return await launchRunInBackground(runState, taskForAgent);
+						} catch (error: unknown) {
+							return finalizeRunError(runState, error);
+						} finally {
+							runState.abortController = undefined;
+						}
+					}),
+				);
+				const orderedRuns = runStates.map(({ runState }) => runState);
+				const hasError = finalizedRuns.some((finalized) => finalized.isError);
+				const content = formatBatchSummary(batchId, orderedRuns, hasError ? "error" : "completed");
+				for (const { runState } of runStates) cleanupRunAfterFinalDelivery(runState.id);
+				clearPendingGroupCompletion("batch", batchId);
+				store.batchGroups.delete(batchId);
+				trimCommandRunHistory(store, {
+					maxRuns: 10,
+					ctx,
+					pi,
+					updateWidget: false,
+					removalReason: "trim",
+				});
+				updateCommandRunsWidget(store);
+
+				return {
+					content: [{ type: "text", text: withIdleRunWarning(content) }],
+					details: makeDetails(
+						"batch",
+						finalizedRuns
+							.map((finalized) => finalized.result)
+							.filter((result): result is SingleResult => Boolean(result)),
+						runStates.map(({ runState }) => toLaunchSummary(runState, "batch")),
+					),
+					isError: hasError,
+				};
+			}
 
 			for (const { runState, taskForAgent } of runStates) {
 				void (async () => {
@@ -1485,6 +1568,140 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 				originSessionFile,
 				createdAt: Date.now(),
 			});
+
+			if (!shouldRunAsync) {
+				let previousOutput = "";
+				let terminalStatus: "completed" | "stopped" | "error" = "completed";
+				const finalizedRuns: FinalizedRun[] = [];
+				const pipeline = store.pipelines.get(pipelineId);
+				if (!pipeline) {
+					return {
+						content: [{ type: "text", text: "Subagent chain failed to initialize." }],
+						details: makeDetails("chain"),
+						isError: true,
+					};
+				}
+
+				try {
+					for (let index = 0; index < steps.length; index++) {
+						pipeline.currentIndex = index;
+						const step = steps[index];
+						const pipelineReferenceSection =
+							index > 0
+								? buildPipelineReferenceSection(previousOutput, {
+										agent: steps[index - 1]?.agent,
+										task: steps[index - 1]?.task,
+										stepNumber: index,
+										totalSteps: steps.length,
+									})
+								: "";
+						let taskForAgent = step.task;
+						if (inheritMainContext) {
+							taskForAgent = wrapTaskWithMainContext(
+								step.task,
+								stripTaskEchoFromMainContext(mainContextText, step.task),
+								{
+									mainSessionFile,
+									totalMessageCount,
+									referenceSections: pipelineReferenceSection ? [pipelineReferenceSection] : undefined,
+								},
+							);
+						} else if (pipelineReferenceSection) {
+							taskForAgent = wrapTaskWithPipelineContext(step.task, previousOutput, {
+								agent: steps[index - 1]?.agent,
+								task: steps[index - 1]?.task,
+								stepNumber: index,
+								totalSteps: steps.length,
+							});
+						}
+
+						const runState = registerRunLaunch({
+							agent: step.agent,
+							taskForDisplay: step.task,
+							taskForAgent,
+							inheritMainContext,
+							originSessionFile,
+							pipelineId,
+							pipelineStepIndex: index,
+						});
+						pipeline.stepRunIds.push(runState.id);
+						chainLaunches.push(toLaunchSummary(runState, "chain"));
+
+						let finalized: FinalizedRun;
+						try {
+							finalized = await launchRunInBackground(runState, taskForAgent);
+						} catch (error: unknown) {
+							finalized = finalizeRunError(runState, error);
+						} finally {
+							runState.abortController = undefined;
+						}
+						finalizedRuns.push(finalized);
+
+						if (runState.removed) {
+							terminalStatus = finalized.isError ? "error" : "stopped";
+							pipeline.stepResults.push({
+								runId: runState.id,
+								agent: runState.agent,
+								task: step.task,
+								output: finalized.rawOutput || "Run removed before pipeline completion.",
+								status: "error",
+							});
+							break;
+						}
+
+						pipeline.stepResults.push({
+							runId: runState.id,
+							agent: runState.agent,
+							task: step.task,
+							output: finalized.rawOutput,
+							status: finalized.isError ? "error" : "done",
+						});
+						previousOutput = finalized.rawOutput;
+						updateCommandRunsWidget(store);
+
+						if (finalized.isError) {
+							terminalStatus = "error";
+							break;
+						}
+					}
+				} catch (error: unknown) {
+					terminalStatus = "error";
+					pipeline.stepResults.push({
+						runId: -1,
+						agent: "pipeline",
+						task: "internal error",
+						output: error instanceof Error ? error.message : "Subagent execution failed",
+						status: "error",
+					});
+				}
+
+				const hasError = pipeline.stepResults.some((step) => step.status === "error");
+				if (terminalStatus === "completed" && hasError) terminalStatus = "error";
+				const content = formatPipelineSummary(pipelineId, pipeline.stepResults, terminalStatus);
+				for (const runId of pipeline.stepRunIds) cleanupRunAfterFinalDelivery(runId);
+				clearPendingGroupCompletion("chain", pipelineId);
+				store.pipelines.delete(pipelineId);
+				trimCommandRunHistory(store, {
+					maxRuns: 10,
+					ctx,
+					pi,
+					updateWidget: false,
+					removalReason: "trim",
+				});
+				updateCommandRunsWidget(store);
+
+				return {
+					content: [{ type: "text", text: withIdleRunWarning(content) }],
+					details: makeDetails(
+						"chain",
+						finalizedRuns
+							.map((finalized) => finalized.result)
+							.filter((result): result is SingleResult => Boolean(result)),
+						[...chainLaunches],
+					),
+					isError: terminalStatus !== "completed",
+				};
+			}
 
 			void (async () => {
 				let previousOutput = "";
