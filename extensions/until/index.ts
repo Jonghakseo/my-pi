@@ -221,10 +221,11 @@ export default function (pi: ExtensionAPI) {
 
 	const updateFooter = () => {
 		if (!latestCtx?.hasUI) return;
-		const theme = latestCtx.ui.theme;
 
 		if (tasks.size === 0) {
-			latestCtx.ui.setStatus(STATUS_KEY, undefined);
+			try {
+				latestCtx.ui.setStatus(STATUS_KEY, undefined);
+			} catch {}
 			return;
 		}
 
@@ -236,9 +237,14 @@ export default function (pi: ExtensionAPI) {
 
 		const nextLabel = nearestRun < Number.POSITIVE_INFINITY ? formatClock(nearestRun) : "—";
 
-		const text = theme.fg("accent", `⏳ until ×${tasks.size}`) + theme.fg("dim", ` | next ${nextLabel}`);
+		const theme = latestCtx.ui.theme;
+		const paint = (color: "accent" | "dim", t: string) => (typeof theme?.fg === "function" ? theme.fg(color, t) : t);
 
-		latestCtx.ui.setStatus(STATUS_KEY, text);
+		const text = paint("accent", `⏳ until ×${tasks.size}`) + paint("dim", ` | next ${nextLabel}`);
+
+		try {
+			latestCtx.ui.setStatus(STATUS_KEY, text);
+		} catch {}
 	};
 
 	const jitter = (ms: number): number => {
@@ -326,8 +332,20 @@ export default function (pi: ExtensionAPI) {
 
 		const delay = jitter(task.intervalMs);
 		task.nextRunAt = Date.now() + delay;
-		task.timer = setTimeout(() => executeRun(id), delay);
-		updateFooter();
+		task.timer = setTimeout(() => {
+			try {
+				executeRun(id);
+			} catch (err) {
+				// biome-ignore lint/suspicious/noConsole: timer fallback needs to surface failures without killing Node.
+				console.error(`[until #${id}] timer callback failed:`, err);
+			}
+		}, delay);
+		try {
+			updateFooter();
+		} catch (err) {
+			// biome-ignore lint/suspicious/noConsole: footer fallback needs to surface failures without killing Node.
+			console.error("[until] updateFooter failed:", err);
+		}
 	};
 
 	// ── Register until task ───────────────────────────────────────────────
@@ -363,7 +381,14 @@ export default function (pi: ExtensionAPI) {
 			nextRunAt: now, // 즉시 실행
 			runCount: 0,
 			inFlight: false,
-			timer: setTimeout(() => executeRun(id), 0), // 즉시 1회 실행
+			timer: setTimeout(() => {
+				try {
+					executeRun(id);
+				} catch (err) {
+					// biome-ignore lint/suspicious/noConsole: timer fallback needs to surface failures without killing Node.
+					console.error(`[until #${id}] initial run failed:`, err);
+				}
+			}, 0), // 즉시 1회 실행
 		};
 
 		tasks.set(id, task);
