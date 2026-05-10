@@ -190,6 +190,6 @@ export const ListAgentsParams = Type.Object({});
 export const SubagentParams = Type.Object({
 	command: Type.String({
 		description:
-			"CLI-style subagent command. Always start with 'subagent help' to discover commands. Supported launch forms: run, continue, batch, and chain. In TUI interactive mode, launches are async: after launch, stop making subagent calls and simply end your response; the subagent will message you again after completion unless the user explicitly asks for manual inspection. In non-TUI/API/print/RPC environments, launches run synchronously and the final result is returned directly as this tool response. Do NOT poll with runs/status/detail right after an async launch. Tip: when a task description is long, write context to a temp file and pass the file path in the task (e.g. 'read /tmp/ctx.md and follow the instructions') — the subagent can read it. Examples: 'subagent run planner --main -- <task>', 'subagent continue 22 -- 아까 진행하던거 마무리해서 커밋해줘', 'subagent batch --main --agent worker --task \"A\" --agent reviewer --task \"B\"', 'subagent chain --main --agent worker --task \"구현\" --agent reviewer --task \"리뷰\"', 'subagent runs', 'subagent status 22', 'subagent abort 22', 'subagent remove all'.",
+			"Command string, e.g. 'subagent help', 'subagent run worker --main -- <task>', 'subagent batch --main --agent worker --task \"A\" --agent reviewer --task \"B\"'. Write long task context to a temp file and reference its path.",
 	}),
 });
