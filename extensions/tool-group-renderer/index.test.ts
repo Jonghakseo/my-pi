@@ -89,7 +89,7 @@ describe("tool-group-renderer bash preview", () => {
 		const line = __test__.formatBashLine(
 			{
 				title: "askUserQuestion 관련 파일 검색",
-				command: "find /usr/local/lib/node_modules/@mariozechner/pi-coding-agent -type f -name '*.js'",
+				command: "find /usr/local/lib/node_modules/@earendil-works/pi-coding-agent -type f -name '*.js'",
 			},
 			{
 				toolName: "bash",
@@ -143,7 +143,7 @@ describe("tool-group-renderer bash preview", () => {
 		const line = __test__.formatBashLine(
 			{
 				title: "askUserQuestion 관련 파일 검색",
-				command: "find /usr/local/lib/node_modules/@mariozechner/pi-coding-agent -type f -name '*.js'",
+				command: "find /usr/local/lib/node_modules/@earendil-works/pi-coding-agent -type f -name '*.js'",
 			},
 			{
 				toolName: "bash",

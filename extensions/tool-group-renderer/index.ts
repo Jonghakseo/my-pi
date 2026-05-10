@@ -5,7 +5,7 @@ import { truncatePlainToWidth } from "../utils/format-utils.js";
 const PATCH_STATE_KEY = Symbol.for("pi.tool-group-renderer.patch-state");
 const PATCH_VERSION = "2026-04-27-r1";
 const GROUP_STATE = Symbol("pi.tool-group-renderer.state");
-const PI_INTERACTIVE_BASE = "/usr/local/lib/node_modules/@mariozechner/pi-coding-agent/dist/modes/interactive";
+const PI_INTERACTIVE_BASE = "/usr/local/lib/node_modules/@earendil-works/pi-coding-agent/dist/modes/interactive";
 const BASH_PREVIEW_LIMIT = 56;
 const MIN_BASH_LINE_WIDTH_WITH_COMMAND = 36;
 const MIN_BASH_COMMAND_PREVIEW_WIDTH = 12;
