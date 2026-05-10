@@ -948,7 +948,7 @@ export function registerAll(pi: ExtensionAPI, store: SubagentStore): void {
 		name: "subagent",
 		label: "Subagent",
 		description:
-			'CLI-style subagent delegation interface. Always start with `subagent help` to learn available commands, then execute run/continue/batch/chain/runs/status/detail/abort/remove via `{ command: "subagent ..." }`. In TUI interactive mode, launches are async: after launch, stop making subagent calls and simply end your response; the subagent will message you again after completion unless the user explicitly asks for manual inspection. In non-TUI/API/print/RPC environments, launches run synchronously and the final result is returned directly as this tool response. Do NOT poll with runs/status/detail right after an async launch. Tip: when a task description is long, write context to a temp file and pass the file path in the task (e.g. "read /tmp/ctx.md and follow the instructions") — the subagent can read it.',
+			"CLI-style subagent delegation. Use `subagent help` for commands. Async launches return later in TUI mode; do not poll immediately after launch.",
 		parameters: SubagentParams,
 
 		execute: createSubagentToolExecute(pi, store) as any,

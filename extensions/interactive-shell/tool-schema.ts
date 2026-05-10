@@ -3,161 +3,53 @@ import { Type } from "typebox";
 export const TOOL_NAME = "interactive_shell";
 export const TOOL_LABEL = "Interactive Shell";
 
-export const TOOL_DESCRIPTION = `Run an interactive CLI coding agent in an overlay.
+export const TOOL_DESCRIPTION = `Run interactive or long-running terminal programs in a visible overlay, or as headless background dispatch when background:true is used (TUI apps, dev servers, REPLs, log viewers, or CLI coding agents when an overlay is needed).
 
-Use this ONLY for delegating tasks to other AI coding agents (Claude Code, Gemini CLI, Codex, etc.) that have their own TUI and benefit from user interaction.
+Use bash for ordinary non-interactive commands. Use subagent for normal AI task delegation unless the user specifically needs an interactive CLI overlay.
 
-DO NOT use this for regular bash commands - use the standard bash tool instead.
+Modes: interactive blocks for user control; hands-free returns a sessionId for checks; dispatch returns a sessionId and notifies on completion. Prefer dispatch for finite fire-and-forget tasks; for long-running servers/logs use hands-free or set handsFree.autoExitOnQuiet:false because dispatch auto-exits on quiet by default.
 
-MODES:
-- interactive (default): User supervises and controls the session
-- hands-free: Agent monitors with periodic updates, user can take over anytime by typing
-- dispatch: Agent is notified on completion via triggerTurn (no polling needed)
-
-RECOMMENDED DEFAULT FOR DELEGATED TASKS:
-- For fire-and-forget delegations and QA-style checks, prefer mode="dispatch".
-- Dispatch is the safest choice when the agent should continue immediately and be notified automatically on completion.
-
-The user will see the process in an overlay. They can:
-- Watch output in real-time
-- Scroll through output (Shift+Up/Down)
-- Transfer output to you (Ctrl+T) - closes overlay and sends output as your context
-- Background (Ctrl+B) - dismiss overlay, keep process running
-- Detach (Ctrl+Q) for menu: transfer/background/kill
-- In hands-free mode: type anything to take over control
-
-HANDS-FREE MODE (NON-BLOCKING):
-When mode="hands-free", the tool returns IMMEDIATELY with a sessionId.
-The overlay opens for the user to watch, but you (the agent) get control back right away.
-
-Workflow:
-1. Start session: interactive_shell({ command: 'pi "Fix bugs"', mode: "hands-free" })
-   -> Returns immediately with sessionId
-2. Check status/output: interactive_shell({ sessionId: "calm-reef" })
-   -> Returns current status and any new output since last check
-3. When task is done: interactive_shell({ sessionId: "calm-reef", kill: true })
-   -> Kills session and returns final output
-
-The user sees the overlay and can:
-- Watch output in real-time
-- Take over by typing (you'll see "user-takeover" status on next query)
-- Kill/background via Ctrl+Q
-
-QUERYING SESSION STATUS:
-- interactive_shell({ sessionId: "calm-reef" }) - get status + rendered terminal output (default: 20 lines, 5KB)
-- interactive_shell({ sessionId: "calm-reef", outputLines: 50 }) - get more lines (max: 200)
-- interactive_shell({ sessionId: "calm-reef", outputMaxChars: 20000 }) - get more content (max: 50KB)
-- interactive_shell({ sessionId: "calm-reef", outputOffset: 0, outputLines: 50 }) - pagination (lines 0-49)
-- interactive_shell({ sessionId: "calm-reef", incremental: true }) - get next N unseen lines (server tracks position)
-- interactive_shell({ sessionId: "calm-reef", drain: true }) - only NEW output since last query (raw stream)
-- interactive_shell({ sessionId: "calm-reef", kill: true }) - end session
-- interactive_shell({ sessionId: "calm-reef", input: "..." }) - send input
-
-IMPORTANT: Don't query too frequently! Wait 30-60 seconds between status checks.
-The user is watching the overlay in real-time - you're just checking in periodically.
-
-RATE LIMITING:
-Queries are limited to once every 60 seconds (configurable). If you query too soon,
-the tool will automatically wait until the limit expires before returning.
-
-SENDING INPUT:
-- interactive_shell({ sessionId: "calm-reef", input: "/help\\n" }) - raw text/keystrokes
-- interactive_shell({ sessionId: "calm-reef", inputKeys: ["ctrl+c"] }) - named keys
-- interactive_shell({ sessionId: "calm-reef", inputKeys: ["up", "up", "enter"] }) - multiple keys
-- interactive_shell({ sessionId: "calm-reef", inputHex: ["0x1b", "0x5b", "0x41"] }) - raw escape sequences
-- interactive_shell({ sessionId: "calm-reef", inputPaste: "multiline\\ntext" }) - bracketed paste (prevents auto-execution)
-
-Named keys for inputKeys: up, down, left, right, enter, escape, tab, backspace, ctrl+c, ctrl+d, etc.
-Modifiers: ctrl+x, alt+x, shift+tab, ctrl+alt+delete (or c-x, m-x, s-tab syntax)
-
-TIMEOUT (for TUI commands that don't exit cleanly):
-Use timeout to auto-kill after N milliseconds. Useful for capturing output from commands like "pi --help":
-- interactive_shell({ command: "pi --help", mode: "hands-free", timeout: 5000 })
-
-DISPATCH MODE (NON-BLOCKING, NO POLLING):
-When mode="dispatch", the tool returns IMMEDIATELY with a sessionId.
-You do NOT need to poll. You'll be notified automatically when the session completes.
-
-Workflow:
-1. Start session: interactive_shell({ command: 'pi "Fix bugs"', mode: "dispatch" })
-   -> Returns immediately with sessionId
-2. Do other work - no polling needed
-3. When complete, you receive a notification with the session output
-
-Dispatch defaults autoExitOnQuiet to true (opt-out with handsFree.autoExitOnQuiet: false).
-You can still query with sessionId if needed, but it's not required.
-
-BACKGROUND DISPATCH (HEADLESS):
-Start a session without any overlay. Process runs headlessly, agent notified on completion:
-- interactive_shell({ command: 'pi "fix bugs"', mode: "dispatch", background: true })
-
-AGENT-INITIATED BACKGROUND:
-Dismiss an existing overlay, keep the process running in background:
-- interactive_shell({ sessionId: "calm-reef", background: true })
-
-ATTACH (REATTACH TO BACKGROUND SESSION):
-Open an overlay for a background session:
-- interactive_shell({ attach: "calm-reef" }) - interactive (blocking)
-- interactive_shell({ attach: "calm-reef", mode: "dispatch" }) - dispatch (non-blocking, notified)
-
-LIST BACKGROUND SESSIONS:
-- interactive_shell({ listBackground: true })
-
-DISMISS BACKGROUND SESSIONS:
-- interactive_shell({ dismissBackground: true }) - kill running, remove exited, clear all
-- interactive_shell({ dismissBackground: "calm-reef" }) - dismiss specific session
-
-Important: this tool does NOT inject prompts. If you want to start with a prompt,
-include it in the command using the CLI's own prompt flags.
-
-Examples:
-- pi "Scan the current codebase"
-- claude "Check the current directory and summarize"
-- gemini (interactive, idle)
-- aider --yes-always (hands-free, auto-approve)
-- pi --help (with timeout: 5000 to capture help output)`;
+Common calls: start with { command, mode?, cwd?, timeout? }; query with { sessionId, outputLines?, drain?/incremental? }; send input with { sessionId, input/inputKeys/inputPaste }; finish with { sessionId, kill: true }. Wait 30-60s between status checks.`;
 
 export const toolParameters = Type.Object({
 	command: Type.Optional(
 		Type.String({
-			description: "The CLI agent command (e.g., 'pi \"Fix the bug\"'). Required to start a new session.",
+			description: "Command to start a new overlay session.",
 		}),
 	),
 	sessionId: Type.Optional(
 		Type.String({
-			description: "Session ID to interact with an existing hands-free session",
+			description: "Existing session ID",
 		}),
 	),
 	kill: Type.Optional(
 		Type.Boolean({
-			description: "Kill the session (requires sessionId). Use when task appears complete.",
+			description: "Kill an existing session.",
 		}),
 	),
 	outputLines: Type.Optional(
 		Type.Number({
-			description: "Number of lines to return when querying (default: 20, max: 200)",
+			description: "Lines to return (default 20, max 200)",
 		}),
 	),
 	outputMaxChars: Type.Optional(
 		Type.Number({
-			description: "Max chars to return when querying (default: 5KB, max: 50KB)",
+			description: "Max returned chars (default 5KB, max 50KB)",
 		}),
 	),
 	outputOffset: Type.Optional(
 		Type.Number({
-			description: "Line offset for pagination (0-indexed). Use with outputLines to read specific ranges.",
+			description: "0-based output line offset for pagination.",
 		}),
 	),
 	drain: Type.Optional(
 		Type.Boolean({
-			description:
-				"If true, return only NEW output since last query (raw stream). More token-efficient for repeated polling.",
+			description: "Return only new raw output since last query.",
 		}),
 	),
 	incremental: Type.Optional(
 		Type.Boolean({
-			description:
-				"If true, return next N lines not yet seen. Server tracks position - just keep calling to paginate through output.",
+			description: "Return next unseen output lines.",
 		}),
 	),
 	settings: Type.Optional(
@@ -170,26 +62,22 @@ export const toolParameters = Type.Object({
 	),
 	input: Type.Optional(
 		Type.String({
-			description:
-				"Raw text/keystrokes to send to the session (requires sessionId). For special keys, use inputKeys instead.",
+			description: "Raw text/keystrokes to send (requires sessionId).",
 		}),
 	),
 	inputKeys: Type.Optional(
 		Type.Array(Type.String(), {
-			description:
-				"Named keys with modifier support: up, down, enter, ctrl+c, alt+x, shift+tab, ctrl+alt+delete, etc. (requires sessionId)",
+			description: "Named keys to send, e.g. enter, ctrl+c, alt+x.",
 		}),
 	),
 	inputHex: Type.Optional(
 		Type.Array(Type.String(), {
-			description:
-				"Hex bytes to send as raw escape sequences (e.g., ['0x1b', '0x5b', '0x41'] for ESC[A). (requires sessionId)",
+			description: "Raw hex byte sequences to send.",
 		}),
 	),
 	inputPaste: Type.Optional(
 		Type.String({
-			description:
-				"Text to paste with bracketed paste mode - prevents shells from auto-executing multiline input. (requires sessionId)",
+			description: "Bracketed-paste text to send.",
 		}),
 	),
 	cwd: Type.Optional(
@@ -204,24 +92,22 @@ export const toolParameters = Type.Object({
 	),
 	reason: Type.Optional(
 		Type.String({
-			description: "Brief explanation shown in the overlay header only (not passed to the subprocess)",
+			description: "Overlay header note only.",
 		}),
 	),
 	mode: Type.Optional(
 		Type.String({
-			description:
-				"Mode: 'interactive' (default, user controls), 'hands-free' (agent monitors, user can take over), or 'dispatch' (agent notified on completion, no polling needed)",
+			description: "interactive | hands-free | dispatch",
 		}),
 	),
 	background: Type.Optional(
 		Type.Boolean({
-			description:
-				"Run without overlay (with mode='dispatch') or dismiss existing overlay (with sessionId). Process runs in background, user can /attach.",
+			description: "New background sessions require mode='dispatch'; with sessionId, move overlay to background.",
 		}),
 	),
 	attach: Type.Optional(
 		Type.String({
-			description: "Background session ID to reattach. Opens overlay with the specified mode.",
+			description: "Background session ID to reattach.",
 		}),
 	),
 	listBackground: Type.Optional(
@@ -231,64 +117,53 @@ export const toolParameters = Type.Object({
 	),
 	dismissBackground: Type.Optional(
 		Type.Union([Type.Boolean(), Type.String()], {
-			description:
-				"Dismiss background sessions. true = all, string = specific session ID. Kills running sessions, removes exited ones.",
+			description: "Dismiss background sessions; true = all, string = ID. Kills running/removes exited.",
 		}),
 	),
 	handsFree: Type.Optional(
 		Type.Object({
 			updateMode: Type.Optional(
 				Type.String({
-					description:
-						"Update mode: 'on-quiet' (default, emit when output stops) or 'interval' (emit on fixed schedule)",
+					description: "Update mode: on-quiet or interval",
 				}),
 			),
-			updateInterval: Type.Optional(
-				Type.Number({ description: "Max interval between updates in ms (default: 60000)" }),
-			),
-			quietThreshold: Type.Optional(
-				Type.Number({ description: "Silence duration before emitting update in on-quiet mode (default: 8000ms)" }),
-			),
+			updateInterval: Type.Optional(Type.Number({ description: "Max update interval ms" })),
+			quietThreshold: Type.Optional(Type.Number({ description: "Quiet threshold ms" })),
 			gracePeriod: Type.Optional(
 				Type.Number({
-					description: "Startup grace period before autoExitOnQuiet can kill the session (default: 15000ms)",
+					description: "Startup grace period ms",
 				}),
 			),
-			updateMaxChars: Type.Optional(Type.Number({ description: "Max chars per update (default: 1500)" })),
+			updateMaxChars: Type.Optional(Type.Number({ description: "Max chars per update" })),
 			maxTotalChars: Type.Optional(
 				Type.Number({
-					description:
-						"Total char budget for all updates (default: 100000). Updates stop including content when exhausted.",
+					description: "Total char budget for updates",
 				}),
 			),
 			autoExitOnQuiet: Type.Optional(
 				Type.Boolean({
-					description:
-						"Auto-kill session when output stops (after quietThreshold). Defaults to false. Set to true for fire-and-forget single-task delegations.",
+					description: "Auto-kill after quietThreshold.",
 				}),
 			),
 		}),
 	),
 	handoffPreview: Type.Optional(
 		Type.Object({
-			enabled: Type.Optional(Type.Boolean({ description: "Include last N lines in tool result details" })),
-			lines: Type.Optional(Type.Number({ description: "Tail lines to include (default from config)" })),
-			maxChars: Type.Optional(
-				Type.Number({ description: "Max chars to include in tail preview (default from config)" }),
-			),
+			enabled: Type.Optional(Type.Boolean({ description: "Include tail in result details" })),
+			lines: Type.Optional(Type.Number({ description: "Tail lines to include" })),
+			maxChars: Type.Optional(Type.Number({ description: "Tail preview max chars" })),
 		}),
 	),
 	handoffSnapshot: Type.Optional(
 		Type.Object({
-			enabled: Type.Optional(Type.Boolean({ description: "Write a transcript snapshot on detach/exit" })),
-			lines: Type.Optional(Type.Number({ description: "Tail lines to capture (default from config)" })),
-			maxChars: Type.Optional(Type.Number({ description: "Max chars to write (default from config)" })),
+			enabled: Type.Optional(Type.Boolean({ description: "Write transcript snapshot" })),
+			lines: Type.Optional(Type.Number({ description: "Snapshot tail lines" })),
+			maxChars: Type.Optional(Type.Number({ description: "Snapshot max chars" })),
 		}),
 	),
 	timeout: Type.Optional(
 		Type.Number({
-			description:
-				"Auto-kill process after N milliseconds. Useful for TUI commands that don't exit cleanly (e.g., 'pi --help')",
+			description: "Auto-kill process after N milliseconds.",
 		}),
 	),
 });
