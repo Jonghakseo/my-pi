@@ -609,7 +609,7 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 	const execute = async (
 		_toolCallId: string,
 		params: Record<string, any>,
-		_signal: AbortSignal | undefined,
+		signal: AbortSignal | undefined,
 		_onUpdate: OnUpdateCallback | undefined,
 		ctx: SubagentToolExecuteContext,
 	): Promise<SubagentExecuteResult> => {
@@ -1025,6 +1025,34 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 			};
 		}
 
+		const parentAbortCleanups = new Map<number, () => void>();
+
+		function clearParentAbortListener(runId: number): void {
+			const cleanup = parentAbortCleanups.get(runId);
+			if (!cleanup) return;
+			cleanup();
+			parentAbortCleanups.delete(runId);
+		}
+
+		function linkParentAbortSignal(runId: number, abortController: AbortController): void {
+			clearParentAbortListener(runId);
+			if (!signal || shouldRunAsync) return;
+
+			const abortFromParent = () => abortController.abort();
+			if (signal.aborted) {
+				abortFromParent();
+				return;
+			}
+
+			signal.addEventListener("abort", abortFromParent, { once: true });
+			parentAbortCleanups.set(runId, () => signal.removeEventListener("abort", abortFromParent));
+		}
+
+		function clearRunAbortState(runState: CommandRunState): void {
+			clearParentAbortListener(runState.id);
+			runState.abortController = undefined;
+		}
+
 		function registerRunLaunch(config: RunLaunchConfig): CommandRunState {
 			const initialDisplayTask = buildSubagentDisplayTaskFallback(config.taskForDisplay);
 			let runState: CommandRunState;
@@ -1082,6 +1110,7 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 			runState.pipelineStepIndex = config.pipelineStepIndex;
 			const abortController = new AbortController();
 			runState.abortController = abortController;
+			linkParentAbortSignal(runState.id, abortController);
 			store.globalLiveRuns.set(runState.id, {
 				runState,
 				abortController,
@@ -1095,6 +1124,7 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 		}
 
 		function cleanupRunAfterFinalDelivery(runId: number) {
+			clearParentAbortListener(runId);
 			store.globalLiveRuns.delete(runId);
 			store.recentLaunchTimestamps.delete(runId);
 		}
@@ -1114,7 +1144,7 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 						const current = partial.details?.results?.[0];
 						if (!current) return;
 						updateRunFromResult(runState, current);
-						if (!claudeCheckpointSent && runState.claudeSessionId) {
+						if (shouldRunAsync && !claudeCheckpointSent && runState.claudeSessionId) {
 							claudeCheckpointSent = true;
 							pi.sendMessage(buildRunStartMessage(runState, "started"), {
 								deliverAs: "followUp",
@@ -1230,7 +1260,7 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 				} catch (error: unknown) {
 					finalized = finalizeRunError(runState, error);
 				} finally {
-					runState.abortController = undefined;
+					clearRunAbortState(runState);
 				}
 
 				const message =
@@ -1308,7 +1338,7 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 					ctx.ui?.notify?.(`subagent tool run #${runState.id} failed: ${runState.lastLine}`, "error");
 					updateCommandRunsWidget(store);
 				} finally {
-					runState.abortController = undefined;
+					clearRunAbortState(runState);
 					trimCommandRunHistory(store, {
 						maxRuns: 10,
 						ctx,
@@ -1388,7 +1418,7 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 						} catch (error: unknown) {
 							return finalizeRunError(runState, error);
 						} finally {
-							runState.abortController = undefined;
+							clearRunAbortState(runState);
 						}
 					}),
 				);
@@ -1633,7 +1663,7 @@ export function createSubagentToolExecute(pi: ExtensionAPI, store: SubagentStore
 						} catch (error: unknown) {
 							finalized = finalizeRunError(runState, error);
 						} finally {
-							runState.abortController = undefined;
+							clearRunAbortState(runState);
 						}
 						finalizedRuns.push(finalized);
 

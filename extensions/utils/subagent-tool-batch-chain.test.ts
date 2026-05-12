@@ -136,6 +136,72 @@ describe("createSubagentToolExecute batch/chain grouped behavior", () => {
 		vi.clearAllMocks();
 	});
 
+	it("propagates parent tool abort signal to headless synchronous child run", async () => {
+		setStdioTty(false);
+		const parentAbortController = new AbortController();
+		mockRunSingleAgent.mockImplementation(
+			async (_cwd: unknown, _agents: unknown, agentName: string, task: string, _step: unknown, signal: AbortSignal) => {
+				expect(signal).toBeDefined();
+				expect(signal.aborted).toBe(false);
+				parentAbortController.abort();
+				expect(signal.aborted).toBe(true);
+				return makeResult(agentName, task, "HEADLESS_DONE");
+			},
+		);
+		const { createSubagentToolExecute } = await loadToolExecute();
+		const store = createStore();
+		const sent: SentCall[] = [];
+		const pi = createPi(sent);
+		const execute = createSubagentToolExecute(pi as never, store);
+		const ctx = { ...createCtx(), hasUI: false };
+
+		const result = await execute(
+			"call-headless-abort",
+			{ command: "subagent run worker -- headless abort propagation" },
+			parentAbortController.signal,
+			undefined,
+			ctx,
+		);
+
+		expect(result.content[0]?.text).toContain("[subagent:worker#1] completed");
+		expect(result.content[0]?.text).toContain("HEADLESS_DONE");
+		expect(sent).toHaveLength(0);
+	});
+
+	it("keeps interactive async child run independent from parent tool abort signal", async () => {
+		setStdioTty(true);
+		const parentAbortController = new AbortController();
+		mockRunSingleAgent.mockImplementation(
+			async (_cwd: unknown, _agents: unknown, agentName: string, task: string, _step: unknown, signal: AbortSignal) => {
+				expect(signal).toBeDefined();
+				expect(signal.aborted).toBe(false);
+				parentAbortController.abort();
+				expect(signal.aborted).toBe(false);
+				return makeResult(agentName, task, "ASYNC_DONE");
+			},
+		);
+		const { createSubagentToolExecute } = await loadToolExecute();
+		const store = createStore();
+		const sent: SentCall[] = [];
+		const pi = createPi(sent);
+		const execute = createSubagentToolExecute(pi as never, store);
+		const ctx = createCtx();
+
+		const result = await execute(
+			"call-async-parent-abort",
+			{ command: "subagent run worker -- async parent abort isolation" },
+			parentAbortController.signal,
+			undefined,
+			ctx,
+		);
+
+		expect(result.content[0]?.text).toContain("Started async subagent run #1");
+		await waitForAssertion(() => {
+			expect(sent).toHaveLength(2);
+		});
+		expect(sent[1]?.message.content).toContain("ASYNC_DONE");
+	});
+
 	it("emits only grouped batch follow-up and no per-member follow-ups", async () => {
 		mockRunSingleAgent.mockImplementation(async (_cwd: unknown, _agents: unknown, agentName: string, task: string) => {
 			return makeResult(agentName, task, agentName === "worker" ? "NB_A" : "NB_B");
