@@ -1,9 +1,10 @@
-import { extractNameFromResult, MAX_NAME_LENGTH } from "../utils/auto-name-utils.js";
 import { generateShortLabel, type ShortLabelContext } from "../utils/short-label.js";
 import { normalizeWhitespace } from "../utils/string-utils.js";
 
 export const SUBAGENT_DISPLAY_TASK_SYSTEM_PROMPT =
 	"서브에이전트 작업 지시를 분석해서 진행 상태에 표시할 짧은 작업명을 20자 이내 한 줄로 추출해. 임시 파일 경로(/tmp/... 등), read/follow the instructions 같은 내부 실행 문구는 숨기고, 사람이 이해할 수 있는 목적만 출력해. 오직 작업명 텍스트만 출력해.";
+
+export const MAX_NAME_LENGTH = 30;
 
 const DISPLAY_TASK_INPUT_MAX_CHARS = 600;
 const GENERIC_DISPLAY_TASKS = new Set(["follow the instructions", "follow instructions", "read context"]);
@@ -33,6 +34,16 @@ export function isDisplayTaskRefreshTokenCurrent(
 
 export function normalizeSubagentTaskText(task: string): string {
 	return stripMarkdownNoise(normalizeWhitespace(task));
+}
+
+export function extractNameFromResult(content: ReadonlyArray<{ type: string; text?: string }>): string {
+	const text = content
+		.filter((c): c is { type: "text"; text: string } => c.type === "text" && typeof c.text === "string")
+		.map((c) => c.text)
+		.join("")
+		.trim();
+
+	return text.slice(0, MAX_NAME_LENGTH);
 }
 
 export function buildSubagentDisplayTaskFallback(task: string): string {

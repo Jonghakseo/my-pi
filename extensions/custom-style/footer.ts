@@ -1,7 +1,6 @@
 import type { ExtensionAPI, ExtensionContext, Theme } from "@mariozechner/pi-coding-agent";
 import { truncateToWidth, visibleWidth } from "@mariozechner/pi-tui";
 
-import { formatNameStatus } from "../utils/auto-name-utils.ts";
 import { formatContextUsageBar } from "../utils/format-utils.ts";
 import type { CheckSummary } from "../utils/git-utils.ts";
 import type { RepoStatusSnapshot } from "../utils/repo-status.ts";
@@ -48,6 +47,11 @@ function sanitizeStatusText(text: string): string {
 function styleStatus(theme: Theme, key: string, text: string): string {
 	const style = STATUS_STYLE_MAP[key];
 	return style ? style(theme, text) : text;
+}
+
+function formatNameStatus(name: string): string {
+	const singleLine = name.replace(/\s+/g, " ").trim();
+	return singleLine.length > 90 ? `${singleLine.slice(0, 89)}…` : singleLine;
 }
 
 function buildFooterStatusEntries(ctx: ExtensionContext, footerData: FooterStatusData) {
