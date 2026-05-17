@@ -1,21 +1,23 @@
 {
-  "theme": "zentui",
-  "quietStartup": true,
-  "lastChangelogVersion": "0.73.0",
-  "defaultProvider": "anthropic",
-  "defaultModel": "claude-opus-4-7",
-  "defaultThinkingLevel": "xhigh",
-  "warnings": {
-    "anthropicExtraUsage": false
+  "autocompleteMaxVisible": 3,
+  "collapseChangelog": true,
+  "compaction": {
+    "enabled": true
   },
-  "subagent": {
-    "claudeRuntime": "cli"
-  },
+  "defaultModel": "gpt-5.5",
+  "defaultProvider": "openai-codex",
+  "defaultThinkingLevel": "high",
+  "doubleEscapeAction": "tree",
   "enabledModels": [
     "openai-codex/gpt-5.5",
     "anthropic/claude-opus-4-7",
     "ollama-kimi-cloud/kimi-k2.6:cloud"
   ],
+  "hideThinkingBlock": false,
+  "images": {
+    "blockImages": false
+  },
+  "lastChangelogVersion": "0.74.0",
   "packages": [
     "npm:@ryan_nookpi/pi-extension-codex-fast-mode",
     "npm:@ryan_nookpi/pi-extension-clipboard",
@@ -34,17 +36,15 @@
     "npm:@ryan_nookpi/pi-extension-cc-system-prompt",
     "npm:@ryan_nookpi/pi-extension-todo-write-overlay"
   ],
-  "compaction": {
-    "enabled": true
+  "quietStartup": true,
+  "subagent": {
+    "claudeRuntime": "cli"
   },
-  "hideThinkingBlock": true,
-  "collapseChangelog": true,
-  "doubleEscapeAction": "tree",
-  "autocompleteMaxVisible": 3,
   "terminal": {
     "showImages": false
   },
-  "images": {
-    "blockImages": false
+  "theme": "nord",
+  "warnings": {
+    "anthropicExtraUsage": false
   }
 }
