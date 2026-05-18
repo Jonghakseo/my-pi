@@ -1,4 +1,4 @@
-import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
 const CURRENT_PR_VIEW_ARGS = ["pr", "view", "--json", "number,title,url"] as const;
 const REVIEW_THREADS_PAGE_SIZE = 100;

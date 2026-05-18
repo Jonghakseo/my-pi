@@ -1,6 +1,6 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { getAgentDir } from "@mariozechner/pi-coding-agent";
+import { getAgentDir } from "@earendil-works/pi-coding-agent";
 import type { InteractiveShellConfig } from "./config.js";
 import type { PtyTerminalSession } from "./pty-session.js";
 import type { InteractiveShellOptions, InteractiveShellResult } from "./types.js";

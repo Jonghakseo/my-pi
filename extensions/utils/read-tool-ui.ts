@@ -6,8 +6,8 @@ import {
 	DEFAULT_MAX_BYTES,
 	DEFAULT_MAX_LINES,
 	formatSize,
-} from "@mariozechner/pi-coding-agent";
-import { Text } from "@mariozechner/pi-tui";
+} from "@earendil-works/pi-coding-agent";
+import { Text } from "@earendil-works/pi-tui";
 
 const PREVIEW_LINE_LIMIT = 10;
 const BASE_READ_TOOL = createReadToolDefinition(process.cwd());

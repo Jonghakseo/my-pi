@@ -42,7 +42,7 @@ Pi 공식 문서는 auto-discovery 대상으로 `extensions/*.ts`와 `extensions
 - **패키지 매니저**: pnpm
 - **린터/포매터**: Biome 2.x
 - **테스트 러너**: Vitest 4.x
-- **의존성**: `@mariozechner/pi-coding-agent`, `@mariozechner/pi-ai`, `@mariozechner/pi-tui`
+- **의존성**: `@earendil-works/pi-coding-agent`, `@earendil-works/pi-ai`, `@earendil-works/pi-tui`
 
 ## 스크립트
 

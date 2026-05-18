@@ -1,5 +1,5 @@
 /** biome-ignore-all lint/suspicious/noExplicitAny: Claude stream events are dynamic runtime data. */
-import type { Message } from "@mariozechner/pi-ai";
+import type { Message } from "@earendil-works/pi-ai";
 import { extractActivityPreviewFromTextDelta, extractThoughtText } from "./live-preview.js";
 import type { SingleResult } from "./types.js";
 

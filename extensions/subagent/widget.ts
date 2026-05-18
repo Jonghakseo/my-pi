@@ -2,8 +2,8 @@
  * Subagent run status widget — renders per-run status boxes above the editor.
  */
 
-import type { Theme, ThemeColor } from "@mariozechner/pi-coding-agent";
-import { Box, Text, truncateToWidth, visibleWidth } from "@mariozechner/pi-tui";
+import type { Theme, ThemeColor } from "@earendil-works/pi-coding-agent";
+import { Box, Text, truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 import { HANG_WARNING_IDLE_MS, PARENT_HINT } from "./constants.js";
 import {
 	AGENT_NAME_PALETTE,

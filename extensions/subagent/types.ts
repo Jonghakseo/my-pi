@@ -2,8 +2,8 @@
  * Type definitions, interfaces, and Typebox schemas for the Subagent tool.
  */
 
-import type { AgentToolResult } from "@mariozechner/pi-agent-core";
-import type { Message } from "@mariozechner/pi-ai";
+import type { AgentToolResult } from "@earendil-works/pi-agent-core";
+import type { Message } from "@earendil-works/pi-ai";
 import { Type } from "typebox";
 import type { AgentConfig, AgentRuntime } from "./agents.js";
 

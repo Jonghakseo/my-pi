@@ -1,5 +1,5 @@
-import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
-import { Container, Spacer, Text, truncateToWidth, visibleWidth } from "@mariozechner/pi-tui";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { Container, Spacer, Text, truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 import { truncatePlainToWidth } from "../utils/format-utils.js";
 
 const PATCH_STATE_KEY = Symbol.for("pi.tool-group-renderer.patch-state");

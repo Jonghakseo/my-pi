@@ -5,7 +5,7 @@
  * side effects and depend only on their arguments and Node built-ins.
  */
 
-import { visibleWidth } from "@mariozechner/pi-tui";
+import { visibleWidth } from "@earendil-works/pi-tui";
 import type { AgentConfigLike } from "./agent-utils.ts";
 
 // ─── Types ───────────────────────────────────────────────────────────────────

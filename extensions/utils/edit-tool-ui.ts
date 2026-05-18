@@ -1,8 +1,8 @@
 import * as os from "node:os";
 import { isAbsolute, resolve as resolvePath } from "node:path";
-import { createEditToolDefinition, type ExtensionAPI } from "@mariozechner/pi-coding-agent";
-import type { Component } from "@mariozechner/pi-tui";
-import { Container, Spacer, Text } from "@mariozechner/pi-tui";
+import { createEditToolDefinition, type ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import type { Component } from "@earendil-works/pi-tui";
+import { Container, Spacer, Text } from "@earendil-works/pi-tui";
 import { applyEditOverrideToRawContent, type EditOverrideEdit } from "./edit-override.ts";
 import { renderEditSideBySide } from "./edit-side-by-side.ts";
 import { loadFileKindAndText } from "./file-kind.ts";

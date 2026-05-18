@@ -1,5 +1,5 @@
-import type { ExtensionAPI, ExtensionContext, KeybindingsManager } from "@mariozechner/pi-coding-agent";
-import type { EditorTheme, TUI } from "@mariozechner/pi-tui";
+import type { ExtensionAPI, ExtensionContext, KeybindingsManager } from "@earendil-works/pi-coding-agent";
+import type { EditorTheme, TUI } from "@earendil-works/pi-tui";
 import { type CustomStyleConfig, ensureConfigExists, loadConfig } from "./config.ts";
 import { installFooter } from "./footer.ts";
 import { isCodexFastModeEnabled, shouldUseCodexFastBadge } from "./footer-state.ts";

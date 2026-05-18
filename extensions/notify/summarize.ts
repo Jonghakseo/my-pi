@@ -1,4 +1,4 @@
-import { type Api, completeSimple, type Model } from "@mariozechner/pi-ai";
+import { type Api, completeSimple, type Model } from "@earendil-works/pi-ai";
 import { normalizeSingleSummary } from "./format.ts";
 import { sanitizeNotificationText } from "./text.ts";
 

@@ -3,7 +3,7 @@
  */
 
 import * as os from "node:os";
-import type { ThemeColor } from "@mariozechner/pi-coding-agent";
+import type { ThemeColor } from "@earendil-works/pi-coding-agent";
 import { normalizeModelRef as normalizeModelRefUtil } from "../utils/format-utils.js";
 
 export {

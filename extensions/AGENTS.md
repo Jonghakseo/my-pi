@@ -1,6 +1,6 @@
 # Pi Extensions Codebase
 
-Custom extensions for the pi coding agent. All extensions are written in TypeScript using the `@mariozechner/pi-coding-agent` API.
+Custom extensions for the pi coding agent. All extensions are written in TypeScript using the `@earendil-works/pi-coding-agent` API.
 
 ## Directory Layout
 
@@ -40,7 +40,7 @@ Custom extensions for the pi coding agent. All extensions are written in TypeScr
 ## Key Patterns
 - **Extension entry point**: Pi auto-discovers both root `*.ts` files and `directory/index.ts` files, but this repo standardizes on `extensions/<name>/index.ts` only to avoid duplicate loading.
 - **New extensions**: Do not add root-level `.ts` entrypoints. Create `extensions/<name>/index.ts` and keep support modules inside that directory or `utils/`.
-- **Dependencies**: `@mariozechner/pi-coding-agent`, `@mariozechner/pi-ai`, `@mariozechner/pi-tui`.
+- **Dependencies**: `@earendil-works/pi-coding-agent`, `@earendil-works/pi-ai`, `@earendil-works/pi-tui`.
 - **Themes**: `theme-cycler/index.ts` provides runtime theme switching.
 
 ## Tooling Standards

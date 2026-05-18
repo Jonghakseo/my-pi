@@ -1,7 +1,7 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import type { ExtensionAPI, ExtensionContext, ToolResultEvent } from "@mariozechner/pi-coding-agent";
+import type { ExtensionAPI, ExtensionContext, ToolResultEvent } from "@earendil-works/pi-coding-agent";
 
 const ARCHIVE_DIR = path.join(os.homedir(), "Documents", "agent-history", "분류 전");
 const FONT_SIGNATURE = "Noto+Serif+KR";

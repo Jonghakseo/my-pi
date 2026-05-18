@@ -1,4 +1,4 @@
-import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import type { PullRequestInfo } from "./github-pr-review-comments.ts";
 
 const PR_REVIEWERS_VIEW_JSON_FIELDS = "latestReviews,reviewRequests" as const;

@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { getAgentDir } from "@mariozechner/pi-coding-agent";
+import { getAgentDir } from "@earendil-works/pi-coding-agent";
 
 export type PromptSuggestLiteThinking = "session-default" | "minimal" | "low" | "medium" | "high" | "xhigh";
 export type PromptSuggestLiteAcceptKey = "space" | "right";

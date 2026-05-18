@@ -5,8 +5,8 @@ import {
 	type Model,
 	type ThinkingLevel as AiThinkingLevel,
 	type UserMessage,
-} from "@mariozechner/pi-ai";
-import type { ExtensionContext } from "@mariozechner/pi-coding-agent";
+} from "@earendil-works/pi-ai";
+import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import type { PromptSuggestLiteConfig, PromptSuggestLiteThinking } from "./config.ts";
 
 interface CompletionResponseLike {

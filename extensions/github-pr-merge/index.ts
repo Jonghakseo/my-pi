@@ -1,4 +1,4 @@
-import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
+import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { fetchCurrentPullRequestInfo, type PullRequestInfo } from "../utils/github-pr-review-comments.ts";
 import { invalidateRepoStatus } from "../utils/repo-status-events.ts";
 import { fetchPullRequestMergeStatus, mergePullRequest } from "../utils/github-pr-merge.ts";

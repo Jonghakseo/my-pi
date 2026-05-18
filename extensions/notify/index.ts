@@ -14,7 +14,7 @@
  *   - 설치 필요: pipx install edge-tts (미설치 시 TTS만 조용히 스킵)
  */
 
-import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
+import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { buildCompletionNotification, extractAssistantText, type NotificationMessage } from "./format.ts";
 import { notify } from "./notify.ts";
 import { isNotifyEnabled, setNotifyEnabled } from "./state.ts";

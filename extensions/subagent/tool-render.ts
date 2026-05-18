@@ -4,8 +4,8 @@
  * Extracted from commands.ts — output format is identical.
  */
 
-import { getMarkdownTheme, type ThemeColor } from "@mariozechner/pi-coding-agent";
-import { Container, Markdown, Spacer, Text } from "@mariozechner/pi-tui";
+import { getMarkdownTheme, type ThemeColor } from "@earendil-works/pi-coding-agent";
+import { Container, Markdown, Spacer, Text } from "@earendil-works/pi-tui";
 import { formatToolCall, formatUsageStats } from "./format.js";
 import { getDisplayItems, getFinalOutput } from "./runner.js";
 import { COLLAPSED_ITEM_COUNT } from "./store.js";

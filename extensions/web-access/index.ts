@@ -12,9 +12,9 @@ import {
 	type Model,
 	StringEnum,
 	type TextContent,
-} from "@mariozechner/pi-ai";
-import type { AgentToolResult, ExtensionAPI, ExtensionContext, Theme } from "@mariozechner/pi-coding-agent";
-import { Box, type KeyId, Text, truncateToWidth } from "@mariozechner/pi-tui";
+} from "@earendil-works/pi-ai";
+import type { AgentToolResult, ExtensionAPI, ExtensionContext, Theme } from "@earendil-works/pi-coding-agent";
+import { Box, type KeyId, Text, truncateToWidth } from "@earendil-works/pi-tui";
 import { Type } from "typebox";
 import { type ActivityEntry, activityMonitor } from "./activity.js";
 import { type CuratorServerHandle, startCuratorServer } from "./curator-server.js";

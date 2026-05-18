@@ -16,8 +16,8 @@
  * Usage: pi -e extensions/theme-cycler/index.ts
  */
 
-import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
-import { truncateToWidth } from "@mariozechner/pi-tui";
+import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
+import { truncateToWidth } from "@earendil-works/pi-tui";
 
 export default function (pi: ExtensionAPI) {
 	let swatchTimer: ReturnType<typeof setTimeout> | null = null;

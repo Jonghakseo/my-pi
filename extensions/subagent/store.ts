@@ -2,8 +2,8 @@
  * Shared state store and state-mutation helpers for the Subagent extension.
  */
 
-import type { Message } from "@mariozechner/pi-ai";
-import { visibleWidth } from "@mariozechner/pi-tui";
+import type { Message } from "@earendil-works/pi-ai";
+import { visibleWidth } from "@earendil-works/pi-tui";
 import { getDisplayItems, getFinalOutput, getLastNonEmptyLine, getLatestActivityPreview } from "./runner.js";
 import type { BatchGroupState, CommandRunState, GlobalRunEntry, PipelineState, SingleResult } from "./types.js";
 import type { WidgetRenderCtx } from "./widget.js";

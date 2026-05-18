@@ -7,9 +7,9 @@ import {
 	formatSize,
 	truncateTail,
 	type Theme,
-} from "@mariozechner/pi-coding-agent";
+} from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
-import { Text, truncateToWidth, type Component } from "@mariozechner/pi-tui";
+import { Text, truncateToWidth, type Component } from "@earendil-works/pi-tui";
 import { truncatePlainToWidth } from "../utils/format-utils.js";
 
 const TAIL_LINES = 5;

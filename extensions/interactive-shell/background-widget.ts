@@ -1,6 +1,6 @@
-import type { Theme } from "@mariozechner/pi-coding-agent";
-import type { TUI } from "@mariozechner/pi-tui";
-import { truncateToWidth, visibleWidth } from "@mariozechner/pi-tui";
+import type { Theme } from "@earendil-works/pi-coding-agent";
+import type { TUI } from "@earendil-works/pi-tui";
+import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 import type { ShellSessionManager } from "./session-manager.js";
 import { STATUS_EXITED, STATUS_RUNNING } from "./strings.js";
 import { formatDuration } from "./types.js";

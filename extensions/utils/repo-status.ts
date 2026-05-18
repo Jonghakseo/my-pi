@@ -1,4 +1,4 @@
-import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { fetchUnresolvedPullRequestReviewCommentsCount, isNoPullRequestError } from "./github-pr-review-comments.ts";
 import { type CheckSummary, parseGitStatusPorcelainV2, summarizeChecks } from "./git-utils.ts";
 

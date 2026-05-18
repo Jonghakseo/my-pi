@@ -6,7 +6,7 @@
  * identical to the original inline implementations.
  */
 
-import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import type { SubagentStore } from "./store.js";
 import type { CommandRunState } from "./types.js";
 import { updateCommandRunsWidget, type WidgetRenderCtx } from "./widget.js";

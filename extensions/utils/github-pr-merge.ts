@@ -1,4 +1,4 @@
-import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import type { PullRequestInfo } from "./github-pr-review-comments.ts";
 
 const PR_MERGE_VIEW_JSON_FIELDS = "headRefOid,isDraft,mergeStateStatus,reviewDecision" as const;

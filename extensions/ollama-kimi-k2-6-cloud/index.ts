@@ -1,5 +1,5 @@
-import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
-import type { Api, AssistantMessageEventStream, Model, SimpleStreamOptions } from "@mariozechner/pi-ai";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import type { Api, AssistantMessageEventStream, Model, SimpleStreamOptions } from "@earendil-works/pi-ai";
 import { streamOllamaNative as streamOllamaNativeBase } from "../utils/ollama-utils.js";
 
 const PROVIDER_ID = "ollama-kimi-cloud";
@@ -10,7 +10,7 @@ const OLLAMA_API = "ollama-native-chat";
 
 function streamOllamaNative(
 	model: Model<Api>,
-	context: import("@mariozechner/pi-ai").Context,
+	context: import("@earendil-works/pi-ai").Context,
 	options?: SimpleStreamOptions,
 ): AssistantMessageEventStream {
 	return streamOllamaNativeBase(`${OLLAMA_BASE_URL}/api/chat`, model, context, options);

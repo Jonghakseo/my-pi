@@ -1,4 +1,4 @@
-import { CustomEditor, type KeybindingsManager, type Theme } from "@mariozechner/pi-coding-agent";
+import { CustomEditor, type KeybindingsManager, type Theme } from "@earendil-works/pi-coding-agent";
 import {
 	type Component,
 	type EditorTheme,
@@ -7,7 +7,7 @@ import {
 	type TUI,
 	visibleWidth,
 	wrapTextWithAnsi,
-} from "@mariozechner/pi-tui";
+} from "@earendil-works/pi-tui";
 import { AGENT_SYMBOL_MAP, formatSymbolHints } from "../subagent/constants.ts";
 
 type AutocompleteEditorInternals = {

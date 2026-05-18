@@ -1,4 +1,4 @@
-import { completeSimple } from "@mariozechner/pi-ai";
+import { completeSimple } from "@earendil-works/pi-ai";
 
 type SummaryModel = Parameters<typeof completeSimple>[0];
 type SummaryResult = Awaited<ReturnType<typeof completeSimple>>;

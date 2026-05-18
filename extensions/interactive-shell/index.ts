@@ -1,4 +1,4 @@
-import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { setupBackgroundWidget } from "./background-widget.js";
 import type { InteractiveShellConfig } from "./config.js";
 import { loadConfig } from "./config.js";

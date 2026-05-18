@@ -14,8 +14,8 @@
  *   4. Track injected paths to avoid duplicate injection.
  */
 
-import type { ImageContent, TextContent } from "@mariozechner/pi-ai";
-import type { ExtensionAPI, ToolResultEvent } from "@mariozechner/pi-coding-agent";
+import type { ImageContent, TextContent } from "@earendil-works/pi-ai";
+import type { ExtensionAPI, ToolResultEvent } from "@earendil-works/pi-coding-agent";
 
 /** Matches pi core's ToolResultEventResult shape (not exported from top-level package). */
 interface ToolResultEventResult {

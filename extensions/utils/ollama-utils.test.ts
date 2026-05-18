@@ -6,7 +6,7 @@ import {
 	mapDoneReason,
 	createEmptyAssistantMessage,
 } from "./ollama-utils.js";
-import type { Model, Api } from "@mariozechner/pi-ai";
+import type { Model, Api } from "@earendil-works/pi-ai";
 
 // ─── flattenTextContent ──────────────────────────────────────────────────────
 

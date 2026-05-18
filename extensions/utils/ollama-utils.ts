@@ -21,7 +21,7 @@ import {
 	type SimpleStreamOptions,
 	type TextContent,
 	type Tool,
-} from "@mariozechner/pi-ai";
+} from "@earendil-works/pi-ai";
 
 // ─── Message / content helpers ──────────────────────────────────────────────
 

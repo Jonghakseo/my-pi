@@ -8,7 +8,7 @@
  */
 
 import * as fs from "node:fs";
-import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import type { ShortLabelContext } from "../utils/short-label.js";
 import { discoverAgents } from "./agents.js";
 import { parseSubagentToolCommand, SUBAGENT_CLI_HELP_TEXT } from "./cli.js";

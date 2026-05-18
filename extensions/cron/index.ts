@@ -1,5 +1,5 @@
-import type { ExtensionAPI, ExtensionCommandContext, ExtensionContext } from "@mariozechner/pi-coding-agent";
-import { Text } from "@mariozechner/pi-tui";
+import type { ExtensionAPI, ExtensionCommandContext, ExtensionContext } from "@earendil-works/pi-coding-agent";
+import { Text } from "@earendil-works/pi-tui";
 import { Type } from "typebox";
 import { CRON_CLI_HELP_TEXT, parseCronToolCommand } from "./cli.ts";
 import { getDaemonStatus, startDaemon, stopDaemon } from "./daemon-client.ts";

@@ -3,7 +3,7 @@
  * in the built-in spinner (⠋ tips: /until 로 조건부 루프 로직을 실행할 수 있습니다 · 12초).
  */
 
-import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
+import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { formatElapsedSince } from "../utils/time-utils.ts";
 
 const TIP_MESSAGES = [

@@ -14,7 +14,7 @@ import {
 	truncateToWidth,
 	visibleWidth,
 	wrapTextWithAnsi,
-} from "@mariozechner/pi-tui";
+} from "@earendil-works/pi-tui";
 import { formatDuration, formatDurationBetween } from "../utils/time-utils.js";
 import {
 	DEFAULT_TURN_COUNT,
