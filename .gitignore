@@ -50,6 +50,7 @@ bookmarks.json
 
 # Dependencies
 node_modules/
+npm/
 
 # Extension-specific ignores
 extensions/.context/
