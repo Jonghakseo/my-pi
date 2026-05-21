@@ -68,14 +68,8 @@ extensions/usage-reporter/
 extensions/picky-handoff
 
 # Local/custom skills
-skills/creatrip-db-query/
-skills/hotfix-flow/
-skills/notion-context/
-skills/release-audit/
-skills/sentry-investigate/
-skills/slack-thread-context/
-skills/gw-worktree-cleanup/
-skills/worktree-handoff/
+# Keep already tracked skills; ignore any new/untracked skill folders by default.
+skills/*
 
 # claude-mcp-bridge local runtime settings
 claude-mcp-bridge-tools.json
