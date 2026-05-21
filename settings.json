@@ -17,7 +17,7 @@
   "images": {
     "blockImages": false
   },
-  "lastChangelogVersion": "0.75.1",
+  "lastChangelogVersion": "0.75.4",
   "packages": [
     "npm:@ryan_nookpi/pi-extension-codex-fast-mode",
     "npm:@ryan_nookpi/pi-extension-clipboard",
