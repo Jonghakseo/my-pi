@@ -76,3 +76,4 @@ claude-mcp-bridge-tools.json
 claude-mcp-bridge-cache.json
 extensions/remote/dist/
 extensions/remote/web-dist/
+helpers/pi-computer-use/
