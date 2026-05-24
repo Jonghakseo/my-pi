@@ -108,7 +108,6 @@ Pi can auto-discover both `extensions/*.ts` and `extensions/*/index.ts`, but thi
 | [`dynamic-agents-md/`](./extensions/dynamic-agents-md/index.ts) | Dynamically injects scoped `AGENTS.md` context after exploratory/file tool results |
 | [`interactive-shell/`](./extensions/interactive-shell/index.ts) | `interactive_shell` tool plus `/attach` and `/dismiss` for interactive, hands-free, dispatch, background, and reattachable shell sessions |
 | [`web-access/`](./extensions/web-access/index.ts) | Local web research/content extraction tools: `web_search`, `fetch_content`, `get_search_content`, curator workflow, GitHub/PDF/video/YouTube extraction |
-| [`ollama-gemma4-26b/`](./extensions/ollama-gemma4-26b/index.ts) | Ollama provider wiring for Gemma 4 26B |
 | [`ollama-kimi-k2-6-cloud/`](./extensions/ollama-kimi-k2-6-cloud/index.ts) | Ollama Cloud provider wiring for Kimi K2.6 |
 
 #### Tool overrides / rendering
