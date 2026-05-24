@@ -9,6 +9,20 @@ This repository contains the agent definitions, local and packaged extensions, s
 > [!NOTE]
 > This is a personal setup. The documentation may lag behind the current state, and some parts can change without notice.
 
+## Install
+
+To reproduce this environment on your own machine, follow **[INSTALL.md](./INSTALL.md)**.
+TL;DR:
+
+```bash
+git clone https://github.com/Jonghakseo/my-pi.git ~/.pi/agent
+cd ~/.pi/agent && ./scripts/bootstrap.sh
+```
+
+The bootstrap script verifies Node/pnpm versions, installs both workspaces, syncs agent
+definitions, and scaffolds `.env` files. See INSTALL.md for the full prerequisite list
+(required CLIs, optional skill-specific tools, MCP bridge wiring, secrets).
+
 ## Usage Example
 
 <p align="center">

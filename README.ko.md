@@ -9,6 +9,19 @@
 > [!NOTE]
 > 개인 실사용 셋업이라 문서가 현재 상태보다 늦을 수 있고, 일부 내용은 예고 없이 바뀔 수 있다.
 
+## 설치
+
+동일한 환경을 직접 재현하려면 **[INSTALL.md](./INSTALL.md)** 를 따라간다. 요약:
+
+```bash
+git clone https://github.com/Jonghakseo/my-pi.git ~/.pi/agent
+cd ~/.pi/agent && ./scripts/bootstrap.sh
+```
+
+부트스트랩 스크립트가 Node/pnpm 버전 확인, 루트·extensions 워크스페이스 설치, 에이전트
+정의 동기화, `.env` 템플릿 생성을 한 번에 처리한다. 필수/선택 CLI 목록, MCP 브릿지 연결,
+시크릿 파일 채우기 같은 자세한 절차는 INSTALL.md 참고.
+
 ## 사용 예시
 
 <p align="center">
