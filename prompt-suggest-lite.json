@@ -1,6 +1,6 @@
 {
 	"enabled": true,
-	"modelRef": "ollama-kimi-cloud/kimi-k2.6:cloud",
+	"modelRef": "session-default",
 	"thinking": "session-default",
 	"customInstruction": "",
 	"noSuggestionToken": "[no suggestion]",
