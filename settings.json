@@ -10,14 +10,13 @@
   "doubleEscapeAction": "tree",
   "enabledModels": [
     "openai-codex/gpt-5.5",
-    "anthropic/claude-opus-4-7",
-    "ollama-kimi-cloud/kimi-k2.6:cloud"
+    "anthropic/claude-opus-4-7"
   ],
-  "hideThinkingBlock": false,
+  "hideThinkingBlock": true,
   "images": {
     "blockImages": false
   },
-  "lastChangelogVersion": "0.75.4",
+  "lastChangelogVersion": "0.75.5",
   "packages": [
     "npm:@ryan_nookpi/pi-extension-codex-fast-mode",
     "npm:@ryan_nookpi/pi-extension-clipboard",
@@ -34,7 +33,8 @@
     "npm:@ryan_nookpi/pi-extension-diff-review",
     "npm:@ryan_nookpi/pi-extension-claude-spinner",
     "npm:@ryan_nookpi/pi-extension-cc-system-prompt",
-    "npm:@ryan_nookpi/pi-extension-todo-write-overlay"
+    "npm:@ryan_nookpi/pi-extension-todo-write-overlay",
+    "git:github.com/injaneity/pi-computer-use@v0.2.5"
   ],
   "quietStartup": true,
   "subagent": {

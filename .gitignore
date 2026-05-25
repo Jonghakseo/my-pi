@@ -43,6 +43,7 @@ tmp/daily-retro.svg
 .pi-lens/
 state/
 .context/
+cache/
 bookmarks.json
 
 # OS / IDE
