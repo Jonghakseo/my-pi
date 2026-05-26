@@ -1,7 +1,6 @@
 ---
 name: stress-interview
 description: verifier + reviewer + challenger를 병렬 호출해 동일 변경사항을 다각도로 검토받는 스킬.
-argument-hint: "이 변경사항 검토해줘 | 방금 수정한 코드 스트레스 테스트 | PR 전 점검"
 disable-model-invocation: false
 ---
 

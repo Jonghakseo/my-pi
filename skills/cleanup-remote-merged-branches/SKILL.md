@@ -1,7 +1,6 @@
 ---
 name: cleanup-remote-merged-branches
 description: 원격(origin 등)에 남아 있는 자동 생성 prefix 브랜치(sync/, dependabot/, renovate/, release/, snyk/ 등) 중 base 브랜치(development/main/production)에 이미 머지된 것을 일괄 정리한다. 사용자가 "원격 sync/ 브랜치 정리", "origin sync/ 머지된 거 다 지워", "dependabot 브랜치 청소", "development에 merged된 원격 브랜치 삭제", "auto-sync PR 브랜치 일괄 삭제"처럼 말하면 사용한다. fetch --prune → 패턴 매칭 → merged 필터 → 메타 표 출력 → 사용자 승인 → `git push <remote> --delete` 일괄 삭제까지 수행하며, 보호 브랜치(production/development/main 등)는 절대 후보에 포함하지 않는다.
-argument-hint: "예: origin sync/ 정리 | dependabot/ 머지된거 전부 지워 | release/ 브랜치 development 머지된 것 정리"
 disable-model-invocation: false
 ---
 

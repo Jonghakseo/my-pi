@@ -1,7 +1,6 @@
 ---
 name: usage-analytics
 description: 서브에이전트·스킬 사용 통계를 분석해 인사이트를 도출한다. "사용 통계 보여줘", "어떤 에이전트를 많이 쓰지?", "안 쓰는 스킬 뭐야?" 같은 요청에서 실행한다.
-argument-hint: "사용 통계 분석해줘 | 최근 한 달 분석 | 안 쓰는 에이전트 알려줘 | 스킬 활용도 보고"
 disable-model-invocation: false
 ---
 

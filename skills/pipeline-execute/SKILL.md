@@ -1,7 +1,6 @@
 ---
 name: pipeline-execute
 description: 구조화된 구현 계획이 있을 때 사용. 태스크별로 worker→verifier→reviewer 파이프라인을 순차 실행.
-argument-hint: "이 계획 실행해줘 | 플랜대로 구현 시작 | pipeline으로 태스크 처리"
 disable-model-invocation: false
 ---
 

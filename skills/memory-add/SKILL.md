@@ -1,7 +1,6 @@
 ---
 name: memory-add
 description: 현재 pi 세션 transcript 에서 기억할 가치가 있는 fact (사용자 룰, 프로젝트 관례, 도구 gotcha, 도메인 사실, 의사결정+이유, 안티패턴) 를 추출해 사용자 confirm 후 remember 로 저장하는 워크플로우. 사용자가 "메모리 추가", "기억할거 정리해서 추가", "memory add", "/memory-add", "이번 세션에서 배운거 저장", "지금까지 룰 메모리에 박아"처럼 말하면 발동. 시크릿/PII/일회성 ID는 자동 제외, 기존 memory 와 dedup, 항목별 confirm 후에만 remember 호출.
-argument-hint: "이번 세션 메모리에 추가 | 방금 정한 룰 기억 | 도메인 사실만 추가 | 시크릿 빼고 추가"
 disable-model-invocation: false
 ---
 

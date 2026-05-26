@@ -1,7 +1,6 @@
 ---
 name: design-first
 description: 새 기능 구현, 큰 변경, 아키텍처 결정 전에 사용. 코드 작성 전 설계를 확정하는 프로세스.
-argument-hint: "이 기능 설계부터 하자 | 구현 전에 정리 좀 | 계획 세워줘"
 disable-model-invocation: false
 ---
 

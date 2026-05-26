@@ -1,7 +1,6 @@
 ---
 name: self-healing
 description: stress-interview로 문제를 모은 뒤 worker 수정 → 재검토를 2사이클 반복하는 자가 치유 스킬.
-argument-hint: "이 변경사항 자동으로 두 번 고쳐가며 안정화해줘 | 방금 만든 코드 self-healing 돌려줘"
 disable-model-invocation: false
 ---
 
