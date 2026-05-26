@@ -1,7 +1,6 @@
 ---
 name: ship
 description: "변경사항을 remote에 올리기 전에 의도 단위 커밋 정리, 사전 검증, push가 필요할 때 사용."
-argument-hint: "ship | ship <branch-name> | 커밋해서 푸시해줘 | 올리기 전에 검증해줘 | push 준비해줘"
 disable-model-invocation: false
 ---
 

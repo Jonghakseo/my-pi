@@ -1,7 +1,6 @@
 ---
 name: pi-auto-update
 description: pi 릴리즈 업데이트 시 현재 버전/최신 버전 확인, CHANGELOG 검토, extensions 영향 분석, extensions 내 pi 관련 의존성 업데이트, 호환성 대응, 업데이트 내역 시각화까지 순서대로 수행하는 워크플로우.
-argument-hint: "pi 업데이트해줘 | 이번 릴리즈 반영하자 | /pi-auto-update"
 disable-model-invocation: false
 ---
 

@@ -1,7 +1,6 @@
 ---
 name: simplify
 description: 변경사항을 code-cleaner + reviewer 병렬 리뷰로 재사용·품질·효율 관점에서 점검하고, 발견된 이슈를 직접 수정하는 스킬.
-argument-hint: "방금 변경한 코드 정리해줘 | 이 diff 리뷰하고 고쳐줘 | simplify 돌려줘"
 disable-model-invocation: false
 ---
 
