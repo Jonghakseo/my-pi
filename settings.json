@@ -30,11 +30,11 @@
     "npm:@ryan_nookpi/pi-extension-claude-hooks-bridge",
     "npm:@ryan_nookpi/pi-extension-claude-mcp-bridge",
     "npm:@ryan_nookpi/pi-extension-memory-layer",
-    "npm:@ryan_nookpi/pi-extension-diff-review",
     "npm:@ryan_nookpi/pi-extension-claude-spinner",
     "npm:@ryan_nookpi/pi-extension-cc-system-prompt",
     "npm:@ryan_nookpi/pi-extension-todo-write-overlay",
-    "git:github.com/injaneity/pi-computer-use@v0.2.5"
+    "git:github.com/injaneity/pi-computer-use@v0.2.5",
+    "npm:@ryan_nookpi/pi-extension-diff-review"
   ],
   "quietStartup": true,
   "subagent": {
