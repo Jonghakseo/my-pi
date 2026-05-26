@@ -1,8 +1,6 @@
 ---
 name: skill-creator
 description: Pi용 스킬을 새로 만들거나 기존 스킬을 개선·검증·평가할 때 사용한다. 사용자가 "스킬 만들어줘", "SKILL.md 작성", "이 워크플로우를 skill로", "스킬 설명/트리거 최적화", "기존 skill 수정", "eval로 스킬 테스트"처럼 말하면 반드시 이 스킬을 사용한다. Agent Skills 표준과 Pi의 스킬 로딩/검증 규칙에 맞춰 스킬 구조, 프론트매터, progressive disclosure, 평가 루프를 설계한다.
-argument-hint: "만들 스킬의 목적 또는 수정할 스킬 경로"
-disable-model-invocation: false
 ---
 
 # skill-creator
@@ -12,10 +10,16 @@ Pi 환경에서 Agent Skills 표준을 따르는 스킬을 만들고, 작게 검
 ## 핵심 원칙
 
 - **Pi 우선**: Claude Code 전용 명령, `claude -p`, Anthropic eval viewer 스크립트를 전제로 하지 않는다. Pi CLI, `read`/`write`/`edit`/`bash`, 필요 시 `subagent`, `ask_user_question`, `todo_write`를 사용한다.
-- **표준 준수**: `SKILL.md`는 Agent Skills 표준의 YAML frontmatter + Markdown 본문 구조를 지킨다.
+- **표준 준수, Pi 동작 우선**: `SKILL.md`는 Agent Skills 표준의 YAML frontmatter + Markdown 본문을 따른다. 단 Pi는 표준 일부를 의도적으로 완화한다(아래 "Pi vs 표준" 참고). 충돌 시 Pi 동작을 따른다.
 - **Progressive disclosure**: 항상 들어가는 `description`은 정확하고 트리거 친화적으로, 본문은 500줄 미만을 목표로, 긴 자료는 `references/`, 반복 가능한 작업은 `scripts/`, 템플릿은 `assets/`에 둔다.
 - **검증 가능한 산출물**: 새 스킬에는 최소한 자체 검증 체크리스트와 현실적인 테스트 프롬프트를 남긴다. 객관 검증이 가능한 스킬이면 `evals/evals.json`도 만든다.
 - **놀라움 금지**: 사용자가 기대하지 않은 권한 상승, 데이터 유출, 위험한 자동화, 악성 행위 보조 스킬은 만들지 않는다.
+
+### Pi vs 표준 (자주 헷갈리는 지점)
+
+- 이름과 디렉터리명이 달라도 Pi는 경고만 한다(표준은 일치 요구). 여러 하네스가 공유하는 스킬 디렉터리에서는 일부러 다르게 두는 것이 합리적일 수 있다.
+- `description`이 없으면 Pi는 스킬을 **아예 로딩하지 않는다**. 다른 위반은 대부분 warning만 내고 로딩은 된다.
+- 같은 이름 스킬이 여러 위치에 있으면 **먼저 발견된 것만** 사용되고 나머지는 warning이 뜬다.
 
 ## 언제 어떤 작업을 하나
 
@@ -40,10 +44,11 @@ Pi 환경에서 Agent Skills 표준을 따르는 스킬을 만들고, 작게 검
 ### 1. 컨텍스트 수집
 
 1. 관련 공식 문서를 확인한다.
-   - Pi 스킬 문서: `/usr/local/lib/node_modules/@mariozechner/pi-coding-agent/docs/skills.md`
-   - 필요 시 Pi README의 CLI 옵션: `/usr/local/lib/node_modules/@mariozechner/pi-coding-agent/README.md`
-   - Agent Skills 표준: `https://agentskills.io/specification`
-2. 기존 스킬 패턴이 필요하면 `~/.pi/agent/skills/` 또는 프로젝트의 `.pi/skills/`, `.agents/skills/`를 살펴본다.
+   - Pi 스킬 문서: `/usr/local/lib/node_modules/@earendil-works/pi-coding-agent/docs/skills.md`
+   - 필요 시 Pi 사용법: `/usr/local/lib/node_modules/@earendil-works/pi-coding-agent/docs/usage.md`, `README.md`
+   - Agent Skills 표준: <https://agentskills.io/specification>
+   - 패키지 경로가 바뀌었을 수 있다면 `npm root -g`로 확인한다.
+2. 기존 스킬 패턴이 필요하면 `~/.pi/agent/skills/`, `~/.agents/skills/`, 프로젝트의 `.pi/skills/`, `.agents/skills/`를 살펴본다.
 3. 사용자의 현재 대화에서 다음을 먼저 추출한다.
    - 스킬이 가능하게 해야 하는 일
    - 트리거되어야 하는 표현/상황
@@ -54,17 +59,32 @@ Pi 환경에서 Agent Skills 표준을 따르는 스킬을 만들고, 작게 검
 
 ### 2. 위치와 이름 결정
 
-기본 선택:
+로딩 위치(Pi가 자동 스캔):
 
-- 개인/전역 워크플로우: `~/.pi/agent/skills/<skill-name>/SKILL.md`
-- 특정 레포 전용: `<repo>/.pi/skills/<skill-name>/SKILL.md`
-- 다른 Agent Skills 클라이언트와 공유 목적: `.agents/skills/<skill-name>/SKILL.md`도 고려
+- 전역(Pi 전용): `~/.pi/agent/skills/`
+- 전역(cross-harness 공유): `~/.agents/skills/`
+- 프로젝트(Pi 전용): `<repo>/.pi/skills/`
+- 프로젝트(cross-harness): `<repo>/.agents/skills/` — cwd부터 git 루트(또는 fs 루트)까지 상향 탐색
+- 패키지: `package.json`의 `pi.skills` 또는 패키지 내 `skills/`
+- 설정/명령행: `.pi/settings.json`의 `"skills"` 배열, `pi --skill <path>`(반복 가능, `--no-skills`와도 합산)
 
-이름 규칙:
+탐색 디테일:
 
-- 디렉터리명과 `name` frontmatter는 반드시 동일하게 한다.
+- `~/.pi/agent/skills/`, `.pi/skills/`에서는 루트의 단일 `.md` 파일도 스킬로 인식된다(디렉터리 없이 한 파일짜리 스킬 가능).
+- `~/.agents/skills/`, `.agents/skills/`에서는 루트의 `.md`는 무시되고 **`SKILL.md`가 있는 디렉터리만** 인식된다.
+- 동일 이름이 여러 위치에 있으면 first-found wins. 충돌 시 워닝이 뜨므로 신규 스킬 이름은 미리 `rg --files -g 'SKILL.md' ~/.pi/agent/skills ~/.agents/skills .pi/skills .agents/skills 2>/dev/null` 정도로 확인.
+
+다른 하네스(Claude Code, Codex)의 스킬을 가져와 쓰려면 `.pi/settings.json`(또는 `~/.pi/settings.json`)에 추가:
+
+```json
+{ "skills": ["~/.claude/skills", "~/.codex/skills"] }
+```
+
+이름 규칙(Pi 적용분):
+
 - 1~64자, 소문자 영문/숫자/하이픈만 사용한다.
 - 앞뒤 하이픈, 연속 하이픈은 금지한다.
+- 디렉터리명과 `name`을 동일하게 두는 것을 **권장**한다(Agent Skills 표준 요구). 단 Pi는 강제하지 않으므로, cross-harness 공유 디렉터리에서 의도적으로 다르게 두어도 로딩된다.
 - 예: `ship`, `systematic-debugging`, `airtable-reporting`
 
 ### 3. 설계 초안
@@ -84,16 +104,28 @@ Pi 환경에서 Agent Skills 표준을 따르는 스킬을 만들고, 작게 검
 
 ### 4. SKILL.md 작성 패턴
 
-프론트매터:
+프론트매터(최소):
 
 ```yaml
 ---
 name: my-skill
 description: 무엇을 하고 언제 사용해야 하는지 구체적으로 쓴다. 사용자의 실제 표현과 관련 키워드를 포함한다.
-argument-hint: "선택: /skill:my-skill 뒤에 올 인자 예시"
-disable-model-invocation: false
 ---
 ```
+
+Pi가 인식하는 선택 필드:
+
+| 필드 | 용도 |
+|---|---|
+| `license` | 라이선스 이름 또는 번들된 파일 참조 |
+| `compatibility` | 환경 요구사항(최대 500자) |
+| `metadata` | 자유 key-value(에이전트가 무시해도 됨) |
+| `allowed-tools` | 공백 구분 사전 승인 툴 목록(experimental) |
+| `disable-model-invocation` | `true`면 시스템 프롬프트에서 숨김. **자동 트리거 금지, `/skill:name`으로만 호출 가능** |
+
+자동 트리거가 위험하거나 사용자 명시 호출만 허용해야 하는 스킬(파괴적 동작, 외부 전송, 비용 큰 작업)은 `disable-model-invocation: true`로 두는 것을 검토한다.
+
+`argument-hint` 같은 Claude Code 전용 필드는 Pi가 인식하지 않으므로 넣지 않는다. 알려지지 않은 필드는 Pi가 조용히 무시한다.
 
 본문 권장 구조:
 
@@ -124,11 +156,23 @@ disable-model-invocation: false
 
 작성 팁:
 
-- `description`에는 "무엇"과 "언제"를 모두 넣는다. 자동 트리거는 이 필드에 크게 의존한다.
+- `description`에는 "무엇"과 "언제"를 모두 넣는다. 자동 트리거는 이 필드에 크게 의존한다. **빠지면 Pi는 스킬 자체를 로딩하지 않는다.**
 - 모델이 따라야 하는 행동은 명령형으로 쓰되, 무조건적인 MUST 남발보다 이유를 설명한다.
 - 대형 레퍼런스는 본문에 붙이지 말고 `references/`로 분리한 뒤 언제 읽어야 하는지 명시한다.
 - 반복적·결정적 검증은 `scripts/`로 옮겨 매번 재발명하지 않게 한다.
-- 상대 경로는 스킬 루트 기준으로 쓴다. 예: `references/checklist.md`, `scripts/validate_skill.py`
+- 상대 경로는 스킬 루트 기준으로 쓴다. 예: `references/checklist.md`, `scripts/validate_skill.py`. 절대경로(`/Users/...`)는 다른 사용자/머신에서 깨지므로 피한다.
+
+### `/skill:name` 강제 호출
+
+Pi에서 사용자는 `/skill:<name>` 슬래시 명령으로 스킬을 명시 호출할 수 있다. 명령 뒤 인자는 `User: <args>` 형태로 스킬 본문 끝에 append된다.
+
+```text
+/skill:my-skill input.pdf --pages 1-3
+```
+
+- 트리거 description이 약하거나 모호한 도메인이면 본문에 "확실하지 않으면 `/skill:<name>`으로 호출하세요" 같은 안내를 둔다.
+- `disable-model-invocation: true`인 스킬은 이 경로로만 호출된다.
+- 사용자가 끄고 싶다면 설정의 `enableSkillCommands: false`로 비활성화 가능.
 
 ### 5. Pi 친화적 평가 루프
 
@@ -175,17 +219,21 @@ pi --no-skills -p "<same eval prompt>"
 스킬 작성/수정 후 반드시 아래를 확인한다.
 
 ```bash
-python3 /Users/example/.pi/agent/skills/skill-creator/scripts/validate_skill.py /path/to/skill
+python3 ~/.pi/agent/skills/skill-creator/scripts/validate_skill.py /path/to/skill
 ```
 
-추가 확인:
+검증 스크립트는 다음을 본다(요약):
 
-- `SKILL.md`가 존재한다.
-- frontmatter `name`과 디렉터리명이 일치한다.
-- `description`이 비어 있지 않고 1024자 이하이다.
-- 본문이 너무 길면 `references/`로 분리한다.
-- 스킬이 위험한 행동을 암묵적으로 지시하지 않는다.
-- 최종 보고에 생성/수정 파일과 검증 결과를 포함한다.
+- 필수: `SKILL.md` 존재, frontmatter 형식, `name`/`description` 유무, `name` 글자 규칙, 길이 제한
+- 경고: `name`과 디렉터리명 불일치(Pi 허용, 표준 위반), `description`이 너무 짧음, 500줄 초과, 본문 내 깨진 상대 경로 참조, 절대 경로 사용, `allowed-tools` 형식, 알려지지 않은 frontmatter 필드
+
+추가 사람 검토:
+
+- 본문이 너무 길면 `references/`로 분리했는가
+- 스킬이 위험한 행동을 암묵적으로 지시하지 않는가
+- 새 스킬을 글로벌에 추가했다면 사용자가 `/reload` 또는 새 세션을 시작해야 한다는 점을 안내했는가
+- 격리 테스트가 필요하면 `pi --no-skills --skill /path/to/skill -p "<쿼리>"`로 재현 가능한지 확인
+- 최종 보고에 생성/수정 파일과 검증 결과 포함
 
 ## Output format
 
