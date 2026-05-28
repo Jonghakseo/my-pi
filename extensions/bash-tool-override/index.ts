@@ -15,6 +15,7 @@ import { truncatePlainToWidth } from "../utils/format-utils.js";
 const TAIL_LINES = 5;
 const MAX_COMMAND_PREVIEW = 120;
 const MIN_COMMAND_PREVIEW_WIDTH = 16;
+const DEFAULT_TIMEOUT_SECONDS = 600;
 
 type BashContent = { type: "text"; text: string };
 
@@ -134,7 +135,11 @@ To execute a command that doesn't need the user to see its output, prefix it wit
 			title: Type.String({
 				description: "명령어가 수행하는 작업을 설명하는 짧은 한글 문장. 반드시 한국어로 작성할 것",
 			}),
-			timeout: Type.Optional(Type.Number({ description: "Optional timeout in milliseconds" })),
+			timeout: Type.Optional(
+				Type.Number({
+					description: `Optional timeout in seconds (default: ${DEFAULT_TIMEOUT_SECONDS}s). Pass an explicit value to override.`,
+				}),
+			),
 		}),
 		promptSnippet: "Execute commands in a bash shell; use title to describe the command's purpose",
 		promptGuidelines: [
@@ -145,9 +150,9 @@ To execute a command that doesn't need the user to see its output, prefix it wit
 			const a = args as Record<string, unknown>;
 			const command = typeof a.command === "string" ? a.command : "";
 			const title = typeof a.title === "string" && a.title.length > 0 ? a.title : deriveTitle(command);
-			const timeout = typeof a.timeout === "number" ? a.timeout : undefined;
+			const timeout = typeof a.timeout === "number" && a.timeout > 0 ? a.timeout : DEFAULT_TIMEOUT_SECONDS;
 
-			return { command, title, ...(timeout !== undefined ? { timeout } : {}) };
+			return { command, title, timeout };
 		},
 		renderCall(args, theme, _context) {
 			const title = args.title as string | undefined;
