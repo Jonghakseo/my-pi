@@ -51,8 +51,10 @@ pi -v
 `pi -v` 출력이 불명확하면 아래로 보조 확인한다.
 
 ```bash
-npm view @mariozechner/pi-coding-agent version
+npm view @earendil-works/pi-coding-agent version
 ```
+
+> 과거 패키지 네임스페이스 `@mariozechner/*` 는 더 이상 사용하지 않는다. 현재 공식 패키지는 모두 `@earendil-works/*` 네임스페이스다.
 
 필요하면 현재 repo에서 사용 중인 pi 관련 버전도 함께 확인한다.
 
@@ -68,7 +70,9 @@ npm view @mariozechner/pi-coding-agent version
 
 우선 이 공식 문서를 확인한다:
 
-- `https://github.com/badlogic/pi-mono/blob/main/packages/coding-agent/CHANGELOG.md`
+- `https://github.com/earendil-works/pi/blob/main/packages/coding-agent/CHANGELOG.md`
+
+> 예전 위치(`badlogic/pi-mono`, `earendil-works/pi-mono`)는 모두 `earendil-works/pi` 로 이전되었다.
 
 가능하면 문서 fetch 도구를 사용해 읽고, 실패 시 웹 검색/브라우저/CLI로 본다.
 
@@ -101,10 +105,12 @@ npm view @mariozechner/pi-coding-agent version
 `extensions/` 아래에서 pi 관련 의존성이 선언된 파일을 모두 찾는다.
 
 찾아야 하는 패턴:
-- `@mariozechner/pi-coding-agent`
-- `@mariozechner/pi-agent-core`
-- `@mariozechner/pi-ai`
-- `@mariozechner/pi-tui`
+- `@earendil-works/pi-coding-agent`
+- `@earendil-works/pi-agent-core`
+- `@earendil-works/pi-ai`
+- `@earendil-works/pi-tui`
+
+> 과거 네임스페이스 `@mariozechner/pi-*` 가 잔존해 있다면 모두 `@earendil-works/pi-*` 로 교체 대상이다.
 
 특히 확인 대상:
 - `extensions/package.json`
@@ -119,9 +125,9 @@ npm view @mariozechner/pi-coding-agent version
 - `pi.registerCommand(`
 - `pi.registerTool(`
 - `pi.on(`
-- `@mariozechner/pi-coding-agent`
-- `@mariozechner/pi-tui`
-- `@mariozechner/pi-ai`
+- `@earendil-works/pi-coding-agent`
+- `@earendil-works/pi-tui`
+- `@earendil-works/pi-ai`
 
 변경 가능성이 큰 영역:
 - slash command 등록 코드
@@ -157,13 +163,14 @@ CHANGELOG의 각 의미 있는 항목에 대해 아래를 만든다.
 보통 다음을 점검/수정한다.
 
 - `extensions/package.json`
-  - `@mariozechner/pi-agent-core`
-  - `@mariozechner/pi-ai`
-  - `@mariozechner/pi-coding-agent`
-  - `@mariozechner/pi-tui`
+  - `@earendil-works/pi-agent-core`
+  - `@earendil-works/pi-ai`
+  - `@earendil-works/pi-coding-agent`
+  - `@earendil-works/pi-tui`
 - `extensions/remote/package.json`
-  - `@mariozechner/pi-coding-agent`
+  - `@earendil-works/pi-coding-agent`
 - `extensions/**/package.json` 중 pi 관련 패키지가 있는 모든 파일
+- 루트 `package.json` 의 `peerDependencies` 에 남아 있는 `@earendil-works/pi-*` 항목
 
 ### 4-3. 설치
 
