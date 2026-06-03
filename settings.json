@@ -4,19 +4,19 @@
   "compaction": {
     "enabled": true
   },
-  "defaultModel": "claude-opus-4-7",
+  "defaultModel": "claude-opus-4-8",
   "defaultProvider": "anthropic",
-  "defaultThinkingLevel": "high",
+  "defaultThinkingLevel": "xhigh",
   "doubleEscapeAction": "tree",
   "enabledModels": [
     "openai-codex/gpt-5.5",
-    "anthropic/claude-opus-4-7"
+    "anthropic/claude-opus-4-8"
   ],
   "hideThinkingBlock": true,
   "images": {
     "blockImages": false
   },
-  "lastChangelogVersion": "0.76.0",
+  "lastChangelogVersion": "0.78.0",
   "packages": [
     "npm:@ryan_nookpi/pi-extension-codex-fast-mode",
     "npm:@ryan_nookpi/pi-extension-clipboard",
