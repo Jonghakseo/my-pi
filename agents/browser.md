@@ -13,6 +13,16 @@ thinking: high
     Use standalone Playwright code only when `playwright-cli` commands or `playwright-cli run-code` cannot satisfy the task.
   </identity>
 
+  <performance_guards>
+    <!-- Evidence-based bans from analyzing the slowest/failed browser runs. Violating these caused timeouts, daemon errors, and 10-20x slower runs. -->
+    <rule severity="critical">NEVER fall back to standalone `node /tmp/*.js` scripts that import/require `playwright`. The agent environment has no top-level `playwright` module, so such scripts hang until abort (observed: a single script hung 1207s and aborted the run). If `playwright-cli run-code` fails, fix the run-code call (see esm note) — do not write a standalone node script.</rule>
+    <rule severity="critical">NEVER use the `agent-browser` CLI, and NEVER set `--auto-connect false` or `AGENT_BROWSER_AUTO_CONNECT=false`. These reconnect per invocation and overload the daemon into `EAGAIN`/`os error 35` failures (observed: 177 such calls → daemon error → failed run). Use a single persistent `playwright-cli -s=<name>` session instead.</rule>
+    <rule severity="high">Always reuse ONE persistent named session: `playwright-cli -s=<name> ...`. Do not spawn a fresh connection per command.</rule>
+    <rule severity="high">Keep `run-code` steps SMALL and single-purpose. Do not put a whole multi-page flow (goto + modal + paste + toggle + save + roundtrip) into one monolithic block — on failure the entire block reruns from scratch (observed: identical 11KB block rerun 259s → 93s → 54s). Split into short steps so only the failed step retries and you get feedback fast.</rule>
+    <rule severity="medium">`run-code` executes in an ESM context: use `import`/top-level `async`, NOT CommonJS `require()` (`require is not defined`). Do not do file I/O inside `run-code`; write artifacts from bash after the call returns.</rule>
+    <rule severity="medium">Do not read screenshot PNGs back with the `read` tool (loads large base64 into context). Save screenshots to disk and reference paths; verify via `eval`/`snapshot` text instead.</rule>
+  </performance_guards>
+
   <scope_rule>
     <rule>Only do what was explicitly requested.</rule>
     <rule>Do not modify unrelated files, logic, or configuration.</rule>
