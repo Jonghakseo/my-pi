@@ -235,6 +235,75 @@ function extractSubagentEndEntriesFromCustomMessage(customMessage: {
 	});
 }
 
+/** Parse a session-entry timestamp (number ms, ISO string, or Date) to epoch ms. */
+function toValidEpochMs(value: unknown): number | undefined {
+	if (typeof value === "number" && Number.isFinite(value) && value > 0) return value;
+	if (typeof value === "string" && value.trim()) {
+		const parsed = Date.parse(value);
+		if (Number.isFinite(parsed) && parsed > 0) return parsed;
+	}
+	if (value instanceof Date) {
+		const t = value.getTime();
+		if (Number.isFinite(t) && t > 0) return t;
+	}
+	return undefined;
+}
+
+/** Run keys of all `subagent_end` entries already present in the log. */
+function loggedEndKeys(entries: LogEntry[]): Set<string> {
+	return new Set(
+		entries.filter((e): e is SubagentEndEntry => e.type === "subagent_end").flatMap((e) => getRunAnalyticsKeys(e)),
+	);
+}
+
+interface SessionEntryLike {
+	type?: string;
+	customType?: string;
+	content?: unknown;
+	details?: Record<string, unknown>;
+	timestamp?: unknown;
+}
+
+/**
+ * Recover `subagent_end` entries from session completion custom_messages that
+ * were never logged live.
+ *
+ * Flush gap: `subagent_end` is only written by the `message_end` handler. When
+ * a subagent completion custom_message lands in the session **after** that
+ * session's final `message_end` (e.g. the run finishes after the last turn, or
+ * the session is closed/interrupted while runs are still in flight), it is
+ * never scanned — and the next `session_start` advances `lastProcessedEntryCount`
+ * past it, dropping the end permanently. This backfills those missing ends from
+ * the resumed session's entries.
+ *
+ * Dedupe: skips any completion whose run key is already logged (idempotent
+ * across repeated session_start). Keyless completions are skipped to avoid
+ * double-counting, since they cannot be matched against existing logs.
+ */
+function findUnloggedSubagentEnds(
+	sessionEntries: SessionEntryLike[],
+	alreadyLoggedKeys: Set<string>,
+): SubagentEndEntry[] {
+	const recovered: SubagentEndEntry[] = [];
+	const seenInScan = new Set<string>();
+	for (const entry of sessionEntries) {
+		if (entry?.type !== "custom_message") continue;
+		if (entry.customType !== "subagent-command" && entry.customType !== "subagent-tool") continue;
+		const ends = extractSubagentEndEntriesFromCustomMessage({ content: entry.content, details: entry.details });
+		if (ends.length === 0) continue;
+		const epoch = toValidEpochMs(entry.timestamp) ?? Date.now();
+		const ts = new Date(epoch).toISOString();
+		for (const end of ends) {
+			const keys = getRunAnalyticsKeys(end);
+			if (keys.length === 0) continue;
+			if (keys.some((k) => alreadyLoggedKeys.has(k) || seenInScan.has(k))) continue;
+			for (const k of keys) seenInScan.add(k);
+			recovered.push({ type: "subagent_end", ts, epoch, ...end });
+		}
+	}
+	return recovered;
+}
+
 // ─── Date grouping ───────────────────────────────────────────────────────────
 
 type Period = "day" | "week" | "month";
@@ -759,6 +828,8 @@ export const __test__ = {
 	computeOverall,
 	getRunAnalyticsKeys,
 	extractSubagentEndEntriesFromCustomMessage,
+	findUnloggedSubagentEnds,
+	loggedEndKeys,
 };
 
 const SKILL_DEBOUNCE_MS = 10_000; // 같은 스킬의 10초 내 중복 read를 무시
@@ -867,7 +938,13 @@ export default function (pi: ExtensionAPI) {
 	pi.on("session_start", async (event, ctx) => {
 		// Initialize entry count to current length to skip all historical entries.
 		try {
-			lastProcessedEntryCount = ctx.sessionManager.getEntries().length;
+			const sessionEntries = ctx.sessionManager.getEntries() as SessionEntryLike[];
+			// Flush gap recovery: backfill subagent_end entries for completions that
+			// landed after the previous session's final message_end. Deduped against
+			// already-logged run keys, so this is idempotent across session_start.
+			const recovered = findUnloggedSubagentEnds(sessionEntries, loggedEndKeys(readAllLogs()));
+			for (const end of recovered) appendLog(end);
+			lastProcessedEntryCount = sessionEntries.length;
 		} catch {
 			lastProcessedEntryCount = 0;
 		}
