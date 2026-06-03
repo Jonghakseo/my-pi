@@ -304,19 +304,33 @@ function refreshStatus(ctx: ExtensionContext, config: HeadroomConfig, state: Hea
 	ctx.ui.setStatus(STATUS_KEY, renderFooterStatus(ctx, config, state));
 }
 
+type HeadroomStatusColor = "dim" | "warning" | "success";
+
+type HeadroomStatusTheme = {
+	fg(color: HeadroomStatusColor, text: string): string;
+};
+
+function isHeadroomStatusTheme(theme: unknown): theme is HeadroomStatusTheme {
+	return typeof (theme as { fg?: unknown } | null)?.fg === "function";
+}
+
+function createStatusPainter(theme: unknown): (color: HeadroomStatusColor, text: string) => string {
+	if (isHeadroomStatusTheme(theme)) return (color, text) => theme.fg(color, text);
+	return (_color, text) => text;
+}
+
 function renderFooterStatus(ctx: ExtensionContext, config: HeadroomConfig, state: HeadroomRuntimeState): string {
-	const theme = ctx.ui.theme;
-	if (!state.enabled) return theme.fg("dim", "○ Headroom off");
-	if (isRemoteBlocked(config)) return theme.fg("warning", "⚠") + theme.fg("dim", " Headroom remote blocked");
-	if (state.proxyStarting) return theme.fg("dim", "⏳ Headroom starting");
-	if (state.proxyOnline === false) return theme.fg("dim", "○ Headroom not running");
-	if (state.proxyOnline === null && !state.stats.last) return theme.fg("dim", "○ Headroom idle");
-	if (!state.stats.last) return theme.fg("success", "✓") + theme.fg("dim", " Headroom");
+	const paint = createStatusPainter(ctx.ui.theme);
+	if (!state.enabled) return paint("dim", "○ Headroom off");
+	if (isRemoteBlocked(config)) return paint("warning", "⚠") + paint("dim", " Headroom remote blocked");
+	if (state.proxyStarting) return paint("dim", "⏳ Headroom starting");
+	if (state.proxyOnline === false) return paint("dim", "○ Headroom not running");
+	if (state.proxyOnline === null && !state.stats.last) return paint("dim", "○ Headroom idle");
+	if (!state.stats.last) return paint("success", "✓") + paint("dim", " Headroom");
 
 	const pct = Math.round((1 - state.stats.last.compressionRatio) * 100);
 	return (
-		theme.fg("success", "✓") +
-		theme.fg("dim", ` Headroom -${pct}% (${state.stats.last.tokensSaved.toLocaleString()} saved)`)
+		paint("success", "✓") + paint("dim", ` Headroom -${pct}% (${state.stats.last.tokensSaved.toLocaleString()} saved)`)
 	);
 }
 
@@ -415,3 +429,7 @@ function parseSubcommand(args: string): Subcommand {
 	const normalized = args.trim().toLowerCase();
 	return SUBCOMMANDS.includes(normalized as Subcommand) ? (normalized as Subcommand) : "status";
 }
+
+export const __test__ = {
+	renderFooterStatus,
+};
