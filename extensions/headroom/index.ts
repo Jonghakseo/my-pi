@@ -251,8 +251,13 @@ function recordAppliedCompression(stats: HeadroomStats, result: CompressResult, 
 }
 
 function recordCompressionError(runtime: HeadroomRuntime, ctx: ExtensionContext, error: unknown): void {
+	runtime.state.stats.lastError = getErrorMessage(error);
+	if (isAbortOrTimeoutError(error)) {
+		runtime.refreshStatus(ctx);
+		return;
+	}
+
 	runtime.state.proxyOnline = false;
-	runtime.state.stats.lastError = error instanceof Error ? error.message : String(error);
 	if (!runtime.state.offlineWarningShown) {
 		runtime.state.offlineWarningShown = true;
 		ctx.ui.notify(
@@ -261,6 +266,23 @@ function recordCompressionError(runtime: HeadroomRuntime, ctx: ExtensionContext,
 		);
 	}
 	runtime.refreshStatus(ctx);
+}
+
+function getErrorMessage(error: unknown): string {
+	return error instanceof Error ? error.message : String(error);
+}
+
+function isAbortOrTimeoutError(error: unknown): boolean {
+	if (!error || typeof error !== "object") return false;
+	const candidate = error as { cause?: unknown; message?: unknown; name?: unknown };
+	if (candidate.name === "TimeoutError" || candidate.name === "AbortError") return true;
+	if (
+		typeof candidate.message === "string" &&
+		/aborted due to timeout|operation was aborted/i.test(candidate.message)
+	) {
+		return true;
+	}
+	return candidate.cause !== undefined && candidate.cause !== error && isAbortOrTimeoutError(candidate.cause);
 }
 
 async function handleCommand(runtime: HeadroomRuntime, command: Subcommand, ctx: ExtensionContext): Promise<void> {
@@ -431,5 +453,6 @@ function parseSubcommand(args: string): Subcommand {
 }
 
 export const __test__ = {
+	isAbortOrTimeoutError,
 	renderFooterStatus,
 };
