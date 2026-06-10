@@ -385,7 +385,7 @@ const getGitRoot = async (pi: ExtensionAPI, cwd: string): Promise<string | null>
 
 const getGitStatusMap = async (pi: ExtensionAPI, cwd: string): Promise<Map<string, GitStatusEntry>> => {
 	const statusMap = new Map<string, GitStatusEntry>();
-	const statusResult = await pi.exec("git", ["status", "--porcelain=1", "-z"], { cwd });
+	const statusResult = await pi.exec("git", ["--no-optional-locks", "status", "--porcelain=1", "-z"], { cwd });
 	if (statusResult.code !== 0 || !statusResult.stdout) {
 		return statusMap;
 	}

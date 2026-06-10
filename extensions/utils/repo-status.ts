@@ -2,14 +2,20 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { fetchUnresolvedPullRequestReviewCommentsCount, isNoPullRequestError } from "./github-pr-review-comments.ts";
 import { type CheckSummary, parseGitStatusPorcelainV2, summarizeChecks } from "./git-utils.ts";
 
-const GIT_STATUS_ARGS = ["status", "--porcelain=v2", "--branch", "--untracked-files=normal"] as const;
+const GIT_STATUS_ARGS = [
+	"--no-optional-locks",
+	"status",
+	"--porcelain=v2",
+	"--branch",
+	"--untracked-files=normal",
+] as const;
 const PR_VIEW_ARGS = [
 	"pr",
 	"view",
 	"--json",
 	"number,title,url,state,reviewDecision,latestReviews,reviewRequests,statusCheckRollup",
 ] as const;
-const GIT_POLL_INTERVAL_MS = 3000;
+const GIT_POLL_INTERVAL_MS = 10_000;
 const PR_POLL_INTERVAL_MS = 30_000;
 
 export type ReviewStatusState = "approved" | "changes_requested" | "commented" | "review";

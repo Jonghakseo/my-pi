@@ -361,7 +361,7 @@ async function committedFiles(pi: ExtensionAPI, cwd: string, mergeBase: string |
 }
 
 async function workingTreeFiles(pi: ExtensionAPI, cwd: string): Promise<DiffFile[]> {
-	const r = await pi.exec("git", ["status", "--porcelain=1", "-uall", "-z"], { cwd });
+	const r = await pi.exec("git", ["--no-optional-locks", "status", "--porcelain=1", "-uall", "-z"], { cwd });
 	if (r.code !== 0 || !r.stdout) return [];
 	return parsePorcelainStatusZ(r.stdout).map((entry) => ({ ...entry, commitState: "uncommitted" }));
 }

@@ -44,9 +44,13 @@ describe("createRepoStatusTracker", () => {
 			unresolvedInlineComments: null,
 		});
 		expect(exec).toHaveBeenCalledTimes(1);
-		expect(exec).toHaveBeenCalledWith("git", ["status", "--porcelain=v2", "--branch", "--untracked-files=normal"], {
-			cwd: "/tmp/repo",
-		});
+		expect(exec).toHaveBeenCalledWith(
+			"git",
+			["--no-optional-locks", "status", "--porcelain=v2", "--branch", "--untracked-files=normal"],
+			{
+				cwd: "/tmp/repo",
+			},
+		);
 
 		tracker.dispose();
 	});
