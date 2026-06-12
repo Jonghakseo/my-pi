@@ -86,13 +86,13 @@ describe("validateClaudeRuntimeModel", () => {
 
 	it("accepts anthropic/claude-* models", () => {
 		expect(() => validateClaudeRuntimeModel("anthropic/claude-sonnet-4-6")).not.toThrow();
-		expect(() => validateClaudeRuntimeModel("anthropic/claude-opus-4-7")).not.toThrow();
+		expect(() => validateClaudeRuntimeModel("anthropic/claude-opus-4-8")).not.toThrow();
 		expect(() => validateClaudeRuntimeModel("anthropic/claude-haiku-4-5")).not.toThrow();
 	});
 
 	it("accepts claude-* models without provider prefix", () => {
 		expect(() => validateClaudeRuntimeModel("claude-sonnet-4-6")).not.toThrow();
-		expect(() => validateClaudeRuntimeModel("claude-opus-4-7")).not.toThrow();
+		expect(() => validateClaudeRuntimeModel("claude-opus-4-8")).not.toThrow();
 	});
 
 	it("is case-insensitive", () => {

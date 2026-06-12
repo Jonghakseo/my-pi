@@ -62,7 +62,7 @@ The current setup has 11 agent definitions, OpenAI/Anthropic agent models, and a
 |---|---|---|---|
 | **finder** | `anthropic/claude-sonnet-4-6` | Fast file & code locator | Quick lookups, grep-like tasks |
 | **worker** | `openai-codex/gpt-5.5` | General-purpose executor | Implementation, writing, fixes (complex multi-file) |
-| **planner** | `anthropic/claude-opus-4-7` | Implementation architect | Breaking down complex tasks |
+| **planner** | `anthropic/claude-opus-4-8` | Implementation architect | Breaking down complex tasks |
 | **simplifier** | `anthropic/claude-sonnet-4-6` | Code simplification specialist | Clean up recently modified code, improve readability, preserve behavior |
 | **code-cleaner** | `anthropic/claude-opus-4-6` | Code cleanup analyst | Find cleanup opportunities and quality issues |
 | **reviewer** | `openai-codex/gpt-5.5` | Code review specialist | PR reviews, quality/correctness checks |
@@ -77,7 +77,7 @@ The current setup has 11 agent definitions, OpenAI/Anthropic agent models, and a
 
 - **openai-codex/gpt-5.5** — General-purpose execution & review (implementation, testing, reviewing, security review, browser automation)
 - **anthropic/claude-sonnet-4-6** — Fast exploration & research (file search, web research, code simplification)
-- **anthropic/claude-opus-4-6 / 4-7** — Deep reasoning tasks (strategic planning, verification, cleanup analysis)
+- **anthropic/claude-opus-4-6 / 4-8** — Deep reasoning tasks (strategic planning, verification, cleanup analysis)
 
 The main agent default is `openai-codex/gpt-5.5` with high thinking.
 
@@ -164,7 +164,6 @@ The following reusable packages are currently listed in `settings.json`.
 | [`@ryan_nookpi/pi-extension-diff-review`](https://github.com/Jonghakseo/pi-extension/tree/main/packages/diff-review) | Diff review assistance |
 | [`@ryan_nookpi/pi-extension-claude-spinner`](https://github.com/Jonghakseo/pi-extension/tree/main/packages/claude-spinner) | Claude-style spinner/status feedback |
 | [`@ryan_nookpi/pi-extension-cc-system-prompt`](https://github.com/Jonghakseo/pi-extension/tree/main/packages/cc-system-prompt) | Claude Code style system prompt |
-| [`@ryan_nookpi/pi-extension-codex-large-context`](https://github.com/Jonghakseo/pi-extension/tree/main/packages/codex-large-context) | Codex large-context support |
 
 ---
 

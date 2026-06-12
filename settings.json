@@ -11,7 +11,8 @@
   "enabledModels": [
     "openai-codex/gpt-5.5",
     "anthropic/claude-fable-5",
-    "anthropic/claude-opus-4-6"
+    "anthropic/claude-opus-4-6",
+    "anthropic/claude-opus-4-8"
   ],
   "hideThinkingBlock": false,
   "images": {
