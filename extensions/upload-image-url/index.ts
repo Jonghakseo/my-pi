@@ -33,6 +33,9 @@ const STORAGE_REPO = process.env.PI_STORAGE_REPO || envFile.PI_STORAGE_REPO;
 const STORAGE_BRANCH = "main";
 
 const ALLOWED_EXTENSIONS = new Set([".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".bmp", ".ico"]);
+const CONFIRMATION_TTL_MS = 30 * 60 * 1000;
+
+let uploadConfirmationExpiresAt = 0;
 
 const MIME_TO_EXT: Record<string, string> = {
 	"image/png": ".png",
@@ -176,6 +179,14 @@ function uploadImageContent(storagePath: string, buffer: Buffer): void {
 	);
 }
 
+function hasActiveUploadConfirmation(now = Date.now()): boolean {
+	return now < uploadConfirmationExpiresAt;
+}
+
+function rememberUploadConfirmation(now = Date.now()): void {
+	uploadConfirmationExpiresAt = now + CONFIRMATION_TTL_MS;
+}
+
 export default function uploadImageUrl(pi: ExtensionAPI) {
 	pi.registerTool({
 		name: "upload_image_url",
@@ -185,9 +196,9 @@ export default function uploadImageUrl(pi: ExtensionAPI) {
 			"Accepts a URL or a local file path. " +
 			"USAGE: Only call this tool when the user has EXPLICITLY asked to upload an image / attach a screenshot / embed an image into GitHub content. " +
 			"Do NOT call it proactively or as a side-effect of other work (e.g. PR creation, reports). " +
-			"At runtime the tool will show a user confirmation dialog before performing the upload; if the user declines, the call returns without uploading.",
+			"At runtime the tool will show a user confirmation dialog before performing the upload unless the user already approved an upload within the previous 30 minutes; if the user declines, the call returns without uploading.",
 		promptGuidelines: [
-			"Use upload_image_url ONLY when the user explicitly requests an image upload. The tool itself prompts the user for confirmation before each upload.",
+			"Use upload_image_url ONLY when the user explicitly requests an image upload. The tool itself prompts the user for confirmation, then reuses that approval for 30 minutes.",
 		],
 		parameters: Type.Object({
 			url: Type.String({ description: "Image URL or local file path to upload" }),
@@ -203,35 +214,39 @@ export default function uploadImageUrl(pi: ExtensionAPI) {
 
 			const { url, filename } = params;
 
-			if (!ctx?.hasUI) {
-				return buildUploadError(
-					"upload_image_url requires an interactive UI to confirm the upload. " +
-						"Re-run the request from an interactive pi session.",
-				);
-			}
+			if (!hasActiveUploadConfirmation()) {
+				if (!ctx?.hasUI) {
+					return buildUploadError(
+						"upload_image_url requires an interactive UI to confirm the upload. " +
+							"Re-run the request from an interactive pi session.",
+					);
+				}
 
-			const displaySource = url.length > 80 ? `${url.slice(0, 77)}...` : url;
-			const confirmMessage = [
-				`업로드 대상: ${STORAGE_OWNER}/${STORAGE_REPO}`,
-				`이미지 소스: ${displaySource}`,
-				filename ? `파일명: ${filename}` : null,
-				"",
-				"이 이미지를 GitHub 저장소에 업로드할까요?",
-			]
-				.filter((line) => line !== null)
-				.join("\n");
-			const confirmed = await ctx.ui.confirm("이미지를 GitHub에 업로드할까요?", confirmMessage);
-			if (!confirmed) {
-				return {
-					content: [
-						{
-							type: "text",
-							text: "사용자가 업로드를 취소했습니다.",
-						},
-					],
-					details: undefined,
-					isError: true,
-				};
+				const displaySource = url.length > 80 ? `${url.slice(0, 77)}...` : url;
+				const confirmMessage = [
+					`업로드 대상: ${STORAGE_OWNER}/${STORAGE_REPO}`,
+					`이미지 소스: ${displaySource}`,
+					filename ? `파일명: ${filename}` : null,
+					"",
+					"이 이미지를 GitHub 저장소에 업로드할까요?",
+					"허용하면 30분 동안 추가 확인 없이 이미지 업로드를 진행합니다.",
+				]
+					.filter((line) => line !== null)
+					.join("\n");
+				const confirmed = await ctx.ui.confirm("이미지를 GitHub에 업로드할까요?", confirmMessage);
+				if (!confirmed) {
+					return {
+						content: [
+							{
+								type: "text",
+								text: "사용자가 업로드를 취소했습니다.",
+							},
+						],
+						details: undefined,
+						isError: true,
+					};
+				}
+				rememberUploadConfirmation();
 			}
 
 			try {
