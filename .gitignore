@@ -1,5 +1,6 @@
 # Sensitive / credentials
 auth.json
+trust.json
 agents/.env.browser
 .env
 extensions/.env
