@@ -248,13 +248,38 @@ async function handleCreate(pi: ExtensionAPI, ctx: ExtensionCommandContext, work
 		await openWorktree(pi, ctx, { ...({} as Worktree), path: wtPath, branch: clean, detached: false } as Worktree);
 }
 
+async function deleteBranch(pi: ExtensionAPI, ctx: ExtensionCommandContext, top: string, wt: Worktree): Promise<void> {
+	if (!wt.branch || wt.detached || PROTECTED_BRANCHES.has(wt.branch)) return;
+	const del = await git(pi, top, ["branch", "-d", wt.branch], 10000);
+	if (del.code === 0) {
+		ctx.ui.notify(`🌿 브랜치 삭제됨: ${wt.branch}`, "info");
+		return;
+	}
+	const force = await ctx.ui.confirm(
+		"브랜치 강제 삭제",
+		`브랜치 "${wt.branch}"가 아직 머지되지 않았습니다.\n강제 삭제(-D)할까요?`,
+	);
+	if (!force) {
+		ctx.ui.notify(`브랜치 "${wt.branch}"는 유지됩니다`, "warning");
+		return;
+	}
+	const forced = await git(pi, top, ["branch", "-D", wt.branch], 10000);
+	if (forced.code === 0) ctx.ui.notify(`🌿 브랜치 강제 삭제됨: ${wt.branch}`, "info");
+	else ctx.ui.notify(`브랜치 삭제 실패: ${forced.stderr.trim().split("\n")[0]}`, "error");
+}
+
 async function handleDelete(pi: ExtensionAPI, ctx: ExtensionCommandContext, wt: Worktree): Promise<boolean> {
 	if (wt.isMain || wt.isCurrent) {
 		ctx.ui.notify("현재/메인 worktree는 삭제할 수 없습니다", "warning");
 		return false;
 	}
 	const dirtyWarn = wt.dirty && wt.dirty > 0 ? `\n⚠ 커밋되지 않은 변경 ${wt.dirty}건이 있습니다.` : "";
-	const ok = await ctx.ui.confirm("worktree 삭제", `"${label(wt)}"\n${tildify(wt.path)} 를 삭제할까요?${dirtyWarn}`);
+	const branchNote =
+		wt.branch && !wt.detached && !PROTECTED_BRANCHES.has(wt.branch) ? `\n브랜치 "${wt.branch}"도 함께 삭제됩니다.` : "";
+	const ok = await ctx.ui.confirm(
+		"worktree 삭제",
+		`"${label(wt)}"\n${tildify(wt.path)} 를 삭제할까요?${dirtyWarn}${branchNote}`,
+	);
 	if (!ok) return false;
 	const top = (await repoToplevel(pi, ctx.cwd)) ?? ctx.cwd;
 	const force = wt.dirty && wt.dirty > 0 ? ["--force"] : [];
@@ -264,6 +289,7 @@ async function handleDelete(pi: ExtensionAPI, ctx: ExtensionCommandContext, wt: 
 		return false;
 	}
 	ctx.ui.notify(`🗑 삭제됨: ${label(wt)}`, "info");
+	await deleteBranch(pi, ctx, top, wt);
 	return true;
 }
 
@@ -325,9 +351,11 @@ async function handleGc(pi: ExtensionAPI, ctx: ExtensionCommandContext, worktree
 	let removed = 0;
 	for (const wt of candidates) {
 		const r = await git(pi, top, ["worktree", "remove", wt.path], 15000);
-		if (r.code === 0) removed++;
+		if (r.code !== 0) continue;
+		removed++;
+		if (wt.branch && !PROTECTED_BRANCHES.has(wt.branch)) await git(pi, top, ["branch", "-d", wt.branch], 10000);
 	}
-	ctx.ui.notify(`🧹 ${removed}/${candidates.length}개 worktree 정리됨`, "info");
+	ctx.ui.notify(`🧹 ${removed}/${candidates.length}개 worktree·브랜치 정리됨`, "info");
 	return removed > 0;
 }
 
