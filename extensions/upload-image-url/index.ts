@@ -33,9 +33,8 @@ const STORAGE_REPO = process.env.PI_STORAGE_REPO || envFile.PI_STORAGE_REPO;
 const STORAGE_BRANCH = "main";
 
 const ALLOWED_EXTENSIONS = new Set([".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".bmp", ".ico"]);
-const CONFIRMATION_TTL_MS = 30 * 60 * 1000;
 
-let uploadConfirmationExpiresAt = 0;
+let uploadConfirmationGranted = false;
 
 const MIME_TO_EXT: Record<string, string> = {
 	"image/png": ".png",
@@ -179,12 +178,12 @@ function uploadImageContent(storagePath: string, buffer: Buffer): void {
 	);
 }
 
-function hasActiveUploadConfirmation(now = Date.now()): boolean {
-	return now < uploadConfirmationExpiresAt;
+function hasActiveUploadConfirmation(): boolean {
+	return uploadConfirmationGranted;
 }
 
-function rememberUploadConfirmation(now = Date.now()): void {
-	uploadConfirmationExpiresAt = now + CONFIRMATION_TTL_MS;
+function rememberUploadConfirmation(): void {
+	uploadConfirmationGranted = true;
 }
 
 export default function uploadImageUrl(pi: ExtensionAPI) {
@@ -196,9 +195,9 @@ export default function uploadImageUrl(pi: ExtensionAPI) {
 			"Accepts a URL or a local file path. " +
 			"USAGE: Only call this tool when the user has EXPLICITLY asked to upload an image / attach a screenshot / embed an image into GitHub content. " +
 			"Do NOT call it proactively or as a side-effect of other work (e.g. PR creation, reports). " +
-			"At runtime the tool will show a user confirmation dialog before performing the upload unless the user already approved an upload within the previous 30 minutes; if the user declines, the call returns without uploading.",
+			"At runtime the tool will show a user confirmation dialog before performing the upload unless the user already approved an upload earlier in this session; if the user declines, the call returns without uploading.",
 		promptGuidelines: [
-			"Use upload_image_url ONLY when the user explicitly requests an image upload. The tool itself prompts the user for confirmation, then reuses that approval for 30 minutes.",
+			"Use upload_image_url ONLY when the user explicitly requests an image upload. The tool itself prompts the user for confirmation, then reuses that approval for the rest of the session.",
 		],
 		parameters: Type.Object({
 			url: Type.String({ description: "Image URL or local file path to upload" }),
@@ -229,7 +228,7 @@ export default function uploadImageUrl(pi: ExtensionAPI) {
 					filename ? `파일명: ${filename}` : null,
 					"",
 					"이 이미지를 GitHub 저장소에 업로드할까요?",
-					"허용하면 30분 동안 추가 확인 없이 이미지 업로드를 진행합니다.",
+					"허용하면 이번 세션 동안 추가 확인 없이 이미지 업로드를 진행합니다.",
 				]
 					.filter((line) => line !== null)
 					.join("\n");
