@@ -100,13 +100,13 @@ export function buildMainContextText(ctx: any): { text: string; totalMessageCoun
 				if (Array.isArray(content)) {
 					for (const part of content) {
 						if (!part || typeof part !== "object") continue;
-						if (part.type === "text" && typeof (part as any).text === "string" && (part as any).text) {
-							messageParts.push(`Main agent: ${(part as any).text}`);
+						if (part.type === "text" && typeof part.text === "string" && part.text) {
+							messageParts.push(`Main agent: ${part.text}`);
 							continue;
 						}
 						if (part.type === "toolCall") {
-							const toolName = typeof (part as any).name === "string" ? (part as any).name : "tool";
-							const argsText = stringifyToolCallArguments((part as any).arguments);
+							const toolName = typeof part.name === "string" ? part.name : "tool";
+							const argsText = stringifyToolCallArguments(part.arguments);
 							messageParts.push(
 								argsText ? `Main agent ToolCall (${toolName}): ${argsText}` : `Main agent ToolCall (${toolName})`,
 							);
