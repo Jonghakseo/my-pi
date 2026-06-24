@@ -5,7 +5,7 @@ import {
 	type Model,
 	type ThinkingLevel as AiThinkingLevel,
 	type UserMessage,
-} from "@earendil-works/pi-ai";
+} from "@earendil-works/pi-ai/compat";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import type { PromptSuggestLiteConfig, PromptSuggestLiteThinking } from "./config.ts";
 
