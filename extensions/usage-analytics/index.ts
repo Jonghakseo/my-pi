@@ -25,7 +25,7 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI, SessionEntry } from "@earendil-works/pi-coding-agent";
 import { Container, Key, matchesKey, Spacer, Text, truncateToWidth } from "@earendil-works/pi-tui";
 import { parseSubagentCommandVerb } from "../subagent/cli.ts";
 
@@ -183,11 +183,15 @@ function getRunAnalyticsKeys(entry: {
 	return keys;
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+	return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
 function extractSubagentEndEntriesFromCustomMessage(customMessage: {
 	content?: unknown;
-	details?: Record<string, unknown>;
+	details?: unknown;
 }): Array<Omit<SubagentEndEntry, "type" | "ts" | "epoch">> {
-	const d = customMessage.details;
+	const d = isRecord(customMessage.details) ? customMessage.details : undefined;
 	if (!d) return [];
 
 	const content = typeof customMessage.content === "string" ? customMessage.content : "";
@@ -256,14 +260,6 @@ function loggedEndKeys(entries: LogEntry[]): Set<string> {
 	);
 }
 
-interface SessionEntryLike {
-	type?: string;
-	customType?: string;
-	content?: unknown;
-	details?: Record<string, unknown>;
-	timestamp?: unknown;
-}
-
 /**
  * Recover `subagent_end` entries from session completion custom_messages that
  * were never logged live.
@@ -280,10 +276,7 @@ interface SessionEntryLike {
  * across repeated session_start). Keyless completions are skipped to avoid
  * double-counting, since they cannot be matched against existing logs.
  */
-function findUnloggedSubagentEnds(
-	sessionEntries: SessionEntryLike[],
-	alreadyLoggedKeys: Set<string>,
-): SubagentEndEntry[] {
+function findUnloggedSubagentEnds(sessionEntries: SessionEntry[], alreadyLoggedKeys: Set<string>): SubagentEndEntry[] {
 	const recovered: SubagentEndEntry[] = [];
 	const seenInScan = new Set<string>();
 	for (const entry of sessionEntries) {
@@ -938,7 +931,7 @@ export default function (pi: ExtensionAPI) {
 	pi.on("session_start", async (event, ctx) => {
 		// Initialize entry count to current length to skip all historical entries.
 		try {
-			const sessionEntries = ctx.sessionManager.getEntries() as SessionEntryLike[];
+			const sessionEntries = ctx.sessionManager.getEntries();
 			// Flush gap recovery: backfill subagent_end entries for completions that
 			// landed after the previous session's final message_end. Deduped against
 			// already-logged run keys, so this is idempotent across session_start.
