@@ -12,7 +12,7 @@ import {
 	type Model,
 	StringEnum,
 	type TextContent,
-} from "@earendil-works/pi-ai";
+} from "@earendil-works/pi-ai/compat";
 import type { AgentToolResult, ExtensionAPI, ExtensionContext, Theme } from "@earendil-works/pi-coding-agent";
 import { Box, type KeyId, Text, truncateToWidth } from "@earendil-works/pi-tui";
 import { Type } from "typebox";
