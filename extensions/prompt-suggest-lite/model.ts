@@ -3,10 +3,11 @@ import {
 	type Api,
 	type Message,
 	type Model,
+	type ProviderEnv,
 	type ThinkingLevel as AiThinkingLevel,
 	type UserMessage,
 } from "@earendil-works/pi-ai/compat";
-import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
+import type { ExtensionContext, ModelRegistry } from "@earendil-works/pi-coding-agent";
 import type { PromptSuggestLiteConfig, PromptSuggestLiteThinking } from "./config.ts";
 
 interface CompletionResponseLike {
@@ -28,20 +29,13 @@ type StreamSimpleLike = (
 	context: { systemPrompt: string; messages: Message[] },
 	options: {
 		apiKey?: string;
+		env?: ProviderEnv;
 		headers?: Record<string, string>;
 		reasoning?: AiThinkingLevel;
 		sessionId?: string;
 		onPayload?: (payload: unknown) => Promise<undefined>;
 	},
 ) => { result(): Promise<CompletionResponseLike> };
-
-type ModelRegistryLike = {
-	getAll(): PiModel[];
-	getApiKeyAndHeaders?: (
-		model: PiModel,
-	) => Promise<{ ok: true; apiKey?: string; headers?: Record<string, string> } | { ok: false; error: string }>;
-	getApiKey?: (model: PiModel) => Promise<string | undefined>;
-};
 
 const CLAUDE_BRIDGE_STREAM_SIMPLE_KEY = Symbol.for("claude-bridge:activeStreamSimple");
 
@@ -85,14 +79,11 @@ function resolveModelForCall(currentModel: PiModel, modelRef: string, allModels:
 
 async function resolveRequestAuth(
 	model: PiModel,
-	modelRegistry: ModelRegistryLike,
-): Promise<{ apiKey?: string; headers?: Record<string, string> }> {
-	if (typeof modelRegistry.getApiKeyAndHeaders === "function") {
-		const auth = await modelRegistry.getApiKeyAndHeaders(model);
-		if (!auth.ok) throw new Error(auth.error);
-		return { apiKey: auth.apiKey, headers: auth.headers };
-	}
-	return { apiKey: await modelRegistry.getApiKey?.(model) };
+	modelRegistry: ModelRegistry,
+): Promise<{ apiKey?: string; env?: ProviderEnv; headers?: Record<string, string> }> {
+	const auth = await modelRegistry.getApiKeyAndHeaders(model);
+	if (!auth.ok) throw new Error(auth.error);
+	return { apiKey: auth.apiKey, env: auth.env, headers: auth.headers };
 }
 
 function getClaudeBridgeStreamSimple(): StreamSimpleLike | undefined {
@@ -105,6 +96,7 @@ async function invokeModel(
 	context: { systemPrompt: string; messages: Message[] },
 	options: {
 		apiKey?: string;
+		env?: ProviderEnv;
 		headers?: Record<string, string>;
 		reasoning?: AiThinkingLevel;
 	},
@@ -123,9 +115,9 @@ export async function generatePromptSuggestion(params: {
 }): Promise<{ text: string; modelRef: string }> {
 	const { ctx, config, prompt } = params;
 	if (!ctx.model) throw new Error("No active model available for prompt-suggest-lite");
-	const modelRegistry = ctx.modelRegistry as unknown as ModelRegistryLike;
+	const modelRegistry = ctx.modelRegistry;
 	const model = resolveModelForCall(ctx.model, config.modelRef, modelRegistry.getAll());
-	const { apiKey, headers } = await resolveRequestAuth(model, modelRegistry);
+	const { apiKey, env, headers } = await resolveRequestAuth(model, modelRegistry);
 	const userMessage: UserMessage = {
 		role: "user",
 		content: [{ type: "text", text: prompt }],
@@ -140,6 +132,7 @@ export async function generatePromptSuggestion(params: {
 		},
 		{
 			apiKey,
+			env,
 			headers,
 			reasoning: toReasoning(config.thinking),
 		},

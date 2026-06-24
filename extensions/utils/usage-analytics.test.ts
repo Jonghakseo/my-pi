@@ -1,8 +1,27 @@
+import type { CustomMessageEntry, SessionEntry } from "@earendil-works/pi-coding-agent";
 import { describe, expect, it } from "vitest";
 import { __test__ } from "../usage-analytics/index.ts";
 
 function iso(epoch: number): string {
 	return new Date(epoch).toISOString();
+}
+
+let nextSessionEntryId = 0;
+
+function customMessageEntry(
+	customType: string,
+	overrides: Partial<Omit<CustomMessageEntry, "type" | "id" | "parentId" | "customType" | "display">> = {},
+): CustomMessageEntry {
+	return {
+		type: "custom_message",
+		id: `test-entry-${++nextSessionEntryId}`,
+		parentId: null,
+		timestamp: "2026-06-01T04:45:00.000Z",
+		customType,
+		content: "",
+		display: false,
+		...overrides,
+	};
 }
 
 describe("usage-analytics failure/interrupted paths", () => {
@@ -96,15 +115,13 @@ describe("usage-analytics failure/interrupted paths", () => {
 
 	it("recovers an unlogged trailing subagent_end from a resumed session entry", () => {
 		const epoch = Date.parse("2026-06-01T04:45:00.000Z");
-		const sessionEntries = [
-			{ type: "assistant", content: "hi" },
-			{
-				type: "custom_message",
-				customType: "subagent-tool",
+		const sessionEntries: SessionEntry[] = [
+			customMessageEntry("other", { content: "hi" }),
+			customMessageEntry("subagent-tool", {
 				content: "[subagent#42] completed",
 				timestamp: "2026-06-01T04:45:00.000Z",
 				details: { runId: 42, status: "done", elapsedMs: 1200, agent: "worker", model: "m" },
-			},
+			}),
 		];
 		const recovered = __test__.findUnloggedSubagentEnds(sessionEntries, new Set<string>());
 		expect(recovered).toEqual([
@@ -125,14 +142,12 @@ describe("usage-analytics failure/interrupted paths", () => {
 	});
 
 	it("skips a completion whose run key is already logged (idempotent backfill)", () => {
-		const sessionEntries = [
-			{
-				type: "custom_message",
-				customType: "subagent-tool",
+		const sessionEntries: SessionEntry[] = [
+			customMessageEntry("subagent-tool", {
 				content: "[subagent#7] completed",
 				timestamp: "2026-06-01T04:45:00.000Z",
 				details: { runId: 7, status: "done", elapsedMs: 500, agent: "worker" },
-			},
+			}),
 		];
 		const alreadyLogged = __test__.loggedEndKeys([
 			{
@@ -149,28 +164,24 @@ describe("usage-analytics failure/interrupted paths", () => {
 	});
 
 	it("dedupes duplicate completion entries within a single scan", () => {
-		const dup = {
-			type: "custom_message",
-			customType: "subagent-command",
+		const dup = customMessageEntry("subagent-command", {
 			content: "[subagent#9] completed",
 			timestamp: "2026-06-01T04:45:00.000Z",
 			details: { runId: 9, status: "done", elapsedMs: 100, agent: "reviewer" },
-		};
+		});
 		const recovered = __test__.findUnloggedSubagentEnds([dup, { ...dup }], new Set<string>());
 		expect(recovered).toHaveLength(1);
 	});
 
 	it("ignores non-completion and non-subagent session entries", () => {
-		const sessionEntries = [
-			{ type: "user", content: "hello" },
-			{ type: "custom_message", customType: "subagent-display-task", details: { runId: 1 } },
-			{
-				type: "custom_message",
-				customType: "subagent-tool",
+		const sessionEntries: SessionEntry[] = [
+			customMessageEntry("other", { content: "hello" }),
+			customMessageEntry("subagent-display-task", { details: { runId: 1 } }),
+			customMessageEntry("subagent-tool", {
 				content: "[subagent#3] running",
 				timestamp: "2026-06-01T04:45:00.000Z",
 				details: { runId: 3, status: "running" },
-			},
+			}),
 		];
 		expect(__test__.findUnloggedSubagentEnds(sessionEntries, new Set<string>())).toEqual([]);
 	});
