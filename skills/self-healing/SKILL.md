@@ -1,6 +1,6 @@
 ---
 name: self-healing
-description: stress-interview로 문제를 모은 뒤 worker 수정 → 재검토를 2사이클 반복하는 자가 치유 스킬.
+description: stress-interview로 문제를 모은 뒤 worker 수정 → 재검토를 2사이클 반복하는 자가 치유 스킬. 사용자가 "셀프힐링", "self-healing", "자가 치유", "리뷰 받고 자동 수정", "2사이클로 검토 후 고쳐줘"처럼 요청하거나 변경사항을 다각도 검토한 뒤 제한된 범위에서 자동 보정해야 할 때 사용한다.
 disable-model-invocation: false
 ---
 
@@ -20,15 +20,31 @@ disable-model-invocation: false
 
 ## 실행 순서
 1. 대상 범위를 1~2문장으로 고정한다.
-2. **Cycle 1**
+2. `subagent` 호출이 필요하면 셸 바이너리가 아니라 **Pi 도구**로 호출한다. `bash`에서 `subagent ...`를 실행하지 말고, 반드시 `functions.subagent` 도구를 `{ "command": "subagent ..." }` 형태로 사용한다.
+3. **Cycle 1**
    - `/skill:stress-interview $ARGUMENTS`
    - 결과에서 수정이 필요한 actionable item만 추린다.
    - `worker`에게 **해당 actionable item만** 수정하도록 요청한다.
-3. **Cycle 2**
+4. **Cycle 2**
    - 다시 `/skill:stress-interview $ARGUMENTS`
    - 남은 actionable item만 추린다.
    - `worker`에게 다시 수정 요청한다.
-4. 2사이클 후 종료하고, 남은 리스크와 미해결 항목을 명시한다.
+5. 2사이클 후 종료하고, 남은 리스크와 미해결 항목을 명시한다.
+
+## subagent Pi 도구 호출 방식
+
+- `subagent`는 Pi harness가 제공하는 도구이며 로컬 터미널 바이너리가 아니다.
+- 호출 인자는 단일 객체이고 키는 `command`다.
+- `run`/`continue`에는 task separator `--`가 필수다.
+- worker 수정 요청은 가능한 한 `--main`으로 현재 컨텍스트를 공유한다.
+- 실행 직후 `status`/`detail`을 반복 polling하지 말고 완료/실패 follow-up을 기다린다.
+
+예시:
+
+```text
+subagent({ command: "subagent help" })
+subagent({ command: "subagent run worker --main -- \"Cycle 1 stress-interview 결과의 actionable item만 최소 수정으로 반영해줘: ...\"" })
+```
 
 ## worker 지시 원칙
 - stress-interview 결과 중 **구체적이고 재현 가능하며 수정 가치가 높은 항목만** 반영한다.

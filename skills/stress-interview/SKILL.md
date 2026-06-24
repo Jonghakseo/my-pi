@@ -1,6 +1,6 @@
 ---
 name: stress-interview
-description: verifier + reviewer + challenger를 병렬 호출해 동일 변경사항을 다각도로 검토받는 스킬.
+description: verifier + reviewer + challenger를 병렬 호출해 동일 변경사항을 다각도로 검토받는 스킬. 사용자가 "스트레스 인터뷰", "stress-interview", "다각도 검토", "서브에이전트 병렬 리뷰", "verifier/reviewer/challenger로 압박 검토"처럼 요청하거나 구현/수정 사항을 배포 전 검증·리뷰·반론 관점에서 동시에 점검해야 할 때 사용한다.
 disable-model-invocation: false
 ---
 
@@ -15,16 +15,34 @@ disable-model-invocation: false
 
 ## 실행 규칙
 1. 먼저 검토 대상을 1~2문장으로 재정의한다.
-2. `subagent help`가 아직 확인되지 않았거나 현재 세션에서 인터페이스가 불명확하면 먼저 확인한다.
-3. 아래 3개를 **병렬**로 실행한다.
+2. `subagent`는 셸 바이너리가 아니라 **Pi 도구**다. `bash`에서 `subagent ...`를 실행하지 말고, 반드시 `functions.subagent` 도구를 `{ "command": "subagent ..." }` 형태로 호출한다.
+3. `subagent help`가 아직 확인되지 않았거나 현재 세션에서 인터페이스가 불명확하면 먼저 Pi 도구로 확인한다.
+   - 예: `subagent({ command: "subagent help" })`
+4. 아래 3개를 **병렬**로 실행한다.
    - `verifier`: 테스트/타입체크/빌드/재현 가능한 검증 중심
    - `reviewer`: correctness, regressions, maintainability 중심
    - `challenger`: 숨은 가정, 실패 시나리오, 의사결정 취약점 중심
-4. 세 결과를 합쳐 아래 기준으로 정리한다.
+5. 세 결과를 합쳐 아래 기준으로 정리한다.
    - 공통 지적: 둘 이상이 비슷하게 지적한 항목
    - 독립 지적: 한 에이전트만 찾은 항목이지만 타당한 항목
    - 상충 지적: 서로 결론이 다른 부분
-5. 에이전트 결과를 **있는 그대로 요약**하고, 근거 없이 임의 판정하지 않는다.
+6. 에이전트 결과를 **있는 그대로 요약**하고, 근거 없이 임의 판정하지 않는다.
+
+## subagent Pi 도구 호출 방식
+
+- 항상 Pi의 `subagent` 도구를 사용한다. 터미널 명령어가 아니므로 `bash`/셸에서 실행하지 않는다.
+- 도구 인자는 단일 객체이며 키는 `command` 하나다.
+- `run`/`continue`에는 task separator `--`가 필수다.
+- 병렬 검토는 `batch`를 기본으로 사용한다.
+- 실행 직후 `status`/`detail`을 반복 polling하지 않는다. 완료/실패 follow-up을 기다린다.
+- 현재 main context를 공유해야 하면 `--main`, 격리된 검토가 필요하면 `--isolated`를 명시한다.
+
+예시:
+
+```text
+subagent({ command: "subagent help" })
+subagent({ command: "subagent batch --main --agent verifier --task \"$ARGUMENTS 를 검증해줘. 가능하면 테스트/타입체크/빌드/재현 가능한 증거를 수집해줘.\" --agent reviewer --task \"$ARGUMENTS 를 코드 리뷰해줘. correctness, regression, maintainability 위주로 봐줘.\" --agent challenger --task \"$ARGUMENTS 에 대해 숨은 가정, 실패 시나리오, 취약한 결정 포인트를 최대 3개 질문으로 압박 검토해줘.\"" })
+```
 
 ## 권장 호출 프롬프트
 - `verifier`: "$ARGUMENTS 를 검증해줘. 가능하면 테스트/타입체크/빌드/재현 가능한 증거를 수집해줘."
