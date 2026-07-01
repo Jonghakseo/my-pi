@@ -60,23 +60,23 @@ The current setup has 11 agent definitions, OpenAI/Anthropic agent models, and a
 
 | Agent | Model | Role | When to Use |
 |---|---|---|---|
-| **finder** | `anthropic/claude-sonnet-4-6` | Fast file & code locator | Quick lookups, grep-like tasks |
+| **finder** | `anthropic/claude-sonnet-5` | Fast file & code locator | Quick lookups, grep-like tasks |
 | **worker** | `openai-codex/gpt-5.5` | General-purpose executor | Implementation, writing, fixes (complex multi-file) |
 | **planner** | `anthropic/claude-opus-4-8` | Implementation architect | Breaking down complex tasks |
-| **simplifier** | `anthropic/claude-sonnet-4-6` | Code simplification specialist | Clean up recently modified code, improve readability, preserve behavior |
+| **simplifier** | `anthropic/claude-sonnet-5` | Code simplification specialist | Clean up recently modified code, improve readability, preserve behavior |
 | **code-cleaner** | `anthropic/claude-opus-4-6` | Code cleanup analyst | Find cleanup opportunities and quality issues |
 | **reviewer** | `openai-codex/gpt-5.5` | Code review specialist | PR reviews, quality/correctness checks |
 | **challenger** | `openai-codex/gpt-5.5` | Pressure tester | Stress-test plans before execution |
 | **verifier** | `anthropic/claude-opus-4-6` | Evidence validation | Verify claims, check correctness |
 | **security-auditor** | `openai-codex/gpt-5.5` | Security reviewer | Focused vulnerability reviews |
-| **searcher** | `anthropic/claude-sonnet-4-6` | Research & web search | Documentation lookup, exploration |
+| **searcher** | `anthropic/claude-sonnet-5` | Research & web search | Documentation lookup, exploration |
 | **browser** | `openai-codex/gpt-5.5` | Browser automation & UI testing | E2E testing, visual verification |
 
 <details>
 <summary><strong>Model Selection</strong></summary>
 
 - **openai-codex/gpt-5.5** — General-purpose execution & review (implementation, testing, reviewing, security review, browser automation)
-- **anthropic/claude-sonnet-4-6** — Fast exploration & research (file search, web research, code simplification)
+- **anthropic/claude-sonnet-5** — Fast exploration & research (file search, web research, code simplification)
 - **anthropic/claude-opus-4-6 / 4-8** — Deep reasoning tasks (strategic planning, verification, cleanup analysis)
 
 The main agent default is `openai-codex/gpt-5.5` with high thinking.
