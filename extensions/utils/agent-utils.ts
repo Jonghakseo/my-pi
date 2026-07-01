@@ -76,7 +76,7 @@ export function validateClaudeRuntimeModel(model: string | undefined): void {
 
 export const CLAUDE_MODEL_ALIAS_MAP: Record<string, string> = {
 	opus: "claude-opus-4-7",
-	sonnet: "claude-sonnet-4-6",
+	sonnet: "claude-sonnet-5",
 	haiku: "claude-haiku-4-5",
 };
 
