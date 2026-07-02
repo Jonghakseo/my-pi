@@ -72,6 +72,7 @@ extensions/picky-handoff
 # Local/custom skills
 # Keep already tracked skills; ignore any new/untracked skill folders by default.
 skills/*
+skills-archive/*
 
 # claude-mcp-bridge local runtime settings
 claude-mcp-bridge-tools.json
