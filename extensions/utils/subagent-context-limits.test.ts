@@ -102,13 +102,17 @@ describe("shouldTripContextGuard", () => {
 });
 
 describe("resolveContextGuardCeiling", () => {
-	it("applies a ceiling to openai-codex pi-runtime models", () => {
+	it("applies a ceiling to whitelisted 272k openai-codex pi-runtime models", () => {
 		expect(resolveContextGuardCeiling("openai-codex/gpt-5.5", "pi")).toBe(235_000);
 		expect(resolveContextGuardCeiling("openai-codex/gpt-5.5", undefined)).toBe(235_000);
+		expect(resolveContextGuardCeiling("openai-codex/gpt-5.4", "pi")).toBe(235_000);
+		expect(resolveContextGuardCeiling("openai-codex/gpt-5.4-mini", "pi")).toBe(235_000);
 	});
 
-	it("returns undefined for unknown models and non-pi runtimes", () => {
+	it("returns undefined for unknown models, unlisted codex models, and non-pi runtimes", () => {
 		expect(resolveContextGuardCeiling("anthropic/claude-opus-4-6", "pi")).toBeUndefined();
+		expect(resolveContextGuardCeiling("openai-codex/gpt-5.3-codex-spark", "pi")).toBeUndefined();
+		expect(resolveContextGuardCeiling("openai-codex/gpt-6-future", "pi")).toBeUndefined();
 		expect(resolveContextGuardCeiling("openai-codex/gpt-5.5", "claude")).toBeUndefined();
 		expect(resolveContextGuardCeiling(undefined, "pi")).toBeUndefined();
 	});

@@ -73,9 +73,14 @@ export function isContextOverflowText(text: string | undefined | null): boolean 
  * Only applied to the pi runtime; the claude runtime handles its own limits.
  */
 const GUARD_CEILINGS: Array<{ prefix: string; tokens: number }> = [
-	// openai-codex/gpt-5.5 observed hard-erroring at ~264k with a raw provider
-	// error and no compaction. Cut at 235k to preserve the exploration so far.
-	{ prefix: "openai-codex/", tokens: 235_000 },
+	// Whitelist only observed 272k-window codex models that hard-error around
+	// ~264k with a raw provider error and no compaction. Cut at 235k to
+	// preserve the exploration so far. Unlisted codex models (including smaller
+	// context-window variants and future models) do not get a proactive guard;
+	// they fall back to overflow detection/recovery (②).
+	{ prefix: "openai-codex/gpt-5.5", tokens: 235_000 },
+	// gpt-5.4 and gpt-5.4-mini both use a 272k window and are covered via startsWith.
+	{ prefix: "openai-codex/gpt-5.4", tokens: 235_000 },
 ];
 
 const GUARD_ENV_KEY = "PI_SUBAGENT_CONTEXT_GUARD_TOKENS";
