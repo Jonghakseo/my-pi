@@ -42,6 +42,7 @@ import { clearPendingGroupCompletion, upsertPendingGroupCompletion } from "./gro
 import { enqueueSubagentInvocation } from "./invocation-queue.js";
 import { appendDisplayTaskUpdate, getSessionFileSize } from "./persisted-session.js";
 import { clearFinishedRuns, formatCommandRunSummary, removeRun, trimCommandRunHistory } from "./run-utils.js";
+import { isContextOverflowText } from "./context-limits.js";
 import { getFinalOutput, getLastNonEmptyLine, runSingleAgent } from "./runner.js";
 import {
 	buildMainContextText,
@@ -83,6 +84,8 @@ type SessionDetailSummary = {
 type ResultFailureDiagnosis = {
 	failed: boolean;
 	reason?: string;
+	/** Set when the failure was caused by exceeding the model context window. */
+	contextOverflow?: boolean;
 };
 
 type AssistantTextPart = { type: "text"; text: string };
@@ -266,6 +269,19 @@ function parseSessionDetailSummary(sessionFile?: string): SessionDetailSummary {
 }
 
 export function diagnoseResultFailure(result: SingleResult): ResultFailureDiagnosis {
+	if (result.exitCode !== 0 || result.stopReason === "error") {
+		const overflowText = result.errorMessage || result.stderr || getFinalOutput(result.messages);
+		if (isContextOverflowText(overflowText)) {
+			const turns = result.usage?.turns ?? 0;
+			return {
+				failed: true,
+				contextOverflow: true,
+				reason:
+					`Subagent stopped after exceeding the model context window (${turns} turn(s) completed). ` +
+					"Partial findings recovered below. To finish, narrow the task scope, split it, or use a larger-context model.",
+			};
+		}
+	}
 	if (result.exitCode !== 0) return { failed: true, reason: `Subagent process exited with code ${result.exitCode}.` };
 	if (result.stopReason === "error")
 		return { failed: true, reason: result.errorMessage || "Subagent reported stopReason=error." };
@@ -512,9 +528,20 @@ function finalizeRunState(runState: CommandRunState, result: SingleResult): Fina
 	const isError = failure.failed;
 	runState.status = isError ? "error" : "done";
 	runState.elapsedMs = Date.now() - runState.startedAt;
-	const rawOutput = isError
-		? failure.reason || result.errorMessage || result.stderr || getFinalOutput(result.messages) || "(no output)"
-		: getFinalOutput(result.messages) || "(no output)";
+	let rawOutput: string;
+	if (isError && failure.contextOverflow) {
+		const partial = getFinalOutput(result.messages).trim();
+		rawOutput = [
+			failure.reason,
+			partial ? `\n\n--- Partial findings (last output before cutoff) ---\n${partial}` : "",
+			`\n\n(Run \`subagent detail #${runState.id}\` for the full tool-call trace.)`,
+		].join("");
+	} else if (isError) {
+		rawOutput =
+			failure.reason || result.errorMessage || result.stderr || getFinalOutput(result.messages) || "(no output)";
+	} else {
+		rawOutput = getFinalOutput(result.messages) || "(no output)";
+	}
 	runState.lastOutput = rawOutput;
 	runState.lastLine = getLastNonEmptyLine(rawOutput) || rawOutput;
 

@@ -48,6 +48,36 @@ describe("diagnoseResultFailure", () => {
 		expect(diagnosis.reason).toContain("rate limited");
 	});
 
+	it("classifies codex context-overflow error as contextOverflow", () => {
+		const result = makeResult({
+			stopReason: "error",
+			errorMessage:
+				"Codex error: Your input exceeds the context window of this model. Please adjust your input and try again.",
+			usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0, contextTokens: 263963, turns: 44 },
+		});
+		const diagnosis = diagnoseResultFailure(result);
+		expect(diagnosis.failed).toBe(true);
+		expect(diagnosis.contextOverflow).toBe(true);
+		expect(diagnosis.reason).toContain("44 turn");
+		expect(diagnosis.reason).toContain("context window");
+	});
+
+	it("classifies proactive context-guard stop as contextOverflow", () => {
+		const result = makeResult({
+			stopReason: "error",
+			errorMessage: "context guard: stopped at 235100 tokens (ceiling 235000) to preserve partial findings.",
+		});
+		const diagnosis = diagnoseResultFailure(result);
+		expect(diagnosis.contextOverflow).toBe(true);
+	});
+
+	it("does not misclassify rate-limit error as context overflow", () => {
+		const result = makeResult({ stopReason: "error", errorMessage: "rate limited" });
+		const diagnosis = diagnoseResultFailure(result);
+		expect(diagnosis.contextOverflow).toBeFalsy();
+		expect(diagnosis.reason).toContain("rate limited");
+	});
+
 	it("fails when stopReason is aborted", () => {
 		const result = makeResult({ stopReason: "aborted" });
 		const diagnosis = diagnoseResultFailure(result);
