@@ -534,7 +534,7 @@ function finalizeRunState(runState: CommandRunState, result: SingleResult): Fina
 		rawOutput = [
 			failure.reason,
 			partial ? `\n\n--- Partial findings (last output before cutoff) ---\n${partial}` : "",
-			`\n\n(Run \`subagent detail #${runState.id}\` for the full tool-call trace.)`,
+			`\n\n(Run \`subagent detail ${runState.id}\` for the full tool-call trace.)`,
 		].join("");
 	} else if (isError) {
 		rawOutput =
