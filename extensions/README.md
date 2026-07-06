@@ -28,7 +28,7 @@ Pi 공식 문서는 auto-discovery 대상으로 `extensions/*.ts`와 `extensions
 | [`github-pr-merge/`](./github-pr-merge/index.ts) | `/github:pr-merge` — 현재 PR을 gh CLI로 merge |
 | [`notify/`](./notify/index.ts) | `/notify`로 세션별 작업 완료 알림(OSC 777/99) + macOS `say` TTS |
 | [`cron/`](./cron/index.ts) | 자연어 예약 작업을 Markdown 프롬프트로 저장하고 launchd-backed daemon에서 헤드리스 `pi -p`로 실행 |
-| [`delay/`](./delay/index.ts) | `/delay 5m <프롬프트>` — 지연 후 현재 입력창에 프롬프트 삽입 + 취소 |
+| [`delay/`](./delay/index.ts) | `/delay 5m <프롬프트>`, `/delay-cancel` — 지연 후 현재 입력창에 프롬프트 삽입 + 취소 |
 | [`footer/`](./footer/index.ts) | 커스텀 푸터 UI facade (`custom-style/main.ts`) |
 | [`theme-cycler/`](./theme-cycler/index.ts) | `Ctrl+Shift+X`로 테마 순환 |
 | [`until/`](./until/index.ts) | `/until`, `until_report` 기반 반복 작업 관리 |

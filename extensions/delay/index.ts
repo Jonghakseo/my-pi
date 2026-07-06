@@ -147,7 +147,7 @@ function helpText(): string {
 		"Usage:",
 		"  /delay <duration> <prompt>     지연 후 프롬프트를 현재 입력창에 넣기",
 		"  /delay list                    예약 목록 보기",
-		"  /delay cancel [id|all]         예약 취소 (id 생략 시 전체 취소)",
+		"  /delay-cancel [id|all]         예약 취소 (id 생략 시 전체 취소)",
 		"",
 		"Examples:",
 		"  /delay 5m 상태 확인해줘",
@@ -170,13 +170,13 @@ async function handleDelayCommand(args: string, ctx: ExtensionContext): Promise<
 	if (!trimmed || trimmed === "help" || trimmed === "--help" || trimmed === "-h") return helpText();
 	if (trimmed === "list" || trimmed === "ls" || trimmed === "status") return listTasks();
 
-	const [command, target] = trimmed.split(/\s+/, 2);
-	if (command === "cancel" || command === "rm" || command === "remove") {
-		if (!target || target === "all") return `✓ ${cancelAll()}개의 delay를 취소했어요.`;
-		return cancelTask(target) ? `✓ ${target} 예약을 취소했어요.` : `예약을 찾을 수 없어요: ${target}`;
-	}
-
 	return scheduleFromCommand(trimmed, ctx);
+}
+
+function handleDelayCancelCommand(args: string): string {
+	const target = args.trim();
+	if (!target || target === "all") return `✓ ${cancelAll()}개의 delay를 취소했어요.`;
+	return cancelTask(target) ? `✓ ${target} 예약을 취소했어요.` : `예약을 찾을 수 없어요: ${target}`;
 }
 
 function clearAllTimers(): void {
@@ -191,18 +191,10 @@ export default function (pi: ExtensionAPI) {
 		description: "지정한 시간 후 프롬프트를 현재 입력창에 넣기: /delay 5m <프롬프트>",
 		getArgumentCompletions: (prefix) => {
 			const trimmed = prefix.trimStart();
-			if (!trimmed.includes(" ")) {
-				return ["list", "cancel", "5m", "30s", "1h"]
-					.filter((value) => value.startsWith(trimmed))
-					.map((value) => ({ value, label: value }));
-			}
-			if (trimmed.startsWith("cancel ")) {
-				const idPrefix = trimmed.slice("cancel ".length);
-				return [{ value: "all", label: "all" }, ...[...tasks.keys()].map((id) => ({ value: id, label: id }))].filter(
-					(item) => item.value.startsWith(idPrefix),
-				);
-			}
-			return null;
+			if (trimmed.includes(" ")) return null;
+			return ["list", "5m", "30s", "1h"]
+				.filter((value) => value.startsWith(trimmed))
+				.map((value) => ({ value, label: value }));
 		},
 		handler: async (args, ctx) => {
 			latestCtx = ctx;
@@ -214,16 +206,33 @@ export default function (pi: ExtensionAPI) {
 		},
 	});
 
+	pi.registerCommand("delay-cancel", {
+		description: "delay 예약 취소. 사용법: /delay-cancel [id|all] (인자 생략 시 전체 취소)",
+		getArgumentCompletions: (prefix) => {
+			const trimmed = prefix.trimStart();
+			const items = [
+				{ value: "all", label: "all" },
+				...[...tasks.keys()].map((id) => ({ value: id, label: id })),
+			].filter((item) => item.value.startsWith(trimmed));
+			return items.length > 0 ? items : null;
+		},
+		handler: async (args, ctx) => {
+			latestCtx = ctx;
+			const message = handleDelayCancelCommand(args ?? "");
+			ctx.ui.notify(message, message.startsWith("✓") ? "info" : "warning");
+		},
+	});
+
 	pi.registerTool({
 		name: "delay",
 		label: "Delay",
 		description:
-			"Schedule prompt text to be inserted into the current interactive editor after a short delay. Use for one-shot reminders like 5m, 1h, or 2시간. The user can cancel with /delay cancel <id>.",
+			"Schedule prompt text to be inserted into the current interactive editor after a short delay. Use for one-shot reminders like 5m, 1h, or 2시간. The user can cancel with /delay-cancel <id> or /delay-cancel for all.",
 		promptSnippet: "Insert a prompt into the current editor after a delay, e.g. delay=5m prompt='check status'.",
 		promptGuidelines: [
 			"Use delay only when the user explicitly asks to put a prompt into the editor later in the same interactive session.",
 			"For recurring or persistent headless scheduled jobs, use cron instead of delay.",
-			"Tell the user the returned id so they can cancel it with `/delay cancel <id>`.",
+			"Tell the user the returned id so they can cancel it with `/delay-cancel <id>`; `/delay-cancel` without an id cancels all.",
 		],
 		parameters: DelayParamsSchema,
 		executionMode: "parallel",
@@ -250,7 +259,7 @@ export default function (pi: ExtensionAPI) {
 				content: [
 					{
 						type: "text" as const,
-						text: `✓ ${task.id} scheduled: ${formatKoreanDuration(delayMs)} later. Cancel with /delay cancel ${task.id}`,
+						text: `✓ ${task.id} scheduled: ${formatKoreanDuration(delayMs)} later. Cancel with /delay-cancel ${task.id}`,
 					},
 				],
 				details: { id: task.id, dueAt: new Date(task.dueAt).toISOString(), prompt: task.prompt },

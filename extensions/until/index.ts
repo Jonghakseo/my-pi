@@ -6,7 +6,7 @@
  *   /until 1h npm audit 돌려서 high 이상 취약점 0개 되면 알려줘
  *   /until 30분마다 스테이징 배포 완료됐는지 확인해
  *   /untils                    — 활성 목록
- *   /until-cancel <id|all>     — 취소
+ *   /until-cancel [id|all]     — 취소 (id 생략 시 전체 취소)
  *
  * LLM은 매 실행마다 until_report 도구를 호출하여 조건 충족 여부를 보고합니다.
  * done: true → 반복 종료, done: false → 다음 실행 대기
@@ -626,7 +626,7 @@ export default function (pi: ExtensionAPI) {
 	});
 
 	pi.registerCommand("until-cancel", {
-		description: "until 취소. 사용법: /until-cancel <id|all>",
+		description: "until 취소. 사용법: /until-cancel [id|all] (인자 생략 시 전체 취소)",
 		getArgumentCompletions: (prefix: string) => {
 			const ids = Array.from(tasks.keys()).map(String);
 			const all = ["all", ...ids].filter((s) => s.startsWith(prefix));
@@ -636,12 +636,7 @@ export default function (pi: ExtensionAPI) {
 			latestCtx = ctx;
 			const raw = (args ?? "").trim().toLowerCase();
 
-			if (!raw) {
-				ctx.ui.notify("사용법: /until-cancel <id|all>", "info");
-				return;
-			}
-
-			if (raw === "all") {
+			if (!raw || raw === "all") {
 				const count = tasks.size;
 				clearAllTasks();
 				ctx.ui.notify(`until ${count}개 취소됨`, "info");
