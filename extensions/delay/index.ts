@@ -147,7 +147,7 @@ function helpText(): string {
 		"Usage:",
 		"  /delay <duration> <prompt>     지연 후 프롬프트를 현재 입력창에 넣기",
 		"  /delay list                    예약 목록 보기",
-		"  /delay cancel <id|all>         예약 취소",
+		"  /delay cancel [id|all]         예약 취소 (id 생략 시 전체 취소)",
 		"",
 		"Examples:",
 		"  /delay 5m 상태 확인해줘",
@@ -172,8 +172,7 @@ async function handleDelayCommand(args: string, ctx: ExtensionContext): Promise<
 
 	const [command, target] = trimmed.split(/\s+/, 2);
 	if (command === "cancel" || command === "rm" || command === "remove") {
-		if (!target) return "취소할 id를 지정해주세요. 예: /delay cancel delay-1 또는 /delay cancel all";
-		if (target === "all") return `✓ ${cancelAll()}개의 delay를 취소했어요.`;
+		if (!target || target === "all") return `✓ ${cancelAll()}개의 delay를 취소했어요.`;
 		return cancelTask(target) ? `✓ ${target} 예약을 취소했어요.` : `예약을 찾을 수 없어요: ${target}`;
 	}
 
