@@ -23,7 +23,7 @@ import {
 	stateToSingleResult,
 } from "./claude-stream-parser.js";
 import { resolveClaudeRuntimeMode } from "./config.js";
-import { CONTEXT_GUARD_SIGNATURE, resolveContextGuardCeiling } from "./context-limits.js";
+import { CONTEXT_GUARD_SIGNATURE, resolveContextGuardCeiling, shouldTripContextGuard } from "./context-limits.js";
 import { formatToolCallPlain } from "./format.js";
 import {
 	extractActivityPreviewFromTextDelta,
@@ -573,6 +573,7 @@ async function runPiAgent(
 	let wasAborted = false;
 	const contextGuardCeiling = resolveContextGuardCeiling(agent.model, "pi");
 	let contextGuardTripped = false;
+	let peakContextTokens = 0;
 
 	const emitUpdate = () => {
 		if (onUpdate) {
@@ -748,13 +749,17 @@ async function runPiAgent(
 							currentResult.usage.cost += usage.cost?.total || 0;
 							currentResult.usage.contextTokens = usage.totalTokens || 0;
 						}
+						peakContextTokens = Math.max(peakContextTokens, currentResult.usage.contextTokens);
 						// ④ Proactive context guard: stop just below the provider's real
 						// ceiling so heavy runs surface partial findings instead of a raw
 						// context-overflow error one turn later.
 						if (
-							!contextGuardTripped &&
-							contextGuardCeiling !== undefined &&
-							currentResult.usage.contextTokens >= contextGuardCeiling &&
+							shouldTripContextGuard({
+								stopReason: msg.stopReason,
+								peakContextTokens,
+								ceiling: contextGuardCeiling,
+								alreadyTripped: contextGuardTripped,
+							}) &&
 							!settled &&
 							!procExited &&
 							!wasAborted
@@ -762,7 +767,7 @@ async function runPiAgent(
 							contextGuardTripped = true;
 							currentResult.stopReason = "error";
 							currentResult.errorMessage =
-								`${CONTEXT_GUARD_SIGNATURE} stopped at ${currentResult.usage.contextTokens} tokens ` +
+								`${CONTEXT_GUARD_SIGNATURE} stopped at ${peakContextTokens} tokens ` +
 								`(ceiling ${contextGuardCeiling}) to preserve partial findings before provider context overflow.`;
 							proc.kill("SIGTERM");
 							setTimeout(() => {

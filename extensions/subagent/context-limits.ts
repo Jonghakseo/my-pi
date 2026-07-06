@@ -110,3 +110,15 @@ export function resolveContextGuardCeiling(model: string | undefined, runtime: s
 	const match = GUARD_CEILINGS.find((entry) => model.startsWith(entry.prefix));
 	return match?.tokens;
 }
+
+export function shouldTripContextGuard(params: {
+	stopReason?: string;
+	peakContextTokens: number;
+	ceiling?: number;
+	alreadyTripped: boolean;
+}): boolean {
+	if (params.alreadyTripped) return false;
+	if (params.ceiling === undefined) return false;
+	if (params.stopReason !== "toolUse") return false;
+	return params.peakContextTokens >= params.ceiling;
+}

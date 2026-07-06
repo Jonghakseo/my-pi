@@ -3,6 +3,7 @@ import {
 	CONTEXT_GUARD_SIGNATURE,
 	isContextOverflowText,
 	resolveContextGuardCeiling,
+	shouldTripContextGuard,
 } from "../subagent/context-limits.ts";
 
 const ENV_KEY = "PI_SUBAGENT_CONTEXT_GUARD_TOKENS";
@@ -33,6 +34,70 @@ describe("isContextOverflowText", () => {
 		expect(isContextOverflowText("")).toBe(false);
 		expect(isContextOverflowText(undefined)).toBe(false);
 		expect(isContextOverflowText("some normal assistant output")).toBe(false);
+	});
+});
+
+describe("shouldTripContextGuard", () => {
+	it("does not trip for terminal assistant stop reasons", () => {
+		for (const stopReason of ["stop", "length", "error", "aborted", undefined]) {
+			expect(
+				shouldTripContextGuard({
+					stopReason,
+					peakContextTokens: 235_000,
+					ceiling: 235_000,
+					alreadyTripped: false,
+				}),
+			).toBe(false);
+		}
+	});
+
+	it("trips for toolUse when peak tokens reach or exceed the ceiling", () => {
+		expect(
+			shouldTripContextGuard({
+				stopReason: "toolUse",
+				peakContextTokens: 235_001,
+				ceiling: 235_000,
+				alreadyTripped: false,
+			}),
+		).toBe(true);
+		expect(
+			shouldTripContextGuard({
+				stopReason: "toolUse",
+				peakContextTokens: 235_000,
+				ceiling: 235_000,
+				alreadyTripped: false,
+			}),
+		).toBe(true);
+	});
+
+	it("does not trip when already tripped or no ceiling applies", () => {
+		expect(
+			shouldTripContextGuard({
+				stopReason: "toolUse",
+				peakContextTokens: 235_001,
+				ceiling: 235_000,
+				alreadyTripped: true,
+			}),
+		).toBe(false);
+		expect(
+			shouldTripContextGuard({
+				stopReason: "toolUse",
+				peakContextTokens: 235_001,
+				ceiling: undefined,
+				alreadyTripped: false,
+			}),
+		).toBe(false);
+	});
+
+	it("does not trip below the ceiling", () => {
+		expect(
+			shouldTripContextGuard({
+				stopReason: "toolUse",
+				peakContextTokens: 234_999,
+				ceiling: 235_000,
+				alreadyTripped: false,
+			}),
+		).toBe(false);
 	});
 });
 
