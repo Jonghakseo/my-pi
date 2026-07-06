@@ -55,13 +55,11 @@ cd ~/.pi/agent && ./scripts/bootstrap.sh
   <img src="./tmp/agents.ko.svg" alt="에이전트" width="800"/>
 </p>
 
-현재 기준 11개의 에이전트 정의, OpenAI/Anthropic 기반 에이전트 모델, 추가 Ollama Cloud provider 옵션으로 구성된다:
+현재 기준 9개의 에이전트 정의, OpenAI/Anthropic 기반 에이전트 모델, 추가 Ollama Cloud provider 옵션으로 구성된다:
 
 | 에이전트 | 모델 | 역할 | 사용 시점 |
 |---|---|---|---|
-| **finder** | `anthropic/claude-sonnet-5` | 빠른 파일·코드 탐색 | 빠른 조회, grep 스타일 탐색 |
 | **worker** | `openai-codex/gpt-5.5` | 범용 작업 실행기 | 구현, 작성, 수정 (복잡한 다중 파일) |
-| **planner** | `anthropic/claude-opus-4-8` | 구현 설계자 | 복잡한 작업 분할 |
 | **simplifier** | `anthropic/claude-sonnet-5` | 코드 단순화 전문가 | 최근 수정 코드 정리, 가독성 개선, 동작 보존 리팩터링 |
 | **code-cleaner** | `anthropic/claude-opus-4-6` | 코드 정리 분석가 | 중복 제거 후보, 품질 문제 탐색 |
 | **reviewer** | `openai-codex/gpt-5.5` | 코드 리뷰 전문가 | PR 리뷰, 품질/정확성 점검 |
@@ -75,8 +73,8 @@ cd ~/.pi/agent && ./scripts/bootstrap.sh
 <summary><strong>모델 선택 기준</strong></summary>
 
 - **openai-codex/gpt-5.5** — 범용 실행·리뷰 (구현, 테스트, 리뷰, 보안 검토, 브라우저 자동화)
-- **anthropic/claude-sonnet-5** — 빠른 탐색·리서치 (파일 검색, 웹 리서치, 코드 단순화)
-- **anthropic/claude-opus-4-6 / 4-8** — 깊은 추론 작업 (전략 설계, 검증, 정리 분석)
+- **anthropic/claude-sonnet-5** — 리서치와 코드 단순화
+- **anthropic/claude-opus-4-6 / 4-8** — 깊은 추론 작업 (검증, 정리 분석)
 
 메인 에이전트 기본값은 `openai-codex/gpt-5.5` + high thinking이다.
 

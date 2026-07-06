@@ -118,7 +118,6 @@ describe("early agent name validation", () => {
 			agents: [
 				{ name: "worker", source: "user", systemPrompt: "" },
 				{ name: "reviewer", source: "user", systemPrompt: "" },
-				{ name: "planner", source: "user", systemPrompt: "" },
 			],
 			projectAgentsDir: null,
 		});
@@ -379,6 +378,5 @@ describe("early agent name validation", () => {
 		const errorText = result.content[0]?.text ?? "";
 		expect(errorText).toContain('"worker"');
 		expect(errorText).toContain('"reviewer"');
-		expect(errorText).toContain('"planner"');
 	});
 });

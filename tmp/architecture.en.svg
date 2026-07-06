@@ -1,129 +1,61 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 500" width="800" height="500">
-  <defs>
-    <filter id="glow">
-      <feGaussianBlur stdDeviation="2" result="blur"/>
-      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
-    </filter>
-    <linearGradient id="bgGrad" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#0d1117"/>
-      <stop offset="100%" stop-color="#010409"/>
-    </linearGradient>
-  </defs>
-
-  <rect width="800" height="500" fill="url(#bgGrad)" rx="12"/>
-  <text x="400" y="32" text-anchor="middle" fill="#e6edf3" font-family="monospace" font-size="16" font-weight="bold" filter="url(#glow)">⚙ System Architecture</text>
-
-  <rect x="280" y="46" width="240" height="36" rx="8" fill="none" stroke="#8b949e" stroke-width="1.5" stroke-dasharray="4,3"/>
-  <text x="400" y="69" text-anchor="middle" fill="#e6edf3" font-family="monospace" font-size="13" font-weight="bold">👤 User  ─  pi TUI</text>
-
-  <line x1="400" y1="82" x2="400" y2="96" stroke="#484f58" stroke-width="1.5"/>
-  <polygon points="394,93 400,100 406,93" fill="#484f58"/>
-
-  <rect x="40" y="100" width="720" height="60" rx="10" fill="rgba(88,166,255,0.06)" stroke="#58a6ff" stroke-width="1.5"/>
-  <text x="60" y="120" fill="#58a6ff" font-family="monospace" font-size="11" font-weight="bold">EXTENSIONS LAYER</text>
-  <g font-family="monospace" font-size="10" fill="#e6edf3">
-    <rect x="60" y="128" width="110" height="22" rx="5" fill="rgba(88,166,255,0.12)" stroke="#58a6ff" stroke-width="0.8"/>
-    <text x="115.0" y="143" text-anchor="middle">subagent</text>
-    <rect x="185" y="128" width="100" height="22" rx="5" fill="rgba(88,166,255,0.12)" stroke="#58a6ff" stroke-width="0.8"/>
-    <text x="235.0" y="143" text-anchor="middle">Remote Access</text>
-    <rect x="300" y="128" width="100" height="22" rx="5" fill="rgba(88,166,255,0.12)" stroke="#58a6ff" stroke-width="0.8"/>
-    <text x="350.0" y="143" text-anchor="middle">MCP Bridge</text>
-    <rect x="415" y="128" width="100" height="22" rx="5" fill="rgba(88,166,255,0.12)" stroke="#58a6ff" stroke-width="0.8"/>
-    <text x="465.0" y="143" text-anchor="middle">UI Overlays</text>
-    <rect x="530" y="128" width="110" height="22" rx="5" fill="rgba(88,166,255,0.12)" stroke="#58a6ff" stroke-width="0.8"/>
-    <text x="585.0" y="143" text-anchor="middle">Safety Guards</text>
-    <rect x="655" y="128" width="95" height="22" rx="5" fill="rgba(88,166,255,0.12)" stroke="#58a6ff" stroke-width="0.8"/>
-    <text x="702.5" y="143" text-anchor="middle">Memory/Tools</text>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 620" width="1200" height="620">
+  <rect width="1200" height="620" fill="#0d1117" rx="12"/>
+  <text x="600" y="45" text-anchor="middle" fill="#e6edf3" font-family="monospace" font-size="22" font-weight="bold">Subagent Architecture</text>
+  <line x1="600" y1="285" x2="210" y2="157" stroke="#30363d" stroke-width="1.4" stroke-dasharray="4,4"/>
+  <line x1="600" y1="285" x2="590" y2="157" stroke="#30363d" stroke-width="1.4" stroke-dasharray="4,4"/>
+  <line x1="600" y1="285" x2="970" y2="157" stroke="#30363d" stroke-width="1.4" stroke-dasharray="4,4"/>
+  <line x1="600" y1="285" x2="210" y2="372" stroke="#30363d" stroke-width="1.4" stroke-dasharray="4,4"/>
+  <line x1="600" y1="285" x2="590" y2="372" stroke="#30363d" stroke-width="1.4" stroke-dasharray="4,4"/>
+  <line x1="600" y1="285" x2="970" y2="372" stroke="#30363d" stroke-width="1.4" stroke-dasharray="4,4"/>
+  <line x1="600" y1="285" x2="210" y2="487" stroke="#30363d" stroke-width="1.4" stroke-dasharray="4,4"/>
+  <line x1="600" y1="285" x2="590" y2="487" stroke="#30363d" stroke-width="1.4" stroke-dasharray="4,4"/>
+  <line x1="600" y1="285" x2="970" y2="487" stroke="#30363d" stroke-width="1.4" stroke-dasharray="4,4"/>
+  <rect x="455" y="240" width="290" height="90" rx="15" fill="rgba(88,166,255,0.12)" stroke="#58a6ff" stroke-width="2"/>
+  <text x="600" y="275" text-anchor="middle" fill="#e6edf3" font-family="monospace" font-size="17" font-weight="bold">Main Agent</text>
+  <text x="600" y="302" text-anchor="middle" fill="#8b949e" font-family="monospace" font-size="12">delegate · execute · verify</text>
+  <g transform="translate(80,115)">
+    <rect width="260" height="84" rx="12" fill="rgba(210,168,255,0.08)" stroke="#d2a8ff" stroke-width="1.3"/>
+    <text x="130" y="34" text-anchor="middle" fill="#d2a8ff" font-family="monospace" font-size="15" font-weight="bold">worker</text>
+    <text x="130" y="58" text-anchor="middle" fill="#e6edf3" font-family="monospace" font-size="12">General-purpose executor</text>
   </g>
-
-  <line x1="400" y1="160" x2="400" y2="174" stroke="#484f58" stroke-width="1.5"/>
-  <polygon points="394,171 400,178 406,171" fill="#484f58"/>
-
-  <rect x="40" y="180" width="720" height="216" rx="10" fill="rgba(188,140,255,0.05)" stroke="#bc8cff" stroke-width="1.5"/>
-  <text x="60" y="200" fill="#bc8cff" font-family="monospace" font-size="11" font-weight="bold">AGENTS · 11 agents / 3 models</text>
-  <g font-family="monospace" font-size="8">
-    <!-- row 1 -->
-    <rect x="52" y="214" width="108" height="56" rx="6" fill="rgba(88,166,255,0.12)" stroke="#58a6ff" stroke-width="1"/>
-    <text x="106" y="230" text-anchor="middle" fill="#58a6ff" font-size="12" font-weight="bold">finder</text>
-    <text x="106" y="245" text-anchor="middle" fill="#8b949e">sonnet</text>
-    <text x="106" y="258" text-anchor="middle" fill="#e6edf3">lookup</text>
-
-    <rect x="168" y="214" width="108" height="56" rx="6" fill="rgba(240,136,62,0.12)" stroke="#f0883e" stroke-width="1"/>
-    <text x="222" y="230" text-anchor="middle" fill="#f0883e" font-size="12" font-weight="bold">worker</text>
-    <text x="222" y="245" text-anchor="middle" fill="#8b949e">codex</text>
-    <text x="222" y="258" text-anchor="middle" fill="#e6edf3">implement</text>
-
-    <rect x="284" y="214" width="108" height="56" rx="6" fill="rgba(210,168,255,0.12)" stroke="#d2a8ff" stroke-width="1"/>
-    <text x="338" y="230" text-anchor="middle" fill="#d2a8ff" font-size="12" font-weight="bold">planner</text>
-    <text x="338" y="245" text-anchor="middle" fill="#8b949e">opus</text>
-    <text x="338" y="258" text-anchor="middle" fill="#e6edf3">planning</text>
-
-    <rect x="400" y="214" width="108" height="56" rx="6" fill="rgba(240,136,62,0.12)" stroke="#f0883e" stroke-width="1"/>
-    <text x="454" y="230" text-anchor="middle" fill="#f0883e" font-size="11" font-weight="bold">code-cleaner</text>
-    <text x="454" y="245" text-anchor="middle" fill="#8b949e">codex</text>
-    <text x="454" y="258" text-anchor="middle" fill="#e6edf3">cleanup</text>
-
-    <rect x="516" y="214" width="108" height="56" rx="6" fill="rgba(240,136,62,0.12)" stroke="#f0883e" stroke-width="1"/>
-    <text x="570" y="230" text-anchor="middle" fill="#f0883e" font-size="12" font-weight="bold">reviewer</text>
-    <text x="570" y="245" text-anchor="middle" fill="#8b949e">codex</text>
-    <text x="570" y="258" text-anchor="middle" fill="#e6edf3">review</text>
-
-    <rect x="632" y="214" width="108" height="56" rx="6" fill="rgba(240,136,62,0.12)" stroke="#f0883e" stroke-width="1"/>
-    <text x="686" y="230" text-anchor="middle" fill="#f0883e" font-size="12" font-weight="bold">challenger</text>
-    <text x="686" y="245" text-anchor="middle" fill="#8b949e">codex</text>
-    <text x="686" y="258" text-anchor="middle" fill="#e6edf3">challenge</text>
-
-    <!-- row 2 -->
-    <rect x="110" y="286" width="108" height="56" rx="6" fill="rgba(210,168,255,0.12)" stroke="#d2a8ff" stroke-width="1"/>
-    <text x="164" y="302" text-anchor="middle" fill="#d2a8ff" font-size="12" font-weight="bold">verifier</text>
-    <text x="164" y="317" text-anchor="middle" fill="#8b949e">opus</text>
-    <text x="164" y="330" text-anchor="middle" fill="#e6edf3">validate</text>
-
-    <rect x="226" y="286" width="108" height="56" rx="6" fill="rgba(240,136,62,0.12)" stroke="#f0883e" stroke-width="1"/>
-    <text x="280" y="302" text-anchor="middle" fill="#f0883e" font-size="10.5" font-weight="bold">security-auditor</text>
-    <text x="280" y="317" text-anchor="middle" fill="#8b949e">codex</text>
-    <text x="280" y="330" text-anchor="middle" fill="#e6edf3">security</text>
-
-    <rect x="342" y="286" width="108" height="56" rx="6" fill="rgba(88,166,255,0.12)" stroke="#58a6ff" stroke-width="1"/>
-    <text x="396" y="302" text-anchor="middle" fill="#58a6ff" font-size="12" font-weight="bold">searcher</text>
-    <text x="396" y="317" text-anchor="middle" fill="#8b949e">sonnet</text>
-    <text x="396" y="330" text-anchor="middle" fill="#e6edf3">research</text>
-
-    <rect x="458" y="286" width="108" height="56" rx="6" fill="rgba(240,136,62,0.12)" stroke="#f0883e" stroke-width="1"/>
-    <text x="512" y="302" text-anchor="middle" fill="#f0883e" font-size="12" font-weight="bold">browser</text>
-    <text x="512" y="317" text-anchor="middle" fill="#8b949e">codex</text>
-    <text x="512" y="330" text-anchor="middle" fill="#e6edf3">browser</text>
-
-    <rect x="574" y="286" width="108" height="56" rx="6" fill="rgba(88,166,255,0.12)" stroke="#58a6ff" stroke-width="1"/>
-    <text x="628" y="302" text-anchor="middle" fill="#58a6ff" font-size="12" font-weight="bold">simplifier</text>
-    <text x="628" y="317" text-anchor="middle" fill="#8b949e">sonnet</text>
-    <text x="628" y="330" text-anchor="middle" fill="#e6edf3">simplify</text>
-
+  <g transform="translate(460,115)">
+    <rect width="260" height="84" rx="12" fill="rgba(210,168,255,0.08)" stroke="#d2a8ff" stroke-width="1.3"/>
+    <text x="130" y="34" text-anchor="middle" fill="#d2a8ff" font-family="monospace" font-size="15" font-weight="bold">simplifier</text>
+    <text x="130" y="58" text-anchor="middle" fill="#e6edf3" font-family="monospace" font-size="12">Code simplification</text>
   </g>
-
-  <text x="400" y="368" text-anchor="middle" fill="#8b949e" font-family="monospace" font-size="8">codex = openai-codex/gpt-5.4 · sonnet = anthropic/claude-sonnet-4-6 · opus = anthropic/claude-opus-4-8</text>
-
-  <line x1="400" y1="396" x2="400" y2="410" stroke="#484f58" stroke-width="1.5"/>
-  <polygon points="394,407 400,414 406,407" fill="#484f58"/>
-
-  <rect x="40" y="416" width="720" height="56" rx="10" fill="rgba(63,185,80,0.05)" stroke="#3fb950" stroke-width="1.5"/>
-  <text x="60" y="436" fill="#3fb950" font-family="monospace" font-size="11" font-weight="bold">INFRASTRUCTURE ─ MCP Tools</text>
-  <g font-family="monospace" font-size="10" fill="#e6edf3">
-    <rect x="60" y="444" width="70" height="20" rx="4" fill="rgba(63,185,80,0.12)" stroke="#3fb950" stroke-width="0.8"/>
-    <text x="95" y="458" text-anchor="middle">Jira</text>
-    <rect x="142" y="444" width="70" height="20" rx="4" fill="rgba(63,185,80,0.12)" stroke="#3fb950" stroke-width="0.8"/>
-    <text x="177" y="458" text-anchor="middle">Slack</text>
-    <rect x="224" y="444" width="70" height="20" rx="4" fill="rgba(63,185,80,0.12)" stroke="#3fb950" stroke-width="0.8"/>
-    <text x="259" y="458" text-anchor="middle">Gmail</text>
-    <rect x="306" y="444" width="70" height="20" rx="4" fill="rgba(63,185,80,0.12)" stroke="#3fb950" stroke-width="0.8"/>
-    <text x="341" y="458" text-anchor="middle">Calendar</text>
-    <rect x="388" y="444" width="70" height="20" rx="4" fill="rgba(63,185,80,0.12)" stroke="#3fb950" stroke-width="0.8"/>
-    <text x="423" y="458" text-anchor="middle">GA4</text>
-    <rect x="470" y="444" width="70" height="20" rx="4" fill="rgba(63,185,80,0.12)" stroke="#3fb950" stroke-width="0.8"/>
-    <text x="505" y="458" text-anchor="middle">Figma</text>
-    <rect x="552" y="444" width="70" height="20" rx="4" fill="rgba(63,185,80,0.12)" stroke="#3fb950" stroke-width="0.8"/>
-    <text x="587" y="458" text-anchor="middle">Database</text>
-    <rect x="634" y="444" width="70" height="20" rx="4" fill="rgba(63,185,80,0.12)" stroke="#3fb950" stroke-width="0.8"/>
-    <text x="669" y="458" text-anchor="middle">GitHub</text>
+  <g transform="translate(840,115)">
+    <rect width="260" height="84" rx="12" fill="rgba(210,168,255,0.08)" stroke="#d2a8ff" stroke-width="1.3"/>
+    <text x="130" y="34" text-anchor="middle" fill="#d2a8ff" font-family="monospace" font-size="15" font-weight="bold">code-cleaner</text>
+    <text x="130" y="58" text-anchor="middle" fill="#e6edf3" font-family="monospace" font-size="12">Cleanup analyst</text>
+  </g>
+  <g transform="translate(80,330)">
+    <rect width="260" height="84" rx="12" fill="rgba(210,168,255,0.08)" stroke="#d2a8ff" stroke-width="1.3"/>
+    <text x="130" y="34" text-anchor="middle" fill="#d2a8ff" font-family="monospace" font-size="15" font-weight="bold">reviewer</text>
+    <text x="130" y="58" text-anchor="middle" fill="#e6edf3" font-family="monospace" font-size="12">Code review</text>
+  </g>
+  <g transform="translate(460,330)">
+    <rect width="260" height="84" rx="12" fill="rgba(210,168,255,0.08)" stroke="#d2a8ff" stroke-width="1.3"/>
+    <text x="130" y="34" text-anchor="middle" fill="#d2a8ff" font-family="monospace" font-size="15" font-weight="bold">challenger</text>
+    <text x="130" y="58" text-anchor="middle" fill="#e6edf3" font-family="monospace" font-size="12">Pressure tester</text>
+  </g>
+  <g transform="translate(840,330)">
+    <rect width="260" height="84" rx="12" fill="rgba(210,168,255,0.08)" stroke="#d2a8ff" stroke-width="1.3"/>
+    <text x="130" y="34" text-anchor="middle" fill="#d2a8ff" font-family="monospace" font-size="15" font-weight="bold">verifier</text>
+    <text x="130" y="58" text-anchor="middle" fill="#e6edf3" font-family="monospace" font-size="12">Evidence validation</text>
+  </g>
+  <g transform="translate(80,445)">
+    <rect width="260" height="84" rx="12" fill="rgba(210,168,255,0.08)" stroke="#d2a8ff" stroke-width="1.3"/>
+    <text x="130" y="34" text-anchor="middle" fill="#d2a8ff" font-family="monospace" font-size="15" font-weight="bold">security-auditor</text>
+    <text x="130" y="58" text-anchor="middle" fill="#e6edf3" font-family="monospace" font-size="12">Security review</text>
+  </g>
+  <g transform="translate(460,445)">
+    <rect width="260" height="84" rx="12" fill="rgba(210,168,255,0.08)" stroke="#d2a8ff" stroke-width="1.3"/>
+    <text x="130" y="34" text-anchor="middle" fill="#d2a8ff" font-family="monospace" font-size="15" font-weight="bold">searcher</text>
+    <text x="130" y="58" text-anchor="middle" fill="#e6edf3" font-family="monospace" font-size="12">Research & web search</text>
+  </g>
+  <g transform="translate(840,445)">
+    <rect width="260" height="84" rx="12" fill="rgba(210,168,255,0.08)" stroke="#d2a8ff" stroke-width="1.3"/>
+    <text x="130" y="34" text-anchor="middle" fill="#d2a8ff" font-family="monospace" font-size="15" font-weight="bold">browser</text>
+    <text x="130" y="58" text-anchor="middle" fill="#e6edf3" font-family="monospace" font-size="12">Browser automation</text>
   </g>
 </svg>

@@ -7,17 +7,15 @@
 
 /**
  * Special-character shortcuts for the >> prefix input.
- * `>>/ task` → finder, `>>? task` → searcher, etc.
+ * `>>? task` → searcher, `>>! task` → challenger, etc.
  */
 export const AGENT_SYMBOL_MAP: Record<string, string> = {
-	"/": "finder",
 	"?": "searcher",
-	"#": "planner",
 	"!": "challenger",
 	"@": "browser",
 };
 
-/** Format symbol hints for display, e.g. ">>/ finder  >>? searcher  >># planner ..." */
+/** Format symbol hints for display, e.g. ">>? searcher  >>! challenger ..." */
 export function formatSymbolHints(prefix = ">>"): string {
 	return Object.entries(AGENT_SYMBOL_MAP)
 		.map(([sym, agent]) => `${prefix}${sym} ${agent}`)

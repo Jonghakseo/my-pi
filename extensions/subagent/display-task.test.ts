@@ -27,7 +27,7 @@ describe("buildSubagentDisplayTaskFallback", () => {
 	it("keeps the human task after tmp context removal", () => {
 		expect(
 			buildSubagentDisplayTaskFallback(
-				"read /tmp/pr-finder-instructions.md and /tmp/pr-chunk-8.md then inspect frontend/apps/admin/** for risky changes",
+				"read /tmp/pr-review-instructions.md and /tmp/pr-chunk-8.md then inspect frontend/apps/admin/** for risky changes",
 			),
 		).toBe("inspect frontend/apps/admin/**");
 	});

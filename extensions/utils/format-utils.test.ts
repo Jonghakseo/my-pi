@@ -308,11 +308,11 @@ describe("agentBgIndex", () => {
 	});
 
 	it("is deterministic", () => {
-		expect(agentBgIndex("finder")).toBe(agentBgIndex("finder"));
+		expect(agentBgIndex("worker")).toBe(agentBgIndex("worker"));
 	});
 
 	it("varies by name", () => {
-		const names = ["finder", "worker", "reviewer", "planner", "verifier"];
+		const names = ["worker", "reviewer", "verifier", "searcher", "challenger"];
 		const indices = new Set(names.map(agentBgIndex));
 		// At least some variation expected
 		expect(indices.size).toBeGreaterThan(1);
@@ -377,7 +377,7 @@ describe("formatCommandRunSummary", () => {
 		const result = formatCommandRunSummary({
 			id: 1,
 			status: "running",
-			agent: "finder",
+			agent: "worker",
 			elapsedMs: 0,
 			toolCalls: 0,
 		});

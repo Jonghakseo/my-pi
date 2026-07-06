@@ -87,7 +87,7 @@ describe("subagent input shortcuts", () => {
 		mockDiscoverAgents.mockReturnValue({
 			agents: [
 				{ name: "worker", source: "user", systemPrompt: "", runtime: "pi" },
-				{ name: "finder", source: "user", systemPrompt: "", runtime: "pi" },
+				{ name: "searcher", source: "user", systemPrompt: "", runtime: "pi" },
 			],
 			projectAgentsDir: null,
 		});
@@ -104,7 +104,7 @@ describe("subagent input shortcuts", () => {
 		fs.rmSync(tmpDir, { recursive: true, force: true });
 	});
 
-	it(">/ routes to hidden finder", async () => {
+	it(">? routes to hidden searcher", async () => {
 		const { registerAll } = await import("../subagent/commands.ts");
 		const store = createStore();
 		const { pi, handlers } = createPi();
@@ -125,14 +125,14 @@ describe("subagent input shortcuts", () => {
 			},
 		};
 
-		const result = await dispatchInput(handlers, ">/ find this", ctx);
+		const result = await dispatchInput(handlers, ">? search this", ctx);
 		await Promise.resolve();
 		await Promise.resolve();
 
 		expect(result.action).toBe("handled");
 		expect(mockRunSingleAgent).toHaveBeenCalled();
-		expect(mockRunSingleAgent.mock.calls[0]?.[2]).toBe("finder");
-		expect(String(mockRunSingleAgent.mock.calls[0]?.[3])).toContain("find this");
+		expect(mockRunSingleAgent.mock.calls[0]?.[2]).toBe("searcher");
+		expect(String(mockRunSingleAgent.mock.calls[0]?.[3])).toContain("search this");
 		expect(pi.sendMessage).not.toHaveBeenCalled();
 	});
 

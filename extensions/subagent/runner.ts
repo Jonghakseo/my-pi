@@ -176,7 +176,7 @@ export function getSubCommandAgentCompletions(
 
 /**
  * Compute shortest usable alias for each agent and return a formatted hint string.
- * e.g. "f→finder  w→worker  s→searcher  p→planner  r→reviewer  v→verifier"
+ * e.g. "w→worker  s→searcher  r→reviewer  v→verifier"
  */
 export function computeAgentAliasHints(agents: AgentConfig[]): string {
 	return computeAgentAliasHintsUtil(agents);

@@ -22,10 +22,8 @@ function mkAgent(name: string, description = "", source = "user"): AgentConfigLi
 }
 
 const STANDARD_AGENTS: AgentConfigLike[] = [
-	mkAgent("finder", "Find files"),
 	mkAgent("worker", "Do work"),
 	mkAgent("reviewer", "Review code"),
-	mkAgent("planner", "Plan tasks"),
 	mkAgent("verifier", "Verify results"),
 	mkAgent("searcher", "Search things"),
 ];
@@ -140,7 +138,7 @@ describe("normalizeAgentAlias", () => {
 
 describe("getAgentInitials", () => {
 	it("should return first letter of single word", () => {
-		expect(getAgentInitials("finder")).toBe("f");
+		expect(getAgentInitials("worker")).toBe("w");
 	});
 
 	it("should return initials of hyphenated name", () => {
@@ -182,19 +180,19 @@ describe("uniqueAgentsByName", () => {
 
 describe("matchSubCommandAgent", () => {
 	it("should match exact name", () => {
-		const result = matchSubCommandAgent(STANDARD_AGENTS, "finder");
-		expect(result.matchedAgent?.name).toBe("finder");
+		const result = matchSubCommandAgent(STANDARD_AGENTS, "worker");
+		expect(result.matchedAgent?.name).toBe("worker");
 		expect(result.ambiguousAgents).toHaveLength(0);
 	});
 
 	it("should match prefix", () => {
-		const result = matchSubCommandAgent(STANDARD_AGENTS, "fin");
-		expect(result.matchedAgent?.name).toBe("finder");
+		const result = matchSubCommandAgent(STANDARD_AGENTS, "wor");
+		expect(result.matchedAgent?.name).toBe("worker");
 	});
 
 	it("should match case-insensitively", () => {
-		const result = matchSubCommandAgent(STANDARD_AGENTS, "FINDER");
-		expect(result.matchedAgent?.name).toBe("finder");
+		const result = matchSubCommandAgent(STANDARD_AGENTS, "WORKER");
+		expect(result.matchedAgent?.name).toBe("worker");
 	});
 
 	it("should return ambiguous for ambiguous prefix", () => {
@@ -231,9 +229,9 @@ describe("matchSubCommandAgent", () => {
 
 describe("getSubCommandAgentCompletions", () => {
 	it("should return completions for prefix", () => {
-		const result = getSubCommandAgentCompletions(STANDARD_AGENTS, "f");
+		const result = getSubCommandAgentCompletions(STANDARD_AGENTS, "w");
 		expect(result).not.toBeNull();
-		expect(result?.some((c) => c.label === "finder")).toBe(true);
+		expect(result?.some((c) => c.label === "worker")).toBe(true);
 	});
 
 	it("should return all agents for empty prefix", () => {
@@ -243,7 +241,7 @@ describe("getSubCommandAgentCompletions", () => {
 	});
 
 	it("should return null if prefix contains space (already past agent name)", () => {
-		const result = getSubCommandAgentCompletions(STANDARD_AGENTS, "finder task");
+		const result = getSubCommandAgentCompletions(STANDARD_AGENTS, "worker task");
 		expect(result).toBeNull();
 	});
 
@@ -266,7 +264,6 @@ describe("computeAgentAliasHints", () => {
 
 	it("should include arrows for shortened aliases", () => {
 		const hints = computeAgentAliasHints(STANDARD_AGENTS);
-		// "f→finder" should be there since "f" uniquely matches finder
 		expect(hints).toContain("→");
 	});
 

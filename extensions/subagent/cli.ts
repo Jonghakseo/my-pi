@@ -27,8 +27,8 @@ export const SUBAGENT_CLI_HELP_TEXT = [
 	"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
 	"",
 	"1. Task separator `--` is REQUIRED for run/continue:",
-	"   ✓ subagent run planner -- 계획 수립",
-	"   ✗ subagent run planner 계획 수립  ← Missing `--`",
+	"   ✓ subagent run worker -- 작업 수행",
+	"   ✗ subagent run worker 작업 수행  ← Missing `--`",
 	"",
 	"2. RUN vs CONTINUE:",
 	"   • run:      Start a NEW subagent execution (must specify agent name)",
@@ -71,7 +71,7 @@ export const SUBAGENT_CLI_HELP_TEXT = [
 	"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
 	"",
 	"  New run:",
-	"    subagent run planner -- 로그인 성능 개선 계획 수립",
+	"    subagent run worker -- 로그인 성능 개선 작업 수행",
 	"",
 	"  Continue existing run (runId 22):",
 	"    subagent continue 22 -- 아까 진행하던거 마무리해서 커밋해줘",
@@ -203,7 +203,7 @@ function parseRunLike(
 ): { params: Record<string, unknown> } | { error: string } {
 	const sepIndex = args.indexOf("--");
 	if (sepIndex === -1) {
-		const example = verb === "run" ? "subagent run planner -- 계획 수립" : "subagent continue 22 -- 다음 단계를 진행";
+		const example = verb === "run" ? "subagent run worker -- 작업 수행" : "subagent continue 22 -- 다음 단계를 진행";
 		return {
 			error: `❌ Missing task separator \`--\`\n\nThe \`--\` is REQUIRED to separate options from task text.\n\n✓ Correct: ${example}\n✗ Wrong:  subagent ${verb} ${args.join(" ")}`,
 		};
@@ -438,7 +438,7 @@ export function parseSubagentToolCommand(
 	if (!trimmed) {
 		return {
 			type: "error",
-			message: `❌ Empty command\n\nYou must provide a valid subagent command.\n\n✓ Try: subagent help\n✓ Try: subagent runs\n✓ Try: subagent run planner -- task description`,
+			message: `❌ Empty command\n\nYou must provide a valid subagent command.\n\n✓ Try: subagent help\n✓ Try: subagent runs\n✓ Try: subagent run worker -- task description`,
 		};
 	}
 
@@ -446,7 +446,7 @@ export function parseSubagentToolCommand(
 	if ("error" in tokenized) {
 		return {
 			type: "error",
-			message: `❌ Syntax error: ${tokenized.error}\n\nCheck that quotes are balanced and the command is well-formed.\n\n✓ Correct: subagent run planner -- "task with spaces"`,
+			message: `❌ Syntax error: ${tokenized.error}\n\nCheck that quotes are balanced and the command is well-formed.\n\n✓ Correct: subagent run worker -- "task with spaces"`,
 		};
 	}
 

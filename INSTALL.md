@@ -1,7 +1,7 @@
 # Installation
 
 This guide reproduces the **`Jonghakseo/my-pi`** environment on a fresh macOS machine.
-After completing it, you should have the same `pi` TUI, the same 11 agents, all
+After completing it, you should have the same `pi` TUI, the same 9 agents, all
 remote-tracked skills, the local extension workspace, and the MCP bridge wired into
 Claude Code.
 
@@ -45,7 +45,6 @@ Skip any you don't use; the matching skill will simply no-op.
 | `ctx7` (Context7) | `skills/context7-cli` | `npm i -g @upstash/context7-mcp` (see skill) |
 | `internal-db` | `skills/internal-db-query` | internal CLI |
 | `gw` (git-worktree helper) | `skills/gw-worktree-cleanup` | https://github.com/jonghakseo/gw |
-| `hwp2md` | HWP conversion | `npm i -g hwp2md` |
 | `ffmpeg`, `yt-dlp` | `fetch_content` video frames | `brew install ffmpeg yt-dlp` |
 | `peekaboo` | `skills/peekaboo` | `brew install steipete/tap/peekaboo` |
 | Ghostty | `bookmark` extension panel | https://ghostty.org |
