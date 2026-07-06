@@ -17,7 +17,7 @@ interface DelayTask {
 
 const DelayParamsSchema = Type.Object({
 	delay: Type.String({ description: "Delay duration such as 30s, 5m, 1h, 1h30m, 2시간." }),
-	prompt: Type.String({ description: "Prompt text to insert into the editor after the delay." }),
+	prompt: Type.String({ description: "Prompt text to submit to the agent after the delay (triggers a turn)." }),
 	id: Type.Optional(Type.String({ description: "Optional task id. Auto-generated when omitted." })),
 });
 
@@ -30,6 +30,7 @@ interface DelayToolParams {
 const tasks = new Map<string, DelayTask>();
 let nextId = 1;
 let latestCtx: ExtensionContext | undefined;
+let api: ExtensionAPI | undefined;
 let statusInterval: ReturnType<typeof setInterval> | undefined;
 
 function allocateId(requested?: string): string {
@@ -92,11 +93,23 @@ function stopStatusTickerIfIdle(): void {
 
 function injectPrompt(task: DelayTask): void {
 	try {
-		if (!task.ctx.hasUI) return;
-		const current = task.ctx.ui.getEditorText();
-		const nextText = current.trim().length > 0 ? `${current.trimEnd()}\n\n${task.prompt}` : task.prompt;
-		task.ctx.ui.setEditorText(nextText);
-		task.ctx.ui.notify(`⏰ ${task.id} 시간이 되어 프롬프트를 입력했어요.`, "info");
+		if (!api) throw new Error("delay runtime is not initialized.");
+		const idle = task.ctx.isIdle();
+		// idle이면 즉시 턴을 트리거하고, 작업 중이면 현재 턴 종료 후 실행되도록 followUp으로 큐잉한다.
+		api.sendUserMessage(task.prompt, idle ? undefined : { deliverAs: "followUp" });
+		if (task.ctx.hasUI) {
+			task.ctx.ui.notify(
+				idle
+					? `⏰ ${task.id} 시간이 되어 프롬프트를 실행했어요.`
+					: `⏰ ${task.id} 작업 중이라 followUp으로 예약했어요.`,
+				"info",
+			);
+		}
+	} catch (err) {
+		if (task.ctx.hasUI) {
+			const message = err instanceof Error ? err.message : String(err);
+			task.ctx.ui.notify(`⏰ ${task.id} 프롬프트 실행 실패: ${message}`, "error");
+		}
 	} finally {
 		tasks.delete(task.id);
 		refreshStatus();
@@ -105,7 +118,7 @@ function injectPrompt(task: DelayTask): void {
 }
 
 function scheduleDelay(ctx: ExtensionContext, delayMs: number, prompt: string, requestedId?: string): DelayTask {
-	if (!ctx.hasUI) throw new Error("delay requires an interactive UI so it can insert text into the editor.");
+	if (!ctx.hasUI) throw new Error("delay requires an interactive UI so it can submit the prompt to the agent.");
 	latestCtx = ctx;
 	const id = allocateId(requestedId);
 	const createdAt = Date.now();
@@ -145,7 +158,7 @@ function cancelAll(): number {
 function helpText(): string {
 	return [
 		"Usage:",
-		"  /delay <duration> <prompt>     지연 후 프롬프트를 현재 입력창에 넣기",
+		"  /delay <duration> <prompt>     지연 후 프롬프트를 제출하고 턴을 트리거",
 		"  /delay list                    예약 목록 보기",
 		"  /delay-cancel [id|all]         예약 취소 (id 생략 시 전체 취소)",
 		"",
@@ -162,7 +175,7 @@ function scheduleFromCommand(args: string, ctx: ExtensionContext): string {
 	const parsed = parseDelayArgs(args);
 	if ("error" in parsed) return parsed.error;
 	const task = scheduleDelay(ctx, parsed.delayMs, parsed.prompt);
-	return `✓ ${task.id} 예약됨: ${formatKoreanDuration(parsed.delayMs)} 후 입력 · ${preview(task.prompt)}`;
+	return `✓ ${task.id} 예약됨: ${formatKoreanDuration(parsed.delayMs)} 후 제출 · ${preview(task.prompt)}`;
 }
 
 async function handleDelayCommand(args: string, ctx: ExtensionContext): Promise<string> {
@@ -187,8 +200,9 @@ function clearAllTimers(): void {
 }
 
 export default function (pi: ExtensionAPI) {
+	api = pi;
 	pi.registerCommand("delay", {
-		description: "지정한 시간 후 프롬프트를 현재 입력창에 넣기: /delay 5m <프롬프트>",
+		description: "지정한 시간 후 프롬프트를 제출하고 턴 트리거: /delay 5m <프롬프트>",
 		getArgumentCompletions: (prefix) => {
 			const trimmed = prefix.trimStart();
 			if (trimmed.includes(" ")) return null;
@@ -227,10 +241,11 @@ export default function (pi: ExtensionAPI) {
 		name: "delay",
 		label: "Delay",
 		description:
-			"Schedule prompt text to be inserted into the current interactive editor after a short delay. Use for one-shot reminders like 5m, 1h, or 2시간. The user can cancel with /delay-cancel <id> or /delay-cancel for all.",
-		promptSnippet: "Insert a prompt into the current editor after a delay, e.g. delay=5m prompt='check status'.",
+			"Schedule a prompt to be submitted to the agent after a short delay, triggering a new turn when it fires. Use for one-shot reminders like 5m, 1h, or 2시간. The user can cancel with /delay-cancel <id> or /delay-cancel for all.",
+		promptSnippet: "Submit a prompt to the agent after a delay, e.g. delay=5m prompt='check status'.",
 		promptGuidelines: [
-			"Use delay only when the user explicitly asks to put a prompt into the editor later in the same interactive session.",
+			"Use delay only when the user explicitly asks to run a prompt later in the same interactive session.",
+			"When the delay fires the prompt is submitted as a user message and triggers a turn (followUp-queued if the agent is busy), not just inserted into the editor.",
 			"For recurring or persistent headless scheduled jobs, use cron instead of delay.",
 			"Tell the user the returned id so they can cancel it with `/delay-cancel <id>`; `/delay-cancel` without an id cancels all.",
 		],
@@ -259,7 +274,7 @@ export default function (pi: ExtensionAPI) {
 				content: [
 					{
 						type: "text" as const,
-						text: `✓ ${task.id} scheduled: ${formatKoreanDuration(delayMs)} later. Cancel with /delay-cancel ${task.id}`,
+						text: `✓ ${task.id} scheduled: prompt will be submitted ${formatKoreanDuration(delayMs)} later (triggers a turn). Cancel with /delay-cancel ${task.id}`,
 					},
 				],
 				details: { id: task.id, dueAt: new Date(task.dueAt).toISOString(), prompt: task.prompt },
