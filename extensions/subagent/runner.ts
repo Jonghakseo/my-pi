@@ -23,6 +23,7 @@ import {
 	stateToSingleResult,
 } from "./claude-stream-parser.js";
 import { resolveClaudeRuntimeMode } from "./config.js";
+import { CONTEXT_GUARD_SIGNATURE, resolveContextGuardCeiling } from "./context-limits.js";
 import { formatToolCallPlain } from "./format.js";
 import {
 	extractActivityPreviewFromTextDelta,
@@ -570,6 +571,8 @@ async function runPiAgent(
 	};
 	let completionMarkerWritten = false;
 	let wasAborted = false;
+	const contextGuardCeiling = resolveContextGuardCeiling(agent.model, "pi");
+	let contextGuardTripped = false;
 
 	const emitUpdate = () => {
 		if (onUpdate) {
@@ -744,6 +747,30 @@ async function runPiAgent(
 							currentResult.usage.cacheWrite += usage.cacheWrite || 0;
 							currentResult.usage.cost += usage.cost?.total || 0;
 							currentResult.usage.contextTokens = usage.totalTokens || 0;
+						}
+						// ④ Proactive context guard: stop just below the provider's real
+						// ceiling so heavy runs surface partial findings instead of a raw
+						// context-overflow error one turn later.
+						if (
+							!contextGuardTripped &&
+							contextGuardCeiling !== undefined &&
+							currentResult.usage.contextTokens >= contextGuardCeiling &&
+							!settled &&
+							!procExited &&
+							!wasAborted
+						) {
+							contextGuardTripped = true;
+							currentResult.stopReason = "error";
+							currentResult.errorMessage =
+								`${CONTEXT_GUARD_SIGNATURE} stopped at ${currentResult.usage.contextTokens} tokens ` +
+								`(ceiling ${contextGuardCeiling}) to preserve partial findings before provider context overflow.`;
+							proc.kill("SIGTERM");
+							setTimeout(() => {
+								if (!procExited && proc.exitCode === null) proc.kill("SIGKILL");
+							}, 5000);
+							settleReason = "context_guard";
+							resolveOnce(1);
+							return;
 						}
 						if (!currentResult.model && msg.model) currentResult.model = msg.model;
 						if (msg.stopReason) currentResult.stopReason = msg.stopReason;
