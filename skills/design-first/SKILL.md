@@ -32,7 +32,7 @@ disable-model-invocation: false
 
 ### Phase 1: 이해
 
-`planner` 에이전트를 활용하거나 직접 수행:
+`searcher` 에이전트를 활용하거나 직접 수행:
 
 - 현재 코드베이스 구조 파악 (파일, 패턴, 의존성)
 - 관련 문서/이슈 확인

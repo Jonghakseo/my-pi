@@ -60,11 +60,11 @@ Claude Code의 dynamic workflows처럼 JS 런타임이 오케스트레이션을 
 
 | Pattern                  | 언제 쓰나                                 | Pi 실행 방식                                                      |
 | ------------------------ | ------------------------------------- | ------------------------------------------------------------- |
-| classify-and-act         | 작업 종류/위험도/모델 선택이 먼저 필요                | `planner` 또는 `challenger`에게 분류 요청                             |
+| classify-and-act         | 작업 종류/위험도/모델 선택이 먼저 필요                | `worker` 또는 `challenger`에게 분류 요청                             |
 | fan-out-and-synthesize   | 많은 파일/항목/문서/소스를 독립 처리                 | `subagent batch --isolated` 또는 `--main` 후 메인에서 종합             |
 | worker→verifier→reviewer | 구현 태스크 품질 게이트                         | `pipeline-execute` 또는 `subagent chain`                        |
 | adversarial verification | 사실/코드/설계 검증 신뢰도 향상                    | `verifier` + `reviewer` + `challenger` 병렬, `stress-interview` |
-| generate-and-filter      | 아이디어/해결책 다수 생성 후 선별                   | 여러 `planner`/`worker` → `reviewer` 필터                         |
+| generate-and-filter      | 아이디어/해결책 다수 생성 후 선별                   | 여러 `worker` → `reviewer` 필터                         |
 | tournament               | 설계/이름/접근법 비교 판단                       | N개 후보 생성 → pairwise judge/reviewer                            |
 | loop until done          | 원인 불명 버그, flaky test, 반복 triage       | stop condition + max cycles를 정하고 반복                           |
 | quarantine triage        | Slack/리뷰/공개 입력 등 untrusted content 처리 | 읽기 전용 agent와 실행 agent를 분리                                     |
@@ -117,9 +117,8 @@ Claude Code의 dynamic workflows처럼 JS 런타임이 오케스트레이션을 
 
 현재 사용 가능한 에이전트를 확인해야 하면 `list-agents`를 호출한다.
 
-- `planner`: 목표 분해, 설계, 실행 가능한 계획 작성.
-- `finder`/`searcher`: 파일 탐색, 코드베이스/문서/웹 리서치.
-- `worker`: 구현, 다중 파일 수정.
+- `searcher`: 파일 탐색, 코드베이스/문서/웹 리서치.
+- `worker`: 목표 분해, 설계, 구현, 다중 파일 수정.
 - `verifier`: 테스트/타입체크/빌드/재현 증거.
 - `reviewer`: correctness, regression, maintainability 리뷰.
 - `challenger`: 숨은 가정, 실패 시나리오, 반론.
