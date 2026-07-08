@@ -4,16 +4,16 @@
   "compaction": {
     "enabled": true
   },
-  "defaultModel": "claude-sonnet-5",
+  "defaultModel": "claude-opus-4-8",
   "defaultProvider": "anthropic",
   "defaultThinkingLevel": "high",
   "doubleEscapeAction": "tree",
   "enabledModels": [
     "openai-codex/gpt-5.5",
     "anthropic/claude-opus-4-8",
-    "anthropic/claude-sonnet-5"
+    "anthropic/claude-fable-5"
   ],
-  "hideThinkingBlock": true,
+  "hideThinkingBlock": false,
   "images": {
     "blockImages": false
   },
