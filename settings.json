@@ -4,8 +4,8 @@
   "compaction": {
     "enabled": true
   },
-  "defaultModel": "claude-opus-4-8",
-  "defaultProvider": "anthropic",
+  "defaultModel": "gpt-5.5",
+  "defaultProvider": "openai-codex",
   "defaultThinkingLevel": "high",
   "doubleEscapeAction": "tree",
   "enabledModels": [
