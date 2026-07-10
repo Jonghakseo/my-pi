@@ -4,20 +4,21 @@
   "compaction": {
     "enabled": true
   },
-  "defaultModel": "gpt-5.5",
+  "defaultModel": "gpt-5.6-sol",
   "defaultProvider": "openai-codex",
   "defaultThinkingLevel": "high",
   "doubleEscapeAction": "tree",
   "enabledModels": [
-    "openai-codex/gpt-5.5",
     "anthropic/claude-opus-4-8",
-    "anthropic/claude-fable-5"
+    "anthropic/claude-fable-5",
+    "openai-codex/gpt-5.6-sol",
+    "openai-codex/gpt-5.6-terra"
   ],
   "hideThinkingBlock": false,
   "images": {
     "blockImages": false
   },
-  "lastChangelogVersion": "0.80.3",
+  "lastChangelogVersion": "0.80.6",
   "packages": [
     "npm:@ryan_nookpi/pi-extension-codex-fast-mode",
     "npm:@ryan_nookpi/pi-extension-clipboard",
