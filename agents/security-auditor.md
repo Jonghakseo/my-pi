@@ -2,7 +2,7 @@
 name: security-auditor
 description: Security vulnerability analyst — use for focused security review of code changes with high-confidence findings only
 tools: read, grep, find, ls, bash
-model: openai-codex/gpt-5.5
+model: openai-codex/gpt-5.6-sol
 thinking: xhigh
 ---
 

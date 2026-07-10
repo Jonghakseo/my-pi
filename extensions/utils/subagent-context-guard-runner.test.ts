@@ -55,12 +55,12 @@ function makeGuardProcess(lines: string[], autoComplete: boolean): MockProc {
 	return proc;
 }
 
-function assistantMessageEnd(stopReason: string, totalTokens: number): string {
+function assistantMessageEnd(model: string, stopReason: string, totalTokens: number): string {
 	return JSON.stringify({
 		type: "message_end",
 		message: {
 			role: "assistant",
-			model: "openai-codex/gpt-5.5",
+			model,
 			content: [{ type: "text", text: "partial finding" }],
 			stopReason,
 			usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens },
@@ -90,24 +90,26 @@ afterEach(() => {
 });
 
 describe("runPiAgent proactive context guard", () => {
-	it("trips on a toolUse turn once peak tokens cross the ceiling", async () => {
+	it("trips on a GPT-5.6 toolUse turn once peak tokens cross the ceiling", async () => {
+		const model = "openai-codex/gpt-5.6-sol";
 		const { result, proc } = await run(
-			"openai-codex/gpt-5.5",
-			[JSON.stringify({ type: "agent_start" }), assistantMessageEnd("toolUse", 240_000)],
+			model,
+			[JSON.stringify({ type: "agent_start" }), assistantMessageEnd(model, "toolUse", 340_000)],
 			false,
 		);
 
 		expect(result.stopReason).toBe("error");
 		expect(result.exitCode).toBe(1);
 		expect(result.errorMessage).toContain("context guard:");
-		expect(result.errorMessage).toContain("240000");
+		expect(result.errorMessage).toContain("340000");
 		expect(proc.kill).toHaveBeenCalledWith("SIGTERM");
 	});
 
 	it("does not trip on a terminal stop message even at high token counts", async () => {
+		const model = "openai-codex/gpt-5.6-sol";
 		const { result } = await run(
-			"openai-codex/gpt-5.5",
-			[JSON.stringify({ type: "agent_start" }), assistantMessageEnd("stop", 240_000)],
+			model,
+			[JSON.stringify({ type: "agent_start" }), assistantMessageEnd(model, "stop", 340_000)],
 			true,
 		);
 
@@ -116,9 +118,10 @@ describe("runPiAgent proactive context guard", () => {
 	});
 
 	it("does not trip for a codex model without a configured ceiling", async () => {
+		const model = "openai-codex/gpt-5.3-codex-spark";
 		const { result, proc } = await run(
-			"openai-codex/gpt-5.3-codex-spark",
-			[JSON.stringify({ type: "agent_start" }), assistantMessageEnd("toolUse", 240_000)],
+			model,
+			[JSON.stringify({ type: "agent_start" }), assistantMessageEnd(model, "toolUse", 240_000)],
 			true,
 		);
 

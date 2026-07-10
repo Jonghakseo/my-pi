@@ -60,24 +60,24 @@ The current setup has 9 agent definitions, OpenAI/Anthropic agent models, and an
 
 | Agent | Model | Role | When to Use |
 |---|---|---|---|
-| **worker** | `openai-codex/gpt-5.5` | General-purpose executor | Implementation, writing, fixes (complex multi-file) |
+| **worker** | `openai-codex/gpt-5.6-sol` | General-purpose executor | Implementation, writing, fixes (complex multi-file) |
 | **simplifier** | `anthropic/claude-sonnet-5` | Code simplification specialist | Clean up recently modified code, improve readability, preserve behavior |
 | **code-cleaner** | `anthropic/claude-opus-4-6` | Code cleanup analyst | Find cleanup opportunities and quality issues |
-| **reviewer** | `openai-codex/gpt-5.5` | Code review specialist | PR reviews, quality/correctness checks |
-| **challenger** | `openai-codex/gpt-5.5` | Pressure tester | Stress-test plans before execution |
+| **reviewer** | `openai-codex/gpt-5.6-sol` | Code review specialist | PR reviews, quality/correctness checks |
+| **challenger** | `openai-codex/gpt-5.6-sol` | Pressure tester | Stress-test plans before execution |
 | **verifier** | `anthropic/claude-opus-4-6` | Evidence validation | Verify claims, check correctness |
-| **security-auditor** | `openai-codex/gpt-5.5` | Security reviewer | Focused vulnerability reviews |
+| **security-auditor** | `openai-codex/gpt-5.6-sol` | Security reviewer | Focused vulnerability reviews |
 | **searcher** | `anthropic/claude-sonnet-5` | Research & web search | Documentation lookup, exploration |
-| **browser** | `openai-codex/gpt-5.5` | Browser automation & UI testing | E2E testing, visual verification |
+| **browser** | `openai-codex/gpt-5.6-sol` | Browser automation & UI testing | E2E testing, visual verification |
 
 <details>
 <summary><strong>Model Selection</strong></summary>
 
-- **openai-codex/gpt-5.5** — General-purpose execution & review (implementation, testing, reviewing, security review, browser automation)
+- **openai-codex/gpt-5.6-sol** — Frontier execution & review (implementation, testing, reviewing, security review, browser automation)
 - **anthropic/claude-sonnet-5** — Research and code simplification
 - **anthropic/claude-opus-4-6 / 4-8** — Deep reasoning tasks (verification, cleanup analysis)
 
-The main agent default is `openai-codex/gpt-5.5` with high thinking.
+The main agent default is `openai-codex/gpt-5.6-sol` with high thinking.
 
 </details>
 

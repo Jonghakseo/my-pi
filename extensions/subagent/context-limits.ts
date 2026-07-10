@@ -73,11 +73,14 @@ export function isContextOverflowText(text: string | undefined | null): boolean 
  * Only applied to the pi runtime; the claude runtime handles its own limits.
  */
 const GUARD_CEILINGS: Array<{ prefix: string; tokens: number }> = [
-	// Whitelist only observed 272k-window codex models that hard-error around
-	// ~264k with a raw provider error and no compaction. Cut at 235k to
-	// preserve the exploration so far. Unlisted codex models (including smaller
-	// context-window variants and future models) do not get a proactive guard;
-	// they fall back to overflow detection/recovery (②).
+	// GPT-5.6 Codex models expose a 372k input window in pi. Keep the same 37k
+	// safety margin used by the older 272k-window models so long tool turns stop
+	// at 335k while partial findings can still be preserved. The family prefix
+	// covers Sol, Terra, and Luna.
+	{ prefix: "openai-codex/gpt-5.6", tokens: 335_000 },
+	// Observed 272k-window codex models hard-error around ~264k with a raw
+	// provider error and no compaction. Cut at 235k to preserve the exploration
+	// so far. Unlisted codex models fall back to overflow detection/recovery (②).
 	{ prefix: "openai-codex/gpt-5.5", tokens: 235_000 },
 	// gpt-5.4 and gpt-5.4-mini both use a 272k window and are covered via startsWith.
 	{ prefix: "openai-codex/gpt-5.4", tokens: 235_000 },
