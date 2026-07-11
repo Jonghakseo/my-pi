@@ -5,6 +5,26 @@
 	"keywords": [
 		"pi-package"
 	],
+	"files": [
+		"agents/",
+		"extensions/",
+		"!extensions/**/.env",
+		"!extensions/.pi-lens/",
+		"!extensions/coverage/",
+		"!extensions/picky-handoff/",
+		"!extensions/prompt-suggest-lite/.data/",
+		"!extensions/usage-reporter/",
+		"!extensions/utils/coverage/",
+		"skills/",
+		"themes/",
+		"scripts/sync-agents.mjs",
+		"docs/assets/",
+		"custom-style.json",
+		"prompt-suggest-lite.json",
+		"INSTALL.md",
+		"README.ko.md",
+		"SYSTEM.md"
+	],
 	"license": "MIT",
 	"author": "Jonghakseo",
 	"repository": {
