@@ -6,7 +6,7 @@
   },
   "defaultModel": "gpt-5.6-sol",
   "defaultProvider": "openai-codex",
-  "defaultThinkingLevel": "high",
+  "defaultThinkingLevel": "max",
   "doubleEscapeAction": "tree",
   "enabledModels": [
     "anthropic/claude-opus-4-8",
@@ -14,7 +14,7 @@
     "openai-codex/gpt-5.6-sol",
     "openai-codex/gpt-5.6-terra"
   ],
-  "hideThinkingBlock": false,
+  "hideThinkingBlock": true,
   "images": {
     "blockImages": false
   },
