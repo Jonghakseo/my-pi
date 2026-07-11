@@ -8,7 +8,7 @@ const extensionsRoot = resolve(configDir, "..");
 const coverageCanaries = [
 	// Utility modules with stable deterministic tests.
 	"utils/agent-utils.ts",
-	"utils/diff-overlay-utils.ts",
+	"diff-overlay/diff-overlay-utils.ts",
 	"utils/format-utils.ts",
 	"utils/git-utils.ts",
 	"utils/path-utils.ts",
