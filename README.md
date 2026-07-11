@@ -26,7 +26,7 @@ definitions, and scaffolds `.env` files. See INSTALL.md for the full prerequisit
 ## Usage Example
 
 <p align="center">
-  <img src="./tmp/pi-usage-example.png" alt="pi usage example showing tool calls, thinking state, todo progress, and status footer" width="800"/>
+  <img src="./docs/assets/pi-usage-example.png" alt="pi usage example showing tool calls, thinking state, todo progress, and status footer" width="800"/>
 </p>
 
 A typical session combines compact tool-call previews, Korean command titles, thinking/status visibility, task tracking, MCP status, model/thinking indicators, and repository context in one terminal UI.
@@ -36,7 +36,7 @@ A typical session combines compact tool-call previews, Korean command titles, th
 ## Architecture
 
 <p align="center">
-  <img src="./tmp/architecture.en.svg" alt="System Architecture" width="800"/>
+  <img src="./docs/assets/architecture.en.svg" alt="System Architecture" width="800"/>
 </p>
 
 The system is organized in **four layers**:
@@ -53,7 +53,7 @@ The system is organized in **four layers**:
 ## Agents
 
 <p align="center">
-  <img src="./tmp/agents.en.svg" alt="Agents" width="800"/>
+  <img src="./docs/assets/agents.en.svg" alt="Agents" width="800"/>
 </p>
 
 The current setup has 9 agent definitions using OpenAI and Anthropic models:
