@@ -79,6 +79,7 @@
 			"!**/node_modules",
 			"!**/dist",
 			"!**/web-dist",
+			"!coverage",
 			"!utils/coverage",
 			"!pi-session-*.html",
 			"!picky-handoff"

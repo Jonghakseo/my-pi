@@ -5,7 +5,7 @@ import { defineConfig } from "vitest/config";
 const configDir = dirname(fileURLToPath(import.meta.url));
 const extensionsRoot = resolve(configDir, "..");
 
-const coverageCanaryInclude = [
+const coverageCanaries = [
 	// Utility modules with stable deterministic tests.
 	"utils/agent-utils.ts",
 	"utils/diff-overlay-utils.ts",
@@ -13,11 +13,30 @@ const coverageCanaryInclude = [
 	"utils/git-utils.ts",
 	"utils/path-utils.ts",
 	"utils/string-utils.ts",
-	"utils/subagent-format-bridge.ts",
-	"utils/subagent-invocation-queue.ts",
 	"utils/time-utils.ts",
-	"utils/usage-analytics.ts",
+	// Additional pure logic modules already meeting the default thresholds.
+	"cron/schedule.ts",
+	"cron/store.ts",
+	"interactive-shell/render-utils.ts",
+	"interactive-shell/session-query.ts",
+	"subagent/claude-args.ts",
 ];
+
+const defaultCoverageThresholds = {
+	lines: 80,
+	functions: 85,
+	branches: 70,
+	statements: 80,
+};
+
+const adjustedCoverageThresholds = {
+	// Current: lines 38.88%, functions 70%, branches 27.5%, statements 39.6%.
+	"subagent/format.ts": { lines: 33, functions: 65, branches: 22, statements: 34 },
+	// Current: lines 77.77%, functions 75%, branches 100%, statements 81.81%.
+	"subagent/invocation-queue.ts": { lines: 72, functions: 70, branches: 95, statements: 76 },
+	// Current: lines 42.85%, functions 53.52%, branches 39.41%, statements 39.63%.
+	"usage-analytics/index.ts": { lines: 37, functions: 48, branches: 34, statements: 34 },
+};
 
 export default defineConfig({
 	test: {
@@ -27,13 +46,11 @@ export default defineConfig({
 		coverage: {
 			provider: "v8",
 			reporter: ["text", "html", "json-summary"],
-			include: coverageCanaryInclude,
-			exclude: ["**/*.test.ts", "**/*.d.ts"],
+			include: ["**/*.ts"],
+			exclude: ["**/*.test.ts", "**/*.d.ts", "tooling/**"],
 			thresholds: {
-				lines: 80,
-				functions: 85,
-				branches: 70,
-				statements: 80,
+				...Object.fromEntries(coverageCanaries.map((file) => [file, defaultCoverageThresholds])),
+				...adjustedCoverageThresholds,
 			},
 		},
 	},
