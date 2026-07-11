@@ -33,7 +33,6 @@
 		"extensions/prompt-suggest-lite/",
 		"extensions/read-tool-override/",
 		"extensions/README.md",
-		"extensions/subagent/",
 		"extensions/theme-cycler/",
 		"extensions/to-html/",
 		"extensions/tool-group-renderer/",
