@@ -21,7 +21,7 @@ Custom extensions for the pi coding agent. All extensions are written in TypeScr
 │   ├── constants.ts       #   Constants
 │   ├── format.ts          #   Formatting utilities
 │   └── run-utils.ts       #   Run management utilities
-├── utils/                 # Shared utility functions and many colocated tests
+├── utils/                 # Shared utility functions and their colocated tests
 │   ├── time-utils.ts      #   Time/duration formatting helpers
 │   └── status-keys.ts     #   Shared footer status key constants
 ├── archive-to-html/       # Auto-archive to-html skill output HTML to ~/Documents
@@ -45,6 +45,7 @@ Custom extensions for the pi coding agent. All extensions are written in TypeScr
 
 ## Tooling Standards
 - **Package manager**: pnpm
+- **Test colocation**: Keep each test in the directory of the module it primarily exercises; keep shared utility tests in `utils/`.
 - **Quality checks**:
   - `pnpm run typecheck` — TypeScript 타입 검사 (web-access 포함, 오류만 출력, 파일 변경 없음)
   - `pnpm run typecheck:web-access` — `web-access/` focused 타입 검사
