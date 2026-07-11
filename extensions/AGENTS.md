@@ -22,7 +22,7 @@ Custom extensions for the pi coding agent. All extensions are written in TypeScr
 ```
 
 ## Moved Out
-- **subagent**: now maintained as the standalone package `@ryan_nookpi/pi-extension-subagent` (source: `~/Documents/pi-extension/packages/subagent`, loaded via a local-path package entry in `settings.json`). Do not re-add subagent code here; contribute to the monorepo instead. `custom-style/ui.ts` mirrors its `subagent.symbolMap` setting read-only for editor hints.
+- **subagent**: maintained in `~/Documents/pi-extension/packages/subagent` and loaded from npm as `@ryan_nookpi/pi-extension-subagent`. Do not re-add subagent code here; contribute to the monorepo and publish a new package version instead. `custom-style/ui.ts` mirrors its `subagent.symbolMap` setting read-only for editor hints.
 
 ## Key Patterns
 - **Extension entry point**: Pi auto-discovers both root `*.ts` files and `directory/index.ts` files, but this repo standardizes on `extensions/<name>/index.ts` only to avoid duplicate loading.

@@ -37,7 +37,7 @@
     "npm:@ryan_nookpi/pi-extension-todo-write-overlay",
     "git:github.com/injaneity/pi-computer-use@v0.2.5",
     "npm:@ryan_nookpi/pi-extension-diff-review",
-    "../../Documents/pi-extension/packages/subagent"
+    "npm:@ryan_nookpi/pi-extension-subagent"
   ],
   "quietStartup": true,
   "subagent": {
