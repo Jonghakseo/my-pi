@@ -3,7 +3,7 @@
 	"license": "MIT",
 	"private": true,
 	"type": "module",
-	"packageManager": "pnpm@10.15.1",
+	"packageManager": "pnpm@10.24.0",
 	"scripts": {
 		"check": "biome check .",
 		"typecheck": "tsc -p tsconfig.json --noEmit",
