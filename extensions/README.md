@@ -1,6 +1,6 @@
 # my-pi-extension
 
-[pi 코딩 에이전트](https://github.com/mariozechner/pi-coding-agent)용 커스텀 확장 모음.
+[pi 코딩 에이전트](https://github.com/earendil-works/pi)용 커스텀 확장 모음.
 
 > 참고: 일부 확장(`codex-fast-mode`, `clipboard`, `ask-user-question`, `auto-name`, `delayed-action`, `idle-screensaver`, `todo-write-overlay`, `open-pr`, `generative-ui`, `cross-agent`, `claude-hooks-bridge`, `claude-mcp-bridge`, `memory-layer`, `diff-review`, `claude-spinner`, `cc-system-prompt`)은 이제 로컬 파일이 아니라 설치형 npm 패키지로 사용한다. `todo-write-overlay`는 기존 `todo-write` 패키지를 대체한다. 나머지 커스텀 확장들도 점진적으로 패키지화해 옮길 계획이다.
 

@@ -2,7 +2,7 @@
 
 # my-pi
 
-A [pi](https://github.com/mariozechner/pi-coding-agent) setup used for daily development.
+A [pi](https://github.com/earendil-works/pi) setup used for daily development.
 
 This repository contains the agent definitions, local and packaged extensions, skills, and themes used together in one working environment.
 
@@ -19,9 +19,9 @@ git clone https://github.com/Jonghakseo/my-pi.git ~/.pi/agent
 cd ~/.pi/agent && ./scripts/bootstrap.sh
 ```
 
-The bootstrap script verifies Node/pnpm versions, installs both workspaces, syncs agent
+The bootstrap script checks that required CLIs are available, installs both workspaces, syncs agent
 definitions, and scaffolds `.env` files. See INSTALL.md for the full prerequisite list
-(required CLIs, optional skill-specific tools, MCP bridge wiring, secrets).
+(required versions, optional skill-specific tools, MCP bridge wiring, secrets).
 
 ## Usage Example
 
@@ -45,7 +45,7 @@ The system is organized in **four layers**:
 |---|---|
 | **User / pi TUI** | Interactive terminal interface |
 | **Extensions** | Local directory-style TypeScript extensions plus installed npm extension packages |
-| **Agents** | 11 specialized agent definitions with distinct roles and models |
+| **Agents** | 9 specialized agent definitions with distinct roles and models |
 | **Infrastructure** | MCP tool integrations via `@ryan_nookpi/pi-extension-claude-mcp-bridge` — reuses your existing Claude Code MCP setup (Jira, Slack, Gmail, Calendar, GA4, Figma, DB, etc.) |
 
 ---
@@ -56,7 +56,7 @@ The system is organized in **four layers**:
   <img src="./tmp/agents.en.svg" alt="Agents" width="800"/>
 </p>
 
-The current setup has 9 agent definitions, OpenAI/Anthropic agent models, and an additional Ollama Cloud provider option:
+The current setup has 9 agent definitions using OpenAI and Anthropic models:
 
 | Agent | Model | Role | When to Use |
 |---|---|---|---|
@@ -77,7 +77,7 @@ The current setup has 9 agent definitions, OpenAI/Anthropic agent models, and an
 - **anthropic/claude-sonnet-5** — Research and code simplification
 - **anthropic/claude-opus-4-6 / 4-8** — Deep reasoning tasks (verification, cleanup analysis)
 
-The main agent default is `openai-codex/gpt-5.6-sol` with high thinking.
+The main agent default is `openai-codex/gpt-5.6-sol` with max thinking.
 
 </details>
 
@@ -121,9 +121,11 @@ Pi can auto-discover both `extensions/*.ts` and `extensions/*/index.ts`, but thi
 |---|---|
 | [`footer/`](./extensions/footer/index.ts) | Custom footer facade backed by `custom-style/` state and UI modules |
 | [`working-text/`](./extensions/working-text/index.ts) | Tip-focused spinner text with elapsed time during processing |
+| [`prompt-suggest-lite/`](./extensions/prompt-suggest-lite/index.ts) | Lightweight next-prompt suggestions after each turn, with `/prompt-suggest` controls |
 | [`theme-cycler/`](./extensions/theme-cycler/index.ts) | `Ctrl+Shift+X` / `Ctrl+Q` theme cycling plus `/theme` picker |
 | [`diff-overlay/`](./extensions/diff-overlay/index.ts) | `/diff` git diff overlay with diff and commit modes |
 | [`files/`](./extensions/files/index.ts) | `/files` and file-reference shortcuts for browsing, opening, revealing, and Quick Look |
+| [`to-html/`](./extensions/to-html/index.ts) | `/to-html` turns the latest assistant response into a native generative-UI HTML widget |
 | [`fork-panel/`](./extensions/fork-panel/index.ts) | `/fork-panel` to fork the current session into a Ghostty split panel |
 | [`bookmark/`](./extensions/bookmark/index.ts) | `/bookmark` to save and reopen pi sessions |
 
@@ -134,7 +136,9 @@ Pi can auto-discover both `extensions/*.ts` and `extensions/*/index.ts`, but thi
 | [`github-pr-merge/`](./extensions/github-pr-merge/index.ts) | `/github:pr-merge` — merge the current branch PR through `gh` |
 | [`pr-comments/`](./extensions/pr-comments/index.ts) | `/github:get-pr-comments` — append unresolved inline review comments from the current PR |
 | [`pr-review-re-request/`](./extensions/pr-review-re-request/index.ts) | `/github:pr-review-re-request` — re-request reviews from pending reviewers |
+| [`worktree/`](./extensions/worktree/index.ts) | `/worktree` — interactively list, open, create, delete, sync, and clean Git worktrees |
 | [`notify/`](./extensions/notify/index.ts) | `/notify` and `/notify-off` for session completion notifications and macOS TTS |
+| [`cron/`](./extensions/cron/index.ts) | Persistent `cron` tool and `/cron` command for scheduled headless pi jobs via a daemon and macOS `launchd` |
 | [`until/`](./extensions/until/index.ts) | `/until`, `/untils`, `/until-cancel`, and `until_report` for repeat-until-condition workflows |
 | [`upload-image-url/`](./extensions/upload-image-url/index.ts) | `upload_image_url` — upload local/remote images to GitHub-backed storage for embedding |
 | [`usage-analytics/`](./extensions/usage-analytics/index.ts) | `/analytics` — subagent and skill usage analytics overlay |
@@ -171,7 +175,7 @@ The setup currently ships with 8 themes, hot-swappable with `Ctrl+Shift+X` / `Ct
 
 | Theme | Style |
 |---|---|
-| **zentui** *(default)* | Minimal ZenTUI-inspired dark theme |
+| **zentui** | Minimal ZenTUI-inspired dark theme |
 | **nord** | Arctic, clean blues and frost tones |
 | **catppuccin-mocha** | Warm pastels on dark chocolate |
 | **darcula** | Deep JetBrains-style dark tones |

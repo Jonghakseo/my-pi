@@ -1,61 +1,59 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 620" width="1200" height="620">
-  <rect width="1200" height="620" fill="#0d1117" rx="12"/>
-  <text x="600" y="45" text-anchor="middle" fill="#e6edf3" font-family="monospace, 'Noto Sans KR', sans-serif" font-size="22" font-weight="bold">서브에이전트 아키텍처</text>
-  <line x1="600" y1="285" x2="210" y2="157" stroke="#30363d" stroke-width="1.4" stroke-dasharray="4,4"/>
-  <line x1="600" y1="285" x2="590" y2="157" stroke="#30363d" stroke-width="1.4" stroke-dasharray="4,4"/>
-  <line x1="600" y1="285" x2="970" y2="157" stroke="#30363d" stroke-width="1.4" stroke-dasharray="4,4"/>
-  <line x1="600" y1="285" x2="210" y2="372" stroke="#30363d" stroke-width="1.4" stroke-dasharray="4,4"/>
-  <line x1="600" y1="285" x2="590" y2="372" stroke="#30363d" stroke-width="1.4" stroke-dasharray="4,4"/>
-  <line x1="600" y1="285" x2="970" y2="372" stroke="#30363d" stroke-width="1.4" stroke-dasharray="4,4"/>
-  <line x1="600" y1="285" x2="210" y2="487" stroke="#30363d" stroke-width="1.4" stroke-dasharray="4,4"/>
-  <line x1="600" y1="285" x2="590" y2="487" stroke="#30363d" stroke-width="1.4" stroke-dasharray="4,4"/>
-  <line x1="600" y1="285" x2="970" y2="487" stroke="#30363d" stroke-width="1.4" stroke-dasharray="4,4"/>
-  <rect x="455" y="240" width="290" height="90" rx="15" fill="rgba(88,166,255,0.12)" stroke="#58a6ff" stroke-width="2"/>
-  <text x="600" y="275" text-anchor="middle" fill="#e6edf3" font-family="monospace, 'Noto Sans KR', sans-serif" font-size="17" font-weight="bold">메인 에이전트</text>
-  <text x="600" y="302" text-anchor="middle" fill="#8b949e" font-family="monospace, 'Noto Sans KR', sans-serif" font-size="12">delegate · execute · verify</text>
-  <g transform="translate(80,115)">
-    <rect width="260" height="84" rx="12" fill="rgba(210,168,255,0.08)" stroke="#d2a8ff" stroke-width="1.3"/>
-    <text x="130" y="34" text-anchor="middle" fill="#d2a8ff" font-family="monospace, 'Noto Sans KR', sans-serif" font-size="15" font-weight="bold">worker</text>
-    <text x="130" y="58" text-anchor="middle" fill="#e6edf3" font-family="monospace, 'Noto Sans KR', sans-serif" font-size="12">범용 작업 실행기</text>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 640" width="1200" height="640" role="img" aria-labelledby="title desc">
+  <title id="title">my-pi 시스템 아키텍처</title>
+  <desc id="desc">사용자와 pi TUI, 확장 기능, 에이전트, 인프라로 이어지는 네 개의 레이어.</desc>
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="5" refY="5" orient="auto" markerUnits="strokeWidth">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#6e7681"/>
+    </marker>
+  </defs>
+
+  <rect width="1200" height="640" rx="12" fill="#0d1117"/>
+  <text x="600" y="42" text-anchor="middle" fill="#e6edf3" font-family="monospace, 'Noto Sans KR', sans-serif" font-size="22" font-weight="bold">시스템 아키텍처</text>
+  <text x="600" y="67" text-anchor="middle" fill="#8b949e" font-family="monospace, 'Noto Sans KR', sans-serif" font-size="12">my-pi 작업 환경을 구성하는 네 개의 연결 레이어</text>
+
+  <line x1="600" y1="190" x2="600" y2="215" stroke="#6e7681" stroke-width="2" marker-end="url(#arrow)"/>
+  <line x1="600" y1="320" x2="600" y2="345" stroke="#6e7681" stroke-width="2" marker-end="url(#arrow)"/>
+  <line x1="600" y1="450" x2="600" y2="475" stroke="#6e7681" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <g>
+    <rect x="100" y="90" width="1000" height="100" rx="14" fill="#58a6ff" fill-opacity="0.10" stroke="#58a6ff" stroke-width="1.5"/>
+    <rect x="126" y="115" width="50" height="50" rx="12" fill="#58a6ff" fill-opacity="0.18" stroke="#58a6ff"/>
+    <text x="151" y="147" text-anchor="middle" fill="#58a6ff" font-family="monospace" font-size="18" font-weight="bold">1</text>
+    <text x="204" y="128" fill="#e6edf3" font-family="monospace, 'Noto Sans KR', sans-serif" font-size="17" font-weight="bold">사용자 / pi TUI</text>
+    <text x="204" y="155" fill="#8b949e" font-family="monospace, 'Noto Sans KR', sans-serif" font-size="13">세션, 프롬프트, 단축키, 도구 출력을 다루는 인터랙티브 터미널</text>
+    <text x="1040" y="128" text-anchor="end" fill="#58a6ff" font-family="monospace, 'Noto Sans KR', sans-serif" font-size="12">터미널 UI</text>
+    <text x="1040" y="153" text-anchor="end" fill="#8b949e" font-family="monospace, 'Noto Sans KR', sans-serif" font-size="11">세션 · 컨텍스트 · 단축키</text>
   </g>
-  <g transform="translate(460,115)">
-    <rect width="260" height="84" rx="12" fill="rgba(210,168,255,0.08)" stroke="#d2a8ff" stroke-width="1.3"/>
-    <text x="130" y="34" text-anchor="middle" fill="#d2a8ff" font-family="monospace, 'Noto Sans KR', sans-serif" font-size="15" font-weight="bold">simplifier</text>
-    <text x="130" y="58" text-anchor="middle" fill="#e6edf3" font-family="monospace, 'Noto Sans KR', sans-serif" font-size="12">코드 단순화</text>
+
+  <g>
+    <rect x="100" y="220" width="1000" height="100" rx="14" fill="#d2a8ff" fill-opacity="0.09" stroke="#d2a8ff" stroke-width="1.5"/>
+    <rect x="126" y="245" width="50" height="50" rx="12" fill="#d2a8ff" fill-opacity="0.16" stroke="#d2a8ff"/>
+    <text x="151" y="277" text-anchor="middle" fill="#d2a8ff" font-family="monospace" font-size="18" font-weight="bold">2</text>
+    <text x="204" y="258" fill="#e6edf3" font-family="monospace, 'Noto Sans KR', sans-serif" font-size="17" font-weight="bold">확장 기능</text>
+    <text x="204" y="285" fill="#8b949e" font-family="monospace, 'Noto Sans KR', sans-serif" font-size="13">로컬 TypeScript 확장과 패키지가 도구, 명령, UI를 추가</text>
+    <text x="1040" y="258" text-anchor="end" fill="#d2a8ff" font-family="monospace, 'Noto Sans KR', sans-serif" font-size="12">로컬 + 패키지형</text>
+    <text x="1040" y="283" text-anchor="end" fill="#8b949e" font-family="monospace, 'Noto Sans KR', sans-serif" font-size="11">도구 · 워크플로우 · 렌더링</text>
   </g>
-  <g transform="translate(840,115)">
-    <rect width="260" height="84" rx="12" fill="rgba(210,168,255,0.08)" stroke="#d2a8ff" stroke-width="1.3"/>
-    <text x="130" y="34" text-anchor="middle" fill="#d2a8ff" font-family="monospace, 'Noto Sans KR', sans-serif" font-size="15" font-weight="bold">code-cleaner</text>
-    <text x="130" y="58" text-anchor="middle" fill="#e6edf3" font-family="monospace, 'Noto Sans KR', sans-serif" font-size="12">코드 정리 분석</text>
+
+  <g>
+    <rect x="100" y="350" width="1000" height="100" rx="14" fill="#3fb950" fill-opacity="0.09" stroke="#3fb950" stroke-width="1.5"/>
+    <rect x="126" y="375" width="50" height="50" rx="12" fill="#3fb950" fill-opacity="0.16" stroke="#3fb950"/>
+    <text x="151" y="407" text-anchor="middle" fill="#3fb950" font-family="monospace" font-size="18" font-weight="bold">3</text>
+    <text x="204" y="388" fill="#e6edf3" font-family="monospace, 'Noto Sans KR', sans-serif" font-size="17" font-weight="bold">에이전트</text>
+    <text x="204" y="415" fill="#8b949e" font-family="monospace, 'Noto Sans KR', sans-serif" font-size="13">구현, 리뷰, 리서치, 검증을 분리하는 9개 전문 역할</text>
+    <text x="1040" y="388" text-anchor="end" fill="#3fb950" font-family="monospace, 'Noto Sans KR', sans-serif" font-size="12">9개 전문 역할</text>
+    <text x="1040" y="413" text-anchor="end" fill="#8b949e" font-family="monospace" font-size="11">OpenAI · Anthropic</text>
   </g>
-  <g transform="translate(80,330)">
-    <rect width="260" height="84" rx="12" fill="rgba(210,168,255,0.08)" stroke="#d2a8ff" stroke-width="1.3"/>
-    <text x="130" y="34" text-anchor="middle" fill="#d2a8ff" font-family="monospace, 'Noto Sans KR', sans-serif" font-size="15" font-weight="bold">reviewer</text>
-    <text x="130" y="58" text-anchor="middle" fill="#e6edf3" font-family="monospace, 'Noto Sans KR', sans-serif" font-size="12">코드 리뷰</text>
+
+  <g>
+    <rect x="100" y="480" width="1000" height="100" rx="14" fill="#f0883e" fill-opacity="0.09" stroke="#f0883e" stroke-width="1.5"/>
+    <rect x="126" y="505" width="50" height="50" rx="12" fill="#f0883e" fill-opacity="0.16" stroke="#f0883e"/>
+    <text x="151" y="537" text-anchor="middle" fill="#f0883e" font-family="monospace" font-size="18" font-weight="bold">4</text>
+    <text x="204" y="518" fill="#e6edf3" font-family="monospace, 'Noto Sans KR', sans-serif" font-size="17" font-weight="bold">인프라</text>
+    <text x="204" y="545" fill="#8b949e" font-family="monospace, 'Noto Sans KR', sans-serif" font-size="13">Claude MCP 브릿지가 Claude Code의 서비스 연동을 재사용</text>
+    <text x="1040" y="518" text-anchor="end" fill="#f0883e" font-family="monospace, 'Noto Sans KR', sans-serif" font-size="12">MCP 연동</text>
+    <text x="1040" y="543" text-anchor="end" fill="#8b949e" font-family="monospace" font-size="11">Jira · Slack · Gmail · Calendar · GA4 · BigQuery</text>
   </g>
-  <g transform="translate(460,330)">
-    <rect width="260" height="84" rx="12" fill="rgba(210,168,255,0.08)" stroke="#d2a8ff" stroke-width="1.3"/>
-    <text x="130" y="34" text-anchor="middle" fill="#d2a8ff" font-family="monospace, 'Noto Sans KR', sans-serif" font-size="15" font-weight="bold">challenger</text>
-    <text x="130" y="58" text-anchor="middle" fill="#e6edf3" font-family="monospace, 'Noto Sans KR', sans-serif" font-size="12">압박 검토</text>
-  </g>
-  <g transform="translate(840,330)">
-    <rect width="260" height="84" rx="12" fill="rgba(210,168,255,0.08)" stroke="#d2a8ff" stroke-width="1.3"/>
-    <text x="130" y="34" text-anchor="middle" fill="#d2a8ff" font-family="monospace, 'Noto Sans KR', sans-serif" font-size="15" font-weight="bold">verifier</text>
-    <text x="130" y="58" text-anchor="middle" fill="#e6edf3" font-family="monospace, 'Noto Sans KR', sans-serif" font-size="12">근거 검증</text>
-  </g>
-  <g transform="translate(80,445)">
-    <rect width="260" height="84" rx="12" fill="rgba(210,168,255,0.08)" stroke="#d2a8ff" stroke-width="1.3"/>
-    <text x="130" y="34" text-anchor="middle" fill="#d2a8ff" font-family="monospace, 'Noto Sans KR', sans-serif" font-size="15" font-weight="bold">security-auditor</text>
-    <text x="130" y="58" text-anchor="middle" fill="#e6edf3" font-family="monospace, 'Noto Sans KR', sans-serif" font-size="12">보안 검토</text>
-  </g>
-  <g transform="translate(460,445)">
-    <rect width="260" height="84" rx="12" fill="rgba(210,168,255,0.08)" stroke="#d2a8ff" stroke-width="1.3"/>
-    <text x="130" y="34" text-anchor="middle" fill="#d2a8ff" font-family="monospace, 'Noto Sans KR', sans-serif" font-size="15" font-weight="bold">searcher</text>
-    <text x="130" y="58" text-anchor="middle" fill="#e6edf3" font-family="monospace, 'Noto Sans KR', sans-serif" font-size="12">리서치·웹 검색</text>
-  </g>
-  <g transform="translate(840,445)">
-    <rect width="260" height="84" rx="12" fill="rgba(210,168,255,0.08)" stroke="#d2a8ff" stroke-width="1.3"/>
-    <text x="130" y="34" text-anchor="middle" fill="#d2a8ff" font-family="monospace, 'Noto Sans KR', sans-serif" font-size="15" font-weight="bold">browser</text>
-    <text x="130" y="58" text-anchor="middle" fill="#e6edf3" font-family="monospace, 'Noto Sans KR', sans-serif" font-size="12">브라우저 자동화</text>
-  </g>
+
+  <text x="600" y="615" text-anchor="middle" fill="#6e7681" font-family="monospace, 'Noto Sans KR', sans-serif" font-size="11">상호작용 → 확장 런타임 → 역할 위임 → 외부 서비스 연동</text>
 </svg>

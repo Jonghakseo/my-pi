@@ -21,7 +21,7 @@ if [[ "$REPO_ROOT" != "$EXPECTED_PATH" ]]; then
   yellow "         pi reads ~/.pi/agent. Symlinking is fine, but clone there for simplicity."
 fi
 
-# 2. Tool version checks ------------------------------------------------------
+# 2. Required tool availability checks ---------------------------------------
 bold "==> Checking required tools"
 
 require() {
@@ -78,8 +78,8 @@ fi
 bold "==> Syncing agent definitions"
 node "$REPO_ROOT/scripts/sync-agents.mjs" --force
 
-# 5. Scaffold env / auth files from templates --------------------------------
-bold "==> Scaffolding secret files (if missing)"
+# 5. Scaffold environment files from templates -------------------------------
+bold "==> Scaffolding environment files (if missing)"
 scaffold() {
   local target="$1" template="$2"
   if [[ -e "$target" ]]; then
@@ -100,7 +100,7 @@ Next steps:
   1. Fill in extensions/.env (PI_STORAGE_OWNER / PI_STORAGE_REPO) if you use upload-image-url.
   2. Make sure Claude Code has your MCP servers registered (the bridge reuses them).
   3. Launch:  cd ~/.pi/agent && pi
-  4. On first launch, sign in to the default provider (anthropic per settings.json).
+  4. On first launch, sign in to the default provider (openai-codex per settings.json).
 
 See INSTALL.md for the full reference.
 EOF

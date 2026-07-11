@@ -67,7 +67,7 @@ cd ~/.pi/agent
 
 ## 3. Run the bootstrap script
 
-The script handles dependencies, agent sync, MCP-bridge prep, and `.env` scaffolding.
+The script checks required CLI availability, installs dependencies, syncs agents, and scaffolds `.env` files.
 
 ```bash
 ./scripts/bootstrap.sh
@@ -75,11 +75,11 @@ The script handles dependencies, agent sync, MCP-bridge prep, and `.env` scaffol
 
 It will:
 
-1. Verify Node and pnpm versions.
+1. Check that Node, pnpm, Git, GitHub CLI, and pi are available.
 2. `pnpm install` at the repo root **and** inside `extensions/`.
 3. Run `scripts/sync-agents.mjs` to copy `agents/*.md` into `~/.pi/agent/agents/`.
-4. Create `auth.json` / `.env` / `extensions/.env` from the templates if missing.
-5. Print a checklist of any missing CLIs from §1.
+4. Create `.env` / `extensions/.env` from the templates if missing.
+5. Print a checklist of any missing optional CLIs from §1.
 
 Re-run it anytime; it is idempotent.
 
@@ -130,7 +130,7 @@ pi
 ```
 
 First launch will prompt you to sign in to the default provider
-(`anthropic` per `settings.json`). After that the TUI should look identical to
+(`openai-codex` per `settings.json`). After that the TUI should look identical to
 the screenshot in the [README](./README.md#usage-example).
 
 ---
