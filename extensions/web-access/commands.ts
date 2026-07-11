@@ -36,6 +36,8 @@ export function registerCommands(pi: ExtensionAPI, support: RuntimeSupport): voi
 		// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: websearch command setup keeps curator startup, provider selection, and browser fallback in one command handler.
 		handler: async (args, ctx) => {
 			closeCurator();
+			const curatorGeneration = state.curatorGeneration;
+			const ownsCuratorStartup = () => state.curatorGeneration === curatorGeneration;
 			const sessionToken = randomUUID();
 
 			const raw = args.trim();
@@ -45,10 +47,12 @@ export function registerCommands(pi: ExtensionAPI, support: RuntimeSupport): voi
 			try {
 				bootstrap = await loadCuratorBootstrap(undefined);
 			} catch (err) {
+				if (!ownsCuratorStartup()) return;
 				const message = err instanceof Error ? err.message : String(err);
 				ctx.ui.notify(`Failed to load web search config: ${message}`, "error");
 				return;
 			}
+			if (!ownsCuratorStartup()) return;
 			const availableProviders = bootstrap.availableProviders;
 			const initialProvider = bootstrap.defaultProvider;
 			const curatorTimeoutSeconds = bootstrap.timeoutSeconds;
@@ -58,6 +62,7 @@ export function registerCommands(pi: ExtensionAPI, support: RuntimeSupport): voi
 				modelRegistry: ctx.modelRegistry,
 			};
 			const summaryModelChoices = await loadSummaryModelChoices(summaryContext);
+			if (!ownsCuratorStartup()) return;
 
 			ctx.ui.notify("Opening web search curator...", "info");
 
@@ -213,9 +218,14 @@ export function registerCommands(pi: ExtensionAPI, support: RuntimeSupport): voi
 					},
 				);
 
+				if (!ownsCuratorStartup()) {
+					handle.close();
+					return;
+				}
 				commandHandle = handle;
 				state.activeCurator = handle;
 				const open = platform() === "darwin" ? await getGlimpseOpen() : null;
+				if (!ownsCuratorStartup()) return;
 				if (open) {
 					try {
 						const win = openInGlimpse(open, handle.url, "Search Curator");
@@ -272,6 +282,7 @@ export function registerCommands(pi: ExtensionAPI, support: RuntimeSupport): voi
 					if (state.activeCurator === handle) handle.searchesDone();
 				}
 			} catch (err) {
+				if (!ownsCuratorStartup()) return;
 				closeCurator();
 				const message = err instanceof Error ? err.message : String(err);
 				ctx.ui.notify(`Failed to open curator: ${message}`, "error");

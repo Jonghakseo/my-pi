@@ -19,6 +19,31 @@ import type { SummaryGenerationContext } from "./summary-review.js";
 import { state, type PendingCurate, type createRuntimeSupport } from "./runtime-support.js";
 
 type RuntimeSupport = ReturnType<typeof createRuntimeSupport>;
+const abortedAwait = Symbol("abortedAwait");
+
+function awaitWithAbort<T>(work: Promise<T>, signal: AbortSignal | undefined): Promise<T | typeof abortedAwait> {
+	if (!signal) return work;
+	if (signal.aborted) return Promise.resolve(abortedAwait);
+	return new Promise<T | typeof abortedAwait>((resolve, reject) => {
+		const onAbort = () => {
+			cleanup();
+			resolve(abortedAwait);
+		};
+		const cleanup = () => signal.removeEventListener("abort", onAbort);
+		signal.addEventListener("abort", onAbort, { once: true });
+		work.then(
+			(value) => {
+				cleanup();
+				resolve(value);
+			},
+			(err: unknown) => {
+				cleanup();
+				reject(err);
+			},
+		);
+	});
+}
+
 const isRecencyFilter = (value: unknown): value is "day" | "week" | "month" | "year" =>
 	value === "day" || value === "week" || value === "month" || value === "year";
 
@@ -87,6 +112,7 @@ export function registerWebSearchTool(pi: ExtensionAPI, support: RuntimeSupport)
 			if (shouldCurate) {
 				closeCurator();
 				const curatorGeneration = state.curatorGeneration;
+				if (signal?.aborted) return buildCurationCancelledReturn("user");
 
 				let resolvePromise: (value: AgentToolResult<Record<string, unknown>>) => void = () => {};
 				const promise = new Promise<AgentToolResult<Record<string, unknown>>>((resolve) => {
@@ -99,23 +125,26 @@ export function registerWebSearchTool(pi: ExtensionAPI, support: RuntimeSupport)
 				const searchSignal = signal ? AbortSignal.any([signal, searchAbort.signal]) : searchAbort.signal;
 				let cancelled = false;
 
-				const bootstrap = await loadCuratorBootstrap(params.provider);
+				const bootstrapResult = await awaitWithAbort(loadCuratorBootstrap(params.provider), signal);
+				if (bootstrapResult === abortedAwait) return buildCurationCancelledReturn("user");
 				if (state.curatorGeneration !== curatorGeneration) {
 					return buildCurationCancelledReturn("stale");
 				}
-				const availableProviders = bootstrap.availableProviders;
-				const defaultProvider = bootstrap.defaultProvider;
-				const curatorTimeoutSeconds = bootstrap.timeoutSeconds;
+				const availableProviders = bootstrapResult.availableProviders;
+				const defaultProvider = bootstrapResult.defaultProvider;
+				const curatorTimeoutSeconds = bootstrapResult.timeoutSeconds;
 				const curatorWorkflow: CuratorWorkflow = "summary-review";
 
 				const summaryContext: SummaryGenerationContext = {
 					model: ctx.model,
 					modelRegistry: ctx.modelRegistry,
 				};
-				const summaryModelChoices = await loadSummaryModelChoices(summaryContext);
+				const summaryModelChoicesResult = await awaitWithAbort(loadSummaryModelChoices(summaryContext), signal);
+				if (summaryModelChoicesResult === abortedAwait) return buildCurationCancelledReturn("user");
 				if (state.curatorGeneration !== curatorGeneration) {
 					return buildCurationCancelledReturn("stale");
 				}
+				const summaryModelChoices = summaryModelChoicesResult;
 
 				const pc: PendingCurate = {
 					phase: "searching",

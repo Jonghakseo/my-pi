@@ -54,8 +54,8 @@ function createHarness() {
 	});
 	if (!tool) throw new Error("web_search tool was not registered");
 	const registeredTool = tool;
-	const execute = (query: string) =>
-		registeredTool.execute("call", { query }, undefined, undefined, {
+	const execute = (query: string, signal?: AbortSignal) =>
+		registeredTool.execute("call", { query }, signal, undefined, {
 			hasUI: true,
 			model: undefined,
 			modelRegistry: undefined,
@@ -127,5 +127,36 @@ describe("web_search curator bootstrap ownership", () => {
 		await expect(settleWithin(result)).resolves.toMatchObject({
 			details: { cancelled: true, cancelReason: "user" },
 		});
+	});
+
+	it("cancels an already-aborted call without starting bootstrap or browser", async () => {
+		const controller = new AbortController();
+		controller.abort();
+		const { execute, opened } = createHarness();
+
+		await expect(settleWithin(execute("aborted", controller.signal))).resolves.toMatchObject({
+			details: { cancelled: true, cancelReason: "user" },
+		});
+		expect(loadCuratorBootstrap).not.toHaveBeenCalled();
+		expect(opened).toHaveLength(0);
+		expect(state.pendingCurate).toBeNull();
+	});
+
+	it("settles promptly when aborted during bootstrap without opening a curator", async () => {
+		const pendingBootstrap = deferred<typeof bootstrap>();
+		vi.mocked(loadCuratorBootstrap).mockReturnValueOnce(pendingBootstrap.promise);
+		const controller = new AbortController();
+		const { execute, opened } = createHarness();
+
+		const result = execute("aborting", controller.signal);
+		await vi.waitFor(() => expect(loadCuratorBootstrap).toHaveBeenCalledOnce());
+		controller.abort();
+
+		await expect(settleWithin(result)).resolves.toMatchObject({
+			details: { cancelled: true, cancelReason: "user" },
+		});
+		expect(opened).toHaveLength(0);
+		expect(state.pendingCurate).toBeNull();
+		pendingBootstrap.resolve(bootstrap);
 	});
 });
