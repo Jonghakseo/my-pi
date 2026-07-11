@@ -86,6 +86,7 @@ export function registerWebSearchTool(pi: ExtensionAPI, support: RuntimeSupport)
 
 			if (shouldCurate) {
 				closeCurator();
+				const curatorGeneration = state.curatorGeneration;
 
 				let resolvePromise: (value: AgentToolResult<Record<string, unknown>>) => void = () => {};
 				const promise = new Promise<AgentToolResult<Record<string, unknown>>>((resolve) => {
@@ -99,6 +100,9 @@ export function registerWebSearchTool(pi: ExtensionAPI, support: RuntimeSupport)
 				let cancelled = false;
 
 				const bootstrap = await loadCuratorBootstrap(params.provider);
+				if (state.curatorGeneration !== curatorGeneration) {
+					return buildCurationCancelledReturn("stale");
+				}
 				const availableProviders = bootstrap.availableProviders;
 				const defaultProvider = bootstrap.defaultProvider;
 				const curatorTimeoutSeconds = bootstrap.timeoutSeconds;
@@ -109,6 +113,9 @@ export function registerWebSearchTool(pi: ExtensionAPI, support: RuntimeSupport)
 					modelRegistry: ctx.modelRegistry,
 				};
 				const summaryModelChoices = await loadSummaryModelChoices(summaryContext);
+				if (state.curatorGeneration !== curatorGeneration) {
+					return buildCurationCancelledReturn("stale");
+				}
 
 				const pc: PendingCurate = {
 					phase: "searching",

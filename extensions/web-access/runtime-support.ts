@@ -35,6 +35,7 @@ export const state = {
 	activeCurator: null as CuratorServerHandle | null,
 	glimpseWin: null as GlimpseWindow | null,
 	pendingCurate: null as PendingCurate | null,
+	curatorGeneration: 0,
 };
 
 export interface PendingCurate {
@@ -68,6 +69,7 @@ function cancelPendingCurate(reason: "user" | "stale" = "stale"): void {
 }
 
 function closeCurator(): void {
+	state.curatorGeneration++;
 	const win = state.glimpseWin;
 	state.glimpseWin = null;
 	try {
