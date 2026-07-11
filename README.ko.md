@@ -25,7 +25,7 @@ cd ~/.pi/agent && ./scripts/bootstrap.sh
 ## 사용 예시
 
 <p align="center">
-  <img src="./tmp/pi-usage-example.png" alt="도구 호출, thinking 상태, todo 진행률, 상태 푸터가 보이는 pi 사용 예시" width="800"/>
+  <img src="./docs/assets/pi-usage-example.png" alt="도구 호출, thinking 상태, todo 진행률, 상태 푸터가 보이는 pi 사용 예시" width="800"/>
 </p>
 
 일반적인 세션에서는 압축된 도구 호출 프리뷰, 한국어 명령 제목, thinking/status 표시, 작업 추적, MCP 상태, 모델/thinking 표시, 저장소 컨텍스트를 하나의 터미널 UI에서 함께 사용한다.
@@ -35,7 +35,7 @@ cd ~/.pi/agent && ./scripts/bootstrap.sh
 ## 아키텍처
 
 <p align="center">
-  <img src="./tmp/architecture.ko.svg" alt="시스템 아키텍처" width="800"/>
+  <img src="./docs/assets/architecture.ko.svg" alt="시스템 아키텍처" width="800"/>
 </p>
 
 시스템은 **네 개의 레이어**로 구성된다:
@@ -52,7 +52,7 @@ cd ~/.pi/agent && ./scripts/bootstrap.sh
 ## 에이전트
 
 <p align="center">
-  <img src="./tmp/agents.ko.svg" alt="에이전트" width="800"/>
+  <img src="./docs/assets/agents.ko.svg" alt="에이전트" width="800"/>
 </p>
 
 현재 기준 9개의 에이전트 정의가 OpenAI와 Anthropic 모델을 사용한다:
