@@ -29,7 +29,6 @@ import * as path from "node:path";
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import { type ExtensionAPI, parseSkillBlock, type SessionEntry } from "@earendil-works/pi-coding-agent";
 import { Container, Key, matchesKey, Spacer, Text, truncateToWidth } from "@earendil-works/pi-tui";
-import { parseSubagentCommandVerb } from "../subagent/cli.ts";
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -875,6 +874,18 @@ export const __test__ = {
 };
 
 const SKILL_DEBOUNCE_MS = 10_000; // 같은 스킬의 10초 내 중복 read를 무시
+
+/**
+ * Analytics-grade mirror of the subagent package's command verb parsing.
+ * The verb is always the first bare token (after an optional leading
+ * "subagent" token), so quote-aware tokenization is unnecessary here.
+ */
+function parseSubagentCommandVerb(command: unknown): string | null {
+	if (typeof command !== "string") return null;
+	const tokens = command.trim().split(/\s+/).filter(Boolean);
+	const verb = tokens[0] === "subagent" ? tokens[1] : tokens[0];
+	return verb || null;
+}
 
 /**
  * Log subagent launches from `tool_result` events.

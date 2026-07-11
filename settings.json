@@ -4,8 +4,8 @@
   "compaction": {
     "enabled": true
   },
-  "defaultModel": "gpt-5.6-sol",
-  "defaultProvider": "openai-codex",
+  "defaultModel": "claude-fable-5",
+  "defaultProvider": "anthropic",
   "defaultThinkingLevel": "max",
   "doubleEscapeAction": "tree",
   "enabledModels": [
@@ -36,11 +36,17 @@
     "npm:@ryan_nookpi/pi-extension-cc-system-prompt",
     "npm:@ryan_nookpi/pi-extension-todo-write-overlay",
     "git:github.com/injaneity/pi-computer-use@v0.2.5",
-    "npm:@ryan_nookpi/pi-extension-diff-review"
+    "npm:@ryan_nookpi/pi-extension-diff-review",
+    "../../Documents/pi-extension/packages/subagent"
   ],
   "quietStartup": true,
   "subagent": {
-    "claudeRuntime": "cli"
+    "claudeRuntime": "cli",
+    "symbolMap": {
+      "?": "searcher",
+      "!": "challenger",
+      "@": "browser"
+    }
   },
   "terminal": {
     "showImages": false

@@ -6,11 +6,16 @@
  */
 
 import { visibleWidth } from "@earendil-works/pi-tui";
-import type { AgentConfigLike } from "./agent-utils.ts";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
-export type { AgentConfigLike };
+export interface AgentConfigLike {
+	name: string;
+	description: string;
+	source: string;
+	tools?: string[];
+	model?: string;
+}
 
 export interface UsageStats {
 	input: number;

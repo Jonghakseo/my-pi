@@ -5,22 +5,6 @@ Custom extensions for the pi coding agent. All extensions are written in TypeScr
 ## Directory Layout
 
 ```
-├── subagent/              # Core — subagent delegation system (largest module)
-│   ├── index.ts           #   Entry point & extension registration
-│   ├── commands.ts        #   Slash commands & tool handlers
-│   ├── tool-execute.ts    #   Tool execution logic
-│   ├── tool-render.ts     #   Tool call/result rendering
-│   ├── runner.ts          #   Process execution & result handling
-│   ├── session.ts         #   Session file management & context
-│   ├── replay.ts          #   Session replay TUI viewer
-│   ├── agents.ts          #   Agent discovery & configuration
-│   ├── widget.ts          #   Run status widget (above-editor)
-│   ├── above-widget.ts    #   Legacy above-editor pixel widget cleanup
-│   ├── store.ts           #   Shared state store
-│   ├── types.ts           #   Type definitions & Typebox schemas
-│   ├── constants.ts       #   Constants
-│   ├── format.ts          #   Formatting utilities
-│   └── run-utils.ts       #   Run management utilities
 ├── utils/                 # Shared utility functions and their colocated tests
 │   ├── time-utils.ts      #   Time/duration formatting helpers
 │   └── status-keys.ts     #   Shared footer status key constants
@@ -36,6 +20,9 @@ Custom extensions for the pi coding agent. All extensions are written in TypeScr
 ├── theme-cycler/          # Ctrl+Shift+X to cycle through themes
 └── upload-image-url/      # Upload images to GitHub storage and return URLs
 ```
+
+## Moved Out
+- **subagent**: now maintained as the standalone package `@ryan_nookpi/pi-extension-subagent` (source: `~/Documents/pi-extension/packages/subagent`, loaded via a local-path package entry in `settings.json`). Do not re-add subagent code here; contribute to the monorepo instead. `custom-style/ui.ts` mirrors its `subagent.symbolMap` setting read-only for editor hints.
 
 ## Key Patterns
 - **Extension entry point**: Pi auto-discovers both root `*.ts` files and `directory/index.ts` files, but this repo standardizes on `extensions/<name>/index.ts` only to avoid duplicate loading.
@@ -75,7 +62,7 @@ When adding new features or refactoring, use this priority order:
 - [ ] **Output/error/log policy:** follow existing message formatting rules; changes to user-facing contracts require prior agreement.
 - [ ] **Separate pure logic:** extract business rules into pure functions where possible; keep I/O (`fs`/`network`/`spawn`) in boundary layers.
 - [ ] **Module-scoped changes:** modify only one module (or a small unit) and avoid touching out-of-scope files.
-- [ ] **Respect single-writer boundaries:** in out-of-scope files/owned areas of other modules (for example, `subagent` core paths), allow only strictly minimal edits.
+- [ ] **Respect single-writer boundaries:** in out-of-scope files/owned areas of other modules, allow only strictly minimal edits.
 - [ ] **Gate execution:** after changes run `test` → `typecheck` (and `coverage` when feasible) and then complete review before commit.
 - [ ] **Runtime load check:** after entrypoint/type-contract changes, run isolated headless Pi loading with a temporary `PI_CODING_AGENT_DIR` and explicit `-e extensions/*/index.ts` list.
 - [ ] **Baseline control:** even if known baseline failures exist, do not introduce new failures. (fix only deltas)

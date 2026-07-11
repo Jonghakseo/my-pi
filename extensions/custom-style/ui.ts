@@ -1,4 +1,6 @@
-import { CustomEditor, type KeybindingsManager, type Theme } from "@earendil-works/pi-coding-agent";
+import * as fs from "node:fs";
+import * as path from "node:path";
+import { CustomEditor, getAgentDir, type KeybindingsManager, type Theme } from "@earendil-works/pi-coding-agent";
 import {
 	type Component,
 	type EditorTheme,
@@ -8,7 +10,33 @@ import {
 	visibleWidth,
 	wrapTextWithAnsi,
 } from "@earendil-works/pi-tui";
-import { AGENT_SYMBOL_MAP, formatSymbolHints } from "../subagent/constants.ts";
+
+// Read-only mirror of the subagent package's `subagent.symbolMap` setting (for editor hints only).
+let cachedSymbolMap: Record<string, string> | undefined;
+function getSubagentSymbolMap(): Record<string, string> {
+	if (cachedSymbolMap) return cachedSymbolMap;
+	const map: Record<string, string> = {};
+	try {
+		const raw: unknown = JSON.parse(fs.readFileSync(path.join(getAgentDir(), "settings.json"), "utf-8"));
+		const subagent = (raw as { subagent?: { symbolMap?: unknown } } | null)?.subagent;
+		const candidate = subagent?.symbolMap;
+		if (candidate && typeof candidate === "object" && !Array.isArray(candidate)) {
+			for (const [symbol, agent] of Object.entries(candidate)) {
+				if (symbol.length === 1 && typeof agent === "string" && agent.trim()) map[symbol] = agent;
+			}
+		}
+	} catch {
+		// Missing/invalid settings mean no symbol shortcuts.
+	}
+	cachedSymbolMap = map;
+	return map;
+}
+
+function formatSymbolHints(prefix = ">>"): string {
+	return Object.entries(getSubagentSymbolMap())
+		.map(([symbol, agent]) => `${prefix}${symbol} ${agent}`)
+		.join("  ");
+}
 
 type AutocompleteEditorInternals = {
 	autocompleteList?: Pick<Component, "render">;
@@ -182,21 +210,25 @@ export class PolishedEditor extends CustomEditor {
 			return "SUBAGENT · manage";
 		}
 
-		const legacyHidden = text.startsWith(">>>");
-		const compactHidden = text.startsWith(">") && !text.startsWith(">>") && !text.startsWith("><");
-		const visible = text.startsWith(">>") && !legacyHidden;
-		if (!visible && !compactHidden && !legacyHidden) {
+		if (text.startsWith(">>>")) {
+			return undefined;
+		}
+		const symbolMap = getSubagentSymbolMap();
+		const visible = text.startsWith(">>");
+		const hiddenSymbol = text.length > 1 && text[1] !== " " && text[1] !== "<" ? symbolMap[text[1] ?? ""] : undefined;
+		const hidden = !visible && text.startsWith(">") && (text === ">" || text.startsWith("> ") || Boolean(hiddenSymbol));
+		if (!visible && !hidden) {
 			return undefined;
 		}
 
-		const prefix = legacyHidden ? ">>>" : compactHidden ? ">" : ">>";
-		const baseLabel = legacyHidden || compactHidden ? "SUBAGENT · hidden" : "SUBAGENT";
+		const prefix = hidden ? ">" : ">>";
+		const baseLabel = hidden ? "SUBAGENT · hidden" : "SUBAGENT";
 		const forwarded = text.slice(prefix.length).trim();
 		if (!forwarded) {
 			return baseLabel;
 		}
 
-		const symbolAgent = AGENT_SYMBOL_MAP[forwarded[0] ?? ""];
+		const symbolAgent = symbolMap[forwarded[0] ?? ""];
 		if (symbolAgent) {
 			return `${baseLabel} · ${symbolAgent}`;
 		}
@@ -243,10 +275,12 @@ export class PolishedEditor extends CustomEditor {
 		const baseLabel = mode.label ? this.uiTheme.fg(mode.labelToken, mode.label) : "";
 		const trimmed = text.trimEnd();
 		if (trimmed === ">>") {
-			return `${baseLabel}${this.uiTheme.fg("muted", ` · ${formatSymbolHints()}`)}`;
+			const hints = formatSymbolHints();
+			return hints ? `${baseLabel}${this.uiTheme.fg("muted", ` · ${hints}`)}` : baseLabel;
 		}
-		if (trimmed === ">" || trimmed === ">>>") {
-			return `${baseLabel}${this.uiTheme.fg("muted", ` · ${formatSymbolHints(">")}`)}`;
+		if (trimmed === ">") {
+			const hints = formatSymbolHints(">");
+			return hints ? `${baseLabel}${this.uiTheme.fg("muted", ` · ${hints}`)}` : baseLabel;
 		}
 		if (trimmed.startsWith("<<<")) {
 			return baseLabel;
