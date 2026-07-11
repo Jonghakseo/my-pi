@@ -1,13 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { platform } from "node:os";
-import {
-	complete,
-	getModel,
-	type Api,
-	type ImageContent,
-	type Model,
-	type TextContent,
-} from "@earendil-works/pi-ai/compat";
+import { complete, getModel, type Api, type Model } from "@earendil-works/pi-ai/compat";
 import type { AgentToolResult, ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import {
 	type CuratorWorkflow,
@@ -33,13 +26,6 @@ import {
 	type SummaryGenerationContext,
 	type SummaryMeta,
 } from "./summary-review.js";
-
-const _MAX_INLINE_CONTENT = 30000; // Content returned directly to agent
-
-const _textContent = (text: string): TextContent => ({ type: "text", text });
-const _imageContent = (data: string, mimeType: string): ImageContent => ({ type: "image", data, mimeType });
-const _isRecencyFilter = (value: unknown): value is "day" | "week" | "month" | "year" =>
-	value === "day" || value === "week" || value === "month" || value === "year";
 
 export const state = {
 	pendingFetches: new Map<string, AbortController>(),
