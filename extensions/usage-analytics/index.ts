@@ -2,9 +2,9 @@
 /**
  * Usage Analytics Extension
  *
- * Logs every subagent invocation and skill read to a local JSONL file,
- * then provides `/analytics` overlay to inspect usage frequency, error rates,
- * and invocation durations per day / week / month.
+ * Logs every subagent invocation, explicit skill invocation, and SKILL.md read
+ * to a local JSONL file, then provides `/analytics` overlay to inspect usage
+ * frequency, error rates, and invocation durations per day / week / month.
  *
  * Log file: ~/.pi/agent/state/usage-analytics.jsonl
  *
@@ -12,6 +12,7 @@
  *   - subagent_start: logged on `tool_result` for the `subagent` tool (run/continue/batch/chain launches)
  *   - subagent_end:   logged when session entries contain completion custom_messages
  *     (single runs or grouped batch/chain completion summaries)
+ *   - skill_invoked:  logged when a finalized user message contains Pi's expanded `<skill>` block
  *   - skill_read:     logged on `tool_result` for the `read` tool when the path contains `SKILL.md`
  *
  * Counting strategy (deduped hybrid):
@@ -25,7 +26,8 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import type { ExtensionAPI, SessionEntry } from "@earendil-works/pi-coding-agent";
+import type { AgentMessage } from "@earendil-works/pi-agent-core";
+import { type ExtensionAPI, parseSkillBlock, type SessionEntry } from "@earendil-works/pi-coding-agent";
 import { Container, Key, matchesKey, Spacer, Text, truncateToWidth } from "@earendil-works/pi-tui";
 import { parseSubagentCommandVerb } from "../subagent/cli.ts";
 
@@ -65,13 +67,19 @@ interface SubagentEndEntry extends BaseLogEntry {
 	model?: string;
 }
 
+interface SkillInvokedEntry extends BaseLogEntry {
+	type: "skill_invoked";
+	skill: string;
+	path: string;
+}
+
 interface SkillReadEntry extends BaseLogEntry {
 	type: "skill_read";
 	skill: string;
 	path: string;
 }
 
-type LogEntry = SubagentStartEntry | SubagentEndEntry | SkillReadEntry;
+type LogEntry = SubagentStartEntry | SubagentEndEntry | SkillInvokedEntry | SkillReadEntry;
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -158,6 +166,16 @@ function extractSkillName(filePath: string): string | null {
 	const fallback = /([^/]+)\/SKILL\.md$/i.exec(normalized);
 	if (fallback) return fallback[1];
 	return null;
+}
+
+function extractSkillInvocation(message: AgentMessage): Pick<SkillInvokedEntry, "skill" | "path"> | null {
+	if (message.role !== "user") return null;
+	const text =
+		typeof message.content === "string"
+			? message.content
+			: message.content.flatMap((part) => (part.type === "text" ? [part.text] : [])).join("");
+	const parsed = parseSkillBlock(text);
+	return parsed ? { skill: parsed.name, path: parsed.location } : null;
 }
 
 /** Determine subagent launch mode from the CLI verb. */
@@ -360,7 +378,8 @@ interface AgentStats {
 
 interface SkillStats {
 	name: string;
-	total: number;
+	invoked: number;
+	reads: number;
 }
 
 interface PeriodStats {
@@ -410,7 +429,7 @@ function computeStats(entries: LogEntry[], period: Period): PeriodStats[] {
 
 	function getSkill(p: ReturnType<typeof getPeriod>, name: string): SkillStats {
 		if (!p.skills.has(name)) {
-			p.skills.set(name, { name, total: 0 });
+			p.skills.set(name, { name, invoked: 0, reads: 0 });
 		}
 		const skill = p.skills.get(name);
 		if (!skill) throw new Error(`Missing skill bucket: ${name}`);
@@ -432,9 +451,12 @@ function computeStats(entries: LogEntry[], period: Period): PeriodStats[] {
 			if (shouldCountFallbackStart(entry as SubagentStartEntry, completedKeys)) {
 				getAgent(p, entry.agent).total++;
 			}
+		} else if (entry.type === "skill_invoked") {
+			const skill = getSkill(p, entry.skill);
+			skill.invoked++;
 		} else if (entry.type === "skill_read") {
 			const skill = getSkill(p, entry.skill);
-			skill.total++;
+			skill.reads++;
 		}
 	}
 
@@ -473,8 +495,10 @@ interface OverallAgentSummary {
 
 interface OverallSkillSummary {
 	name: string;
-	total: number;
-	lastUsed: number;
+	invoked: number;
+	reads: number;
+	lastInvoked: number;
+	lastRead: number;
 }
 
 /**
@@ -499,14 +523,24 @@ function updateOverallAgentSummary(
 	agentMap.set(name, agent);
 }
 
+interface OverallSkillAccumulator {
+	invoked: number;
+	reads: number;
+	lastInvoked: number;
+	lastRead: number;
+}
+
 function updateOverallSkillSummary(
-	skillMap: Map<string, { total: number; lastUsed: number }>,
-	entry: SkillReadEntry,
+	skillMap: Map<string, OverallSkillAccumulator>,
+	entry: SkillInvokedEntry | SkillReadEntry,
 ): void {
-	const skill = skillMap.get(entry.skill) ?? { total: 0, lastUsed: 0 };
-	skill.total += 1;
-	if (entry.epoch > skill.lastUsed) {
-		skill.lastUsed = entry.epoch;
+	const skill = skillMap.get(entry.skill) ?? { invoked: 0, reads: 0, lastInvoked: 0, lastRead: 0 };
+	if (entry.type === "skill_invoked") {
+		skill.invoked += 1;
+		skill.lastInvoked = Math.max(skill.lastInvoked, entry.epoch);
+	} else {
+		skill.reads += 1;
+		skill.lastRead = Math.max(skill.lastRead, entry.epoch);
 	}
 	skillMap.set(entry.skill, skill);
 }
@@ -534,13 +568,14 @@ function computeOverall(entries: LogEntry[]): {
 	agents: OverallAgentSummary[];
 	skills: OverallSkillSummary[];
 	totalSubagentRuns: number;
+	totalSkillInvocations: number;
 	totalSkillReads: number;
 } {
 	const agentMap = new Map<
 		string,
 		{ total: number; done: number; error: number; durations: number[]; lastUsed: number }
 	>();
-	const skillMap = new Map<string, { total: number; lastUsed: number }>();
+	const skillMap = new Map<string, OverallSkillAccumulator>();
 	const completedKeys = new Set(
 		entries
 			.filter((entry): entry is SubagentEndEntry => entry.type === "subagent_end")
@@ -565,7 +600,7 @@ function computeOverall(entries: LogEntry[]): {
 			}
 			continue;
 		}
-		if (entry.type === "skill_read") {
+		if (entry.type === "skill_invoked" || entry.type === "skill_read") {
 			updateOverallSkillSummary(skillMap, entry);
 		}
 	}
@@ -590,14 +625,15 @@ function computeOverall(entries: LogEntry[]): {
 		.sort((a, b) => b.total - a.total);
 
 	const skills: OverallSkillSummary[] = Array.from(skillMap.entries())
-		.map(([name, s]) => ({ name, total: s.total, lastUsed: s.lastUsed }))
-		.sort((a, b) => b.total - a.total);
+		.map(([name, s]) => ({ name, ...s }))
+		.sort((a, b) => b.invoked - a.invoked || b.reads - a.reads || a.name.localeCompare(b.name));
 
 	return {
 		agents,
 		skills,
 		totalSubagentRuns: agents.reduce((sum, a) => sum + a.total, 0),
-		totalSkillReads: skills.reduce((sum, s) => sum + s.total, 0),
+		totalSkillInvocations: skills.reduce((sum, s) => sum + s.invoked, 0),
+		totalSkillReads: skills.reduce((sum, s) => sum + s.reads, 0),
 	};
 }
 
@@ -612,6 +648,7 @@ function formatDuration(ms: number): string {
 }
 
 function formatRelativeTime(epoch: number): string {
+	if (epoch <= 0) return "-";
 	const diff = Date.now() - epoch;
 	if (diff < 60_000) return "just now";
 	if (diff < 3600_000) return `${Math.floor(diff / 60_000)}m ago`;
@@ -722,7 +759,9 @@ class AnalyticsOverlay {
 		const overall = computeOverall(this.entries);
 
 		lines.push(
-			theme.bold(`Total: ${overall.totalSubagentRuns} subagent runs · ${overall.totalSkillReads} skill reads`),
+			theme.bold(
+				`Total: ${overall.totalSubagentRuns} subagent runs · ${overall.totalSkillInvocations} skill invocations · ${overall.totalSkillReads} skill reads`,
+			),
 		);
 		lines.push("");
 
@@ -749,15 +788,20 @@ class AnalyticsOverlay {
 		lines.push("");
 
 		// Top skills
-		lines.push(theme.bold("📚 Skills  (by frequency)"));
+		lines.push(theme.bold("📚 Skills  (invocations / SKILL.md reads)"));
 		if (overall.skills.length === 0) {
-			lines.push(theme.fg("dim", "  No skill usage recorded yet."));
+			lines.push(theme.fg("dim", "  No skill activity recorded yet."));
 		} else {
 			const maxNameLen = Math.max(...overall.skills.map((s) => s.name.length), 6);
-			lines.push(theme.fg("dim", `  ${"Skill".padEnd(maxNameLen)}  ${"Reads".padStart(6)}  Last used`));
+			lines.push(
+				theme.fg(
+					"dim",
+					`  ${"Skill".padEnd(maxNameLen)}  ${"Invoked".padStart(7)}  ${"Reads".padStart(5)}  ${"Last invoked".padStart(12)}  Last read`,
+				),
+			);
 			for (const s of overall.skills) {
 				lines.push(
-					`  ${theme.fg("accent", s.name.padEnd(maxNameLen))}  ${String(s.total).padStart(6)}  ${theme.fg("dim", formatRelativeTime(s.lastUsed))}`,
+					`  ${theme.fg("accent", s.name.padEnd(maxNameLen))}  ${String(s.invoked).padStart(7)}  ${String(s.reads).padStart(5)}  ${theme.fg("dim", formatRelativeTime(s.lastInvoked).padStart(12))}  ${theme.fg("dim", formatRelativeTime(s.lastRead))}`,
 				);
 			}
 		}
@@ -793,7 +837,7 @@ class AnalyticsOverlay {
 	private renderSkills(lines: string[], theme: any): void {
 		const stats = computeStats(this.entries, this.period);
 
-		lines.push(theme.bold(`📚 Skill usage by ${this.period}`));
+		lines.push(theme.bold(`📚 Skill activity by ${this.period}`));
 		lines.push("");
 
 		if (stats.length === 0) {
@@ -802,12 +846,16 @@ class AnalyticsOverlay {
 		}
 
 		for (const ps of stats) {
-			const skillList = Array.from(ps.skills.values()).sort((a, b) => b.total - a.total);
+			const skillList = Array.from(ps.skills.values()).sort(
+				(a, b) => b.invoked - a.invoked || b.reads - a.reads || a.name.localeCompare(b.name),
+			);
 			if (skillList.length === 0) continue;
 
 			lines.push(theme.bold(`  ${ps.label}`));
 			for (const s of skillList) {
-				lines.push(`    ${theme.fg("accent", s.name.padEnd(20))} ${String(s.total).padStart(3)} reads`);
+				lines.push(
+					`    ${theme.fg("accent", s.name.padEnd(20))} ${String(s.invoked).padStart(3)} invoked  ${String(s.reads).padStart(3)} reads`,
+				);
 			}
 			lines.push("");
 		}
@@ -819,6 +867,7 @@ class AnalyticsOverlay {
 export const __test__ = {
 	computeStats,
 	computeOverall,
+	extractSkillInvocation,
 	getRunAnalyticsKeys,
 	extractSubagentEndEntriesFromCustomMessage,
 	findUnloggedSubagentEnds,
@@ -896,9 +945,17 @@ export default function (pi: ExtensionAPI) {
 		logSkillRead(event, skillLastLogged);
 	});
 
-	// ── Subagent completion tracking ──
-	// Scan new session entries on each message_end to find completion custom_messages.
-	pi.on("message_end", async (_event, ctx) => {
+	// ── Skill invocation and subagent completion tracking ──
+	// Explicit `/skill:name` commands arrive as finalized user messages containing
+	// Pi's expanded skill block. Reads remain separately tracked via tool_result.
+	pi.on("message_end", async (event, ctx) => {
+		const invocation = extractSkillInvocation(event.message);
+		if (invocation) {
+			const { ts, epoch } = now();
+			appendLog({ type: "skill_invoked", ts, epoch, ...invocation });
+		}
+
+		// Scan new session entries to find subagent completion custom_messages.
 		try {
 			const entries = ctx.sessionManager.getEntries();
 			// Initialize on first call: skip all existing entries to avoid duplicates.

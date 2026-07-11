@@ -12,7 +12,7 @@ disable-model-invocation: false
 
 로그 파일: `~/.pi/agent/state/usage-analytics.jsonl`
 
-각 줄은 JSON 객체이며 3가지 타입이 있다:
+각 줄은 JSON 객체이며 4가지 타입이 있다:
 
 ```jsonc
 // 서브에이전트 시작 (run/batch/chain은 agent명 포함, continue는 "_continue" 플레이스홀더)
@@ -22,7 +22,10 @@ disable-model-invocation: false
 // 서브에이전트 완료 (집계의 단일 소스)
 { "type": "subagent_end", "ts": "ISO8601", "epoch": 1234567890, "agent": "worker", "runId": 42, "status": "done", "elapsedMs": 45000, "model": "claude-sonnet-4-20250514" }
 
-// 스킬 읽기
+// 명시적 스킬 호출: `/skill:name`이 확장된 사용자 `<skill>` 메시지가 확정될 때 기록
+{ "type": "skill_invoked", "ts": "ISO8601", "epoch": 1234567890, "skill": "picky-cli", "path": "/path/to/SKILL.md" }
+
+// SKILL.md 읽기: 에이전트가 read 도구로 직접 열었을 때 기록하며, 같은 스킬의 10초 내 중복 read는 제외
 { "type": "skill_read", "ts": "ISO8601", "epoch": 1234567890, "skill": "systematic-debugging", "path": "/path/to/SKILL.md" }
 ```
 
@@ -67,11 +70,17 @@ cat ~/.pi/agent/state/usage-analytics.jsonl
 
 #### 3-B. 스킬 분석
 
+`skill_invoked`와 `skill_read`는 의미가 다르므로 합산하지 않고 반드시 분리한다.
+
 | 지표 | 계산 방법 |
 |------|----------|
-| **호출 빈도** | `skill_read` 이벤트 수를 skill별로 집계 |
-| **일별 추이** | 날짜별 스킬 사용 건수 변화 |
-| **마지막 사용일** | 가장 최근 `skill_read`의 `ts` |
+| **명시적 호출 빈도** | `skill_invoked` 이벤트 수를 skill별로 집계. 실제 `/skill:name` 호출의 기본 지표로 사용 |
+| **직접 읽기 빈도** | `skill_read` 이벤트 수를 skill별로 집계. 에이전트가 SKILL.md를 직접 로드한 활동으로 별도 표시 |
+| **일별 추이** | 날짜별 `skill_invoked`와 `skill_read` 건수를 각각 계산 |
+| **마지막 호출일** | 가장 최근 `skill_invoked`의 `ts` |
+| **마지막 읽기일** | 가장 최근 `skill_read`의 `ts` |
+
+> `skill_invoked`는 이벤트 도입 이후부터 forward-only로 기록된다. 과거 데이터는 백필되지 않았으므로, 도입 전 기간의 호출 0회를 미사용 근거로 해석하지 않는다.
 
 ### Step 4: 인사이트 도출
 
@@ -87,9 +96,10 @@ cat ~/.pi/agent/state/usage-analytics.jsonl
 
 #### 스킬 인사이트
 
-- **미사용**: 분석 기간 내 0회 사용된 스킬 → 삭제 또는 통합 검토
-- **과다 사용**: 전체 스킬 사용의 50% 이상을 차지 → 해당 스킬의 범위가 너무 넓을 수 있음
-- **최근 미사용**: 마지막 사용이 30일 이상 전인 스킬 → 여전히 필요한지 재평가
+- **미사용**: 계측 적용 기간 내 `skill_invoked`와 `skill_read`가 모두 0회인 스킬 → 삭제 또는 통합 검토
+- **명시적 과다 호출**: 전체 `skill_invoked`의 50% 이상을 차지 → 해당 스킬의 명시적 호출 패턴 검토
+- **과다 읽기**: 전체 `skill_read`의 50% 이상을 차지 → 반복 로드 또는 지나치게 넓은 트리거 검토
+- **최근 미사용**: 마지막 호출과 마지막 읽기가 모두 30일 이상 전 → 여전히 필요한지 재평가
 
 ### Step 5: 보고서 출력
 
@@ -118,9 +128,9 @@ cat ~/.pi/agent/state/usage-analytics.jsonl
 
 #### 스킬별 상세
 
-| 스킬 | 사용 횟수 | 마지막 사용 | 비고 |
-|------|----------|-----------|------|
-| ...  |          |           |      |
+| 스킬 | 명시적 호출 | 직접 읽기 | 마지막 호출 | 마지막 읽기 | 비고 |
+|------|------------|----------|------------|------------|------|
+| ...  |            |          |            |            |      |
 
 #### 미사용 스킬
 - ...
@@ -136,7 +146,9 @@ cat ~/.pi/agent/state/usage-analytics.jsonl
 
 1. **데이터 기반**: 모든 판단은 로그 수치에 근거한다. 추측하지 않는다.
 2. **기간 준수**: 사용자가 지정한 기간 외의 데이터는 분석에 포함하지 않는다.
-3. **미사용 탐지**: 등록된 에이전트/스킬 목록과 실제 사용을 대조한다. 등록 목록은 아래 명령으로 확인한다:
+3. **이벤트 의미 분리**: `skill_invoked`를 명시적 호출, `skill_read`를 직접 읽기로 표시하며 서로 합산하거나 바꿔 부르지 않는다.
+4. **계측 범위 명시**: 백필되지 않은 도입 전 기간은 명시적 호출 통계의 미수집 구간으로 표시한다.
+5. **미사용 탐지**: 등록된 에이전트/스킬 목록과 실제 사용을 대조한다. 등록 목록은 아래 명령으로 확인한다:
    - 에이전트: `ls ~/.pi/agent/agents/` + `ls .pi/agents/` (프로젝트별)
    - 스킬: `ls ~/.pi/agent/skills/` + `ls .pi/skills/` (프로젝트별)
-4. **간결한 제안**: 인사이트마다 구체적 행동을 하나씩 제안한다.
+6. **간결한 제안**: 인사이트마다 구체적 행동을 하나씩 제안한다.

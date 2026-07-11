@@ -24,6 +24,93 @@ function customMessageEntry(
 	};
 }
 
+describe("usage-analytics skill activity", () => {
+	it("extracts an explicit skill invocation from an expanded user message", () => {
+		const invocation = __test__.extractSkillInvocation({
+			role: "user",
+			content: [
+				{
+					type: "text",
+					text: '<skill name="picky-cli" location="/skills/picky-cli/SKILL.md">\nReferences are relative to /skills/picky-cli.\n\n# picky-cli\n</skill>\n\ncreate a pickle',
+				},
+			],
+			timestamp: Date.now(),
+		});
+
+		expect(invocation).toEqual({
+			skill: "picky-cli",
+			path: "/skills/picky-cli/SKILL.md",
+		});
+	});
+
+	it("ignores ordinary user messages and non-user messages", () => {
+		expect(
+			__test__.extractSkillInvocation({ role: "user", content: "please use picky-cli", timestamp: Date.now() }),
+		).toBeNull();
+		expect(
+			__test__.extractSkillInvocation({
+				role: "assistant",
+				content: [{ type: "text", text: '<skill name="picky-cli" location="/tmp/SKILL.md">\nx\n</skill>' }],
+				provider: "test",
+				model: "test",
+				api: "test",
+				usage: {
+					input: 0,
+					output: 0,
+					cacheRead: 0,
+					cacheWrite: 0,
+					totalTokens: 0,
+					cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+				},
+				stopReason: "stop",
+				timestamp: Date.now(),
+			}),
+		).toBeNull();
+	});
+
+	it("keeps skill invocations and SKILL.md reads as separate metrics", () => {
+		const now = Date.now();
+		const entries = [
+			{
+				type: "skill_invoked" as const,
+				ts: iso(now - 2000),
+				epoch: now - 2000,
+				skill: "picky-cli",
+				path: "/skills/picky-cli/SKILL.md",
+			},
+			{
+				type: "skill_invoked" as const,
+				ts: iso(now - 1000),
+				epoch: now - 1000,
+				skill: "picky-cli",
+				path: "/skills/picky-cli/SKILL.md",
+			},
+			{
+				type: "skill_read" as const,
+				ts: iso(now),
+				epoch: now,
+				skill: "picky-cli",
+				path: "/skills/picky-cli/SKILL.md",
+			},
+		];
+
+		const stats = __test__.computeStats(entries, "week");
+		expect(stats).toHaveLength(1);
+		expect(stats[0]?.skills.get("picky-cli")).toEqual({ name: "picky-cli", invoked: 2, reads: 1 });
+
+		const overall = __test__.computeOverall(entries);
+		expect(overall.totalSkillInvocations).toBe(2);
+		expect(overall.totalSkillReads).toBe(1);
+		expect(overall.skills[0]).toEqual({
+			name: "picky-cli",
+			invoked: 2,
+			reads: 1,
+			lastInvoked: now - 1000,
+			lastRead: now,
+		});
+	});
+});
+
 describe("usage-analytics failure/interrupted paths", () => {
 	it("counts a failed chain step from subagent_end without double-counting its matching start", () => {
 		const now = Date.now();
