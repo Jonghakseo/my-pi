@@ -1,6 +1,6 @@
 ---
 name: interactive-shell
-description: Local guide for using interactive_shell in this repo. Prefer it for dev servers, TUI apps, REPLs, database shells, log viewers, and commands that need a visible terminal overlay. Do not use it for subagent-style delegation; use the subagent tool for that.
+description: "dev server, TUI, REPL, DB shell, 로그처럼 사용자 제어나 장시간 실행이 필요한 터미널 작업에 사용한다. AI 작업 위임에는 subagent를 사용한다."
 ---
 
 # Interactive Shell (Project-local Skill)

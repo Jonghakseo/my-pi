@@ -1,6 +1,6 @@
 ---
 name: dynamic-workflow
-description: 사용자가 “서브에이전트로 작업을 분해/실행/검증”, “현재 작업을 에이전트들에게 나눠서 처리”, “동적 workflow 설계”처럼 요청하거나, 장기·병렬·대규모·검증 중심 작업에서 단일 컨텍스트 진행의 agentic laziness/self-preferential bias/goal drift 위험이 클 때 사용한다.
+description: "장기·병렬·대규모 작업을 서브에이전트로 분해·실행·검증하거나 동적 workflow를 설계할 때 사용한다."
 disable-model-invocation: false
 ---
 

@@ -1,6 +1,6 @@
 ---
 name: context7-cli
-description: Use Context7 CLI (`ctx7`) from bash to look up library and framework documentation without MCP tools. Use when you need package docs grounding, API references, or example-driven answers from Context7.
+description: "Context7 CLI(`ctx7`)로 라이브러리·프레임워크 공식 문서와 API 예시를 조회할 때 사용한다."
 compatibility: Requires bash plus either `ctx7` in PATH or `npx -y ctx7`; Node.js 18+ recommended.
 ---
 

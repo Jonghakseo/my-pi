@@ -1,6 +1,6 @@
 ---
 name: memory-manage
-description: 기존 ~/.pi/memory 의 user/project 메모리를 검토·정리·통합·폐기하는 워크플로우. 사용자가 "메모리 관리", "메모리 정리", "memory cleanup", "/memory-manage", "기존 메모리 통합", "오래된 기억 지워", "중복 메모리 정리"처럼 말하면 발동. recall/memory_list 로 전체 스캔 후 중복·노후·미배치·블랙리스트 위반을 카테고리별로 모아 사용자에게 항목별 confirm 받아 forget/remember 조합으로 적용. 절대 confirm 없이 forget 호출하지 않음.
+description: "기존 user/project 메모리의 중복·노후 항목을 검토, 통합, 정리할 때 사용한다. 사용자 확인 없이 메모리를 삭제하지 않는다."
 disable-model-invocation: false
 ---
 
