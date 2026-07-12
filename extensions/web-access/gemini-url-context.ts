@@ -1,7 +1,6 @@
 import { activityMonitor } from "./activity.js";
 import { type ExtractedContent, extractHeadingTitle } from "./extract.js";
 import { API_BASE, DEFAULT_MODEL, getApiKey } from "./gemini-api.js";
-import { isGeminiWebAvailable, queryWithCookies } from "./gemini-web.js";
 
 const EXTRACTION_PROMPT = `Extract the complete readable content from this URL as clean markdown.
 Include the page title, all text content, code blocks, and tables.
@@ -60,37 +59,6 @@ export async function extractWithUrlContext(url: string, signal?: AbortSignal): 
 
 		const title = extractTitleFromContent(content, url);
 		return { url, title, content, error: null };
-	} catch (err) {
-		if (shouldRethrow(err)) throw err;
-		const message = err instanceof Error ? err.message : String(err);
-		if (message.toLowerCase().includes("abort")) {
-			activityMonitor.logComplete(activityId, 0);
-		} else {
-			activityMonitor.logError(activityId, message);
-		}
-		return null;
-	}
-}
-
-export async function extractWithGeminiWeb(url: string, signal?: AbortSignal): Promise<ExtractedContent | null> {
-	const cookies = await isGeminiWebAvailable();
-	if (!cookies) return null;
-
-	const activityId = activityMonitor.logStart({ type: "api", query: `gemini_web: ${url}` });
-
-	try {
-		const text = await queryWithCookies(EXTRACTION_PROMPT + url, cookies, {
-			model: "gemini-3-flash-preview",
-			signal,
-			timeoutMs: 60000,
-		});
-
-		activityMonitor.logComplete(activityId, 200);
-
-		if (!text || text.length < 50) return null;
-
-		const title = extractTitleFromContent(text, url);
-		return { url, title, content: text, error: null };
 	} catch (err) {
 		if (shouldRethrow(err)) throw err;
 		const message = err instanceof Error ? err.message : String(err);

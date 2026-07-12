@@ -5,7 +5,6 @@ import { basename, dirname, extname, join, resolve } from "node:path";
 import { activityMonitor } from "./activity.js";
 import { type ExtractedContent, type ExtractOptions, extractHeadingTitle, type FrameResult } from "./extract.js";
 import { API_BASE, getApiKey, queryGeminiApiWithVideo } from "./gemini-api.js";
-import { isGeminiWebAvailable, queryWithCookies } from "./gemini-web.js";
 import { loadConfigSection, normalizeBoolean, normalizePositiveNumber, normalizeString } from "./config.js";
 import { mapFfmpegError, readExecError, trimErrorText } from "./utils.js";
 
@@ -140,9 +139,7 @@ export async function extractVideo(
 	const displayName = basename(info.absolutePath);
 	const activityId = activityMonitor.logStart({ type: "fetch", url: `video:${displayName}` });
 
-	const result =
-		(await tryVideoGeminiApi(info, effectivePrompt, effectiveModel, signal)) ??
-		(await tryVideoGeminiWeb(info, effectivePrompt, effectiveModel, signal));
+	const result = await tryVideoGeminiApi(info, effectivePrompt, effectiveModel, signal);
 
 	if (result) {
 		const thumbnail = await extractVideoFrame(info.absolutePath);
@@ -195,36 +192,6 @@ export async function getLocalVideoDuration(filePath: string): Promise<number | 
 		return duration;
 	} catch (err) {
 		return { error: mapFfprobeError(err) };
-	}
-}
-
-async function tryVideoGeminiWeb(
-	info: VideoFileInfo,
-	prompt: string,
-	model: string,
-	signal?: AbortSignal,
-): Promise<ExtractedContent | null> {
-	try {
-		const cookies = await isGeminiWebAvailable();
-		if (!cookies) return null;
-		if (signal?.aborted) return null;
-
-		const text = await queryWithCookies(prompt, cookies, {
-			files: [info.absolutePath],
-			model,
-			signal,
-			timeoutMs: 180000,
-		});
-
-		return {
-			url: info.absolutePath,
-			title: extractVideoTitle(text, info.absolutePath),
-			content: text,
-			error: null,
-		};
-	} catch (err) {
-		if (shouldRethrow(err)) throw err;
-		return null;
 	}
 }
 

@@ -1,5 +1,5 @@
 import type { ExtractedContent } from "./extract.js";
-import type { SearchResult } from "./perplexity.js";
+import type { SearchResult } from "./search-types.js";
 import type { QueryResultData } from "./storage.js";
 
 export function stripThumbnails(results: ExtractedContent[]): ExtractedContent[] {
@@ -10,23 +10,6 @@ export function formatSearchSummary(results: SearchResult[], answer: string): st
 	let output = answer ? `${answer}\n\n---\n\n**Sources:**\n` : "";
 	output += results.map((r, i) => `${i + 1}. ${r.title}\n   ${r.url}`).join("\n\n");
 	return output;
-}
-
-export function duplicateQuerySet(results: QueryResultData[]): Set<string> {
-	const counts = new Map<string, number>();
-	for (const result of results) {
-		counts.set(result.query, (counts.get(result.query) ?? 0) + 1);
-	}
-	const duplicates = new Set<string>();
-	for (const [query, count] of counts) {
-		if (count > 1) duplicates.add(query);
-	}
-	return duplicates;
-}
-
-export function formatQueryHeader(query: string, provider: string | undefined, duplicateQueries: Set<string>): string {
-	const suffix = duplicateQueries.has(query) && provider ? ` (${provider})` : "";
-	return `## Query: "${query}"${suffix}\n\n`;
 }
 
 export function hasFullInlineCoverage(urls: string[], inlineContent: ExtractedContent[] | undefined): boolean {

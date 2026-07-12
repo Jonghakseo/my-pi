@@ -3,7 +3,7 @@ import { parseHTML } from "linkedom";
 import pLimit from "p-limit";
 import TurndownService from "turndown";
 import { activityMonitor } from "./activity.js";
-import { extractWithGeminiWeb, extractWithUrlContext } from "./gemini-url-context.js";
+import { extractWithUrlContext } from "./gemini-url-context.js";
 import { extractGitHub } from "./github-extract.js";
 import { extractPDFToMarkdown, isPDF } from "./pdf-extract.js";
 import { extractRSCContent } from "./rsc-extract.js";
@@ -68,7 +68,6 @@ export interface ExtractedContent {
 
 export interface ExtractOptions {
 	timeoutMs?: number;
-	forceClone?: boolean;
 	prompt?: string;
 	timestamp?: string;
 	frames?: number;
@@ -415,7 +414,7 @@ export async function extractContent(
 	}
 
 	try {
-		const ghResult = await extractGitHub(url, signal, options?.forceClone);
+		const ghResult = await extractGitHub(url, signal);
 		if (ghResult) return ghResult;
 		if (signal?.aborted) return abortedResult(url);
 	} catch (err) {
@@ -468,7 +467,7 @@ export async function extractContent(
 
 	let geminiResult: ExtractedContent | null = null;
 	try {
-		geminiResult = (await extractWithUrlContext(url, signal)) ?? (await extractWithGeminiWeb(url, signal));
+		geminiResult = await extractWithUrlContext(url, signal);
 	} catch (err) {
 		if (isAbortError(err)) return abortedResult(url);
 		if (isConfigParseError(err)) {
