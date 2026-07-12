@@ -65,7 +65,7 @@ The current setup has 9 agent definitions using OpenAI and Anthropic models:
 | **code-cleaner** | `anthropic/claude-opus-4-6` | Code cleanup analyst | Find cleanup opportunities and quality issues |
 | **reviewer** | `openai-codex/gpt-5.6-sol` | Code review specialist | PR reviews, quality/correctness checks |
 | **challenger** | `openai-codex/gpt-5.6-sol` | Pressure tester | Stress-test plans before execution |
-| **verifier** | `anthropic/claude-opus-4-6` | Evidence validation | Verify claims, check correctness |
+| **verifier** | `anthropic/claude-opus-4-8` | Evidence validation | Verify claims, check correctness |
 | **security-auditor** | `openai-codex/gpt-5.6-sol` | Security reviewer | Focused vulnerability reviews |
 | **searcher** | `anthropic/claude-sonnet-5` | Research & web search | Documentation lookup, exploration |
 | **browser** | `openai-codex/gpt-5.6-terra` | Browser automation & UI testing | E2E testing, visual verification |
@@ -76,7 +76,8 @@ The current setup has 9 agent definitions using OpenAI and Anthropic models:
 - **openai-codex/gpt-5.6-terra** — Frontier execution (implementation and browser automation)
 - **openai-codex/gpt-5.6-sol** — Frontier review (testing, reviewing, security review)
 - **anthropic/claude-sonnet-5** — Research and code simplification
-- **anthropic/claude-opus-4-6 / 4-8** — Deep reasoning tasks (verification, cleanup analysis)
+- **anthropic/claude-opus-4-8** — Deep verification tasks
+- **anthropic/claude-opus-4-6** — Deep cleanup analysis
 
 The main agent default is `openai-codex/gpt-5.6-sol` with max thinking.
 

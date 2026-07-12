@@ -64,7 +64,7 @@ cd ~/.pi/agent && ./scripts/bootstrap.sh
 | **code-cleaner** | `anthropic/claude-opus-4-6` | 코드 정리 분석가 | 중복 제거 후보, 품질 문제 탐색 |
 | **reviewer** | `openai-codex/gpt-5.6-sol` | 코드 리뷰 전문가 | PR 리뷰, 품질/정확성 점검 |
 | **challenger** | `openai-codex/gpt-5.6-sol` | 스트레스 테스터 | 실행 전 계획 검증 |
-| **verifier** | `anthropic/claude-opus-4-6` | 근거 기반 검증 | 주장 확인, 정확성 점검 |
+| **verifier** | `anthropic/claude-opus-4-8` | 근거 기반 검증 | 주장 확인, 정확성 점검 |
 | **security-auditor** | `openai-codex/gpt-5.6-sol` | 보안 검토자 | 취약점 중심 리뷰 |
 | **searcher** | `anthropic/claude-sonnet-5` | 리서치·웹 검색 | 문서 탐색, 조사 |
 | **browser** | `openai-codex/gpt-5.6-terra` | 브라우저 자동화·UI 테스트 | E2E 테스트, 시각 검증 |
@@ -75,7 +75,8 @@ cd ~/.pi/agent && ./scripts/bootstrap.sh
 - **openai-codex/gpt-5.6-terra** — 최고 성능 실행 (구현·브라우저 자동화)
 - **openai-codex/gpt-5.6-sol** — 최고 성능 리뷰 (테스트·리뷰·보안 검토)
 - **anthropic/claude-sonnet-5** — 리서치와 코드 단순화
-- **anthropic/claude-opus-4-6 / 4-8** — 깊은 추론 작업 (검증, 정리 분석)
+- **anthropic/claude-opus-4-8** — 심층 검증 작업
+- **anthropic/claude-opus-4-6** — 심층 정리 분석
 
 메인 에이전트 기본값은 `openai-codex/gpt-5.6-sol` + max thinking이다.
 
