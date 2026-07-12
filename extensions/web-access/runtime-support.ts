@@ -2,16 +2,11 @@ import { randomUUID } from "node:crypto";
 import { platform } from "node:os";
 import { complete, getModel, type Api, type Model } from "@earendil-works/pi-ai/compat";
 import type { AgentToolResult, ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import {
-	type CuratorWorkflow,
-	type ProviderAvailability,
-	normalizeProviderInput,
-	saveConfig,
-} from "./config-runtime.js";
+import { type CuratorWorkflow, normalizeProviderInput, saveConfig } from "./config-runtime.js";
 import { type CuratorServerHandle, startCuratorServer } from "./curator-server.js";
 import { type ExtractedContent, fetchAllContent } from "./extract.js";
-import { type ResolvedSearchProvider, search } from "./gemini-search.js";
-import { type GlimpseWindow, extractDomain, getGlimpseOpen, openInBrowser, openInGlimpse } from "./glimpse.js";
+import { search } from "./gemini-search.js";
+import { extractDomain, getGlimpseOpen, openInBrowser, openInGlimpse } from "./glimpse.js";
 import {
 	duplicateQuerySet,
 	formatQueryHeader,
@@ -20,6 +15,7 @@ import {
 	stripThumbnails,
 } from "./result-format.js";
 import { generateId, type QueryResultData, type StoredSearchData, storeResult } from "./storage.js";
+import { buildCurationCancelledReturn, closeCurator, type PendingCurate, state } from "./state.js";
 import {
 	buildDeterministicSummary,
 	generateSummaryDraft,
@@ -27,60 +23,8 @@ import {
 	type SummaryMeta,
 } from "./summary-review.js";
 
-export const state = {
-	pendingFetches: new Map<string, AbortController>(),
-	sessionActive: false,
-	widgetVisible: false,
-	widgetUnsubscribe: null as (() => void) | null,
-	activeCurator: null as CuratorServerHandle | null,
-	glimpseWin: null as GlimpseWindow | null,
-	pendingCurate: null as PendingCurate | null,
-	curatorGeneration: 0,
-};
-
-export interface PendingCurate {
-	phase: "searching" | "curating";
-	workflow: CuratorWorkflow;
-	summaryContext: SummaryGenerationContext;
-	searchResults: Map<number, QueryResultData>;
-	allInlineContent: ExtractedContent[];
-	queryList: string[];
-	includeContent: boolean;
-	numResults?: number;
-	recencyFilter?: "day" | "week" | "month" | "year";
-	domainFilter?: string[];
-	availableProviders: ProviderAvailability;
-	defaultProvider: ResolvedSearchProvider;
-	summaryModels: Array<{ value: string; label: string }>;
-	defaultSummaryModel: string | null;
-	timeoutSeconds: number;
-	onUpdate:
-		| ((update: { content: Array<{ type: string; text: string }>; details?: Record<string, unknown> }) => void)
-		| undefined;
-	signal: AbortSignal | undefined;
-	abortSearches: () => void;
-	finish: (value: AgentToolResult<Record<string, unknown>>) => void;
-	cancel: (reason?: "user" | "stale") => void;
-	browserPromise?: Promise<void>;
-}
-
-function cancelPendingCurate(reason: "user" | "stale" = "stale"): void {
-	state.pendingCurate?.cancel(reason);
-}
-
-function closeCurator(): void {
-	state.curatorGeneration++;
-	const win = state.glimpseWin;
-	state.glimpseWin = null;
-	try {
-		win?.close();
-	} catch {}
-	cancelPendingCurate();
-	if (state.activeCurator) {
-		state.activeCurator.close();
-		state.activeCurator = null;
-	}
-}
+export { closeCurator, state } from "./state.js";
+export type { PendingCurate } from "./state.js";
 
 export function createRuntimeSupport(pi: ExtensionAPI) {
 	function startBackgroundFetch(urls: string[]): string | null {
@@ -180,18 +124,6 @@ export function createRuntimeSupport(pi: ExtensionAPI) {
 			fallbackUsed: meta.fallbackUsed === true,
 			fallbackReason: meta.fallbackReason,
 			edited: meta.edited === true,
-		};
-	}
-
-	function buildCurationCancelledReturn(reason: "user" | "stale"): AgentToolResult<Record<string, unknown>> {
-		const message = `Search curation cancelled (${reason}).`;
-		return {
-			content: [{ type: "text", text: message }],
-			details: {
-				error: message,
-				cancelled: true,
-				cancelReason: reason,
-			},
 		};
 	}
 
@@ -692,5 +624,7 @@ export function createRuntimeSupport(pi: ExtensionAPI) {
 		openCuratorBrowser,
 		resolveSummaryForSubmit,
 		rewriteSearchQuery,
+		// Re-exposed so lazily-loaded callers avoid a second dynamic import.
+		startCuratorServer,
 	};
 }

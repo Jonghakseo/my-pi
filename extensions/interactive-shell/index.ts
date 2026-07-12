@@ -2,8 +2,7 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { setupBackgroundWidget } from "./background-widget.js";
 import type { InteractiveShellConfig } from "./config.js";
 import { loadConfig } from "./config.js";
-import type { HeadlessCompletionInfo } from "./headless-monitor.js";
-import { HeadlessDispatchMonitor } from "./headless-monitor.js";
+import type { HeadlessCompletionInfo, HeadlessDispatchMonitor } from "./headless-monitor.js";
 import { translateInput } from "./key-encoding.js";
 import {
 	buildDispatchNotification,
@@ -11,9 +10,9 @@ import {
 	buildResultNotification,
 	summarizeInteractiveResult,
 } from "./notification-utils.js";
-import { InteractiveShellOverlay } from "./overlay-component.js";
-import { PtyTerminalSession } from "./pty-session.js";
-import { ReattachOverlay } from "./reattach-overlay.js";
+// Heavy modules (overlay UI, node-pty, reattach overlay, dispatch monitor) are
+// loaded lazily at their use sites to keep extension startup cheap.
+import type { PtyTerminalSession } from "./pty-session.js";
 import { InteractiveShellCoordinator } from "./runtime-coordinator.js";
 import { generateSessionId, sessionManager } from "./session-manager.js";
 import { createSessionQueryState, getSessionOutput } from "./session-query.js";
@@ -548,6 +547,7 @@ export default function interactiveShellExtension(pi: ExtensionAPI) {
 				const reattachSessionId = attach;
 				const isNonBlocking = mode === "hands-free" || mode === "dispatch";
 				const attachStartTime = bgSession.startedAt.getTime();
+				const { InteractiveShellOverlay } = await import("./overlay-component.js");
 				let overlayPromise: Promise<InteractiveShellResult>;
 				try {
 					overlayPromise = ctx.ui.custom<InteractiveShellResult>(
@@ -752,6 +752,8 @@ export default function interactiveShellExtension(pi: ExtensionAPI) {
 
 			// ── Branch 4a: Headless dispatch ──
 			if (mode === "dispatch" && background) {
+				const { PtyTerminalSession } = await import("./pty-session.js");
+				const { HeadlessDispatchMonitor } = await import("./headless-monitor.js");
 				const id = generateSessionId(name);
 				const session = new PtyTerminalSession({
 					command,
@@ -836,6 +838,7 @@ export default function interactiveShellExtension(pi: ExtensionAPI) {
 					};
 				}
 				const overlayStartTime = Date.now();
+				const { InteractiveShellOverlay } = await import("./overlay-component.js");
 
 				let overlayPromise: Promise<InteractiveShellResult>;
 				try {
@@ -937,6 +940,7 @@ export default function interactiveShellExtension(pi: ExtensionAPI) {
 				details: { exitCode: null, backgrounded: false, cancelled: false },
 			});
 
+			const { InteractiveShellOverlay } = await import("./overlay-component.js");
 			let result: InteractiveShellResult;
 			try {
 				result = await ctx.ui.custom<InteractiveShellResult>(
@@ -1073,6 +1077,7 @@ export default function interactiveShellExtension(pi: ExtensionAPI) {
 				ctx.ui.notify("An overlay is already open. Close it first.", "error");
 				return;
 			}
+			const { ReattachOverlay } = await import("./reattach-overlay.js");
 			try {
 				const result = await ctx.ui.custom<InteractiveShellResult>(
 					(tui, theme, _kb, done) =>
@@ -1194,7 +1199,7 @@ function handleTransferredDispatchResult(pi: ExtensionAPI, id: string, result: I
 	coordinator.disposeMonitor(id);
 }
 
-function handleDispatchBackgroundResult(
+async function handleDispatchBackgroundResult(
 	pi: ExtensionAPI,
 	id: string,
 	command: string,
@@ -1207,7 +1212,7 @@ function handleDispatchBackgroundResult(
 		overlayStartTime?: number;
 	},
 	wasAgentInitiated: boolean,
-): void {
+): Promise<void> {
 	if (!result.backgrounded) return;
 	if (!wasAgentInitiated) {
 		pi.sendMessage(
@@ -1249,6 +1254,7 @@ function handleDispatchBackgroundResult(
 	const elapsed = ctx.overlayStartTime ? Date.now() - ctx.overlayStartTime : 0;
 	const remainingTimeout = ctx.timeout ? Math.max(0, ctx.timeout - elapsed) : undefined;
 	const bgStartTime = bgSession.startedAt.getTime();
+	const { HeadlessDispatchMonitor } = await import("./headless-monitor.js");
 	const monitor = new HeadlessDispatchMonitor(
 		bgSession.session,
 		config,
@@ -1329,7 +1335,7 @@ function setupDispatchCompletion(
 			}
 
 			if (mode === "dispatch" && result.backgrounded) {
-				handleDispatchBackgroundResult(pi, id, command, reason, result, config, ctx, wasAgentInitiated);
+				handleDispatchBackgroundResult(pi, id, command, reason, result, config, ctx, wasAgentInitiated).catch(() => {});
 				return;
 			}
 

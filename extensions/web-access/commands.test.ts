@@ -69,10 +69,10 @@ function createHarness() {
 		sendMessage: vi.fn(),
 	} as unknown as ExtensionAPI;
 	const support = createRuntimeSupport(pi);
-	registerCommands(pi, {
+	registerCommands(pi, async () => ({
 		...support,
 		loadSummaryModelChoices: vi.fn(async () => ({ summaryModels: [], defaultSummaryModel: null })),
-	});
+	}));
 	if (!handler) throw new Error("websearch command was not registered");
 	const registeredHandler = handler;
 	const ctx = {

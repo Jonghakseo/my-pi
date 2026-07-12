@@ -15,10 +15,10 @@ import type { ExtractedContent } from "./extract.js";
 import { search } from "./gemini-search.js";
 import { extractDomain } from "./glimpse.js";
 import type { QueryResultData } from "./storage.js";
+import { buildCurationCancelledReturn, closeCurator, type PendingCurate, state } from "./state.js";
 import type { SummaryGenerationContext } from "./summary-review.js";
-import { state, type PendingCurate, type createRuntimeSupport } from "./runtime-support.js";
+import type { GetRuntimeSupport } from "./runtime.js";
 
-type RuntimeSupport = ReturnType<typeof createRuntimeSupport>;
 const abortedAwait = Symbol("abortedAwait");
 
 function awaitWithAbort<T>(work: Promise<T>, signal: AbortSignal | undefined): Promise<T | typeof abortedAwait> {
@@ -47,9 +47,7 @@ function awaitWithAbort<T>(work: Promise<T>, signal: AbortSignal | undefined): P
 const isRecencyFilter = (value: unknown): value is "day" | "week" | "month" | "year" =>
 	value === "day" || value === "week" || value === "month" || value === "year";
 
-export function registerWebSearchTool(pi: ExtensionAPI, support: RuntimeSupport): void {
-	const { buildCurationCancelledReturn, buildSearchReturn, closeCurator, loadSummaryModelChoices, openCuratorBrowser } =
-		support;
+export function registerWebSearchTool(pi: ExtensionAPI, getSupport: GetRuntimeSupport): void {
 	pi.registerTool({
 		name: "web_search",
 		label: "Web Search",
@@ -110,9 +108,13 @@ export function registerWebSearchTool(pi: ExtensionAPI, support: RuntimeSupport)
 			}
 
 			if (shouldCurate) {
+				// Generation must be captured synchronously (before any await) so a
+				// closeCurator() racing with this call is detected as stale below.
 				closeCurator();
 				const curatorGeneration = state.curatorGeneration;
 				if (signal?.aborted) return buildCurationCancelledReturn("user");
+				// Heavy runtime (extract/curator/summary modules) loads on first search.
+				const { loadSummaryModelChoices, openCuratorBrowser } = await getSupport();
 
 				let resolvePromise: (value: AgentToolResult<Record<string, unknown>>) => void = () => {};
 				const promise = new Promise<AgentToolResult<Record<string, unknown>>>((resolve) => {
@@ -293,6 +295,7 @@ export function registerWebSearchTool(pi: ExtensionAPI, support: RuntimeSupport)
 				}
 			}
 
+			const { buildSearchReturn } = await getSupport();
 			return buildSearchReturn({
 				queryList,
 				results: searchResults,
