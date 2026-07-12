@@ -1,6 +1,6 @@
 ---
 name: stress-interview
-description: verifier + reviewer + challenger를 병렬 호출해 동일 변경사항을 다각도로 검토받는 스킬. 사용자가 "스트레스 인터뷰", "stress-interview", "다각도 검토", "서브에이전트 병렬 리뷰", "verifier/reviewer/challenger로 압박 검토"처럼 요청하거나 구현/수정 사항을 배포 전 검증·리뷰·반론 관점에서 동시에 점검해야 할 때 사용한다.
+description: "verifier·reviewer·challenger 서브에이전트를 병렬 호출해 변경사항을 검증·리뷰·반론 관점으로 다각도 검토할 때 사용한다."
 disable-model-invocation: false
 ---
 

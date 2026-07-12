@@ -1,6 +1,6 @@
 ---
 name: self-healing
-description: stress-interview로 문제를 모은 뒤 worker 수정 → 재검토를 2사이클 반복하는 자가 치유 스킬. 사용자가 "셀프힐링", "self-healing", "자가 치유", "리뷰 받고 자동 수정", "2사이클로 검토 후 고쳐줘"처럼 요청하거나 변경사항을 다각도 검토한 뒤 제한된 범위에서 자동 보정해야 할 때 사용한다.
+description: "stress-interview 검토 후 worker 수정과 재검토를 2사이클 반복하는 self-healing·자가 치유 작업에 사용한다."
 disable-model-invocation: false
 ---
 

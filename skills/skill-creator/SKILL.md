@@ -1,6 +1,6 @@
 ---
 name: skill-creator
-description: Pi용 스킬을 새로 만들거나 기존 스킬을 개선·검증·평가할 때 사용한다. 사용자가 "스킬 만들어줘", "SKILL.md 작성", "이 워크플로우를 skill로", "스킬 설명/트리거 최적화", "기존 skill 수정", "eval로 스킬 테스트"처럼 말하면 반드시 이 스킬을 사용한다. Agent Skills 표준과 Pi의 스킬 로딩/검증 규칙에 맞춰 스킬 구조, 프론트매터, progressive disclosure, 평가 루프를 설계한다.
+description: "Pi 스킬을 생성·수정하거나 SKILL.md, description·트리거, progressive disclosure, eval을 설계·검증할 때 사용한다."
 ---
 
 # skill-creator
