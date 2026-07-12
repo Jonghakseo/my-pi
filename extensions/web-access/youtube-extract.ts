@@ -2,8 +2,6 @@ import { execFileSync } from "node:child_process";
 import { activityMonitor } from "./activity.js";
 import { type ExtractedContent, extractHeadingTitle, type FrameResult, type VideoFrame } from "./extract.js";
 import { isGeminiApiAvailable, queryGeminiApiWithVideo } from "./gemini-api.js";
-import { isGeminiWebAvailable, queryWithCookies } from "./gemini-web.js";
-import { searchWithPerplexity } from "./perplexity.js";
 import { loadConfigSection, normalizeBoolean, normalizeString } from "./config.js";
 import { formatSeconds, isTimeoutError, mapFfmpegError, readExecError, trimErrorText } from "./utils.js";
 
@@ -74,10 +72,7 @@ export async function extractYouTube(
 
 	const activityId = activityMonitor.logStart({ type: "fetch", url: `youtube.com/${videoId ?? "video"}` });
 
-	const result =
-		(await tryGeminiWeb(canonicalUrl, effectivePrompt, effectiveModel, signal)) ??
-		(await tryGeminiApi(canonicalUrl, effectivePrompt, effectiveModel, signal)) ??
-		(await tryPerplexity(url, effectivePrompt, signal));
+	const result = await tryGeminiApi(canonicalUrl, effectivePrompt, effectiveModel, signal);
 
 	if (result) {
 		result.url = url;
@@ -190,37 +185,6 @@ export async function fetchYouTubeThumbnail(videoId: string): Promise<{ data: st
 	}
 }
 
-async function tryGeminiWeb(
-	url: string,
-	prompt: string,
-	model: string,
-	signal?: AbortSignal,
-): Promise<ExtractedContent | null> {
-	try {
-		const cookies = await isGeminiWebAvailable();
-		if (!cookies) return null;
-
-		if (signal?.aborted) return null;
-
-		const text = await queryWithCookies(prompt, cookies, {
-			youtubeUrl: url,
-			model,
-			signal,
-			timeoutMs: 120000,
-		});
-
-		return {
-			url,
-			title: extractHeadingTitle(text) ?? "YouTube Video",
-			content: text,
-			error: null,
-		};
-	} catch (err) {
-		if (shouldRethrow(err)) throw err;
-		return null;
-	}
-}
-
 async function tryGeminiApi(
 	url: string,
 	prompt: string,
@@ -242,33 +206,6 @@ async function tryGeminiApi(
 			url,
 			title: extractHeadingTitle(text) ?? "YouTube Video",
 			content: text,
-			error: null,
-		};
-	} catch (err) {
-		if (shouldRethrow(err)) throw err;
-		return null;
-	}
-}
-
-async function tryPerplexity(url: string, prompt: string, signal?: AbortSignal): Promise<ExtractedContent | null> {
-	try {
-		if (signal?.aborted) return null;
-
-		const perplexityQuery =
-			prompt === YOUTUBE_PROMPT ? `Summarize this YouTube video in detail: ${url}` : `${prompt} YouTube video: ${url}`;
-
-		const { answer } = await searchWithPerplexity(perplexityQuery, { signal });
-
-		if (!answer) return null;
-
-		const content =
-			`# Video Summary (via Perplexity)\n\n${answer}\n\n` +
-			`*Full video understanding requires Gemini access. Set GEMINI_API_KEY or sign into Google in Chrome.*`;
-
-		return {
-			url,
-			title: "Video Summary (via Perplexity)",
-			content,
 			error: null,
 		};
 	} catch (err) {

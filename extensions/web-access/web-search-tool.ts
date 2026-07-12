@@ -2,56 +2,139 @@ import { Box, Text } from "@earendil-works/pi-tui";
 import { StringEnum } from "@earendil-works/pi-ai/compat";
 import type { AgentToolResult, ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
-import {
-	loadConfig,
-	loadConfigForExtensionInit,
-	loadCuratorBootstrap,
-	normalizeProviderInput,
-	normalizeQueryList,
-	resolveWorkflow,
-	type CuratorWorkflow,
-} from "./config-runtime.js";
+import { loadConfig, normalizeProviderInput, normalizeQueryList } from "./config-runtime.js";
 import type { ExtractedContent } from "./extract.js";
 import { search } from "./gemini-search.js";
-import { extractDomain } from "./glimpse.js";
-import type { QueryResultData } from "./storage.js";
-import { buildCurationCancelledReturn, closeCurator, type PendingCurate, state } from "./state.js";
-import type { SummaryGenerationContext } from "./summary-review.js";
-import type { GetRuntimeSupport } from "./runtime.js";
-
-const abortedAwait = Symbol("abortedAwait");
-
-function awaitWithAbort<T>(work: Promise<T>, signal: AbortSignal | undefined): Promise<T | typeof abortedAwait> {
-	if (!signal) return work;
-	if (signal.aborted) return Promise.resolve(abortedAwait);
-	return new Promise<T | typeof abortedAwait>((resolve, reject) => {
-		const onAbort = () => {
-			cleanup();
-			resolve(abortedAwait);
-		};
-		const cleanup = () => signal.removeEventListener("abort", onAbort);
-		signal.addEventListener("abort", onAbort, { once: true });
-		work.then(
-			(value) => {
-				cleanup();
-				resolve(value);
-			},
-			(err: unknown) => {
-				cleanup();
-				reject(err);
-			},
-		);
-	});
-}
+import { formatSearchSummary, hasFullInlineCoverage, stripThumbnails } from "./result-format.js";
+import { generateId, type QueryResultData, type StoredSearchData, storeResult } from "./storage.js";
+import { state } from "./state.js";
 
 const isRecencyFilter = (value: unknown): value is "day" | "week" | "month" | "year" =>
 	value === "day" || value === "week" || value === "month" || value === "year";
 
-export function registerWebSearchTool(pi: ExtensionAPI, getSupport: GetRuntimeSupport): void {
+function startBackgroundFetch(pi: ExtensionAPI, urls: string[]): string | null {
+	if (urls.length === 0) return null;
+	const fetchId = generateId();
+	const controller = new AbortController();
+	state.pendingFetches.set(fetchId, controller);
+	// Heavy extract module graph loads lazily on first background fetch.
+	import("./extract.js")
+		.then((m) => m.fetchAllContent(urls, controller.signal))
+		.then((fetched) => {
+			if (!state.sessionActive || !state.pendingFetches.has(fetchId)) return;
+			const data: StoredSearchData = {
+				id: fetchId,
+				type: "fetch",
+				timestamp: Date.now(),
+				urls: stripThumbnails(fetched),
+			};
+			storeResult(fetchId, data);
+			pi.appendEntry("web-search-results", data);
+			const ok = fetched.filter((f) => !f.error).length;
+			pi.sendMessage(
+				{
+					customType: "web-search-content-ready",
+					content: `Content fetched for ${ok}/${fetched.length} URLs [${fetchId}]. Full page content now available.`,
+					display: true,
+				},
+				{ triggerTurn: true },
+			);
+		})
+		.catch((err) => {
+			if (!state.sessionActive || !state.pendingFetches.has(fetchId)) return;
+			const message = err instanceof Error ? err.message : String(err);
+			const isAbort = (err instanceof Error && err.name === "AbortError") || message.toLowerCase().includes("abort");
+			if (!isAbort) {
+				pi.sendMessage(
+					{
+						customType: "web-search-error",
+						content: `Content fetch failed [${fetchId}]: ${message}`,
+						display: true,
+					},
+					{ triggerTurn: false },
+				);
+			}
+		})
+		.finally(() => {
+			state.pendingFetches.delete(fetchId);
+		});
+	return fetchId;
+}
+
+interface SearchReturnOptions {
+	queryList: string[];
+	results: QueryResultData[];
+	urls: string[];
+	includeContent: boolean;
+	inlineContent?: ExtractedContent[];
+}
+
+function buildSearchReturn(pi: ExtensionAPI, opts: SearchReturnOptions): AgentToolResult<Record<string, unknown>> {
+	const sc = opts.results.filter((r) => !r.error).length;
+	const tr = opts.results.reduce((sum, r) => sum + r.results.length, 0);
+
+	let output = "";
+	for (const { query, answer, results, error } of opts.results) {
+		if (opts.queryList.length > 1) {
+			output += `## Query: "${query}"\n\n`;
+		}
+		if (error) output += `Error: ${error}\n\n`;
+		else if (results.length === 0) output += "No results found.\n\n";
+		else output += `${formatSearchSummary(results, answer)}\n\n`;
+	}
+
+	const hasInlineReady = hasFullInlineCoverage(opts.urls, opts.inlineContent);
+	let fetchId: string | null = null;
+	if (hasInlineReady && opts.inlineContent) {
+		fetchId = generateId();
+		const data: StoredSearchData = {
+			id: fetchId,
+			type: "fetch",
+			timestamp: Date.now(),
+			urls: opts.inlineContent,
+		};
+		storeResult(fetchId, data);
+		pi.appendEntry("web-search-results", data);
+		output += `---\nFull content for ${opts.inlineContent.length} sources available [${fetchId}].`;
+	} else if (opts.includeContent) {
+		fetchId = startBackgroundFetch(pi, opts.urls);
+		if (fetchId) {
+			output += `---\nContent fetching in background [${fetchId}]. Will notify when ready.`;
+		}
+	}
+
+	const searchId = generateId();
+	const searchData: StoredSearchData = {
+		id: searchId,
+		type: "search",
+		timestamp: Date.now(),
+		queries: opts.results,
+	};
+	storeResult(searchId, searchData);
+	pi.appendEntry("web-search-results", searchData);
+
+	const isBackgroundFetch = fetchId !== null && !hasInlineReady;
+
+	return {
+		content: [{ type: "text", text: output.trim() }],
+		details: {
+			queries: opts.queryList,
+			queryCount: opts.queryList.length,
+			successfulQueries: sc,
+			totalResults: tr,
+			includeContent: opts.includeContent,
+			fetchId,
+			fetchUrls: isBackgroundFetch ? opts.urls : undefined,
+			searchId,
+		},
+	};
+}
+
+export function registerWebSearchTool(pi: ExtensionAPI): void {
 	pi.registerTool({
 		name: "web_search",
 		label: "Web Search",
-		description: `Search the web using Perplexity AI, Exa, or Gemini. Returns an AI-synthesized answer with source citations. For comprehensive research, prefer queries (plural) with 2-4 varied angles over a single query — each query gets its own synthesized answer, so varying phrasing and scope gives much broader coverage. When includeContent is true, full page content is fetched in the background. Searches auto-open the interactive browser curator and stream results live; set workflow to "none" to skip curation. Provider auto-selects: Exa (direct API with key, MCP fallback without), else Perplexity (needs key), else Gemini API (needs key), else Gemini Web (needs a supported Chromium-based browser login).`,
+		description: `Search the web using Exa or Gemini. Returns an AI-synthesized answer with source citations. For comprehensive research, prefer queries (plural) with 2-4 varied angles over a single query — each query gets its own synthesized answer, so varying phrasing and scope gives much broader coverage. When includeContent is true, full page content is fetched in the background. Provider auto-selects: Exa (direct API with key, MCP fallback without), else Gemini (needs API key).`,
 		parameters: Type.Object({
 			query: Type.Optional(
 				Type.String({
@@ -71,187 +154,24 @@ export function registerWebSearchTool(pi: ExtensionAPI, getSupport: GetRuntimeSu
 				Type.Array(Type.String(), { description: "Limit to domains (prefix with - to exclude)" }),
 			),
 			provider: Type.Optional(
-				StringEnum(["auto", "perplexity", "gemini", "exa"], { description: "Search provider (default: auto)" }),
-			),
-			workflow: Type.Optional(
-				StringEnum(["none", "summary-review"], {
-					description:
-						"Search workflow mode: none = no curator, summary-review = open curator with auto summary draft (default)",
-				}),
+				StringEnum(["auto", "gemini", "exa"], { description: "Search provider (default: auto)" }),
 			),
 		}),
 
-		// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: the web_search tool execute path coordinates validation, curator workflow, background fetch, and storage.
-		async execute(_toolCallId, params, signal, onUpdate, ctx) {
+		// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: the web_search execute path coordinates validation, provider fallback, background fetch, and storage.
+		async execute(_toolCallId, params, signal, onUpdate) {
 			const rawQueryList: unknown[] = Array.isArray(params.queries)
 				? params.queries
 				: params.query !== undefined
 					? [params.query]
 					: [];
 			const queryList = normalizeQueryList(rawQueryList);
-			const configWorkflow = loadConfigForExtensionInit().workflow;
-			const workflow = resolveWorkflow(params.workflow ?? configWorkflow, ctx?.hasUI !== false);
-			const shouldCurate = workflow !== "none";
 
 			if (queryList.length === 0) {
 				return {
 					content: [{ type: "text", text: "Error: No query provided. Use 'query' or 'queries' parameter." }],
 					details: { error: "No query provided" },
 				};
-			}
-
-			if (shouldCurate && !ctx) {
-				return {
-					content: [{ type: "text", text: "Error: Curation requires an active extension context." }],
-					details: { error: "Missing extension context" },
-				};
-			}
-
-			if (shouldCurate) {
-				// Generation must be captured synchronously (before any await) so a
-				// closeCurator() racing with this call is detected as stale below.
-				closeCurator();
-				const curatorGeneration = state.curatorGeneration;
-				if (signal?.aborted) return buildCurationCancelledReturn("user");
-				// Heavy runtime (extract/curator/summary modules) loads on first search.
-				const { loadSummaryModelChoices, openCuratorBrowser } = await getSupport();
-
-				let resolvePromise: (value: AgentToolResult<Record<string, unknown>>) => void = () => {};
-				const promise = new Promise<AgentToolResult<Record<string, unknown>>>((resolve) => {
-					resolvePromise = resolve;
-				});
-				const includeContent = params.includeContent ?? false;
-				const searchResults = new Map<number, QueryResultData>();
-				const allInlineContent: ExtractedContent[] = [];
-				const searchAbort = new AbortController();
-				const searchSignal = signal ? AbortSignal.any([signal, searchAbort.signal]) : searchAbort.signal;
-				let cancelled = false;
-
-				const bootstrapResult = await awaitWithAbort(loadCuratorBootstrap(params.provider), signal);
-				if (bootstrapResult === abortedAwait) return buildCurationCancelledReturn("user");
-				if (state.curatorGeneration !== curatorGeneration) {
-					return buildCurationCancelledReturn("stale");
-				}
-				const availableProviders = bootstrapResult.availableProviders;
-				const defaultProvider = bootstrapResult.defaultProvider;
-				const curatorTimeoutSeconds = bootstrapResult.timeoutSeconds;
-				const curatorWorkflow: CuratorWorkflow = "summary-review";
-
-				const summaryContext: SummaryGenerationContext = {
-					model: ctx.model,
-					modelRegistry: ctx.modelRegistry,
-				};
-				const summaryModelChoicesResult = await awaitWithAbort(loadSummaryModelChoices(summaryContext), signal);
-				if (summaryModelChoicesResult === abortedAwait) return buildCurationCancelledReturn("user");
-				if (state.curatorGeneration !== curatorGeneration) {
-					return buildCurationCancelledReturn("stale");
-				}
-				const summaryModelChoices = summaryModelChoicesResult;
-
-				const pc: PendingCurate = {
-					phase: "searching",
-					workflow: curatorWorkflow,
-					summaryContext,
-					searchResults,
-					allInlineContent,
-					queryList,
-					includeContent,
-					numResults: params.numResults,
-					recencyFilter: isRecencyFilter(params.recencyFilter) ? params.recencyFilter : undefined,
-					domainFilter: params.domainFilter,
-					availableProviders,
-					defaultProvider,
-					summaryModels: summaryModelChoices.summaryModels,
-					defaultSummaryModel: summaryModelChoices.defaultSummaryModel,
-					timeoutSeconds: curatorTimeoutSeconds,
-					onUpdate: onUpdate as PendingCurate["onUpdate"],
-					signal,
-					abortSearches: () => {
-						if (!searchAbort.signal.aborted) searchAbort.abort();
-					},
-					finish: () => {},
-					cancel: () => {},
-				};
-
-				const finish = (value: AgentToolResult<Record<string, unknown>>) => {
-					if (cancelled) return;
-					cancelled = true;
-					pc.abortSearches();
-					signal?.removeEventListener("abort", onAbort);
-					state.pendingCurate = null;
-					resolvePromise(value);
-				};
-
-				const cancel = (reason: "user" | "stale" = "stale") => {
-					if (cancelled) return;
-					finish(buildCurationCancelledReturn(reason));
-				};
-
-				pc.finish = finish;
-				pc.cancel = cancel;
-
-				const onAbort = () => closeCurator();
-				state.pendingCurate = pc;
-				signal?.addEventListener("abort", onAbort, { once: true });
-				pc.browserPromise = openCuratorBrowser(pc, false);
-
-				for (let qi = 0; qi < queryList.length; qi++) {
-					if (signal?.aborted || cancelled || searchAbort.signal.aborted) break;
-					onUpdate?.({
-						content: [{ type: "text", text: `Searching ${qi + 1}/${queryList.length}: "${queryList[qi]}"...` }],
-						details: { phase: "searching", progress: qi / queryList.length, currentQuery: queryList[qi] },
-					});
-					const requestedProvider = pc.defaultProvider;
-					try {
-						const { answer, results, inlineContent, provider } = await search(queryList[qi], {
-							provider: requestedProvider,
-							numResults: params.numResults,
-							recencyFilter: isRecencyFilter(params.recencyFilter) ? params.recencyFilter : undefined,
-							domainFilter: params.domainFilter,
-							includeContent: params.includeContent,
-							signal: searchSignal,
-						});
-						if (signal?.aborted || cancelled || searchAbort.signal.aborted) break;
-						searchResults.set(qi, { query: queryList[qi], answer, results, error: null, provider });
-						if (inlineContent) allInlineContent.push(...inlineContent);
-						if (state.activeCurator) {
-							state.activeCurator.pushResult(qi, {
-								answer,
-								results: results.map((r) => ({ title: r.title, url: r.url, domain: extractDomain(r.url) })),
-								provider,
-							});
-						}
-					} catch (err) {
-						if (signal?.aborted || cancelled || searchAbort.signal.aborted) break;
-						const message = err instanceof Error ? err.message : String(err);
-						searchResults.set(qi, {
-							query: queryList[qi],
-							answer: "",
-							results: [],
-							error: message,
-							provider: requestedProvider,
-						});
-						if (state.activeCurator) {
-							state.activeCurator.pushError(qi, message, requestedProvider);
-						}
-					}
-				}
-
-				if (signal?.aborted || cancelled || searchAbort.signal.aborted) {
-					cancel();
-					return promise;
-				}
-
-				await pc.browserPromise;
-				if (state.activeCurator && !cancelled) {
-					state.activeCurator.searchesDone();
-					pc.onUpdate?.({
-						content: [{ type: "text", text: "All searches complete — waiting for summary approval in browser..." }],
-						details: { phase: "curating", progress: 1 },
-					});
-				}
-
-				return promise;
 			}
 
 			const searchResults: QueryResultData[] = [];
@@ -295,8 +215,7 @@ export function registerWebSearchTool(pi: ExtensionAPI, getSupport: GetRuntimeSu
 				}
 			}
 
-			const { buildSearchReturn } = await getSupport();
-			return buildSearchReturn({
+			return buildSearchReturn(pi, {
 				queryList,
 				results: searchResults,
 				urls: allUrls,
@@ -332,7 +251,7 @@ export function registerWebSearchTool(pi: ExtensionAPI, getSupport: GetRuntimeSu
 			return new Text(lines.join("\n"), 0, 0);
 		},
 
-		// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: search result rendering supports partial progress, curated summaries, and multiple detail layouts.
+		// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: search result rendering supports partial progress and legacy curated/summary details from old sessions.
 		renderResult(result, { expanded, isPartial }, theme) {
 			type QueryDetail = {
 				query: string;
@@ -341,6 +260,7 @@ export function registerWebSearchTool(pi: ExtensionAPI, getSupport: GetRuntimeSu
 				sources: Array<{ title: string; url: string }>;
 				error: string | null;
 			};
+			// curated/summary fields remain readable so entries from old sessions render correctly.
 			const details = result.details as {
 				queryCount?: number;
 				successfulQueries?: number;
@@ -358,7 +278,7 @@ export function registerWebSearchTool(pi: ExtensionAPI, getSupport: GetRuntimeSu
 				cancelReason?: string;
 				summary?: {
 					text: string;
-					workflow: CuratorWorkflow;
+					workflow: string;
 					model: string | null;
 					durationMs: number;
 					tokenEstimate: number;
@@ -369,10 +289,7 @@ export function registerWebSearchTool(pi: ExtensionAPI, getSupport: GetRuntimeSu
 			};
 
 			if (isPartial) {
-				if (details?.phase === "curating") {
-					return new Text(theme.fg("accent", "waiting for summary approval..."), 0, 0);
-				}
-				if (details?.phase === "searching") {
+				if (details?.phase === "searching" || details?.phase === "search") {
 					const progress = details?.progress ?? 0;
 					const bar = "\u2588".repeat(Math.floor(progress * 10)) + "\u2591".repeat(10 - Math.floor(progress * 10));
 					const query = details?.currentQuery || "";
@@ -467,17 +384,13 @@ export function registerWebSearchTool(pi: ExtensionAPI, getSupport: GetRuntimeSu
 			}
 
 			if (details?.fetchUrls && details.fetchUrls.length > 0) {
-				if (details.curated) {
-					lines.push(theme.fg("muted", `Fetching ${details.fetchUrls.length} URLs in background`));
-				} else {
-					lines.push(theme.fg("muted", "Fetching:"));
-					for (const u of details.fetchUrls.slice(0, 5)) {
-						const display = u.length > 60 ? `${u.slice(0, 57)}...` : u;
-						lines.push(theme.fg("dim", `  ${display}`));
-					}
-					if (details.fetchUrls.length > 5) {
-						lines.push(theme.fg("dim", `  ... and ${details.fetchUrls.length - 5} more`));
-					}
+				lines.push(theme.fg("muted", "Fetching:"));
+				for (const u of details.fetchUrls.slice(0, 5)) {
+					const display = u.length > 60 ? `${u.slice(0, 57)}...` : u;
+					lines.push(theme.fg("dim", `  ${display}`));
+				}
+				if (details.fetchUrls.length > 5) {
+					lines.push(theme.fg("dim", `  ... and ${details.fetchUrls.length - 5} more`));
 				}
 			}
 

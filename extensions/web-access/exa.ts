@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { activityMonitor } from "./activity.js";
 import { loadConfigSection, normalizeApiKey } from "./config.js";
 import type { ExtractedContent } from "./extract.js";
-import type { SearchOptions, SearchResponse } from "./perplexity.js";
+import type { SearchOptions, SearchResponse } from "./search-types.js";
 
 const EXA_ANSWER_URL = "https://api.exa.ai/answer";
 const EXA_SEARCH_URL = "https://api.exa.ai/search";

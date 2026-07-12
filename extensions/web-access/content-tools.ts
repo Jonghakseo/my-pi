@@ -18,11 +18,6 @@ export function registerContentTools(pi: ExtensionAPI): void {
 		parameters: Type.Object({
 			url: Type.Optional(Type.String({ description: "Single URL to fetch" })),
 			urls: Type.Optional(Type.Array(Type.String(), { description: "Multiple URLs (parallel)" })),
-			forceClone: Type.Optional(
-				Type.Boolean({
-					description: "Force cloning large GitHub repositories that exceed the size threshold",
-				}),
-			),
 			prompt: Type.Optional(
 				Type.String({
 					description:
@@ -69,7 +64,6 @@ export function registerContentTools(pi: ExtensionAPI): void {
 			// Heavy extract module graph loads on first fetch.
 			const { fetchAllContent } = await import("./extract.js");
 			const fetchResults = await fetchAllContent(urlList, signal, {
-				forceClone: params.forceClone,
 				prompt: params.prompt,
 				timestamp: params.timestamp,
 				frames: params.frames,

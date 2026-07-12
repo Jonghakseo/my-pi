@@ -6,7 +6,6 @@ const MAX_TREE_ENTRIES = 200;
 const MAX_INLINE_FILE_CHARS = 100_000;
 
 let ghAvailable: boolean | null = null;
-let ghHintShown = false;
 
 export async function checkGhAvailable(): Promise<boolean> {
 	if (ghAvailable !== null) return ghAvailable;
@@ -15,27 +14,6 @@ export async function checkGhAvailable(): Promise<boolean> {
 		execFile("gh", ["--version"], { timeout: 5000 }, (err) => {
 			ghAvailable = !err;
 			resolve(ghAvailable);
-		});
-	});
-}
-
-export function showGhHint(): void {
-	if (!ghHintShown) {
-		ghHintShown = true;
-	}
-}
-
-export async function checkRepoSize(owner: string, repo: string): Promise<number | null> {
-	if (!(await checkGhAvailable())) return null;
-
-	return new Promise((resolve) => {
-		execFile("gh", ["api", `repos/${owner}/${repo}`, "--jq", ".size"], { timeout: 10000 }, (err, stdout) => {
-			if (err) {
-				resolve(null);
-				return;
-			}
-			const kb = parseInt(stdout.trim(), 10);
-			resolve(Number.isNaN(kb) ? null : kb);
 		});
 	});
 }
