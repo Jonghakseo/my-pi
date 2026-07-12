@@ -12,6 +12,7 @@ import {
 } from "node:fs";
 import { extname, join, sep as pathSep, resolve as resolvePath } from "node:path";
 import { activityMonitor } from "./activity.js";
+import { type CachedClone, cloneCache, onCloneCacheClear } from "./clone-cache.js";
 import type { ExtractedContent } from "./extract.js";
 import { checkGhAvailable, checkRepoSize, fetchViaApi, showGhHint } from "./github-api.js";
 import { loadConfigSection, normalizeBoolean, normalizePositiveNumber, normalizeString } from "./config.js";
@@ -110,11 +111,6 @@ export interface GitHubUrlInfo {
 	type: "root" | "blob" | "tree";
 }
 
-interface CachedClone {
-	localPath: string;
-	clonePromise: Promise<string | null>;
-}
-
 interface GitHubCloneConfig {
 	enabled: boolean;
 	maxRepoSizeMB: number;
@@ -122,9 +118,11 @@ interface GitHubCloneConfig {
 	clonePath: string;
 }
 
-const cloneCache = new Map<string, CachedClone>();
-
 let cachedConfig: GitHubCloneConfig | null = null;
+
+onCloneCacheClear(() => {
+	cachedConfig = null;
+});
 
 const GITHUB_DEFAULTS: GitHubCloneConfig = {
 	enabled: true,
@@ -688,14 +686,4 @@ export async function extractGitHub(
 	const content = generateContent(result, info);
 	const title = info.path ? `${owner}/${repo} - ${info.path}` : `${owner}/${repo}`;
 	return { url, title, content, error: null };
-}
-
-export function clearCloneCache(): void {
-	for (const entry of cloneCache.values()) {
-		try {
-			rmSync(entry.localPath, { recursive: true, force: true });
-		} catch {}
-	}
-	cloneCache.clear();
-	cachedConfig = null;
 }

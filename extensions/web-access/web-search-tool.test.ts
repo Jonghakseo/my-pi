@@ -45,13 +45,13 @@ function createHarness() {
 	} as unknown as ExtensionAPI;
 	const support = createRuntimeSupport(pi);
 	const opened: PendingCurate[] = [];
-	registerWebSearchTool(pi, {
+	registerWebSearchTool(pi, async () => ({
 		...support,
 		loadSummaryModelChoices: vi.fn(async () => ({ summaryModels: [], defaultSummaryModel: null })),
 		openCuratorBrowser: vi.fn(async (pc: PendingCurate) => {
 			opened.push(pc);
 		}),
-	});
+	}));
 	if (!tool) throw new Error("web_search tool was not registered");
 	const registeredTool = tool;
 	const execute = (query: string, signal?: AbortSignal) =>

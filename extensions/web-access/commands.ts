@@ -12,31 +12,33 @@ import {
 	type WebSearchWorkflow,
 } from "./config-runtime.js";
 import type { CuratorServerHandle } from "./curator-server.js";
-import { startCuratorServer } from "./curator-server.js";
 import { search } from "./gemini-search.js";
 import { getActiveGoogleEmail, isGeminiWebAvailable } from "./gemini-web.js";
 import { extractDomain, getGlimpseOpen, openInBrowser, openInGlimpse } from "./glimpse.js";
 import { deleteResult, getAllResults, type QueryResultData } from "./storage.js";
+import { closeCurator, state } from "./state.js";
 import type { SummaryGenerationContext } from "./summary-review.js";
-import { state, type createRuntimeSupport } from "./runtime-support.js";
-type RuntimeSupport = ReturnType<typeof createRuntimeSupport>;
-export function registerCommands(pi: ExtensionAPI, support: RuntimeSupport): void {
-	const {
-		buildSearchReturn,
-		closeCurator,
-		collectAllResultsAndUrls,
-		filterByQueryIndices,
-		generateSummaryForSelectedIndices,
-		loadSummaryModelChoices,
-		resolveSummaryForSubmit,
-		rewriteSearchQuery,
-	} = support;
+import type { GetRuntimeSupport } from "./runtime.js";
+export function registerCommands(pi: ExtensionAPI, getSupport: GetRuntimeSupport): void {
 	pi.registerCommand("websearch", {
 		description: "Open web search curator",
 		// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: websearch command setup keeps curator startup, provider selection, and browser fallback in one command handler.
 		handler: async (args, ctx) => {
+			// Generation must be captured synchronously (before any await) so a
+			// racing closeCurator() is detected via ownsCuratorStartup below.
 			closeCurator();
 			const curatorGeneration = state.curatorGeneration;
+			// Heavy runtime (extract/curator/summary modules) loads on first use.
+			const {
+				buildSearchReturn,
+				collectAllResultsAndUrls,
+				filterByQueryIndices,
+				generateSummaryForSelectedIndices,
+				loadSummaryModelChoices,
+				resolveSummaryForSubmit,
+				rewriteSearchQuery,
+				startCuratorServer,
+			} = await getSupport();
 			const ownsCuratorStartup = () => state.curatorGeneration === curatorGeneration;
 			const sessionToken = randomUUID();
 

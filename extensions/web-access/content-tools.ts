@@ -2,7 +2,7 @@ import type { ImageContent, TextContent } from "@earendil-works/pi-ai/compat";
 import type { AgentToolResult, ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Text } from "@earendil-works/pi-tui";
 import { Type } from "typebox";
-import { fetchAllContent, type ExtractedContent } from "./extract.js";
+import type { ExtractedContent } from "./extract.js";
 import { formatFullResults, stripThumbnails } from "./result-format.js";
 import { generateId, getResult, type QueryResultData, type StoredSearchData, storeResult } from "./storage.js";
 import { formatSeconds } from "./utils.js";
@@ -66,6 +66,8 @@ export function registerContentTools(pi: ExtensionAPI): void {
 				details: { phase: "fetch", progress: 0 },
 			});
 
+			// Heavy extract module graph loads on first fetch.
+			const { fetchAllContent } = await import("./extract.js");
 			const fetchResults = await fetchAllContent(urlList, signal, {
 				forceClone: params.forceClone,
 				prompt: params.prompt,
