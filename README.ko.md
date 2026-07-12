@@ -59,7 +59,7 @@ cd ~/.pi/agent && ./scripts/bootstrap.sh
 
 | 에이전트 | 모델 | 역할 | 사용 시점 |
 |---|---|---|---|
-| **worker** | `openai-codex/gpt-5.6-sol` | 범용 작업 실행기 | 구현, 작성, 수정 (복잡한 다중 파일) |
+| **worker** | `openai-codex/gpt-5.6-terra` | 범용 작업 실행기 | 구현, 작성, 수정 (복잡한 다중 파일) |
 | **simplifier** | `anthropic/claude-sonnet-5` | 코드 단순화 전문가 | 최근 수정 코드 정리, 가독성 개선, 동작 보존 리팩터링 |
 | **code-cleaner** | `anthropic/claude-opus-4-6` | 코드 정리 분석가 | 중복 제거 후보, 품질 문제 탐색 |
 | **reviewer** | `openai-codex/gpt-5.6-sol` | 코드 리뷰 전문가 | PR 리뷰, 품질/정확성 점검 |
@@ -67,12 +67,13 @@ cd ~/.pi/agent && ./scripts/bootstrap.sh
 | **verifier** | `anthropic/claude-opus-4-6` | 근거 기반 검증 | 주장 확인, 정확성 점검 |
 | **security-auditor** | `openai-codex/gpt-5.6-sol` | 보안 검토자 | 취약점 중심 리뷰 |
 | **searcher** | `anthropic/claude-sonnet-5` | 리서치·웹 검색 | 문서 탐색, 조사 |
-| **browser** | `openai-codex/gpt-5.6-sol` | 브라우저 자동화·UI 테스트 | E2E 테스트, 시각 검증 |
+| **browser** | `openai-codex/gpt-5.6-terra` | 브라우저 자동화·UI 테스트 | E2E 테스트, 시각 검증 |
 
 <details>
 <summary><strong>모델 선택 기준</strong></summary>
 
-- **openai-codex/gpt-5.6-sol** — 최고 성능 실행·리뷰 (구현, 테스트, 리뷰, 보안 검토, 브라우저 자동화)
+- **openai-codex/gpt-5.6-terra** — 최고 성능 실행 (구현·브라우저 자동화)
+- **openai-codex/gpt-5.6-sol** — 최고 성능 리뷰 (테스트·리뷰·보안 검토)
 - **anthropic/claude-sonnet-5** — 리서치와 코드 단순화
 - **anthropic/claude-opus-4-6 / 4-8** — 깊은 추론 작업 (검증, 정리 분석)
 
