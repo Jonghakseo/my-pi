@@ -43,7 +43,6 @@ Skip any you don't use; the matching skill will simply no-op.
 | CLI | Used by | Install |
 |---|---|---|
 | `ctx7` (Context7) | `skills/context7-cli` | `npm i -g @upstash/context7-mcp` (see skill) |
-| `creatrip-db` | `skills/creatrip-db-query` | internal Creatrip CLI |
 | `gw` (git-worktree helper) | `skills/gw-worktree-cleanup` | https://github.com/jonghakseo/gw |
 | `ffmpeg`, `yt-dlp` | `fetch_content` video frames | `brew install ffmpeg yt-dlp` |
 | `peekaboo` | `skills/peekaboo` | `brew install steipete/tap/peekaboo` |

@@ -2,7 +2,7 @@ import { visibleWidth } from "@earendil-works/pi-tui";
 import { describe, expect, it } from "vitest";
 import { __test__ } from "./index.ts";
 
-const patchStateKey = Symbol.for("creatrip.tool-group-renderer.patch-state");
+const patchStateKey = Symbol.for("pi.tool-group-renderer.patch-state");
 
 class DummyToolExecutionComponent {
 	args: unknown;

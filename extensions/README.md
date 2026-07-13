@@ -61,7 +61,7 @@ pnpm run format:write         # Biome 포맷 자동 적용
 확장 엔트리포인트 구조나 타입 계약을 건드린 뒤에는 일반 검사와 함께 isolated headless Pi 로딩 검증을 실행한다.
 
 ```bash
-cd /Users/creatrip/.pi/agent
+cd "${PI_CODING_AGENT_DIR:-$HOME/.pi/agent}"
 tmp=$(mktemp -d)
 exts=$(find extensions -mindepth 2 -maxdepth 2 -name index.ts | sort | awk '{printf " -e %s", $0}')
 PI_CODING_AGENT_DIR="$tmp" PI_OFFLINE=1 pi -p --no-session --no-tools --offline $exts

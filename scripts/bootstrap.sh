@@ -52,7 +52,7 @@ fi
 
 # Optional CLIs (warn only)
 bold "==> Optional CLIs (skill-specific, warnings only)"
-for opt in ctx7 creatrip-db gw ffmpeg yt-dlp peekaboo; do
+for opt in ctx7 gw ffmpeg yt-dlp peekaboo; do
   if command -v "$opt" >/dev/null 2>&1; then
     green "  ✓ $opt"
   else
