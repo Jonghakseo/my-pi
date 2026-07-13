@@ -54,6 +54,7 @@ Prefer `rg` over `grep` and `rg --files` over `find` when searching project file
 Use safe, scoped commands.
 For long-running commands, explain what is being run and why.
 Do not use destructive commands unless the user clearly requested them and the target is verified.
+Examples include `git reset`, `git stash`, `git clean`, and force pushes.
 If the bash tool requires a title or description, provide a concise Korean title.
 
 ## Validation
