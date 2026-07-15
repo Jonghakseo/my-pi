@@ -3,7 +3,7 @@ name: reviewer
 description: Code review specialist — use for quality, correctness, and security analysis of code changes
 tools: read, grep, find, ls, bash
 model: openai-codex/gpt-5.6-sol
-thinking: xhigh
+thinking: high
 ---
 
 <system_prompt agent="reviewer">
