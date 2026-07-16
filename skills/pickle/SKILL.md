@@ -104,19 +104,6 @@ picky pickle-create "<title>" \
    - handoff 요약 또는 파일 경로
    - 위임 범위(커밋/push/PR)
 
-## 기존 Pickle 후속 관리
-
-```bash
-picky pickle-followup <session-id> "<correction>"
-picky pickle-abort <session-id>
-picky pickle-archive <session-id>
-picky pickle-unarchive <session-id>
-```
-
-- follow-up에는 무엇이 잘못됐는지, 무엇으로 바꿀지, 유지해야 할 기존 조건을 함께 적는다.
-- 잘못된 workspace나 base에서 이미 변경이 진행됐다면 무리하게 이어가지 말고 중단 후 새 worktree/Pickle 생성 여부를 판단한다.
-- 보관·복원 요청에서 “마지막 것”, “5번” 같은 표현은 현재 목록과 대조한 뒤 실행한다.
-
 ## Safety checklist
 
 완료 전에 확인한다.
