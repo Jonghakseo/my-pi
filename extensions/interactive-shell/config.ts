@@ -32,7 +32,7 @@ export interface InteractiveShellConfig {
 }
 
 const DEFAULT_CONFIG: InteractiveShellConfig = {
-	exitAutoCloseDelay: 10,
+	exitAutoCloseDelay: 3,
 	overlayWidthPercent: 95,
 	overlayHeightPercent: 60,
 	scrollbackLines: 5000,
