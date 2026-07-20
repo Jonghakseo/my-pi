@@ -49,6 +49,6 @@
   <g transform="translate(440,590)">
     <rect width="280" height="105" rx="14" fill="rgba(88,166,255,0.08)" stroke="#58a6ff" stroke-width="1.5"/>
     <text x="140" y="38" text-anchor="middle" fill="#58a6ff" font-family="monospace" font-size="17" font-weight="bold">bolt</text>
-    <text x="140" y="68" text-anchor="middle" fill="#e6edf3" font-family="monospace" font-size="13">Fast executor (text-only)</text>
+    <text x="140" y="68" text-anchor="middle" fill="#e6edf3" font-family="monospace" font-size="13">Fast executor (narrow scope)</text>
   </g>
 </svg>

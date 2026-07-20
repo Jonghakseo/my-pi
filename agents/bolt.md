@@ -1,6 +1,6 @@
 ---
 name: bolt
-description: Fast general-purpose implementation agent — same workflow as worker; no vision support, so do not delegate screenshots or other image inputs
+description: Fast general-purpose implementation agent — same workflow as worker; prefer narrowly scoped tasks due to its 128k text-only context (no screenshots or image inputs)
 tools: read, grep, find, ls, bash, edit, write
 model: openai-codex/gpt-5.3-codex-spark
 thinking: xhigh
