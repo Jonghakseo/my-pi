@@ -20,7 +20,7 @@ disable-model-invocation: false
 { "type": "subagent_start", "ts": "ISO8601", "epoch": 1234567890, "agent": "worker", "mode": "run" }
 
 // 서브에이전트 완료 (집계의 단일 소스)
-{ "type": "subagent_end", "ts": "ISO8601", "epoch": 1234567890, "agent": "worker", "runId": 42, "status": "done", "elapsedMs": 45000, "model": "claude-sonnet-4-20250514" }
+{ "type": "subagent_end", "ts": "ISO8601", "epoch": 1234567890, "agent": "worker", "runId": 42, "status": "error", "elapsedMs": 45000, "model": "openai-codex/gpt-5.3-codex-spark", "errorClass": "context_overflow", "peakContextTokens": 127196, "lastToolName": "read", "lastToolOutputChars": 9032 }
 
 // 명시적 스킬 호출: `/skill:name`이 확장된 사용자 `<skill>` 메시지가 확정될 때 기록
 { "type": "skill_invoked", "ts": "ISO8601", "epoch": 1234567890, "skill": "picky-cli", "path": "/path/to/SKILL.md" }
@@ -66,6 +66,8 @@ cat ~/.pi/agent/state/usage-analytics.jsonl
 | **최장/최단 소요시간** | `elapsedMs`의 max / min |
 | **사용 모델 분포** | `model` 필드별 건수 |
 | **호출 모드 분포** | `mode` 필드별 건수 (run/continue/batch/chain) |
+| **실패 원인 분포** | `errorClass`별 건수 (`context_overflow`, `overloaded`, `rate_limit`, `tool_error`, `aborted`, `process_error`, `unknown`) |
+| **실패 시 컨텍스트·도구** | `peakContextTokens`, `lastToolName`, `lastToolOutputChars`로 실패 직전 상태 분석 |
 | **일별 추이** | 날짜별 호출 건수 변화 |
 
 #### 3-B. 스킬 분석
@@ -93,6 +95,8 @@ cat ~/.pi/agent/state/usage-analytics.jsonl
 - **높은 에러율**: 에러율 20% 이상인 에이전트 → 프롬프트/설정 개선 필요
 - **비효율**: 평균 소요시간이 다른 에이전트 대비 2배 이상인 에이전트 → 태스크 범위 축소 검토
 - **continue 비율**: continue 모드 비율이 높으면 → 한 번에 완료하지 못하는 태스크가 많다는 신호
+- **컨텍스트 초과**: `errorClass=context_overflow`이고 `peakContextTokens`가 모델 한도에 근접하면 → 태스크 분할·탐색 출력 제한·guard 조정 검토
+- **도구 출력 과다**: 실패 직전 `lastToolOutputChars`가 크면 → 검색 limit·read range·대상 경로 축소 검토
 
 #### 스킬 인사이트
 

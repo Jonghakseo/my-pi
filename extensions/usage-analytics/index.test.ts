@@ -196,6 +196,42 @@ describe("usage-analytics failure/interrupted paths", () => {
 				status: "error",
 				elapsedMs: 1234,
 				model: undefined,
+				errorClass: undefined,
+				peakContextTokens: undefined,
+				lastToolName: undefined,
+				lastToolOutputChars: undefined,
+			},
+		]);
+	});
+
+	it("preserves normalized failure telemetry from a completion message", () => {
+		const entries = __test__.extractSubagentEndEntriesFromCustomMessage({
+			content: "[subagent:bolt#6] failed",
+			details: {
+				runId: 6,
+				agent: "bolt",
+				status: "error",
+				errorClass: "context_overflow",
+				peakContextTokens: 127196,
+				lastToolName: "read",
+				lastToolOutputChars: 9032,
+			},
+		});
+
+		expect(entries).toEqual([
+			{
+				agent: "bolt",
+				runId: 6,
+				batchId: undefined,
+				pipelineId: undefined,
+				stepIndex: undefined,
+				status: "error",
+				elapsedMs: undefined,
+				model: undefined,
+				errorClass: "context_overflow",
+				peakContextTokens: 127196,
+				lastToolName: "read",
+				lastToolOutputChars: 9032,
 			},
 		]);
 	});
@@ -224,6 +260,10 @@ describe("usage-analytics failure/interrupted paths", () => {
 				status: "done",
 				elapsedMs: 1200,
 				model: "m",
+				errorClass: undefined,
+				peakContextTokens: undefined,
+				lastToolName: undefined,
+				lastToolOutputChars: undefined,
 			},
 		]);
 	});
