@@ -1,6 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 620" width="1200" height="620">
-  <rect width="1200" height="620" fill="#0d1117" rx="12"/>
-  <text x="600" y="45" text-anchor="middle" fill="#e6edf3" font-family="monospace, 'Noto Sans KR', sans-serif" font-size="22" font-weight="bold">에이전트 (9)</text>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 785" width="1200" height="785">
+  <rect width="1200" height="785" fill="#0d1117" rx="12"/>
+  <text x="600" y="45" text-anchor="middle" fill="#e6edf3" font-family="monospace, 'Noto Sans KR', sans-serif" font-size="22" font-weight="bold">에이전트 (10)</text>
   <g transform="translate(80,95)">
     <rect width="280" height="105" rx="14" fill="rgba(88,166,255,0.08)" stroke="#58a6ff" stroke-width="1.5"/>
     <text x="140" y="38" text-anchor="middle" fill="#58a6ff" font-family="monospace, 'Noto Sans KR', sans-serif" font-size="17" font-weight="bold">worker</text>
@@ -45,5 +45,10 @@
     <rect width="280" height="105" rx="14" fill="rgba(88,166,255,0.08)" stroke="#58a6ff" stroke-width="1.5"/>
     <text x="140" y="38" text-anchor="middle" fill="#58a6ff" font-family="monospace, 'Noto Sans KR', sans-serif" font-size="17" font-weight="bold">browser</text>
     <text x="140" y="68" text-anchor="middle" fill="#e6edf3" font-family="monospace, 'Noto Sans KR', sans-serif" font-size="13">브라우저 자동화</text>
+  </g>
+  <g transform="translate(440,590)">
+    <rect width="280" height="105" rx="14" fill="rgba(88,166,255,0.08)" stroke="#58a6ff" stroke-width="1.5"/>
+    <text x="140" y="38" text-anchor="middle" fill="#58a6ff" font-family="monospace, 'Noto Sans KR', sans-serif" font-size="17" font-weight="bold">bolt</text>
+    <text x="140" y="68" text-anchor="middle" fill="#e6edf3" font-family="monospace, 'Noto Sans KR', sans-serif" font-size="13">고속 실행 (텍스트 전용)</text>
   </g>
 </svg>
