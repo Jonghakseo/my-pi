@@ -75,6 +75,40 @@ function summarizeFailure(result: { code: number; stdout: string; stderr: string
 		.join("\n");
 }
 
+async function generateWidget(pi: ExtensionAPI, ctx: ExtensionCommandContext, prompt: string): Promise<void> {
+	const result = await pi.exec(
+		"pi",
+		[
+			"--mode",
+			"json",
+			"--print",
+			"--no-session",
+			"--no-extensions",
+			"--no-builtin-tools",
+			"--extension",
+			GENERATIVE_UI_EXTENSION,
+			"--tools",
+			"visualize_read_me,show_widget",
+			"--model",
+			MODEL,
+			"--thinking",
+			"minimal",
+			"--no-context-files",
+			"--no-skills",
+			"--no-prompt-templates",
+			prompt,
+		],
+		{ cwd: ctx.cwd, timeout: RUN_TIMEOUT_MS },
+	);
+
+	if (result.code !== 0) {
+		ctx.ui.notify(`HTML 위젯 생성 실패\n${summarizeFailure(result)}`, "error");
+		return;
+	}
+
+	ctx.ui.notify("✅ HTML 위젯 생성 요청이 완료되었습니다.", "info");
+}
+
 export default function (pi: ExtensionAPI) {
 	pi.registerCommand("to-html", {
 		description:
@@ -91,37 +125,10 @@ export default function (pi: ExtensionAPI) {
 			ctx.ui.notify("🎨 마지막 응답을 HTML 위젯으로 변환 중…", "info");
 
 			const prompt = buildPrompt(lastResponse, args);
-			const result = await pi.exec(
-				"pi",
-				[
-					"--mode",
-					"json",
-					"--print",
-					"--no-session",
-					"--no-extensions",
-					"--no-builtin-tools",
-					"--extension",
-					GENERATIVE_UI_EXTENSION,
-					"--tools",
-					"visualize_read_me,show_widget",
-					"--model",
-					MODEL,
-					"--thinking",
-					"minimal",
-					"--no-context-files",
-					"--no-skills",
-					"--no-prompt-templates",
-					prompt,
-				],
-				{ cwd: ctx.cwd, timeout: RUN_TIMEOUT_MS },
-			);
-
-			if (result.code !== 0) {
-				ctx.ui.notify(`HTML 위젯 생성 실패\n${summarizeFailure(result)}`, "error");
-				return;
-			}
-
-			ctx.ui.notify("✅ HTML 위젯 생성 요청이 완료되었습니다.", "info");
+			void generateWidget(pi, ctx, prompt).catch((error: unknown) => {
+				const message = error instanceof Error ? error.message : String(error);
+				ctx.ui.notify(`HTML 위젯 생성 실패\n${message}`, "error");
+			});
 		},
 	});
 }
