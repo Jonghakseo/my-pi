@@ -64,6 +64,10 @@ interface SubagentEndEntry extends BaseLogEntry {
 	status: "done" | "error";
 	elapsedMs?: number;
 	model?: string;
+	errorClass?: string;
+	peakContextTokens?: number;
+	lastToolName?: string;
+	lastToolOutputChars?: number;
 }
 
 interface SkillInvokedEntry extends BaseLogEntry {
@@ -204,6 +208,17 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 	return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
+function extractFailureTelemetry(
+	record: Record<string, unknown>,
+): Pick<SubagentEndEntry, "errorClass" | "peakContextTokens" | "lastToolName" | "lastToolOutputChars"> {
+	return {
+		errorClass: typeof record.errorClass === "string" ? record.errorClass : undefined,
+		peakContextTokens: typeof record.peakContextTokens === "number" ? record.peakContextTokens : undefined,
+		lastToolName: typeof record.lastToolName === "string" ? record.lastToolName : undefined,
+		lastToolOutputChars: typeof record.lastToolOutputChars === "number" ? record.lastToolOutputChars : undefined,
+	};
+}
+
 function extractSubagentEndEntriesFromCustomMessage(customMessage: {
 	content?: unknown;
 	details?: unknown;
@@ -232,6 +247,7 @@ function extractSubagentEndEntriesFromCustomMessage(customMessage: {
 				status,
 				elapsedMs,
 				model,
+				...extractFailureTelemetry(d),
 			},
 		];
 	}
@@ -251,6 +267,7 @@ function extractSubagentEndEntriesFromCustomMessage(customMessage: {
 				status: typeof summary.status === "string" && summary.status.toLowerCase() === "error" ? "error" : "done",
 				elapsedMs: typeof summary.elapsedMs === "number" ? summary.elapsedMs : undefined,
 				model: typeof summary.model === "string" ? summary.model : undefined,
+				...extractFailureTelemetry(summary as Record<string, unknown>),
 			},
 		];
 	});
