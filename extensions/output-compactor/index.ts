@@ -25,7 +25,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import type { ExtensionAPI, ExtensionContext, ToolResultEvent } from "@earendil-works/pi-coding-agent";
 import { compressOutput } from "./compact.ts";
-import { getNetSaved, recordCompaction, reverseIfTracked } from "./state.ts";
+import { getStats, recordCompaction, reverseIfTracked } from "./state.ts";
 import { appendCompactionLog } from "./telemetry.ts";
 import { estimateTokens, formatSignedTokens } from "./tokens.ts";
 
@@ -97,12 +97,12 @@ function saveOriginal(toolCallId: string, output: string): string | undefined {
 export default function (pi: ExtensionAPI) {
 	const refreshFooter = (ctx: ExtensionContext) => {
 		if (!ctx.hasUI) return;
-		const net = getNetSaved(sessionIdOf(ctx));
-		if (net === 0) {
+		const { net, count } = getStats(sessionIdOf(ctx));
+		if (count === 0) {
 			ctx.ui.setStatus(STATUS_KEY, undefined);
 			return;
 		}
-		const label = `🗜 ${formatSignedTokens(net)} tok`;
+		const label = `󰝰 ${formatSignedTokens(net)} tok · ${count}×`;
 		const color = net > 0 ? "success" : "warning";
 		ctx.ui.setStatus(STATUS_KEY, ctx.ui.theme.fg(color, label));
 	};
