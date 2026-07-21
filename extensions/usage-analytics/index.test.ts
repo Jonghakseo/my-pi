@@ -206,10 +206,10 @@ describe("usage-analytics failure/interrupted paths", () => {
 
 	it("preserves normalized failure telemetry from a completion message", () => {
 		const entries = __test__.extractSubagentEndEntriesFromCustomMessage({
-			content: "[subagent:bolt#6] failed",
+			content: "[subagent:worker#6] failed",
 			details: {
 				runId: 6,
-				agent: "bolt",
+				agent: "worker",
 				status: "error",
 				errorClass: "context_overflow",
 				peakContextTokens: 127196,
@@ -220,7 +220,7 @@ describe("usage-analytics failure/interrupted paths", () => {
 
 		expect(entries).toEqual([
 			{
-				agent: "bolt",
+				agent: "worker",
 				runId: 6,
 				batchId: undefined,
 				pipelineId: undefined,

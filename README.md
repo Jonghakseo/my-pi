@@ -56,12 +56,11 @@ The system is organized in **four layers**:
   <img src="./docs/assets/agents.en.svg" alt="Agents" width="800"/>
 </p>
 
-The current setup has 10 agent definitions using OpenAI and Anthropic models:
+The current setup has 9 agent definitions using OpenAI and Anthropic models:
 
 | Agent | Model | Role | When to Use |
 |---|---|---|---|
 | **worker** | `openai-codex/gpt-5.6-terra` | General-purpose executor | Implementation, writing, fixes (complex multi-file) |
-| **bolt** | `openai-codex/gpt-5.3-codex-spark` | Fast general-purpose executor | Quick, narrowly scoped implementation, writing, fixes; 128k text-only (no screenshot/image input) |
 | **simplifier** | `anthropic/claude-sonnet-5` | Code simplification specialist | Clean up recently modified code, improve readability, preserve behavior |
 | **code-cleaner** | `anthropic/claude-opus-4-6` | Code cleanup analyst | Find cleanup opportunities and quality issues |
 | **reviewer** | `openai-codex/gpt-5.6-sol` | Code review specialist | PR reviews, quality/correctness checks |
@@ -74,7 +73,6 @@ The current setup has 10 agent definitions using OpenAI and Anthropic models:
 <details>
 <summary><strong>Model Selection</strong></summary>
 
-- **openai-codex/gpt-5.3-codex-spark** — Fast 128k text-only execution (`bolt`; narrowly scoped tasks only; no screenshot/image input)
 - **openai-codex/gpt-5.6-terra** — Frontier execution (implementation and browser automation)
 - **openai-codex/gpt-5.6-sol** — Frontier review (testing, reviewing, security review)
 - **anthropic/claude-sonnet-5** — Research and code simplification
