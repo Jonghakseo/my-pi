@@ -16,9 +16,16 @@ interface TrackedFile {
 interface SessionStat {
 	/** 순 절감 토큰 (원본이 다시 읽히면 마이너스로 전환) */
 	net: number;
+	/** 압축이 발동한 누적 횟수 */
+	count: number;
 	/** 압축으로 생성한 tmp 경로별 추적 정보 */
 	files: Record<string, TrackedFile>;
 	ts: number;
+}
+
+export interface SessionSummary {
+	net: number;
+	count: number;
 }
 
 interface PersistedState {
@@ -47,6 +54,7 @@ function parseSession(raw: unknown): SessionStat | undefined {
 	if (!isRecord(raw) || typeof raw.net !== "number") return undefined;
 	return {
 		net: raw.net,
+		count: typeof raw.count === "number" ? raw.count : 0,
 		files: parseFiles(raw.files),
 		ts: typeof raw.ts === "number" ? raw.ts : Date.now(),
 	};
@@ -90,19 +98,20 @@ function save(state: PersistedState): void {
 function ensureSession(state: PersistedState, sessionId: string): SessionStat {
 	let s = state.sessions[sessionId];
 	if (!s) {
-		s = { net: 0, files: {}, ts: Date.now() };
+		s = { net: 0, count: 0, files: {}, ts: Date.now() };
 		state.sessions[sessionId] = s;
 	}
 	return s;
 }
 
-/** 세션의 현재 순 절감 토큰. */
-export function getNetSaved(sessionId: string): number {
-	if (!sessionId) return 0;
-	return load().sessions[sessionId]?.net ?? 0;
+/** 세션의 현재 순 절감 토큰과 누적 압축 횟수. */
+export function getStats(sessionId: string): SessionSummary {
+	if (!sessionId) return { net: 0, count: 0 };
+	const s = load().sessions[sessionId];
+	return { net: s?.net ?? 0, count: s?.count ?? 0 };
 }
 
-/** 압축 1건 기록: net += saved, tmp 경로 추적 시작. */
+/** 압축 1건 기록: net += saved, count += 1, tmp 경로 추적 시작. */
 export function recordCompaction(
 	sessionId: string,
 	tmpPath: string,
@@ -113,6 +122,7 @@ export function recordCompaction(
 	const state = load();
 	const s = ensureSession(state, sessionId);
 	s.net += savedTokens;
+	s.count += 1;
 	s.files[tmpPath] = { original: originalTokens, reversed: false };
 	s.ts = Date.now();
 	save(state);
