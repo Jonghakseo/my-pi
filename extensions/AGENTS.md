@@ -15,7 +15,7 @@ Custom extensions for the pi coding agent. All extensions are written in TypeScr
 ├── files/                 # File picker / diff viewer UI
 ├── interactive-shell/     # Interactive shell overlay (interactive/hands-free/dispatch)
 ├── notify/                # /notify session-toggle: OSC 777/99 alert + macOS say TTS on agent_end
-├── output-compactor/      # Compress >24KB bash output via codex-spark; save original to tmp, inject summary+path
+├── output-compactor/      # Compress >24KB bash output via codex-spark; save original to tmp, inject summary+path; footer shows net tokens saved (re-reading the tmp original flips that entry negative)
 ├── footer/                # Custom footer UI facade for custom-style/main.ts
 ├── working-text/          # Spinner working message (tip text + elapsed time)
 ├── theme-cycler/          # Ctrl+Shift+X to cycle through themes
