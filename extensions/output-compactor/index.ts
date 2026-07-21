@@ -102,7 +102,7 @@ export default function (pi: ExtensionAPI) {
 			ctx.ui.setStatus(STATUS_KEY, undefined);
 			return;
 		}
-		const label = `󰝰 ${formatSignedTokens(net)} tok · ${count}×`;
+		const label = ` ${formatSignedTokens(net)} tok · ${count}×`;
 		const color = net > 0 ? "success" : "warning";
 		ctx.ui.setStatus(STATUS_KEY, ctx.ui.theme.fg(color, label));
 	};
