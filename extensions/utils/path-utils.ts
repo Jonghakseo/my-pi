@@ -8,20 +8,6 @@
 import { homedir } from "node:os";
 import path from "node:path";
 
-// ─── Constants (from upload-image-url.ts) ────────────────────────────────────
-
-export const ALLOWED_EXTENSIONS = new Set([".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".bmp", ".ico"]);
-
-export const MIME_TO_EXT: Record<string, string> = {
-	"image/png": ".png",
-	"image/jpeg": ".jpg",
-	"image/gif": ".gif",
-	"image/webp": ".webp",
-	"image/svg+xml": ".svg",
-	"image/bmp": ".bmp",
-	"image/x-icon": ".ico",
-};
-
 // ─── File Reference Sanitization (from files.ts) ────────────────────────────
 
 /**
@@ -134,38 +120,4 @@ export function extractPathsFromInput(pathValue: unknown): string[] {
 	if (typeof pathValue === "string" && pathValue.length > 0) return [pathValue];
 	if (Array.isArray(pathValue)) return pathValue.filter((x): x is string => typeof x === "string" && x.length > 0);
 	return [];
-}
-
-// ─── Filename Sanitization (from upload-image-url.ts) ────────────────────────
-
-/**
- * Strip path separators and shell-unsafe characters from a filename.
- * Prevents directory traversal and command injection.
- */
-export function sanitizeFilename(raw: string): string {
-	return raw.replace(/[/\\:*?"<>|`$!&;#{}()'\s]/g, "_").replace(/\.{2,}/g, "_");
-}
-
-/**
- * Infer a file extension from a URL or content-type header.
- *
- * Checks the URL pathname extension first, then falls back to
- * MIME type mapping. Defaults to `.png` if nothing matches.
- */
-export function inferExtension(url: string, contentType?: string): string {
-	try {
-		const parts = path.extname(new URL(url).pathname).toLowerCase().split("?");
-		const ext = parts[0] ?? "";
-		if (ext && ALLOWED_EXTENSIONS.has(ext)) return ext;
-	} catch {
-		/* ignore invalid URLs */
-	}
-
-	if (contentType) {
-		for (const [mime, ext] of Object.entries(MIME_TO_EXT)) {
-			if (contentType.includes(mime)) return ext;
-		}
-	}
-
-	return ".png";
 }

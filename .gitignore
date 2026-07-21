@@ -3,7 +3,6 @@ auth.json
 trust.json
 agents/.env.browser
 .env
-extensions/.env
 
 # Session data (large)
 sessions/
