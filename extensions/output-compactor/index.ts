@@ -26,6 +26,7 @@ import { join, resolve } from "node:path";
 import type { ExtensionAPI, ExtensionContext, ToolResultEvent } from "@earendil-works/pi-coding-agent";
 import { compressOutput } from "./compact.ts";
 import { getNetSaved, recordCompaction, reverseIfTracked } from "./state.ts";
+import { appendCompactionLog } from "./telemetry.ts";
 import { estimateTokens, formatSignedTokens } from "./tokens.ts";
 
 const DEFAULT_THRESHOLD_BYTES = 24 * 1024;
@@ -131,15 +132,29 @@ export default function (pi: ExtensionAPI) {
 		const summary = await compressOutput(command, output, model, ctx.modelRegistry, COMPRESS_TIMEOUT_MS);
 		if (!summary) return;
 
+		const summaryBytes = Buffer.byteLength(summary, "utf8");
+		// 압축이 실질 이득이 없으면(요약이 원본만큼 크거나 더 큼) 그대로 통과시킨다.
+		if (summaryBytes >= size) return;
+		const reductionPct = Math.round((1 - summaryBytes / size) * 100);
 		const header =
-			`[output-compactor] bash output was large (${formatSize(size)}) and has been compressed by ${SPARK_MODEL_ID}.\n` +
+			`[output-compactor] bash output compressed by ${SPARK_MODEL_ID}: ${formatSize(size)} \u2192 ${formatSize(summaryBytes)} (-${reductionPct}%).\n` +
 			`Full output saved to: ${savedPath}\n` +
 			`Re-read that file if you need exact verbatim content (full logs, precise lines).\n\n` +
 			`--- compressed summary ---\n`;
 		const replacement = header + summary;
 
+		const sessionId = sessionIdOf(ctx);
 		const savedTokens = estimateTokens(output) - estimateTokens(replacement);
-		recordCompaction(sessionIdOf(ctx), resolve(savedPath), estimateTokens(output), savedTokens);
+		recordCompaction(sessionId, resolve(savedPath), estimateTokens(output), savedTokens);
+		appendCompactionLog({
+			ts: Date.now(),
+			sessionId,
+			command,
+			originalBytes: size,
+			summaryBytes,
+			reductionPct,
+			savedTokens,
+		});
 		refreshFooter(ctx);
 
 		return {
