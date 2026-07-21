@@ -7,7 +7,6 @@
 	],
 	"files": [
 		"agents/",
-		"extensions/.env.example",
 		"extensions/.gitignore",
 		"extensions/AGENTS.md",
 		"extensions/archive-to-html/",
@@ -40,7 +39,6 @@
 		"extensions/tsconfig.json",
 		"extensions/tsconfig.web-access.json",
 		"extensions/until/",
-		"extensions/upload-image-url/",
 		"extensions/usage-analytics/",
 		"extensions/utils/",
 		"extensions/web-access/",

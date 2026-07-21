@@ -30,7 +30,6 @@ Pi 공식 문서는 auto-discovery 대상으로 `extensions/*.ts`와 `extensions
 | [`footer/`](./footer/index.ts) | 커스텀 푸터 UI facade (`custom-style/main.ts`) |
 | [`theme-cycler/`](./theme-cycler/index.ts) | `Ctrl+Shift+X`로 테마 순환 |
 | [`until/`](./until/index.ts) | `/until`, `until_report` 기반 반복 작업 관리 |
-| [`upload-image-url/`](./upload-image-url/index.ts) | 이미지 → GitHub 스토리지 업로드 |
 | [`usage-analytics/`](./usage-analytics/index.ts) | 서브에이전트·스킬 사용 통계 오버레이 |
 | [`working-text/`](./working-text/index.ts) | 스피너 작업 메시지 (팁 텍스트 + 경과 시간) |
 | [`web-access/`](./web-access/index.ts) | 웹 검색/콘텐츠 추출 도구 및 큐레이터 워크플로우 |

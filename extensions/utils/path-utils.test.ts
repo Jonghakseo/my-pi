@@ -2,14 +2,10 @@ import { homedir } from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import {
-	ALLOWED_EXTENSIONS,
 	extractPathsFromInput,
 	formatDisplayPath,
 	getFolderName,
-	inferExtension,
 	isCommentLikeReference,
-	MIME_TO_EXT,
-	sanitizeFilename,
 	sanitizeReference,
 	shortenPath,
 	stripLineSuffix,
@@ -221,98 +217,5 @@ describe("extractPathsFromInput", () => {
 
 	it("handles single-element array", () => {
 		expect(extractPathsFromInput(["only.ts"])).toEqual(["only.ts"]);
-	});
-});
-
-// ─── sanitizeFilename ────────────────────────────────────────────────────────
-
-describe("sanitizeFilename", () => {
-	it("replaces path separators", () => {
-		expect(sanitizeFilename("path/to/file")).toBe("path_to_file");
-		expect(sanitizeFilename("path\\to\\file")).toBe("path_to_file");
-	});
-
-	it("replaces shell-unsafe characters", () => {
-		expect(sanitizeFilename('file"name')).toBe("file_name");
-		expect(sanitizeFilename("file`name")).toBe("file_name");
-		expect(sanitizeFilename("file$name")).toBe("file_name");
-		expect(sanitizeFilename("file!name")).toBe("file_name");
-	});
-
-	it("replaces consecutive dots", () => {
-		expect(sanitizeFilename("file..name")).toBe("file_name");
-		expect(sanitizeFilename("file...name")).toBe("file_name");
-	});
-
-	it("replaces spaces", () => {
-		expect(sanitizeFilename("my file")).toBe("my_file");
-	});
-
-	it("handles empty string", () => {
-		expect(sanitizeFilename("")).toBe("");
-	});
-
-	it("handles Korean characters (no change)", () => {
-		expect(sanitizeFilename("이미지")).toBe("이미지");
-	});
-});
-
-// ─── inferExtension ──────────────────────────────────────────────────────────
-
-describe("inferExtension", () => {
-	it("infers from URL pathname", () => {
-		expect(inferExtension("https://example.com/image.jpg")).toBe(".jpg");
-		expect(inferExtension("https://example.com/photo.png")).toBe(".png");
-		expect(inferExtension("https://example.com/icon.svg")).toBe(".svg");
-	});
-
-	it("falls back to content-type", () => {
-		expect(inferExtension("https://example.com/unknown", "image/gif")).toBe(".gif");
-		expect(inferExtension("https://example.com/unknown", "image/webp")).toBe(".webp");
-	});
-
-	it("defaults to .png", () => {
-		expect(inferExtension("https://example.com/noext")).toBe(".png");
-		expect(inferExtension("https://example.com/noext", "text/html")).toBe(".png");
-	});
-
-	it("handles query parameters in URL", () => {
-		// The URL has .jpg but with query params
-		expect(inferExtension("https://example.com/image.jpg?w=200")).toBe(".jpg");
-	});
-
-	it("handles invalid URLs gracefully", () => {
-		expect(inferExtension("not-a-url")).toBe(".png");
-	});
-
-	it("handles URL with no extension and image/jpeg content-type", () => {
-		expect(inferExtension("https://cdn.example.com/abc123", "image/jpeg")).toBe(".jpg");
-	});
-});
-
-// ─── ALLOWED_EXTENSIONS constant ─────────────────────────────────────────────
-
-describe("ALLOWED_EXTENSIONS", () => {
-	it("contains common image extensions", () => {
-		expect(ALLOWED_EXTENSIONS.has(".png")).toBe(true);
-		expect(ALLOWED_EXTENSIONS.has(".jpg")).toBe(true);
-		expect(ALLOWED_EXTENSIONS.has(".gif")).toBe(true);
-		expect(ALLOWED_EXTENSIONS.has(".webp")).toBe(true);
-		expect(ALLOWED_EXTENSIONS.has(".svg")).toBe(true);
-	});
-
-	it("does not contain non-image extensions", () => {
-		expect(ALLOWED_EXTENSIONS.has(".txt")).toBe(false);
-		expect(ALLOWED_EXTENSIONS.has(".pdf")).toBe(false);
-	});
-});
-
-// ─── MIME_TO_EXT constant ────────────────────────────────────────────────────
-
-describe("MIME_TO_EXT", () => {
-	it("maps common MIME types", () => {
-		expect(MIME_TO_EXT["image/png"]).toBe(".png");
-		expect(MIME_TO_EXT["image/jpeg"]).toBe(".jpg");
-		expect(MIME_TO_EXT["image/svg+xml"]).toBe(".svg");
 	});
 });

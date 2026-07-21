@@ -66,7 +66,7 @@ cd ~/.pi/agent
 
 ## 3. Run the bootstrap script
 
-The script checks required CLI availability, installs dependencies, syncs agents, and scaffolds `.env` files.
+The script checks required CLI availability, installs dependencies, syncs agents, and scaffolds the root `.env` file.
 
 ```bash
 ./scripts/bootstrap.sh
@@ -77,7 +77,7 @@ It will:
 1. Check that Node, pnpm, Git, GitHub CLI, and pi are available.
 2. `pnpm install` at the repo root **and** inside `extensions/`.
 3. Run `scripts/sync-agents.mjs` to copy `agents/*.md` into `~/.pi/agent/agents/`.
-4. Create `.env` / `extensions/.env` from the templates if missing.
+4. Create `.env` from the template if missing.
 5. Print a checklist of any missing optional CLIs from §1.
 
 Re-run it anytime; it is idempotent.
@@ -94,13 +94,6 @@ You normally don't edit it by hand.
 
 ### `.env` (repo root)
 Currently empty by default; add only what your own extensions need.
-
-### `extensions/.env`
-Used by `upload-image-url` extension:
-```env
-PI_STORAGE_OWNER=<github-username>
-PI_STORAGE_REPO=<public-image-host-repo>
-```
 
 ### `agents/.env.browser` (optional)
 Only needed if you use the `browser` agent with persistent cookies.
@@ -141,7 +134,7 @@ These are intentionally git-ignored — recreate or substitute if you want parit
 | Path | Why ignored | What to do |
 |---|---|---|
 | `auth.json` | provider tokens | created on first launch |
-| `.env`, `extensions/.env`, `agents/.env.browser` | secrets | use the `.example` files |
+| `.env`, `agents/.env.browser` | secrets | use the `.example` files |
 | `sessions/`, `.data/`, `state/`, `.context/`, `cron/` | per-machine runtime data | left empty; pi recreates |
 | `bin/`, `local-scripts/` | personal scripts | not portable |
 | `extensions/until-presets/`, `extensions/usage-reporter/` | personal extensions | optional |

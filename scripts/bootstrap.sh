@@ -90,17 +90,15 @@ scaffold() {
   fi
 }
 scaffold "$REPO_ROOT/.env"              "$REPO_ROOT/.env.example"
-scaffold "$REPO_ROOT/extensions/.env"   "$REPO_ROOT/extensions/.env.example"
 
 # 6. Final notes --------------------------------------------------------------
 bold "==> Done"
 cat <<EOF
 
 Next steps:
-  1. Fill in extensions/.env (PI_STORAGE_OWNER / PI_STORAGE_REPO) if you use upload-image-url.
-  2. Make sure Claude Code has your MCP servers registered (the bridge reuses them).
-  3. Launch:  cd ~/.pi/agent && pi
-  4. On first launch, sign in to the default provider (openai-codex per settings.json).
+  1. Make sure Claude Code has your MCP servers registered (the bridge reuses them).
+  2. Launch:  cd ~/.pi/agent && pi
+  3. On first launch, sign in to the default provider (openai-codex per settings.json).
 
 See INSTALL.md for the full reference.
 EOF

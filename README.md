@@ -143,7 +143,6 @@ Pi can auto-discover both `extensions/*.ts` and `extensions/*/index.ts`, but thi
 | [`notify/`](./extensions/notify/index.ts) | `/notify` and `/notify-off` for session completion notifications and macOS TTS |
 | [`cron/`](./extensions/cron/index.ts) | Persistent `cron` tool and `/cron` command for scheduled headless pi jobs via a daemon and macOS `launchd` |
 | [`until/`](./extensions/until/index.ts) | `/until`, `/untils`, `/until-cancel`, and `until_report` for repeat-until-condition workflows |
-| [`upload-image-url/`](./extensions/upload-image-url/index.ts) | `upload_image_url` — upload local/remote images to GitHub-backed storage for embedding |
 | [`usage-analytics/`](./extensions/usage-analytics/index.ts) | `/analytics` — subagent and skill usage analytics overlay |
 | [`archive-to-html/`](./extensions/archive-to-html/index.ts) | Archives matching temporary HTML outputs and `show_widget` renderings into `~/Documents/agent-history/분류 전` |
 
