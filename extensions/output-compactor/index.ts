@@ -25,8 +25,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import type { ExtensionAPI, ExtensionContext, ToolResultEvent } from "@earendil-works/pi-coding-agent";
 import { compressOutput } from "./compact.ts";
-import { getStats, recordCompaction, reverseIfTracked } from "./state.ts";
-import { appendCompactionLog } from "./telemetry.ts";
+import { getStats, recordCompaction, recordSkip, reverseIfTracked } from "./telemetry.ts";
 import { estimateTokens, formatSignedTokens } from "./tokens.ts";
 
 const DEFAULT_THRESHOLD_BYTES = 24 * 1024;
@@ -97,13 +96,13 @@ function saveOriginal(toolCallId: string, output: string): string | undefined {
 export default function (pi: ExtensionAPI) {
 	const refreshFooter = (ctx: ExtensionContext) => {
 		if (!ctx.hasUI) return;
-		const { net, count } = getStats(sessionIdOf(ctx));
+		const { netSavedTokens, count } = getStats(sessionIdOf(ctx));
 		if (count === 0) {
 			ctx.ui.setStatus(STATUS_KEY, undefined);
 			return;
 		}
-		const label = `󰀼 ${formatSignedTokens(net)} tok · ${count}×`;
-		const color = net > 0 ? "success" : "warning";
+		const label = `󰀼 ${formatSignedTokens(netSavedTokens)} tok · ${count}×`;
+		const color = netSavedTokens > 0 ? "success" : "warning";
 		ctx.ui.setStatus(STATUS_KEY, ctx.ui.theme.fg(color, label));
 	};
 
@@ -121,20 +120,37 @@ export default function (pi: ExtensionAPI) {
 		const output = joinText(event.content);
 		if (!output) return;
 
+		const sessionId = sessionIdOf(ctx);
+		const command = typeof event.input.command === "string" ? event.input.command : "";
+		const monitorBase = {
+			ts: Date.now(),
+			sessionId,
+			command,
+			thresholdBytes: thresholdBytes(),
+			originalBytes: size,
+		};
 		const model = ctx.modelRegistry.find(SPARK_PROVIDER, SPARK_MODEL_ID);
-		if (!model) return;
+		if (!model) {
+			recordSkip({ ...monitorBase, reason: "model_unavailable" });
+			return;
+		}
 
 		const savedPath = saveOriginal(event.toolCallId, output);
 		// 원본을 저장하지 못하면 재조회 안전밸브가 없으므로 압축하지 않고 통과시킨다.
-		if (!savedPath) return;
+		if (!savedPath) {
+			recordSkip({ ...monitorBase, reason: "original_save_failed" });
+			return;
+		}
 
-		const command = typeof event.input.command === "string" ? event.input.command : "";
+		const modelStartedAt = Date.now();
 		const summary = await compressOutput(command, output, model, ctx.modelRegistry, COMPRESS_TIMEOUT_MS);
-		if (!summary) return;
+		const modelDurationMs = Date.now() - modelStartedAt;
+		if (!summary) {
+			recordSkip({ ...monitorBase, reason: "compression_failed_or_timed_out", modelDurationMs });
+			return;
+		}
 
 		const summaryBytes = Buffer.byteLength(summary, "utf8");
-		// 압축이 실질 이득이 없으면(요약이 원본만큼 크거나 더 큼) 그대로 통과시킨다.
-		if (summaryBytes >= size) return;
 		const reductionPct = Math.round((1 - summaryBytes / size) * 100);
 		const header =
 			`[output-compactor] bash output compressed by ${SPARK_MODEL_ID}: ${formatSize(size)} \u2192 ${formatSize(summaryBytes)} (-${reductionPct}%).\n` +
@@ -142,18 +158,30 @@ export default function (pi: ExtensionAPI) {
 			`Re-read that file if you need exact verbatim content (full logs, precise lines).\n\n` +
 			`--- compressed summary ---\n`;
 		const replacement = header + summary;
+		const replacementBytes = Buffer.byteLength(replacement, "utf8");
+		// 헤더를 포함한 주입본까지 원본보다 작을 때만 실제 컨텍스트 절감이 발생한다.
+		if (replacementBytes >= size) {
+			recordSkip({ ...monitorBase, reason: "no_benefit", summaryBytes, modelDurationMs });
+			return;
+		}
 
-		const sessionId = sessionIdOf(ctx);
-		const savedTokens = estimateTokens(output) - estimateTokens(replacement);
-		recordCompaction(sessionId, resolve(savedPath), estimateTokens(output), savedTokens);
-		appendCompactionLog({
-			ts: Date.now(),
-			sessionId,
-			command,
-			originalBytes: size,
+		const originalTokens = estimateTokens(output);
+		const summaryTokens = estimateTokens(summary);
+		const replacementTokens = estimateTokens(replacement);
+		const savedTokens = originalTokens - replacementTokens;
+		const effectiveReductionPct = Math.round((1 - replacementBytes / size) * 100);
+		recordCompaction({
+			...monitorBase,
+			outputPath: resolve(savedPath),
 			summaryBytes,
+			replacementBytes,
 			reductionPct,
+			effectiveReductionPct,
+			originalTokens,
+			summaryTokens,
+			replacementTokens,
 			savedTokens,
+			modelDurationMs,
 		});
 		refreshFooter(ctx);
 
