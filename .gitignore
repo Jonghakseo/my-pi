@@ -37,6 +37,7 @@ state/
 .context/
 cache/
 bookmarks.json
+models-store.json
 
 # OS / IDE
 .DS_Store
