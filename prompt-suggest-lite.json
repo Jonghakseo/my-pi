@@ -1,6 +1,6 @@
 {
 	"enabled": true,
-	"modelRef": "session-default",
+	"modelRef": "openai-codex/gpt-5.6-luna",
 	"thinking": "session-default",
 	"customInstruction": "",
 	"noSuggestionToken": "[no suggestion]",
