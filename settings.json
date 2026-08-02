@@ -6,22 +6,23 @@
   },
   "defaultModel": "claude-fable-5",
   "defaultProvider": "anthropic",
-  "defaultThinkingLevel": "max",
+  "defaultThinkingLevel": "high",
   "doubleEscapeAction": "tree",
   "enabledModels": [
-    "anthropic/claude-opus-4-8",
     "anthropic/claude-fable-5",
     "openai-codex/gpt-5.6-sol",
-    "openai-codex/gpt-5.6-terra"
+    "openai-codex/gpt-5.6-terra",
+    "anthropic/claude-opus-5",
+    "azure-deepseek/deepseek-v4-pro"
   ],
   "hideThinkingBlock": true,
+  "httpIdleTimeoutMs": 90000,
   "images": {
     "blockImages": false
   },
-  "lastChangelogVersion": "0.80.6",
+  "lastChangelogVersion": "0.83.0",
   "packages": [
     "npm:@ryan_nookpi/pi-extension-codex-fast-mode",
-    "npm:@ryan_nookpi/pi-extension-clipboard",
     "npm:@ryan_nookpi/pi-extension-ask-user-question",
     "npm:@ryan_nookpi/pi-extension-auto-name",
     "npm:@ryan_nookpi/pi-extension-delayed-action",
@@ -36,14 +37,15 @@
     "npm:@ryan_nookpi/pi-extension-cc-system-prompt",
     "npm:@ryan_nookpi/pi-extension-todo-write-overlay",
     "npm:@ryan_nookpi/pi-extension-diff-review",
-    "npm:@ryan_nookpi/pi-extension-subagent"
+    "npm:@ryan_nookpi/pi-extension-subagent",
+    "npm:@ryan_nookpi/pi-extension-clipboard"
   ],
   "quietStartup": true,
   "subagent": {
     "claudeRuntime": "cli",
     "symbolMap": {
-      "?": "searcher",
       "!": "challenger",
+      "?": "searcher",
       "@": "browser"
     }
   },

@@ -17,6 +17,7 @@ Pi 공식 문서는 auto-discovery 대상으로 `extensions/*.ts`와 `extensions
 | 확장 | 설명 |
 |------|------|
 | [`archive-to-html/`](./archive-to-html/index.ts) | 조건에 맞는 임시 HTML 출력과 `show_widget` 렌더링 자동 아카이브 |
+| [`azure-deepseek/`](./azure-deepseek/index.ts) | Azure AI Foundry OpenAI v1 DeepSeek 배포 프로바이더 (`AZURE_DEEPSEEK_*` 환경변수) |
 | [`diff-overlay/`](./diff-overlay/index.ts) | Diff 뷰어 오버레이 |
 | [`dynamic-agents-md/`](./dynamic-agents-md/index.ts) | 디렉토리 스코프별 동적 AGENTS.md 로딩 |
 | [`files/`](./files/index.ts) | 파일 피커 / Diff 뷰어 UI |
