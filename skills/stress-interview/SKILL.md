@@ -19,6 +19,7 @@ disable-model-invocation: false
 3. `subagent help`가 아직 확인되지 않았거나 현재 세션에서 인터페이스가 불명확하면 먼저 Pi 도구로 확인한다.
    - 예: `subagent({ command: "subagent help" })`
 4. 아래 3개를 **병렬**로 실행한다.
+   - 모든 에이전트는 반드시 `--isolated`(격리된) 상태로 호출한다.
    - `verifier`: 테스트/타입체크/빌드/재현 가능한 검증 중심
    - `reviewer`: correctness, regressions, maintainability 중심
    - `challenger`: 숨은 가정, 실패 시나리오, 의사결정 취약점 중심
