@@ -31,7 +31,7 @@ import { estimateTokens, formatSignedTokens } from "./tokens.ts";
 const DEFAULT_THRESHOLD_BYTES = 24 * 1024;
 const SPARK_PROVIDER = "openai-codex";
 const SPARK_MODEL_ID = "gpt-5.3-codex-spark";
-const COMPRESS_TIMEOUT_MS = 20_000;
+const COMPRESS_TIMEOUT_MS = 30_000;
 const TARGET_TOOLS = new Set(["bash"]);
 const TMP_SUBDIR = "pi-output-compactor";
 const STATUS_KEY = "output-compactor";
