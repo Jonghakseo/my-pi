@@ -65,6 +65,7 @@ extensions/picky-handoff
 # Keep already tracked skills; ignore any new/untracked skill folders by default.
 skills/*
 !skills/harness-refine/
+!skills/i-have-adhd/
 skills-archive/*
 
 # claude-mcp-bridge local runtime settings
