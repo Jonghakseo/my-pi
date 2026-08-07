@@ -4,6 +4,7 @@ import {
 	type Message,
 	type Model,
 	type ProviderEnv,
+	type ProviderHeaders,
 	type ThinkingLevel as AiThinkingLevel,
 	type UserMessage,
 } from "@earendil-works/pi-ai/compat";
@@ -30,7 +31,7 @@ type StreamSimpleLike = (
 	options: {
 		apiKey?: string;
 		env?: ProviderEnv;
-		headers?: Record<string, string>;
+		headers?: ProviderHeaders;
 		reasoning?: AiThinkingLevel;
 		sessionId?: string;
 		onPayload?: (payload: unknown) => Promise<undefined>;
@@ -80,7 +81,7 @@ function resolveModelForCall(currentModel: PiModel, modelRef: string, allModels:
 async function resolveRequestAuth(
 	model: PiModel,
 	modelRegistry: ModelRegistry,
-): Promise<{ apiKey?: string; env?: ProviderEnv; headers?: Record<string, string> }> {
+): Promise<{ apiKey?: string; env?: ProviderEnv; headers?: ProviderHeaders }> {
 	const auth = await modelRegistry.getApiKeyAndHeaders(model);
 	if (!auth.ok) throw new Error(auth.error);
 	return { apiKey: auth.apiKey, env: auth.env, headers: auth.headers };
@@ -97,7 +98,7 @@ async function invokeModel(
 	options: {
 		apiKey?: string;
 		env?: ProviderEnv;
-		headers?: Record<string, string>;
+		headers?: ProviderHeaders;
 		reasoning?: AiThinkingLevel;
 	},
 ): Promise<CompletionResponseLike> {
