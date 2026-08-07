@@ -16,8 +16,11 @@
  * pi 내장 truncation(50KB)이 손대지 않는 16~50KB 밴드를 겨냥한다.
  *
  * 환경변수:
- *   PI_OUTPUT_COMPACTOR=off            — 비활성화
+ *   PI_OUTPUT_COMPACTOR=off            — 기본 비활성화
  *   PI_OUTPUT_COMPACTOR_THRESHOLD_KB   — 임계치(KB) 재정의 (기본 24)
+ *
+ * 명령어:
+ *   /output-compactor on|off           — 현재 세션에서 즉시 켜기/끄기
  */
 
 import { mkdirSync, writeFileSync } from "node:fs";
@@ -36,8 +39,8 @@ const TARGET_TOOLS = new Set(["bash"]);
 const TMP_SUBDIR = "pi-output-compactor";
 const STATUS_KEY = "output-compactor";
 
-function isEnabled(): boolean {
-	return (process.env.PI_OUTPUT_COMPACTOR || "").toLowerCase() !== "off";
+function isEnabled(sessionOverride: boolean | undefined): boolean {
+	return sessionOverride ?? (process.env.PI_OUTPUT_COMPACTOR || "").toLowerCase() !== "off";
 }
 
 function thresholdBytes(): number {
@@ -94,6 +97,8 @@ function saveOriginal(toolCallId: string, output: string): string | undefined {
 }
 
 export default function (pi: ExtensionAPI) {
+	const sessionEnabledOverrides = new Map<string, boolean>();
+
 	const refreshFooter = (ctx: ExtensionContext) => {
 		if (!ctx.hasUI) return;
 		const { netSavedTokens, count } = getStats(sessionIdOf(ctx));
@@ -191,11 +196,31 @@ export default function (pi: ExtensionAPI) {
 		};
 	};
 
+	pi.registerCommand("output-compactor", {
+		description: "Toggle bash-output compression for this session: /output-compactor on|off",
+		handler: async (args, ctx) => {
+			const value = args.trim().toLowerCase();
+			if (value !== "on" && value !== "off") {
+				ctx.ui.notify("사용법: /output-compactor on|off", "error");
+				return;
+			}
+
+			const sessionId = sessionIdOf(ctx);
+			if (!sessionId) {
+				ctx.ui.notify("세션 ID를 확인할 수 없어 설정을 바꿀 수 없습니다.", "error");
+				return;
+			}
+
+			sessionEnabledOverrides.set(sessionId, value === "on");
+			ctx.ui.notify(`Output compactor: ${value}`, "info");
+		},
+	});
+
 	pi.on("session_start", (_event, ctx) => refreshFooter(ctx));
 	pi.on("session_info_changed", (_event, ctx) => refreshFooter(ctx));
 
 	pi.on("tool_result", async (event: ToolResultEvent, ctx: ExtensionContext) => {
-		if (!isEnabled()) return;
+		if (!isEnabled(sessionEnabledOverrides.get(sessionIdOf(ctx)))) return;
 		if (event.toolName === "read") return handleReadReversal(event, ctx);
 		if (TARGET_TOOLS.has(event.toolName)) return compactBashResult(event, ctx);
 	});
