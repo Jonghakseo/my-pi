@@ -36,6 +36,7 @@ const SPARK_PROVIDER = "openai-codex";
 const SPARK_MODEL_ID = "gpt-5.3-codex-spark";
 const COMPRESS_TIMEOUT_MS = 30_000;
 const TARGET_TOOLS = new Set(["bash"]);
+const TOGGLE_VALUES = ["on", "off"] as const;
 const TMP_SUBDIR = "pi-output-compactor";
 const STATUS_KEY = "output-compactor";
 
@@ -198,6 +199,13 @@ export default function (pi: ExtensionAPI) {
 
 	pi.registerCommand("output-compactor", {
 		description: "Toggle bash-output compression for this session: /output-compactor on|off",
+		getArgumentCompletions: (prefix) => {
+			const matches = TOGGLE_VALUES.filter((value) => value.startsWith(prefix.trim().toLowerCase())).map((value) => ({
+				value,
+				label: value,
+			}));
+			return matches.length > 0 ? matches : null;
+		},
 		handler: async (args, ctx) => {
 			const value = args.trim().toLowerCase();
 			if (value !== "on" && value !== "off") {
