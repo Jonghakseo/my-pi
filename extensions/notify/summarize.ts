@@ -1,4 +1,4 @@
-import { type Api, completeSimple, type Model } from "@earendil-works/pi-ai/compat";
+import { type Api, completeSimple, type Model, type ProviderHeaders } from "@earendil-works/pi-ai/compat";
 import { normalizeSingleSummary } from "./format.ts";
 import { sanitizeNotificationText } from "./text.ts";
 
@@ -16,7 +16,7 @@ const NOTIFICATION_SUMMARY_PROMPT = [
 
 export type NotificationSummaryModel = Model<Api>;
 export type NotificationSummaryAuth =
-	| { ok: true; apiKey?: string; headers?: Record<string, string> }
+	| { ok: true; apiKey?: string; headers?: ProviderHeaders }
 	| { ok: false; error: string };
 
 export interface NotificationSummaryModelRegistry {

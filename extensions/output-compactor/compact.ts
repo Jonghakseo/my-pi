@@ -1,4 +1,4 @@
-import { type Api, completeSimple, type Model } from "@earendil-works/pi-ai/compat";
+import { type Api, completeSimple, type Model, type ProviderHeaders } from "@earendil-works/pi-ai/compat";
 
 const COMPACTION_SYSTEM_PROMPT = [
 	"You compress large shell-command output so it fits a coding agent's context window.",
@@ -22,7 +22,7 @@ const COMPACTION_SYSTEM_PROMPT = [
 export type CompactorModel = Model<Api>;
 
 export type CompactorAuth =
-	| { ok: true; apiKey?: string; headers?: Record<string, string>; env?: Record<string, string> }
+	| { ok: true; apiKey?: string; headers?: ProviderHeaders; env?: Record<string, string> }
 	| { ok: false; error: string };
 
 export interface CompactorModelRegistry {
