@@ -30,6 +30,24 @@ function normalizeInlinePreview(value: string): string {
 	return value.replace(/\r\n|\r|\n/g, " ");
 }
 
+function abbreviateLeadingCwd(command: string, cwd: string): string {
+	if (!cwd) return command;
+
+	const escapedSingleQuotedCwd = cwd.replace(/'/g, `'\\''`);
+	const escapedDoubleQuotedCwd = cwd.replace(/(["\\$`])/g, "\\$1");
+	const prefixes = [`cd ${cwd}`, `cd '${escapedSingleQuotedCwd}'`, `cd "${escapedDoubleQuotedCwd}"`];
+
+	for (const prefix of prefixes) {
+		if (!command.startsWith(prefix)) continue;
+		const remainder = command.slice(prefix.length);
+		if (remainder.length === 0 || /^[\s;&|]/.test(remainder)) {
+			return `cd <cwd>${remainder}`;
+		}
+	}
+
+	return command;
+}
+
 class BashCallPreview implements Component {
 	private readonly text = new Text("", 0, 0);
 
@@ -154,16 +172,17 @@ To execute a command that doesn't need the user to see its output, prefix it wit
 
 			return { command, title, timeout };
 		},
-		renderCall(args, theme, _context) {
+		renderCall(args, theme, context) {
 			const title = args.title as string | undefined;
 			const command = args.command as string;
+			const previewCommand = context.expanded ? command : abbreviateLeadingCwd(command, context.cwd);
 			const showTitle = typeof title === "string" && title.length > 0;
 
 			const header = showTitle
 				? `${theme.fg("toolTitle", theme.bold("bash"))} ${theme.fg("accent", title)}`
 				: theme.fg("toolTitle", theme.bold("bash"));
 
-			return new BashCallPreview(header, command, theme);
+			return new BashCallPreview(header, previewCommand, theme);
 		},
 		renderResult(result, { expanded, isPartial }, theme, context) {
 			const runningState = context.state as RunningRenderState;
