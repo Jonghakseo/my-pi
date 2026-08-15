@@ -30,22 +30,26 @@ function normalizeInlinePreview(value: string): string {
 	return value.replace(/\r\n|\r|\n/g, " ");
 }
 
+const LEADING_CD_PATTERN = /^cd\s+(?:'([^']*)'|"((?:[^"\\]|\\.)*)"|([^\s;&|()]+))/;
+
 function abbreviateLeadingCwd(command: string, cwd: string): string {
 	if (!cwd) return command;
 
-	const escapedSingleQuotedCwd = cwd.replace(/'/g, `'\\''`);
-	const escapedDoubleQuotedCwd = cwd.replace(/(["\\$`])/g, "\\$1");
-	const prefixes = [`cd ${cwd}`, `cd '${escapedSingleQuotedCwd}'`, `cd "${escapedDoubleQuotedCwd}"`];
+	const match = command.match(LEADING_CD_PATTERN);
+	if (!match) return command;
 
-	for (const prefix of prefixes) {
-		if (!command.startsWith(prefix)) continue;
-		const remainder = command.slice(prefix.length);
-		if (remainder.length === 0 || /^[\s;&|]/.test(remainder)) {
-			return `cd <cwd>${remainder}`;
-		}
-	}
+	const [matched, singleQuoted, doubleQuoted, bare] = match;
+	let target: string;
+	if (singleQuoted !== undefined) target = singleQuoted;
+	else if (doubleQuoted !== undefined) target = doubleQuoted.replace(/\\(["\\$`])/g, "$1");
+	else target = bare;
 
-	return command;
+	if (target !== cwd && !target.startsWith(`${cwd}/`)) return command;
+
+	const remainder = command.slice(matched.length);
+	if (remainder.length > 0 && !/^[\s;&|)]/.test(remainder)) return command;
+
+	return `cd <cwd>${target.slice(cwd.length)}${remainder}`;
 }
 
 class BashCallPreview implements Component {

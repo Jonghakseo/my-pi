@@ -48,4 +48,33 @@ describe("bash tool command preview", () => {
 
 		expect(rendered).toContain("$ cd /Users/creatrip/other && git status --short");
 	});
+
+	it("abbreviates the cwd prefix of a subdirectory cd", () => {
+		const cwd = "/Users/creatrip/project";
+		const rendered = renderCommand(`cd ${cwd}/packages/api && pnpm test`, cwd, false);
+
+		expect(rendered).toContain("$ cd <cwd>/packages/api && pnpm test");
+		expect(rendered).not.toContain(cwd);
+	});
+
+	it("abbreviates a quoted subdirectory cd", () => {
+		const cwd = "/Users/creatrip/project";
+		const rendered = renderCommand(`cd '${cwd}/packages/api' && pnpm test`, cwd, false);
+
+		expect(rendered).toContain("$ cd <cwd>/packages/api && pnpm test");
+	});
+
+	it("abbreviates a cd terminated by a shell separator", () => {
+		const cwd = "/Users/creatrip/project";
+
+		expect(renderCommand(`cd ${cwd}; ls`, cwd, false)).toContain("$ cd <cwd>; ls");
+		expect(renderCommand(`cd ${cwd}/packages; ls`, cwd, false)).toContain("$ cd <cwd>/packages; ls");
+	});
+
+	it("does not abbreviate a sibling directory sharing the cwd prefix", () => {
+		const cwd = "/Users/creatrip/project";
+		const rendered = renderCommand(`cd ${cwd}extra && ls`, cwd, false);
+
+		expect(rendered).toContain(`$ cd ${cwd}extra && ls`);
+	});
 });
