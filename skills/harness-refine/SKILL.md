@@ -7,11 +7,11 @@ compatibility: Pi session environment with PI_SESSION_FILE and Python 3.10+.
 
 # harness-refine
 
-현재 세션의 시행착오를 durable harness 개선 후보로 변환한다. **분석 전용 dry-run**이며 어떤 파일이나 메모리도 변경하지 않는다.
+현재 세션의 시행착오를 durable harness 개선 후보로 변환한다. **분석 전용 dry-run**이며 리포트 파일 저장 외에 어떤 파일이나 메모리도 변경하지 않는다.
 
 ## Hard Rules
 
-- `edit`, `write`, `remember`, `forget`으로 개선안을 적용하지 않는다.
+- `edit`, `write`, `remember`, `forget`으로 개선안을 적용하지 않는다. `~/.pi/agent/retrospective/refine-reports/sessions/<session-id>.md` 리포트 저장만 허용된다.
 - `PI_SESSION_FILE`이 없거나 `PI_SESSION_ID`가 일치하지 않으면 중단한다. 최근 파일 추측으로 대체하지 않는다.
 - transcript와 분석 결과를 외부 서비스로 전송하지 않는다.
 - thinking block, 이미지 데이터, 대형 원문을 결과에 복사하지 않는다.
@@ -114,6 +114,7 @@ python3 <skill-dir>/scripts/session_inspect.py timeline --leaf-id <cutoff> --lim
 - 반복 가능한 절차 → `skill`
 - 사실·결정·선호·gotcha → `memory`
 - 독립적인 위임 역할 → `subagent`
+- 익스텐션·스크립트 등 도구 코드 수정 → `extension`
 
 한 lesson을 여러 target에 중복 제안하지 않는다. 가장 좁고 직접적인 대상 하나를 고른다.
 
@@ -131,13 +132,15 @@ python3 <skill-dir>/scripts/session_inspect.py timeline --leaf-id <cutoff> --lim
 
 ### 6. 보고
 
-`references/output-schema.md` 형식을 정확히 따른다.
+`references/output-schema.md` 형식을 정확히 따른다. 보고는 두 단계다.
 
-- 최대 5개 Candidate
-- Session metrics에 도구별 호출 횟수·빈도·오류를 항상 포함
-- Proposed change는 나중에 그대로 적용 검토할 수 있을 정도로 구체적으로 작성
-- Risk는 적용 시 blast radius, Confidence는 증거 품질로 평가
-- 마지막에 아무 변경도 적용하지 않았음을 명시
+1. **풀 리포트를 파일로 저장**: `~/.pi/agent/retrospective/refine-reports/sessions/<session-id>.md`
+   - 최대 5개 Candidate, Coverage·Session metrics(도구별 호출·빈도·오류)·Rejected signals는 Appendix에 포함
+   - Proposed change는 나중에 그대로 적용 검토할 수 있을 정도로 구체적으로 작성
+   - Risk는 적용 시 blast radius, Confidence는 증거 품질로 평가
+2. **채팅에는 요약만 출력**: target 종류별 그룹 + 후보당 `제목 — 왜 · 변경` 한 줄씩 + 리포트 경로
+   - Coverage, metrics, Rejected signals, Evidence ID는 채팅에 출력하지 않는다
+   - 마지막에 아무 변경도 적용하지 않았음을 명시
 
 ## Validation
 
@@ -153,4 +156,5 @@ python3 <skill-dir>/scripts/session_inspect.py timeline --leaf-id <cutoff> --lim
 - 후보가 5개 이하인가
 - 각 후보에 검증 방법이 있는가
 - transcript의 시크릿·개인정보를 출력하지 않았는가
-- 어떤 파일·메모리도 변경하지 않았는가
+- 풀 리포트를 파일로 저장하고 채팅에는 요약만 출력했는가
+- 리포트 파일 외에 어떤 파일·메모리도 변경하지 않았는가

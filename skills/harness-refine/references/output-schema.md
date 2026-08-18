@@ -1,36 +1,21 @@
 # Harness Refine Output Contract
 
-Return one Markdown report. The report is a dry-run proposal, not an applied change.
+결과물은 두 가지다. **풀 리포트는 파일로 저장**하고, **채팅에는 요약만 출력**한다. 둘 다 dry-run 제안이며 적용된 변경이 아니다.
 
-## Required structure
+## 리포트 파일
+
+경로: `~/.pi/agent/retrospective/refine-reports/sessions/<session-id>.md` (디렉터리는 `mkdir -p`로 생성)
 
 ```markdown
-# Harness Refine Report
-
-## Coverage
-- Session: <id>
-- CWD: <path>
-- Active branch: <N entries>
-- Analysis cutoff: <cutoff leaf id; excluded N current-turn entries>
-- History: <raw_branch | raw_branch_with_compaction_entries>
-- Evidence limits: <truncation, missing parent session, parse warnings, or none>
-
-## Session metrics
-- Assistant turns: <N>
-- Tool calls: <N> (<calls per assistant turn>)
-- Tool errors: <N>
-
-| Tool | Calls | Frequency | Errors | Avg duration |
-|---|---:|---:|---:|---:|
-| ... |
+# Harness Refine Report — <session-id>
 
 ## Candidates
 
 ### HR-001 — <short title>
-- Target: `project-agents | global-system | skill | memory | subagent`
+- Target: `project-agents | global-system | skill | memory | subagent | extension`
 - Scope: `project | user | global`
 - Action: `create | update | merge | delete`
-- Target reference: `<path, skill name, memory title/topic, or subagent name>`
+- Target reference: `<path, skill name, memory title/topic, subagent name, or extension path>`
 - Confidence: `high | medium | low`
 - Risk: `low | medium | high`
 - Evidence:
@@ -44,9 +29,48 @@ Return one Markdown report. The report is a dry-run proposal, not an applied cha
 ## Rejected signals
 - `<signal>` — `<why it is transient, unsupported, duplicated, or not reusable>`
 
-## Recommendation
-- `<highest-value next action; remind that nothing was applied>`
+## Appendix
+
+### Coverage
+- Session: <id>
+- CWD: <path>
+- Active branch: <N entries>
+- Analysis cutoff: <cutoff leaf id; excluded N current-turn entries>
+- History: <raw_branch | raw_branch_with_compaction_entries>
+- Evidence limits: <truncation, missing parent session, parse warnings, or none>
+
+### Session metrics
+- Assistant turns: <N>
+- Tool calls: <N> (<calls per assistant turn>)
+- Tool errors: <N>
+
+| Tool | Calls | Frequency | Errors | Avg duration |
+|---|---:|---:|---:|---:|
+| ... |
 ```
+
+## 채팅 요약
+
+리포트 저장 후 채팅에는 아래 형식만 출력한다. **Coverage, Session metrics, Rejected signals, Evidence ID, Validation은 채팅에 출력하지 않는다** — 리포트 파일로 충분하다.
+
+```markdown
+Refine 제안 <N>건 — 상세: <리포트 파일 경로>
+
+### Memory
+- **HR-001 <제목>** — 왜: <증거 요약 한 줄> · 변경: <제안 요약 한 줄>
+
+### Skill
+- **HR-002 <제목>** — 왜: ... · 변경: ...
+
+### Extension
+- ...
+
+아무 변경도 적용하지 않았습니다. 적용할 후보 번호를 지정해 주세요.
+```
+
+- Target 종류별로 그룹핑하고, 후보가 없는 종류의 헤더는 생략한다.
+- 후보당 정확히 한 항목: **제목 + 왜(증거 요약) + 변경(제안 요약)**, 각각 한 줄.
+- 후보가 0개면 `No refine-worthy lesson`과 리포트 경로만 출력한다.
 
 ## Field rules
 
@@ -83,3 +107,7 @@ Use project scope for project facts, decisions, and tool gotchas. Use user scope
 ### `subagent`
 
 Use when a distinct delegated role, prompt contract, or verification responsibility repeatedly improved results. Ordinary one-off delegation does not justify a subagent change.
+
+### `extension`
+
+Use for code or configuration changes to harness tooling itself — pi extensions (`~/.pi/agent/extensions/`), skill helper scripts (`skills/*/scripts/`), or standalone CLI tools the harness relies on. Choose this when the fix is in tool code/output/options, not in instructions or procedure.

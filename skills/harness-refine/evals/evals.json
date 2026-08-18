@@ -4,11 +4,11 @@
     {
       "id": "current-session-full-refine",
       "prompt": "/skill:harness-refine 현재 세션 전체를 분석해서 다음 세션에 남길 개선 후보를 뽑아줘.",
-      "expected_output": "현재 PI_SESSION_FILE의 active branch를 분석하고 도구 호출 횟수·빈도·오류가 포함된 dry-run Harness Refine Report를 반환한다.",
+      "expected_output": "현재 PI_SESSION_FILE의 active branch를 분석해 풀 리포트를 refine-reports/sessions/<session-id>.md에 저장하고, 채팅에는 target 종류별 요약과 리포트 경로만 출력한다.",
       "files": [],
       "assertions": [
         {
-          "text": "Coverage에 session id, cwd, active branch entry 수, analysis cutoff leaf, 제외된 current-turn entry 수와 history coverage를 포함한다.",
+          "text": "리포트 파일 Appendix의 Coverage에 session id, cwd, active branch entry 수, analysis cutoff leaf, 제외된 current-turn entry 수와 history coverage를 포함한다.",
           "type": "qualitative"
         },
         {
@@ -16,7 +16,7 @@
           "type": "qualitative"
         },
         {
-          "text": "Session metrics에 assistant turns, 총 tool calls, calls per assistant turn, tool errors와 도구별 calls/frequency/errors를 포함한다.",
+          "text": "리포트 파일 Appendix의 Session metrics에 assistant turns, 총 tool calls, calls per assistant turn, tool errors와 도구별 calls/frequency/errors를 포함한다.",
           "type": "qualitative"
         },
         {
@@ -24,7 +24,11 @@
           "type": "qualitative"
         },
         {
-          "text": "파일 편집이나 메모리 저장 없이 dry-run임을 명시한다.",
+          "text": "리포트 파일 저장 외에는 파일 편집이나 메모리 저장 없이 dry-run임을 명시한다.",
+          "type": "qualitative"
+        },
+        {
+          "text": "채팅 요약에는 Coverage·Session metrics·Rejected signals·Evidence ID를 출력하지 않고, 후보당 제목·왜·변경 한 줄씩만 보여준다.",
           "type": "qualitative"
         }
       ]
@@ -64,7 +68,7 @@
           "type": "qualitative"
         },
         {
-          "text": "후보가 없더라도 Session metrics와 Rejected signals를 제공한다.",
+          "text": "후보가 없더라도 리포트 파일에 Session metrics와 Rejected signals를 제공하고, 채팅에는 No refine-worthy lesson과 리포트 경로만 출력한다.",
           "type": "qualitative"
         }
       ]
