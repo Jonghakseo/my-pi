@@ -185,7 +185,7 @@ class EasyReviewTests(unittest.TestCase):
             (bundle / "review-plan.json").write_text(json.dumps(plan, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
             run("preview", "--bundle", str(bundle))
-            run("compile", "--bundle", str(bundle), "--format", "both")
+            run("compile", "--bundle", str(bundle))
 
             html_output = (bundle / "review.html").read_text(encoding="utf-8")
             review = json.loads((bundle / "review.json").read_text(encoding="utf-8"))
@@ -221,7 +221,7 @@ class EasyReviewTests(unittest.TestCase):
             self.assertNotIn("{{BODY}}", html_output)
             self.assertNotIn("Findings", html_output)
             self.assertNotIn("Change map", html_output)
-            self.assertTrue((bundle / "review.md").is_file())
+            self.assertFalse((bundle / "review.md").exists())
 
     def test_internal_easy_review_verification_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
@@ -425,7 +425,7 @@ class EasyReviewTests(unittest.TestCase):
             )
             (bundle / "review-plan.json").write_text(json.dumps(plan, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
-            run("compile", "--bundle", str(bundle), "--format", "html")
+            run("compile", "--bundle", str(bundle))
             html_output = (bundle / "review.html").read_text(encoding="utf-8")
 
             self.assertLess(html_output.index('id="section-core-flow"'), html_output.index('id="section-tests"'))
@@ -487,7 +487,7 @@ class EasyReviewTests(unittest.TestCase):
             )
             (bundle / "review-plan.json").write_text(json.dumps(plan, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
-            run("compile", "--bundle", str(bundle), "--format", "both")
+            run("compile", "--bundle", str(bundle))
             html_output = (bundle / "review.html").read_text(encoding="utf-8")
             review = json.loads((bundle / "review.json").read_text(encoding="utf-8"))
 
@@ -500,9 +500,60 @@ class EasyReviewTests(unittest.TestCase):
             self.assertEqual(review["coverage"]["detailed_files"], [core_file["id"]])
             self.assertEqual(review["coverage"]["summarized_files"], [docs_file["id"]])
             self.assertEqual(review["coverage"]["omitted_files"], [omitted_file["id"]])
-            markdown_output = (bundle / "review.md").read_text(encoding="utf-8")
-            self.assertNotIn("## 확인한 내용", markdown_output)
-            self.assertNotIn("별도로 실행한 테스트나 빌드는 없습니다.", markdown_output)
+            self.assertFalse((bundle / "review.md").exists())
+
+    def test_intraline_ranges_mark_changed_characters(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            diff_path = root / "change.diff"
+            diff_path.write_text(simple_diff(), encoding="utf-8")
+            bundle = root / "bundle"
+            run("capture", "--diff-file", str(diff_path), "--output", str(bundle))
+            source = json.loads((bundle / "source.json").read_text(encoding="utf-8"))
+            for chunk in source["chunks"]:
+                run("inspect", "--bundle", str(bundle), "--chunk", chunk["id"])
+
+            lines = source["lines"]
+            file_entry = source["files"][0]
+            ranges = easy_review.intraline_ranges(lines, file_entry["line_indices"])
+            by_id = {lines[index]["id"]: value for index, value in ranges.items()}
+            deletion = next(line for line in lines if line["kind"] == "deletion")
+            addition = next(line for line in lines if line["kind"] == "addition")
+            audit_line = next(line for line in lines if "audit" in line["text"])
+
+            self.assertNotIn(deletion["id"], by_id)
+            marked = addition["text"]
+            start, end = by_id[addition["id"]][0]
+            self.assertEqual(marked[start:end], ", strict=True")
+            self.assertNotIn(audit_line["id"], by_id)
+
+            evidence = addition["id"]
+            plan = json.loads((bundle / "review-plan.json").read_text(encoding="utf-8"))
+            plan.update(
+                {
+                    "title": "Change",
+                    "summary": "Summary",
+                    "overview": ["Overview"],
+                    "sections": [
+                        {
+                            "id": "change",
+                            "title": "Group",
+                            "summary": "Summary",
+                            "default_open": True,
+                            "evidence": [evidence],
+                            "files": [reviewed_file(file_entry["id"])],
+                        }
+                    ],
+                    "unreviewed_file_ids": [],
+                    "verification": [],
+                }
+            )
+            (bundle / "review-plan.json").write_text(
+                json.dumps(plan, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+            )
+            run("compile", "--bundle", str(bundle))
+            html_output = (bundle / "review.html").read_text(encoding="utf-8")
+            self.assertIn(f'data-intraline="{start}-{end}"', html_output)
 
     def test_combined_diff_is_rejected(self) -> None:
         with self.assertRaises(easy_review.EasyReviewError):
