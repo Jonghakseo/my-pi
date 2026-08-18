@@ -12,7 +12,7 @@ Pi 환경에서 Agent Skills 표준을 따르는 스킬을 만들고, 작게 검
 - **Pi 우선**: Claude Code 전용 명령, `claude -p`, Anthropic eval viewer 스크립트를 전제로 하지 않는다. Pi CLI, `read`/`write`/`edit`/`bash`, 필요 시 `subagent`, `ask_user_question`, `todo_write`를 사용한다.
 - **표준 준수, Pi 동작 우선**: `SKILL.md`는 Agent Skills 표준의 YAML frontmatter + Markdown 본문을 따른다. 단 Pi는 표준 일부를 의도적으로 완화한다(아래 "Pi vs 표준" 참고). 충돌 시 Pi 동작을 따른다.
 - **Progressive disclosure**: 항상 들어가는 `description`은 정확하고 트리거 친화적으로, 본문은 500줄 미만을 목표로, 긴 자료는 `references/`, 반복 가능한 작업은 `scripts/`, 템플릿은 `assets/`에 둔다.
-- **검증 가능한 산출물**: 새 스킬에는 최소한 자체 검증 체크리스트와 현실적인 테스트 프롬프트를 남긴다. 객관 검증이 가능한 스킬이면 `evals/evals.json`도 만든다.
+- **검증 가능한 산출물**: 새 스킬에는 최소한 자체 검증 체크리스트와 현실적인 테스트 프롬프트를 남긴다.
 - **놀라움 금지**: 사용자가 기대하지 않은 권한 상승, 데이터 유출, 위험한 자동화, 악성 행위 보조 스킬은 만들지 않는다.
 
 ### Pi vs 표준 (자주 헷갈리는 지점)
@@ -178,10 +178,7 @@ Pi에서 사용자는 `/skill:<name>` 슬래시 명령으로 스킬을 명시 �
 
 사용자가 평가를 원하거나 객관 결과가 중요한 스킬이면 아래를 적용한다.
 
-1. `evals/evals.json`을 만든다.
-   - 시작은 2~3개 현실적인 프롬프트로 충분하다.
-   - 파일 변환, 코드 생성, 데이터 추출처럼 객관 검증 가능한 항목에는 `assertions`를 추가한다.
-   - 템플릿은 `assets/evals-template.json`을 참고한다.
+1. 현실적인 eval 프롬프트 2~3개를 정한다. 파일로 남기지 말고 대화 맥락에서 바로 사용한다.
 2. 작업 공간을 스킬 디렉터리의 sibling으로 둔다.
    - 예: `~/.pi/agent/skills/<skill-name>-workspace/iteration-1/...`
 3. 가능한 경우 Pi CLI로 with-skill / baseline을 비교한다.
