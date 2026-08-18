@@ -47,7 +47,7 @@ SOFT_LINE_LIMIT = 500
 # We deliberately skip refs inside inline code (backticks) and fenced code
 # blocks because those are typically illustrative examples, not real paths.
 RELPATH_RE = re.compile(
-    r"(?<![\w/`])((?:scripts|references|assets|evals)/[A-Za-z0-9_./-]+)"
+    r"(?<![\w/`])((?:scripts|references|assets)/[A-Za-z0-9_./-]+)"
 )
 FENCED_CODE_RE = re.compile(r"```.*?```", re.DOTALL)
 INLINE_CODE_RE = re.compile(r"`[^`\n]*`")
@@ -269,7 +269,7 @@ def validate(path: Path) -> int:
     body_no_code = INLINE_CODE_RE.sub("", body_no_code)
     _check_body_references(body_no_code, skill_dir, warnings)
 
-    for directory in ("scripts", "references", "assets", "evals"):
+    for directory in ("scripts", "references", "assets"):
         candidate = skill_dir / directory
         if candidate.exists() and not candidate.is_dir():
             errors.append(f"{directory}/ exists but is not a directory")
