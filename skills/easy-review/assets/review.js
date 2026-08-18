@@ -1,4 +1,26 @@
 (() => {
+  const themeButton = document.querySelector('[data-action="toggle-theme"]');
+  if (themeButton) {
+    const labels = { auto: '테마: 자동', light: '테마: 라이트', dark: '테마: 다크' };
+    const order = ['auto', 'light', 'dark'];
+    let theme = 'auto';
+    try {
+      const stored = localStorage.getItem('easy-review-theme');
+      if (order.includes(stored)) theme = stored;
+    } catch { /* file:// 등 저장소 접근 불가 시 자동 모드 유지 */ }
+    const applyTheme = () => {
+      if (theme === 'auto') delete document.documentElement.dataset.theme;
+      else document.documentElement.dataset.theme = theme;
+      themeButton.textContent = labels[theme];
+    };
+    themeButton.addEventListener('click', () => {
+      theme = order[(order.indexOf(theme) + 1) % order.length];
+      try { localStorage.setItem('easy-review-theme', theme); } catch { /* 저장 실패해도 현재 문서에는 적용 */ }
+      applyTheme();
+    });
+    applyTheme();
+  }
+
   const expandButton = document.querySelector('[data-action="expand-all"]');
   if (expandButton) {
     expandButton.addEventListener('click', () => {

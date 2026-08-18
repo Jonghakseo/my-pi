@@ -1,6 +1,6 @@
 ---
 name: easy-review
-description: "Create selective, read-only, evidence-anchored review views from Git working trees, staged or unstaged changes, commits and ranges, GitHub PRs, agent-authored changes, or unified diff files. Use when the user asks for Easy Review, 이지 리뷰, or to review, inspect, summarize, abridge, or make a PR or diff easier to understand as a self-contained HTML reading view. Organize changes into a reader-first story, deliberately show, summarize, or omit files and low-signal regions, preserve the complete original diff outside the reading view, expose coverage and uncertainty, and never post reviews, modify code, or call an LLM API. Do not use for implementing fixes, addressing review comments, or diagnosing runtime failures."
+description: "Use when the user asks for Easy Review (이지 리뷰) or to make Git changes, commits, PRs, or diffs easier to understand as a read-only, reader-ordered HTML review document."
 ---
 
 # Easy Review

@@ -1326,6 +1326,7 @@ def render_html(review: dict[str, Any], assets_dir: Path) -> str:
     toolbar = child(main, "div", attributes={"class": "toolbar", "aria-label": "보기 설정"})
     child(toolbar, "button", "전체 펼치기", {"type": "button", "data-action": "expand-all"})
     child(toolbar, "button", "근거 ID 보기", {"type": "button", "data-action": "toggle-anchors"})
+    child(toolbar, "button", "테마: 자동", {"type": "button", "data-action": "toggle-theme"})
 
     layout = child(main, "div", attributes={"class": "review-layout"})
     review_content = child(layout, "div", attributes={"class": "review-content"})

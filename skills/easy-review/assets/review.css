@@ -1,45 +1,97 @@
 :root {
   color-scheme: light dark;
-  --canvas: #f3f2ef;
-  --paper: #fbfaf7;
-  --paper-raised: #ffffff;
-  --ink: #181817;
-  --ink-secondary: #5e5d59;
-  --ink-tertiary: #77756e;
-  --rule: #d8d6cf;
-  --rule-strong: #aaa79e;
+  --canvas: #f0ece3;
+  --paper: #f7f4ec;
+  --paper-raised: #fcfaf3;
+  --ink: #35322c;
+  --ink-secondary: #63605a;
+  --ink-tertiary: #7c7970;
+  --rule: #d9d5ca;
+  --rule-strong: #aba699;
   --accent: #2458d3;
-  --accent-wash: #edf2ff;
-  --add: #e9f5e9;
-  --delete: #faeae6;
-  --add-strong: #c3e5bd;
-  --delete-strong: #f6cec2;
-  --code: #f7f7f4;
-  --warning: #9c6b00;
+  --accent-wash: #eaeffb;
+  --add: #e4f0e0;
+  --delete: #f7e7e0;
+  --add-strong: #c3e0ba;
+  --delete-strong: #f3cdbe;
+  --code: #f6f3ea;
+  --warning: #96690a;
   --danger: #b42318;
   --success: #23733b;
+  --tok-comment: #78776e;
+  --tok-punct: #7a786f;
+  --tok-tag: #a7352a;
+  --tok-number: #7554a3;
+  --tok-string: #28723c;
+  --tok-operator: #315f9e;
+  --tok-keyword: #8d356b;
+  --tok-function: #795d16;
+  --tok-regex: #9b511d;
+}
+
+:root[data-theme="light"] { color-scheme: light; }
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --canvas: #23211d;
+  --paper: #282621;
+  --paper-raised: #2d2b26;
+  --ink: #e2ddd1;
+  --ink-secondary: #b4afa3;
+  --ink-tertiary: #948f84;
+  --rule: #3e3c35;
+  --rule-strong: #5c5950;
+  --accent: #8fabe8;
+  --accent-wash: #2a3146;
+  --add: #2c4030;
+  --delete: #4a2f28;
+  --add-strong: #40603f;
+  --delete-strong: #6d4033;
+  --code: #26241f;
+  --warning: #d9b45c;
+  --danger: #ee9182;
+  --success: #82c795;
+  --tok-comment: #8f8d81;
+  --tok-punct: #98968a;
+  --tok-tag: #e0806f;
+  --tok-number: #b39ad6;
+  --tok-string: #8cc79b;
+  --tok-operator: #85aede;
+  --tok-keyword: #d18cb8;
+  --tok-function: #cbb166;
+  --tok-regex: #d0925f;
 }
 
 @media (prefers-color-scheme: dark) {
-  :root {
-    --canvas: #151513;
-    --paper: #1b1b19;
-    --paper-raised: #20201e;
-    --ink: #eeeeea;
-    --ink-secondary: #b1afa8;
-    --ink-tertiary: #96938b;
-    --rule: #363531;
-    --rule-strong: #55534d;
-    --accent: #85a7ff;
-    --accent-wash: #202a42;
-    --add: #1e3524;
-    --delete: #3e2420;
-    --add-strong: #33593a;
-    --delete-strong: #693c31;
-    --code: #171715;
-    --warning: #e2b84b;
-    --danger: #ff8c82;
-    --success: #75c78d;
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --canvas: #23211d;
+    --paper: #282621;
+    --paper-raised: #2d2b26;
+    --ink: #e2ddd1;
+    --ink-secondary: #b4afa3;
+    --ink-tertiary: #948f84;
+    --rule: #3e3c35;
+    --rule-strong: #5c5950;
+    --accent: #8fabe8;
+    --accent-wash: #2a3146;
+    --add: #2c4030;
+    --delete: #4a2f28;
+    --add-strong: #40603f;
+    --delete-strong: #6d4033;
+    --code: #26241f;
+    --warning: #d9b45c;
+    --danger: #ee9182;
+    --success: #82c795;
+    --tok-comment: #8f8d81;
+    --tok-punct: #98968a;
+    --tok-tag: #e0806f;
+    --tok-number: #b39ad6;
+    --tok-string: #8cc79b;
+    --tok-operator: #85aede;
+    --tok-keyword: #d18cb8;
+    --tok-function: #cbb166;
+    --tok-regex: #d0925f;
   }
 }
 
@@ -49,7 +101,7 @@ body {
   margin: 0;
   background: var(--canvas);
   color: var(--ink);
-  font: 15px/1.65 ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font: 15px/1.7 "Pretendard Variable", Pretendard, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Segoe UI", "Malgun Gothic", sans-serif;
   font-feature-settings: "kern", "ss01", "ss02";
   text-rendering: optimizeLegibility;
 }
@@ -243,7 +295,7 @@ button { font: inherit; }
 .line mark.intra { background: none; color: inherit; padding: 0; border-radius: 2px; }
 .line.addition mark.intra { background: var(--add-strong); }
 .line.deletion mark.intra { background: var(--delete-strong); }
-.line.hunk_header { color: #5072a8; }
+.line.hunk_header { color: var(--tok-operator); }
 .line.metadata { color: var(--ink-tertiary); }
 .line.focus { box-shadow: inset 3px 0 var(--accent); }
 
@@ -286,15 +338,15 @@ button { font: inherit; }
 .show-anchor-ids .inline-fold > summary { grid-template-columns: 78px 46px 46px minmax(240px, 1fr); }
 .show-anchor-ids .fold-anchor { display: block; border-right: 1px solid var(--rule); }
 
-.token.comment, .token.prolog, .token.doctype, .token.cdata { color: #747772; font-style: italic; }
-.token.punctuation { color: #777974; }
-.token.property, .token.tag, .token.constant, .token.symbol, .token.deleted { color: #a7352a; }
-.token.boolean, .token.number { color: #7554a3; }
-.token.selector, .token.attr-name, .token.string, .token.char, .token.builtin, .token.inserted { color: #28723c; }
-.token.operator, .token.entity, .token.url, .language-css .token.string, .style .token.string { color: #315f9e; }
-.token.atrule, .token.attr-value, .token.keyword { color: #8d356b; }
-.token.function, .token.class-name { color: #795d16; }
-.token.regex, .token.important, .token.variable { color: #9b511d; }
+.token.comment, .token.prolog, .token.doctype, .token.cdata { color: var(--tok-comment); font-style: italic; }
+.token.punctuation { color: var(--tok-punct); }
+.token.property, .token.tag, .token.constant, .token.symbol, .token.deleted { color: var(--tok-tag); }
+.token.boolean, .token.number { color: var(--tok-number); }
+.token.selector, .token.attr-name, .token.string, .token.char, .token.builtin, .token.inserted { color: var(--tok-string); }
+.token.operator, .token.entity, .token.url, .language-css .token.string, .style .token.string { color: var(--tok-operator); }
+.token.atrule, .token.attr-value, .token.keyword { color: var(--tok-keyword); }
+.token.function, .token.class-name { color: var(--tok-function); }
+.token.regex, .token.important, .token.variable { color: var(--tok-regex); }
 .token.important, .token.bold { font-weight: 700; }
 .token.italic { font-style: italic; }
 

@@ -207,6 +207,8 @@ class EasyReviewTests(unittest.TestCase):
             self.assertIn("파일 경로와 변경 정보", html_output)
             self.assertIn('class="fold-copy"', html_output)
             self.assertIn('data-action="toggle-minimap"', html_output)
+            self.assertIn('data-action="toggle-theme"', html_output)
+            self.assertIn(':root[data-theme="dark"]', html_output)
             self.assertIn("data-minimap-progress", html_output)
             self.assertIn("0% 읽음", html_output)
             self.assertNotIn("위치 0%", html_output)
