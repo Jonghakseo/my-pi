@@ -73,3 +73,4 @@ skills-archive/*
 claude-mcp-bridge-tools.json
 claude-mcp-bridge-cache.json
 helpers/pi-computer-use/
+__pycache__/
