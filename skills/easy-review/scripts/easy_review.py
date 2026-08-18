@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import difflib
 import hashlib
 import json
 import os
@@ -1051,60 +1052,6 @@ def anchor_label(
     return f"{display_path} {position}"
 
 
-def evidence_text(
-    source: dict[str, Any], files_by_id: dict[str, dict[str, Any]], evidence: list[str]
-) -> str:
-    return ", ".join(f"`{anchor_label(source, files_by_id, anchor)}`" for anchor in evidence)
-
-
-def render_markdown(review: dict[str, Any]) -> str:
-    plan = review["plan"]
-    coverage = review["coverage"]
-    source = review["source"]
-    files_by_id = {file_entry["id"]: file_entry for file_entry in review["files"]}
-    output = [f"# {plan['title']}", "", plan["summary"], ""]
-    output.extend(["## 한눈에 보기", ""])
-    for item in plan["overview"]:
-        output.append(f"- {item}")
-
-    output.extend(["", "## 읽는 순서", ""])
-    for index, section in enumerate(plan["sections"], start=1):
-        output.append(f"{index}. **{section['title']}** — {section['summary']}")
-
-    if plan["attention"]:
-        labels = {"fix": "수정 필요", "caution": "주의해서 볼 점", "confirm": "확인 필요"}
-        output.extend(["", "## 먼저 볼 점", ""])
-        for item in plan["attention"]:
-            evidence = evidence_text(source, files_by_id, item["evidence"])
-            output.append(f"- **[{labels[item['type']]}] {item['title']}** — {item['body']} ({evidence})")
-
-    for index, section in enumerate(plan["sections"], start=1):
-        output.extend(["", f"## {index}. {section['title']}", "", section["summary"], ""])
-        for file_plan in section["files"]:
-            source_file = files_by_id[file_plan["file_id"]]
-            view_label = "코드 표시" if file_plan["view"] == "detail" else "요약만"
-            output.append(f"- **{view_label}** `{source_file['path']}` — {file_plan['note']}")
-    if plan["verification"]:
-        labels = {"passed": "통과", "failed": "실패", "not_run": "실행 안 함", "unknown": "결과 미확인"}
-        output.extend(["", "## 확인한 내용", ""])
-        for item in plan["verification"]:
-            detail = f" — {item['evidence']}" if item.get("evidence") else ""
-            output.append(f"- **{labels[item['status']]}** `{item['name']}`{detail}")
-    capture = source["capture"]
-    coverage_label = "전체 검토" if coverage["status"] == "complete" else "일부 검토"
-    output.extend(
-        [
-            "",
-            "## 검토 범위",
-            "",
-            f"{coverage_label} · 파일 {coverage['reviewed_files']}/{coverage['total_files']} · 변경 묶음 {coverage['inspected_chunks']}/{coverage['total_chunks']} · 원본 `{capture.get('kind')}` `{source['source_sha256'][:12]}`",
-            f"HTML 선택: 코드 {len(coverage['detailed_files'])}개 · 요약 {len(coverage['summarized_files'])}개 · 생략 {len(coverage['omitted_files'])}개",
-            "",
-        ]
-    )
-    return "\n".join(output)
-
-
 def syntax_language(path: str) -> str | None:
     name = Path(path).name.lower()
     suffix = Path(path).suffix.lower()
@@ -1156,7 +1103,13 @@ def syntax_language(path: str) -> str | None:
     }.get(suffix)
 
 
-def html_line(line: dict[str, Any], *, language: str | None = None, focus: bool = False) -> Element:
+def html_line(
+    line: dict[str, Any],
+    *,
+    language: str | None = None,
+    focus: bool = False,
+    intraline: list[tuple[int, int]] | None = None,
+) -> Element:
     classes = ["line", line["kind"]]
     if focus:
         classes.append("focus")
@@ -1170,8 +1123,52 @@ def html_line(line: dict[str, Any], *, language: str | None = None, focus: bool 
     code_attributes = {}
     if language and line["kind"] in SOURCE_LINE_KINDS:
         code_attributes["class"] = f"language-{language}"
+    if intraline:
+        code_attributes["data-intraline"] = " ".join(f"{start}-{end}" for start, end in intraline)
     child(code_cell, "code", line["text"], code_attributes)
     return row
+
+
+def intraline_ranges(
+    lines: list[dict[str, Any]], file_indices: list[int]
+) -> dict[int, list[tuple[int, int]]]:
+    """Pair adjacent deletion/addition runs and mark changed character ranges."""
+    ranges: dict[int, list[tuple[int, int]]] = {}
+    position = 0
+    while position < len(file_indices):
+        if lines[file_indices[position]]["kind"] != "deletion":
+            position += 1
+            continue
+        deletion_start = position
+        while position < len(file_indices) and lines[file_indices[position]]["kind"] == "deletion":
+            position += 1
+        addition_start = position
+        while position < len(file_indices) and lines[file_indices[position]]["kind"] == "addition":
+            position += 1
+        deletions = file_indices[deletion_start:addition_start]
+        additions = file_indices[addition_start:position]
+        for old_index, new_index in zip(deletions, additions):
+            old_body = lines[old_index]["text"][1:]
+            new_body = lines[new_index]["text"][1:]
+            if old_body == new_body:
+                continue
+            matcher = difflib.SequenceMatcher(None, old_body, new_body, autojunk=False)
+            if matcher.ratio() < 0.5:
+                continue
+            old_ranges: list[tuple[int, int]] = []
+            new_ranges: list[tuple[int, int]] = []
+            for tag, old_from, old_to, new_from, new_to in matcher.get_opcodes():
+                if tag == "equal":
+                    continue
+                if old_to > old_from:
+                    old_ranges.append((old_from + 1, old_to + 1))
+                if new_to > new_from:
+                    new_ranges.append((new_from + 1, new_to + 1))
+            if old_ranges:
+                ranges[old_index] = old_ranges
+            if new_ranges:
+                ranges[new_index] = new_ranges
+    return ranges
 
 
 def append_fold_summary(details: Element, *, reason: str, count: int) -> Element:
@@ -1206,6 +1203,7 @@ def render_file_diff(
 
     file_indices = file_entry["line_indices"]
     language = syntax_language(file_entry["path"])
+    intraline = intraline_ranges(lines, file_indices)
     diff = Element("div", {"class": "diff"})
     index_position = 0
     while index_position < len(file_indices):
@@ -1238,11 +1236,23 @@ def render_file_diff(
             folded_lines = child(details, "div", attributes={"class": "folded-lines"})
             for collapsed_index in collapsed_indices:
                 folded_lines.append(
-                    html_line(lines[collapsed_index], language=language, focus=collapsed_index in focus_indices)
+                    html_line(
+                        lines[collapsed_index],
+                        language=language,
+                        focus=collapsed_index in focus_indices,
+                        intraline=intraline.get(collapsed_index),
+                    )
                 )
             index_position += len(collapsed_indices)
             continue
-        diff.append(html_line(lines[line_index], language=language, focus=line_index in focus_indices))
+        diff.append(
+            html_line(
+                lines[line_index],
+                language=language,
+                focus=line_index in focus_indices,
+                intraline=intraline.get(line_index),
+            )
+        )
         index_position += 1
     return diff
 
@@ -1294,8 +1304,8 @@ def render_html(review: dict[str, Any], assets_dir: Path) -> str:
     coverage_label = "전체 검토" if coverage["status"] == "complete" else "일부 검토"
     stat_values = (
         ("범위", coverage_label),
-        ("검토", f'{coverage["reviewed_files"]}/{coverage["total_files"]} files'),
-        ("선택", f'{len(coverage["detailed_files"])} code · {len(coverage["summarized_files"])} notes'),
+        ("검토", f'파일 {coverage["reviewed_files"]}/{coverage["total_files"]}'),
+        ("선택", f'코드 {len(coverage["detailed_files"])} · 요약 {len(coverage["summarized_files"])}'),
         ("변경", f'+{source["stats"]["additions"]} −{source["stats"]["deletions"]}'),
     )
     for label, value in stat_values:
@@ -1359,7 +1369,7 @@ def render_html(review: dict[str, Any], assets_dir: Path) -> str:
         child(
             section_summary,
             "span",
-            f"{detail_count} code / {summary_count} notes",
+            f"코드 {detail_count} · 요약 {summary_count}",
             {"class": "section-count"},
         )
         section_body = child(section_node, "div", attributes={"class": "section-body"})
@@ -1502,8 +1512,8 @@ def render_html(review: dict[str, Any], assets_dir: Path) -> str:
     child(
         minimap_navigation,
         "p",
-        f'{len(coverage["detailed_files"])} code · {len(coverage["summarized_files"])} notes · '
-        f'{len(coverage["omitted_files"])} omitted',
+        f'코드 {len(coverage["detailed_files"])} · 요약 {len(coverage["summarized_files"])} · '
+        f'생략 {len(coverage["omitted_files"])}',
         {"class": "minimap-meta"},
     )
 
@@ -1547,17 +1557,10 @@ def command_compile(args: argparse.Namespace) -> int:
         "files": source["files"],
     }
     write_json_atomic(bundle / "review.json", review)
-    generated = [bundle / "review.json"]
-    if args.format_value in {"chat", "both"}:
-        markdown_path = bundle / "review.md"
-        write_text_atomic(markdown_path, render_markdown(review))
-        generated.append(markdown_path)
-    if args.format_value in {"html", "both"}:
-        html_path = bundle / "review.html"
-        assets_dir = Path(__file__).resolve().parent.parent / "assets"
-        write_text_atomic(html_path, render_html(review, assets_dir))
-        generated.append(html_path)
-    for path in generated:
+    html_path = bundle / "review.html"
+    assets_dir = Path(__file__).resolve().parent.parent / "assets"
+    write_text_atomic(html_path, render_html(review, assets_dir))
+    for path in (bundle / "review.json", html_path):
         print(path)
     return 0
 
@@ -1570,7 +1573,7 @@ def command_describe(args: argparse.Namespace) -> int:
         "llm_api_calls": False,
         "capture_modes": ["worktree", "unstaged", "staged", "revision", "range", "github_pr", "diff_file"],
         "commands": ["capture", "inspect", "preview", "compile", "describe"],
-        "formats": ["chat", "html", "both"],
+        "formats": ["html"],
         "limits": {"max_diff_bytes": MAX_DIFF_BYTES, "default_chunk_bytes": DEFAULT_CHUNK_BYTES, "max_chunks": MAX_CHUNKS},
     }
     print(json.dumps(description, ensure_ascii=False, indent=2))
@@ -1606,7 +1609,6 @@ def build_parser() -> argparse.ArgumentParser:
 
     compile_parser = subparsers.add_parser("compile", help="compile a valid plan into review artifacts")
     compile_parser.add_argument("--bundle", required=True)
-    compile_parser.add_argument("--format", dest="format_value", choices=("chat", "html", "both"), required=True)
     compile_parser.set_defaults(handler=command_compile)
 
     describe = subparsers.add_parser("describe", help="print the local command contract")

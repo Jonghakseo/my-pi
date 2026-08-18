@@ -37,6 +37,34 @@
     window.Prism.highlightAllUnder(document.querySelector('.shell'));
   }
 
+  const wrapCharRange = (root, start, end) => {
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    let offset = 0;
+    const targets = [];
+    while (walker.nextNode()) {
+      const node = walker.currentNode;
+      const from = Math.max(start - offset, 0);
+      const to = Math.min(end - offset, node.data.length);
+      if (from < to) targets.push({ node, from, to });
+      offset += node.data.length;
+    }
+    targets.forEach(({ node, from, to }) => {
+      const range = document.createRange();
+      range.setStart(node, from);
+      range.setEnd(node, to);
+      const mark = document.createElement('mark');
+      mark.className = 'intra';
+      range.surroundContents(mark);
+    });
+  };
+
+  document.querySelectorAll('code[data-intraline]').forEach((code) => {
+    code.dataset.intraline.split(' ').forEach((pair) => {
+      const [start, end] = pair.split('-').map(Number);
+      if (Number.isFinite(start) && Number.isFinite(end) && start < end) wrapCharRange(code, start, end);
+    });
+  });
+
   const minimap = document.querySelector('.minimap');
   const minimapToggle = document.querySelector('[data-action="toggle-minimap"]');
   const minimapLinks = Array.from(document.querySelectorAll('[data-minimap-link]'));

@@ -12,6 +12,8 @@
   --accent-wash: #edf2ff;
   --add: #e9f5e9;
   --delete: #faeae6;
+  --add-strong: #c3e5bd;
+  --delete-strong: #f6cec2;
   --code: #f7f7f4;
   --warning: #9c6b00;
   --danger: #b42318;
@@ -32,6 +34,8 @@
     --accent-wash: #202a42;
     --add: #1e3524;
     --delete: #3e2420;
+    --add-strong: #33593a;
+    --delete-strong: #693c31;
     --code: #171715;
     --warning: #e2b84b;
     --danger: #ff8c82;
@@ -236,6 +240,9 @@ button { font: inherit; }
 .line-id, .line-no { color: var(--ink-tertiary); text-align: right; user-select: none; border-right: 1px solid var(--rule); }
 .line.addition { background: var(--add); }
 .line.deletion { background: var(--delete); }
+.line mark.intra { background: none; color: inherit; padding: 0; border-radius: 2px; }
+.line.addition mark.intra { background: var(--add-strong); }
+.line.deletion mark.intra { background: var(--delete-strong); }
 .line.hunk_header { color: #5072a8; }
 .line.metadata { color: var(--ink-tertiary); }
 .line.focus { box-shadow: inset 3px 0 var(--accent); }

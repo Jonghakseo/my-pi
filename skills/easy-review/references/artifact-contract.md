@@ -5,7 +5,7 @@
 - `source.diff`: 빠짐없이 보존한 원본
 - `source.json`: 파싱한 줄, 전역 근거 ID, chunk, 힌트, 원본 hash
 - `review-plan.json`: 에이전트가 선택한 읽는 순서, 표시 수준, 설명과 근거
-- `review.json`: 검증 후 Markdown과 HTML 렌더러가 사용하는 결과
+- `review.json`: 검증 후 HTML 렌더러가 사용하는 결과
 
 `inspection.json`은 inspector로 실제 표시한 chunk를 기록한다. 모든 의미적 결과를 이해했다는 증명은 아니다. HTML은 선택된 읽기 화면이므로 원본의 모든 파일을 포함하지 않아도 된다.
 
