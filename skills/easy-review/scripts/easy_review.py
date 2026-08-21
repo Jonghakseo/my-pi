@@ -10,6 +10,7 @@ import json
 import os
 import re
 import shlex
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -1290,6 +1291,92 @@ def append_file_identity(parent: Element, path: str) -> Element:
     return heading
 
 
+def append_chat_ui(parent: Element, source_sha256: str) -> None:
+    chat_root = child(
+        parent,
+        "aside",
+        attributes={
+            "class": "chat-root",
+            "data-easy-review-chat": "",
+            "data-review-source": source_sha256,
+        },
+    )
+    panel = child(
+        chat_root,
+        "section",
+        attributes={
+            "class": "chat-panel",
+            "data-chat-panel": "",
+            "aria-label": "Easy Review Pi 대화",
+            "hidden": "",
+        },
+    )
+    header = child(panel, "header", attributes={"class": "chat-header"})
+    child(header, "h2", "리뷰에 질문하기", {"class": "chat-title"})
+    child(
+        header,
+        "p",
+        "연결 확인 중…",
+        {"class": "chat-status", "data-chat-status": "", "role": "status"},
+    )
+    header_actions = child(header, "div", attributes={"class": "chat-header-actions"})
+    child(
+        header_actions,
+        "button",
+        "초기화",
+        {"type": "button", "class": "chat-text-button", "data-chat-action": "reset"},
+    )
+    child(
+        header_actions,
+        "button",
+        "닫기",
+        {"type": "button", "class": "chat-text-button", "data-chat-action": "close"},
+    )
+    child(
+        panel,
+        "div",
+        attributes={"class": "chat-messages", "data-chat-messages": "", "aria-live": "polite"},
+    )
+    form = child(panel, "form", attributes={"class": "chat-form", "data-chat-form": ""})
+    child(
+        form,
+        "textarea",
+        attributes={
+            "class": "chat-input",
+            "data-chat-input": "",
+            "rows": "3",
+            "maxlength": "6000",
+            "placeholder": "현재 변경이나 선택한 코드에 관해 질문하세요",
+            "aria-label": "리뷰 질문",
+        },
+    )
+    form_actions = child(form, "div", attributes={"class": "chat-form-actions"})
+    child(
+        form_actions,
+        "button",
+        "중단",
+        {"type": "button", "class": "chat-stop", "data-chat-action": "stop", "hidden": ""},
+    )
+    child(
+        form_actions,
+        "button",
+        "질문",
+        {"type": "submit", "class": "chat-send", "data-chat-action": "send"},
+    )
+    chat_fab = child(
+        chat_root,
+        "button",
+        attributes={
+            "type": "button",
+            "class": "chat-fab",
+            "data-chat-action": "toggle",
+            "aria-label": "Easy Review Pi 대화 열기",
+            "aria-expanded": "false",
+        },
+    )
+    child(chat_fab, "span", "π", {"class": "chat-fab-mark", "aria-hidden": "true"})
+
+
 def render_html(review: dict[str, Any], assets_dir: Path) -> str:
     plan = review["plan"]
     coverage = review["coverage"]
@@ -1517,10 +1604,17 @@ def render_html(review: dict[str, Any], assets_dir: Path) -> str:
         f'생략 {len(coverage["omitted_files"])}',
         {"class": "minimap-meta"},
     )
+    append_chat_ui(main, source["source_sha256"])
 
-    style = (assets_dir / "review.css").read_text(encoding="utf-8")
+    style = "\n".join(
+        (assets_dir / name).read_text(encoding="utf-8")
+        for name in ("review.css", "chat.css")
+    )
     syntax_script = (assets_dir / "vendor" / "prism.js").read_text(encoding="utf-8")
-    behavior_script = (assets_dir / "review.js").read_text(encoding="utf-8")
+    behavior_script = "\n".join(
+        (assets_dir / name).read_text(encoding="utf-8")
+        for name in ("review.js", "chat.js")
+    )
     try:
         return render_document(
             title=plan["title"],
@@ -1566,14 +1660,64 @@ def command_compile(args: argparse.Namespace) -> int:
     return 0
 
 
+def resolve_pi_sdk_root(pi_bin: str) -> Path:
+    executable = shutil.which(pi_bin)
+    candidates: list[Path] = []
+    if executable:
+        resolved = Path(executable).resolve()
+        candidates.extend([resolved.parent, *resolved.parents])
+    try:
+        npm_root = run_command(["npm", "root", "-g"], cwd=Path.cwd()).decode().strip()
+        if npm_root:
+            candidates.append(Path(npm_root) / "@earendil-works" / "pi-coding-agent")
+    except EasyReviewError:
+        pass
+    for candidate in candidates:
+        package_json = candidate / "package.json"
+        if not package_json.is_file():
+            continue
+        try:
+            package = json.loads(package_json.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        if package.get("name") == "@earendil-works/pi-coding-agent":
+            return candidate.resolve()
+    raise EasyReviewError("cannot locate @earendil-works/pi-coding-agent for the local Pi SDK")
+
+
+def command_serve(args: argparse.Namespace) -> int:
+    bundle = Path(args.bundle).expanduser().resolve()
+    node_bin = shutil.which(args.node_bin)
+    if not node_bin:
+        raise EasyReviewError(f"Node.js executable not found: {args.node_bin}")
+    sdk_root = resolve_pi_sdk_root(args.pi_bin)
+    server_script = SCRIPT_DIR / "chat_server.mjs"
+    command = [
+        node_bin,
+        str(server_script),
+        "--bundle",
+        str(bundle),
+        "--sdk-root",
+        str(sdk_root),
+        "--port",
+        str(args.port),
+    ]
+    try:
+        os.execv(node_bin, command)
+    except OSError as error:
+        raise EasyReviewError(f"cannot start Easy Review Pi SDK server: {error}") from error
+
+
 def command_describe(args: argparse.Namespace) -> int:
     description = {
         "name": "easy-review",
         "schema_version": SCHEMA_VERSION,
         "read_only": True,
-        "llm_api_calls": False,
+        "direct_llm_api_calls": False,
+        "local_pi_sdk_chat": True,
+        "chat_scope": "review_bundle_only",
         "capture_modes": ["worktree", "unstaged", "staged", "revision", "range", "github_pr", "diff_file"],
-        "commands": ["capture", "inspect", "preview", "compile", "describe"],
+        "commands": ["capture", "inspect", "preview", "compile", "serve", "describe"],
         "formats": ["html"],
         "limits": {"max_diff_bytes": MAX_DIFF_BYTES, "default_chunk_bytes": DEFAULT_CHUNK_BYTES, "max_chunks": MAX_CHUNKS},
     }
@@ -1611,6 +1755,13 @@ def build_parser() -> argparse.ArgumentParser:
     compile_parser = subparsers.add_parser("compile", help="compile a valid plan into review artifacts")
     compile_parser.add_argument("--bundle", required=True)
     compile_parser.set_defaults(handler=command_compile)
+
+    serve_parser = subparsers.add_parser("serve", help="serve review.html with an in-process Pi SDK chat session")
+    serve_parser.add_argument("--bundle", required=True)
+    serve_parser.add_argument("--port", type=int, default=0, help="loopback port; defaults to an available port")
+    serve_parser.add_argument("--node-bin", default="node", help="Node.js executable used for the Pi SDK server")
+    serve_parser.add_argument("--pi-bin", default="pi", help="Pi executable used to locate the installed SDK package")
+    serve_parser.set_defaults(handler=command_serve)
 
     describe = subparsers.add_parser("describe", help="print the local command contract")
     describe.add_argument("--json", action="store_true", help="retained for explicit machine-readable invocation")

@@ -1,7 +1,7 @@
 interface:
   display_name: "Easy Review"
-  short_description: "PR과 코드 변경을 이해 순서대로 정리"
-  default_prompt: "$easy-review로 이 PR 또는 변경사항을 사람이 이해하기 쉬운 순서의 읽기 전용 리뷰로 정리해줘."
+  short_description: "PR과 코드 변경을 읽기 문서와 로컬 Pi Q&A로 정리"
+  default_prompt: "$easy-review로 이 PR 또는 변경사항을 사람이 이해하기 쉬운 순서의 읽기 전용 리뷰로 정리하고, 필요하면 로컬 Pi 채팅도 실행해줘."
 
 policy:
   allow_implicit_invocation: false

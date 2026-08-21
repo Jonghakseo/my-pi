@@ -1,6 +1,6 @@
 ---
 name: easy-review
-description: "Use when the user asks for Easy Review (이지 리뷰) or to make Git changes, commits, PRs, or diffs easier to understand as a read-only, reader-ordered HTML review document."
+description: "Use when the user asks for Easy Review (이지 리뷰), an interactive Easy Review chatbot, or to make Git changes, commits, PRs, or diffs easier to understand as a read-only, reader-ordered HTML review document with optional local Pi Q&A."
 ---
 
 # Easy Review
@@ -10,7 +10,8 @@ description: "Use when the user asks for Easy Review (이지 리뷰) or to make 
 ## 지켜야 할 경계
 
 - 저장소와 원격 서비스에는 읽기 전용으로 접근한다. checkout, 소스 수정, stage, commit, push, 리뷰 게시, 스레드 해결을 하지 않는다.
-- 외부 LLM API를 호출하거나 제공자 API 키를 읽지 않는다. 현재 대화 중인 에이전트만 의미 판단을 맡는다.
+- 캡처·검증·컴파일은 외부 LLM API를 호출하거나 제공자 API 키를 읽지 않는다. 선택적 `serve`만 Node 서버 프로세스 안에 Pi SDK 세션을 만들며, 로컬 `auth.json`과 현재 모델 설정을 계승해 설정된 모델 제공자와 통신함을 사용자에게 알린다.
+- 채팅 Pi에는 도구를 제공하지 않는다. 저장소나 임의 로컬 파일을 읽지 못하게 하고, 검증된 `review.json`에서 현재 section과 근거 범위만 전달한다.
 - 표시할 코드를 다시 작성하지 않는다. 원본 diff의 `D000001` 형태 내부 근거 ID로 정확한 줄을 가리킨다. 원본은 모두 보존하되 HTML에 모든 파일을 표시할 의무는 없다.
 - CI 통과, merge, 배포, 실제 런타임 동작을 서로 다른 근거로 취급한다.
 - 일부 파일이나 변경 묶음을 읽지 못했다면 결과를 반드시 `partial`로 남긴다.
@@ -77,8 +78,25 @@ stale hash, 알 수 없는 근거, section 밖 근거, 파일 중복·누락, �
 python3 "$SKILL_DIR/scripts/easy_review.py" compile --bundle <bundle-dir>
 ```
 
+## 선택적으로 로컬 Pi 채팅을 실행한다
+
+사용자가 HTML 안에서 리뷰와 대화하거나 챗봇 FAB를 요청했을 때만 실행한다.
+
+```bash
+python3 "$SKILL_DIR/scripts/easy_review.py" serve --bundle <bundle-dir>
+```
+
+- 출력된 `http://127.0.0.1:<port>/` URL을 전달한다. 자동으로 브라우저를 열지 않는다.
+- 서버는 loopback에만 바인딩하고 실행별 HttpOnly cookie와 Origin/Host 검사를 사용한다.
+- 서버는 `@earendil-works/pi-coding-agent` SDK의 `ModelRuntime.create()`와 in-memory `AgentSession`을 같은 Node 프로세스에서 사용한다. 별도 Pi CLI/RPC subprocess를 만들지 않는다.
+- `DefaultResourceLoader`에서 extensions, skills, prompt templates, themes, context files를 끄고, 세션은 `noTools: "all"`, `tools: []`로 만든다. 공식 동작 근거는 설치된 Pi 문서의 `docs/sdk.md`, `docs/providers.md`, `docs/security.md`를 따른다.
+- 질문에는 현재 보고 있는 section, 사용자가 선택한 리뷰 텍스트, 해당 section의 focus/evidence diff만 크기 제한과 함께 전달한다.
+- 답변은 스트리밍하되 text node로만 렌더링한다. 모델 출력에 HTML을 삽입하지 않는다.
+- 정적 `file://`로 연 HTML은 기존 리뷰 기능을 유지하며, FAB에는 `serve`가 필요하다고 안내한다.
+- 서버 종료 시 in-memory Pi SDK 세션을 `dispose()`한다.
+
 ## 결과를 전달한다
 
-`<bundle-dir>/review.html`의 절대 경로 링크를 준다.
+`<bundle-dir>/review.html`의 절대 경로 링크를 준다. 채팅 서버를 실행했다면 loopback HTTP URL도 함께 준다.
 
-최종 답변에는 대상, 전체/일부 검토 범위, 실제로 먼저 볼 점, 수행한 검증, 생성한 HTML 링크만 간결하게 적는다. 문제를 찾지 못했다는 사실을 승인이나 안전 보장으로 표현하지 않는다.
+최종 답변에는 대상, 전체/일부 검토 범위, 실제로 먼저 볼 점, 수행한 검증, 생성한 HTML 링크만 간결하게 적는다. 채팅을 실행했다면 번들 전용 컨텍스트이고 Pi의 설정된 모델 제공자와 통신한다는 점을 덧붙인다. 문제를 찾지 못했다는 사실을 승인이나 안전 보장으로 표현하지 않는다.
