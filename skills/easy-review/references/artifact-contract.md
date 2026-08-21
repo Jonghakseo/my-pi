@@ -107,6 +107,9 @@
 - 넓은 화면에서는 우측 미니맵을 고정하고, 좁은 화면에서는 현재 section과 문서 위치가 보이는 하단 플로팅 바로 바꾼다. 두 형태 모두 현재·지난·남은 section을 구분한다.
 - HTML 문서는 Python 표준 라이브러리의 element tree로 구성한다. 계획과 diff에서 온 값은 text 또는 attribute로만 넣어 자동 이스케이프하고, 문자열 HTML 조각이나 범용 `replace()`로 동적 데이터를 삽입하지 않는다.
 - CSS, Prism, 동작 스크립트는 읽기 전용 정적 자산으로만 삽입한다. 스크립트 자산에 `</script>`가 있으면 컴파일을 중단한다.
+- HTML에는 선택적 로컬 Pi 채팅 FAB를 포함한다. `file://`에서는 연결 안내만 제공하고, `serve`로 같은-origin loopback 서버에서 열었을 때만 채팅한다.
+- 채팅 답변은 text node로만 렌더링한다. 모델 출력에 `innerHTML`이나 동적 HTML serializer를 사용하지 않는다.
+- 채팅 컨텍스트는 `review.json`의 계획, 현재 section, 선택 텍스트, section의 focus/evidence 줄로 제한한다. Pi 도구나 저장소 읽기 권한을 제공하지 않는다.
 
 ## Chunk 동작
 
