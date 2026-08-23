@@ -44,7 +44,7 @@ cd ~/.pi/agent && ./scripts/bootstrap.sh
 |---|---|
 | **사용자 / pi TUI** | 터미널 기반 인터랙티브 인터페이스 |
 | **확장 기능** | 디렉터리형 로컬 TypeScript 확장 + 설치형 npm 확장 패키지 |
-| **에이전트** | 역할과 모델이 다른 10개의 전문 에이전트 정의 |
+| **에이전트** | 역할과 모델이 다른 9개의 전문 에이전트 정의 |
 | **인프라** | `@ryan_nookpi/pi-extension-claude-mcp-bridge`를 통한 MCP 도구 연동 — 기존 Claude Code MCP 설정을 그대로 재사용 (Jira, Slack, Gmail, Calendar, GA4, Figma, DB 등) |
 
 ---

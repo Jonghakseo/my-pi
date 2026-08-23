@@ -76,7 +76,7 @@ It will:
 
 1. Check that Node, pnpm, Git, GitHub CLI, and pi are available.
 2. `pnpm install` at the repo root **and** inside `extensions/`.
-3. Run `scripts/sync-agents.mjs` to copy `agents/*.md` into `~/.pi/agent/agents/`.
+3. Run `scripts/sync-agents.mjs` to sync `agents/*.md` into `~/.pi/agent/agents/` and remove retired bundled agent definitions.
 4. Create `.env` from the template if missing.
 5. Print a checklist of any missing optional CLIs from §1.
 
