@@ -3,8 +3,8 @@
 /**
  * sync-agents.mjs
  *
- * Copies agent definition files (*.md) from this repo's agents/ directory
- * into ~/.pi/agent/agents/.
+ * Syncs agent definition files (*.md) from this repo's agents/ directory
+ * into ~/.pi/agent/agents/ and removes explicitly retired bundled agents.
  *
  * Default behavior: run at most once per package version by writing a stamp
  * file under ~/.pi/agent/state/. Use --force to bypass the stamp and overwrite
@@ -31,6 +31,7 @@ const stateDir = path.join(agentRootDir, "state");
 const stampFile = path.join(stateDir, "sync-agents.json");
 const packageJsonPath = path.join(repoRoot, "package.json");
 const forceOverwrite = process.argv.includes("--force");
+const retiredAgentFiles = ["deepseek-worker.md"];
 
 function readPackageVersion() {
   try {
@@ -73,6 +74,17 @@ function writeStamp() {
   );
 }
 
+function removeRetiredAgents() {
+  for (const file of retiredAgentFiles) {
+    const src = path.join(sourceDir, file);
+    const dst = path.join(targetDir, file);
+    if (!fs.existsSync(src) && fs.existsSync(dst)) {
+      fs.rmSync(dst);
+      console.log(`  removed   ${file}  (retired)`);
+    }
+  }
+}
+
 function main() {
   // Bail out gracefully if source dir doesn't exist (e.g. partial clone)
   if (!fs.existsSync(sourceDir)) {
@@ -80,6 +92,8 @@ function main() {
     console.log("[sync-agents] Skipping agent sync.");
     return;
   }
+
+  removeRetiredAgents();
 
   if (shouldSkipByStamp()) {
     console.log(

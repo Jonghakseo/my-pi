@@ -45,7 +45,7 @@ The system is organized in **four layers**:
 |---|---|
 | **User / pi TUI** | Interactive terminal interface |
 | **Extensions** | Local directory-style TypeScript extensions plus installed npm extension packages |
-| **Agents** | 10 specialized agent definitions with distinct roles and models |
+| **Agents** | 9 specialized agent definitions with distinct roles and models |
 | **Infrastructure** | MCP tool integrations via `@ryan_nookpi/pi-extension-claude-mcp-bridge` — reuses your existing Claude Code MCP setup (Jira, Slack, Gmail, Calendar, GA4, Figma, DB, etc.) |
 
 ---
