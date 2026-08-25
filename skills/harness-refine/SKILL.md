@@ -40,10 +40,10 @@ python3 <skill-dir>/scripts/session_inspect.py timeline --leaf-id <cutoff> --lim
 
 ### Commands
 
-- `summary`: 세션 메타데이터, active branch 크기, 역할/모델/토큰, 도구별 호출 수·빈도·오류·평균 시간을 반환한다.
+- `summary`: 세션 메타데이터, active branch 크기, 역할/모델/토큰, 도구별 호출 수·빈도·오류·평균 시간과 async subagent 완료·실패 집계를 반환한다. dispatch tool 성공과 async run 결과는 별도 통계다.
 - `patterns`: tool·operation·argument keys별 반복 횟수, 오류, first/last timestamp와 크기가 제한된 argument preview를 반환한다.
 - `tools`: 개별 호출 arguments/history를 반환한다. refine workflow에서는 반드시 `--tool`로 범위를 좁힌다.
-- `search`: 도구명·arguments·result를 검색한다. `--query`, `--tool`, `--errors-only`, `--include-results`를 조합한다.
+- `search`: 도구명·arguments·result를 검색한다. `--query`, `--tool`, `--errors-only`, `--include-results`를 조합한다. 결과의 `async_outcomes`에는 subagent dispatch 이후 도착한 완료·실패 알림이 별도로 포함되며, `--tool subagent`로 좁힐 수 있다.
 - `timeline`: thinking과 이미지를 제외한 현재 branch의 대화·도구 흐름을 반환한다.
 - `--exclude-current-turn`은 최신 user message와 이후 entry를 제외해 자기 관찰 편향을 막는다.
 - 모든 command는 `--session <jsonl>`과 `--leaf-id <entry-id>` override를 지원하지만, 사용자가 명시하지 않으면 현재 `PI_SESSION_FILE`만 사용한다.
