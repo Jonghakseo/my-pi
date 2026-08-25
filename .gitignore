@@ -32,6 +32,7 @@ tmp/daily-retro.svg
 
 # Internal pi data
 .pi/
+.playwright-cli/
 .pi-lens/
 state/
 .context/
