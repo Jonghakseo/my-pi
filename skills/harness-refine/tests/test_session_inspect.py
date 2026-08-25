@@ -53,7 +53,9 @@ class SessionInspectTest(unittest.TestCase):
             )},
             {"type": "message", "id": "r1", "parentId": "a1", "timestamp": "2026-01-01T00:00:07.000Z", "message": {"role": "toolResult", "toolCallId": "call-bash", "toolName": "bash", "content": [{"type": "text", "text": "failed with sk-abcdefghijklmnopqrstuvwxyz123456"}], "isError": True, "timestamp": 3}},
             {"type": "message", "id": "r2", "parentId": "r1", "timestamp": "2026-01-01T00:00:08.000Z", "message": {"role": "toolResult", "toolCallId": "call-read", "toolName": "read", "content": [{"type": "text", "text": "configuration"}], "isError": False, "timestamp": 4}},
-            {"type": "message", "id": "u2", "parentId": "r2", "timestamp": "2026-01-01T00:00:09.000Z", "message": {"role": "user", "content": "Use the project runner next time", "timestamp": 5}},
+            {"type": "custom_message", "id": "async-ok", "parentId": "r2", "timestamp": "2026-01-01T00:00:08.200Z", "customType": "subagent-tool", "content": "[subagent:worker#1] completed\nPrompt: inspect code"},
+            {"type": "custom_message", "id": "async-error", "parentId": "async-ok", "timestamp": "2026-01-01T00:00:08.400Z", "customType": "subagent-tool", "content": "[subagent-batch#batch-1] error\nRuns: #1 done, #2 error\nCause: API_TOKEN=super-secret-value"},
+            {"type": "message", "id": "u2", "parentId": "async-error", "timestamp": "2026-01-01T00:00:09.000Z", "message": {"role": "user", "content": "Use the project runner next time", "timestamp": 5}},
         ]
         self.session_path.write_text("\n".join(row(entry) for entry in entries) + "\n", encoding="utf-8")
 
@@ -81,6 +83,13 @@ class SessionInspectTest(unittest.TestCase):
         self.assertNotIn("obsolete", json.dumps(output))
         self.assertEqual(output["summary"]["usage"]["tokens"]["totalTokens"], 130)
 
+    def test_summary_reports_async_subagent_outcomes_separately(self) -> None:
+        output = self.run_cli("summary")
+        outcomes = output["summary"]["async_outcomes"]
+
+        self.assertEqual(outcomes, {"total": 2, "successes": 1, "errors": 1})
+        self.assertEqual(output["summary"]["tools"]["errors"], 1)
+
     def test_tools_redacts_secret_arguments_and_results(self) -> None:
         output = self.run_cli("tools", "--include-results")
         serialized = json.dumps(output, ensure_ascii=False)
@@ -103,6 +112,25 @@ class SessionInspectTest(unittest.TestCase):
         )
         self.assertEqual(output["search"]["matched_calls"], 1)
         self.assertEqual(output["search"]["calls"][0]["tool"], "bash")
+
+    def test_search_errors_includes_redacted_async_subagent_outcomes(self) -> None:
+        output = self.run_cli("search", "--errors-only", "--include-results")
+        search = output["search"]
+        serialized = json.dumps(search, ensure_ascii=False)
+
+        self.assertEqual(search["matched_calls"], 1)
+        self.assertEqual(search["matched_async_outcomes"], 1)
+        self.assertEqual(search["async_outcomes"][0]["async_id"], "subagent-batch#batch-1")
+        self.assertNotIn("super-secret-value", serialized)
+        self.assertIn("<redacted>", serialized)
+
+    def test_search_tool_filter_applies_to_async_subagent_outcomes(self) -> None:
+        output = self.run_cli("search", "--tool", "bash", "--errors-only")
+        self.assertEqual(output["search"]["matched_async_outcomes"], 0)
+
+        output = self.run_cli("search", "--tool", "subagent", "--errors-only")
+        self.assertEqual(output["search"]["matched_calls"], 0)
+        self.assertEqual(output["search"]["matched_async_outcomes"], 1)
 
     def test_timeline_excludes_thinking_and_old_branch(self) -> None:
         output = self.run_cli("timeline")
@@ -137,7 +165,7 @@ class SessionInspectTest(unittest.TestCase):
         self.assertEqual(bounded["summary"]["tools"]["pending"], 0)
         self.assertEqual(bounded["analysis"]["cutoff_reason"], "before_latest_user")
         self.assertEqual(bounded["analysis"]["source_leaf_id"], "a-current")
-        self.assertEqual(bounded["analysis"]["cutoff_leaf_id"], "r2")
+        self.assertEqual(bounded["analysis"]["cutoff_leaf_id"], "async-error")
         self.assertEqual(bounded["analysis"]["excluded_entries"], 2)
 
     def test_patterns_returns_bounded_argument_shape_groups(self) -> None:

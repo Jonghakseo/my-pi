@@ -37,6 +37,10 @@ SECRET_PATTERNS = [
         r"(?i)\b([A-Z0-9_]*(?:TOKEN|KEY|SECRET|PASSWORD|API_KEY))\s*=\s*([^\s'\"]+)"
     ),
 ]
+SUBAGENT_OUTCOME_RE = re.compile(
+    r"^\[(?P<async_id>subagent[^\]]*)\]\s+(?P<outcome>error|failed|completed)\b",
+    re.IGNORECASE,
+)
 
 
 def redact_text(value: str) -> str:
@@ -208,6 +212,37 @@ def tool_records(branch: list[dict[str, Any]], include_results: bool, max_chars:
     return calls
 
 
+def async_outcome_records(
+    branch: list[dict[str, Any]], include_results: bool, max_chars: int
+) -> list[dict[str, Any]]:
+    """Parse async subagent completion notifications emitted after dispatch succeeds."""
+    outcomes: list[dict[str, Any]] = []
+    for entry in branch:
+        if entry.get("type") != "custom_message" or entry.get("customType") != "subagent-tool":
+            continue
+        content = entry.get("content")
+        if not isinstance(content, str):
+            continue
+        match = SUBAGENT_OUTCOME_RE.match(content.strip())
+        if not match:
+            continue
+        outcome = match.group("outcome").casefold()
+        record = {
+            "sequence": len(outcomes) + 1,
+            "entry_id": entry.get("id"),
+            "timestamp": entry.get("timestamp"),
+            "tool": "subagent",
+            "async_id": match.group("async_id"),
+            "outcome": outcome,
+            "status": "success" if outcome == "completed" else "error",
+            "is_error": outcome != "completed",
+        }
+        if include_results:
+            record["result"] = truncate(content, max_chars)
+        outcomes.append(record)
+    return outcomes
+
+
 def tool_stats(calls: list[dict[str, Any]], assistant_turns: int) -> list[dict[str, Any]]:
     grouped: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for call in calls:
@@ -341,6 +376,7 @@ def command_summary(args: argparse.Namespace) -> dict[str, Any]:
             models[f"{message.get('provider', 'unknown')}/{message.get('model', 'unknown')}"] += 1
             stop_reasons[str(message.get("stopReason", "unknown"))] += 1
     calls = tool_records(branch, include_results=False, max_chars=args.max_chars)
+    async_outcomes = async_outcome_records(branch, include_results=False, max_chars=args.max_chars)
     assistant_turns = roles.get("assistant", 0)
     output = base_meta(path, header, branch, warnings, analysis)
     output["summary"] = {
@@ -355,6 +391,11 @@ def command_summary(args: argparse.Namespace) -> dict[str, Any]:
             "errors": sum(call["status"] == "error" for call in calls),
             "pending": sum(call["status"] == "pending" for call in calls),
             "by_tool": tool_stats(calls, assistant_turns),
+        },
+        "async_outcomes": {
+            "total": len(async_outcomes),
+            "successes": sum(outcome["status"] == "success" for outcome in async_outcomes),
+            "errors": sum(outcome["status"] == "error" for outcome in async_outcomes),
         },
     }
     return output
@@ -479,6 +520,7 @@ def searchable_text(call: dict[str, Any]) -> str:
 def command_search(args: argparse.Namespace) -> dict[str, Any]:
     path, header, branch, warnings, analysis = session_context(args)
     calls = tool_records(branch, include_results=True, max_chars=args.max_chars)
+    async_outcomes = async_outcome_records(branch, include_results=True, max_chars=args.max_chars)
     query = args.query.casefold() if args.query else None
     matches = []
     for call in calls:
@@ -491,8 +533,20 @@ def command_search(args: argparse.Namespace) -> dict[str, Any]:
         if not args.include_results:
             call.pop("result", None)
         matches.append(call)
+    async_matches = []
+    for outcome in async_outcomes:
+        if args.tool and args.tool != outcome["tool"]:
+            continue
+        if args.errors_only and outcome["status"] != "error":
+            continue
+        if query and query not in searchable_text(outcome).casefold():
+            continue
+        if not args.include_results:
+            outcome.pop("result", None)
+        async_matches.append(outcome)
     if args.limit:
         matches = matches[-args.limit :]
+        async_matches = async_matches[-args.limit :]
     output = base_meta(path, header, branch, warnings, analysis)
     output["search"] = {
         "filters": {
@@ -503,6 +557,8 @@ def command_search(args: argparse.Namespace) -> dict[str, Any]:
         },
         "matched_calls": len(matches),
         "calls": matches,
+        "matched_async_outcomes": len(async_matches),
+        "async_outcomes": async_matches,
     }
     return output
 
