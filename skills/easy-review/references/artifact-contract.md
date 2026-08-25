@@ -108,8 +108,10 @@
 - HTML 문서는 Python 표준 라이브러리의 element tree로 구성한다. 계획과 diff에서 온 값은 text 또는 attribute로만 넣어 자동 이스케이프하고, 문자열 HTML 조각이나 범용 `replace()`로 동적 데이터를 삽입하지 않는다.
 - CSS, Prism, 동작 스크립트는 읽기 전용 정적 자산으로만 삽입한다. 스크립트 자산에 `</script>`가 있으면 컴파일을 중단한다.
 - HTML에는 선택적 로컬 Pi 채팅 FAB를 포함한다. `file://`에서는 연결 안내만 제공하고, `serve`로 같은-origin loopback 서버에서 열었을 때만 채팅한다.
-- 채팅 답변은 text node로만 렌더링한다. 모델 출력에 `innerHTML`이나 동적 HTML serializer를 사용하지 않는다.
-- 채팅 컨텍스트는 `review.json`의 계획, 현재 section, 선택 텍스트, section의 focus/evidence 줄로 제한한다. Pi 도구나 저장소 읽기 권한을 제공하지 않는다.
+- 채팅 답변은 문단·제목·목록·강조·인라인 코드·코드 블록·인용·안전한 링크만 지원하는 제한된 마크다운으로 렌더링한다. 검증된 파서가 `createElement`와 text node로 DOM을 구성하며, 모델 출력에 `innerHTML`, `insertAdjacentHTML`, `document.write` 또는 동적 HTML serializer를 사용하지 않는다. HTML 문법과 안전하지 않은 링크 프로토콜은 일반 텍스트로 남긴다.
+- 채팅의 기본 컨텍스트는 `review.json`의 계획, 현재 section, 선택 텍스트, section의 focus/evidence 줄로 제한한다. 추가 diff가 필요하면 읽기 전용 `review_diff` custom tool이 메모리에 적재된 같은 `review.json`의 캡처 diff만 파일 경로·검색어·`D...` anchor로 조회한다.
+- 채팅 Pi에는 built-in·extension 도구나 저장소 읽기 권한을 제공하지 않는다. `review_diff`의 경로 입력은 filesystem path로 해석하지 않고 번들의 파일 인덱스에만 대조하며, 결과는 최대 200개 diff 줄·32,000자로 제한하고 offset pagination을 제공한다.
+- `review_diff` 결과는 live Git 상태가 아니라 캡처 시점 원본이다. `summary`·`omitted`·`unreviewed` 파일도 원본 diff 조회는 가능하지만 각 review 상태를 결과에 표시하고, 조회 사실을 검토 완료로 표현하지 않는다.
 
 ## Chunk 동작
 

@@ -4,16 +4,16 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 
-import { createEasyReviewServer, ReviewContext } from "../chat_server.mjs";
+import { createEasyReviewServer, createReviewDiffTool, ReviewContext } from "../chat_server.mjs";
 
 const SOURCE_SHA = "a".repeat(64);
 
 function sampleReview() {
   const lines = [
-    { id: "D000001", text: "diff --git a/app.py b/app.py", kind: "file_header", old_line: null, new_line: null },
-    { id: "D000002", text: "@@ -1 +1 @@", kind: "hunk_header", old_line: null, new_line: null },
-    { id: "D000003", text: "-value = 1", kind: "deletion", old_line: 1, new_line: null },
-    { id: "D000004", text: "+value = 2", kind: "addition", old_line: null, new_line: 1 },
+    { id: "D000001", text: "diff --git a/app.py b/app.py", kind: "file_header", file_id: "F001", hunk_id: null, old_line: null, new_line: null },
+    { id: "D000002", text: "@@ -1 +1 @@", kind: "hunk_header", file_id: "F001", hunk_id: "H0001", old_line: null, new_line: null },
+    { id: "D000003", text: "-value = 1", kind: "deletion", file_id: "F001", hunk_id: "H0001", old_line: 1, new_line: null },
+    { id: "D000004", text: "+value = 2", kind: "addition", file_id: "F001", hunk_id: "H0001", old_line: null, new_line: 1 },
   ];
   return {
     source: { source_sha256: SOURCE_SHA, lines },
@@ -67,6 +67,7 @@ function fakeSdk(state) {
     DefaultResourceLoader: FakeLoader,
     SessionManager: { inMemory: (cwd) => ({ cwd }) },
     getAgentDir: () => "/fake/agent",
+    defineTool: (definition) => definition,
     createAgentSession: async (options) => {
       state.sessionOptions.push(options);
       return { session: new FakeSession() };
@@ -89,18 +90,99 @@ test("review context includes selected bundle evidence", () => {
   const prompt = context.questionPrompt("What changed?", "value-update", "selected code");
   assert.match(prompt, /selected code/);
   assert.match(prompt, /D000004 old:- new:1 \[addition\] \+value = 2/);
-  assert.match(context.systemPrompt(), /You have no tools/);
+  assert.match(context.systemPrompt(), /exactly one read-only tool named review_diff/);
 });
 
-test("Pi SDK server inherits auth runtime while disabling tools and resources", async (t) => {
+test("review_diff lists the captured file catalog without filters", async () => {
+  const context = new ReviewContext(sampleReview());
+  const tool = createReviewDiffTool({ defineTool: (definition) => definition }, context);
+  const result = await tool.execute("call-1", {});
+
+  assert.match(result.content[0].text, /Captured Easy Review diff files only/);
+  assert.match(result.content[0].text, /app\.py \[review=detail\]/);
+  assert.equal(result.details.mode, "catalog");
+  assert.equal(result.details.totalFiles, 1);
+});
+
+test("review_diff reads only the captured bundle with bounded pagination", async () => {
+  const context = new ReviewContext(sampleReview());
+  const tool = createReviewDiffTool({ defineTool: (definition) => definition }, context);
+  const first = await tool.execute("call-1", { path: "app.py", limit: 2 });
+
+  assert.match(first.content[0].text, /Captured Easy Review diff only/);
+  assert.match(first.content[0].text, /FILE app\.py \[review=detail\]/);
+  assert.match(first.content[0].text, /D000001/);
+  assert.equal(first.details.totalLines, 4);
+  assert.equal(first.details.returnedLines, 2);
+  assert.equal(first.details.nextOffset, 2);
+
+  const second = await tool.execute("call-2", { path: "app.py", offset: 2, limit: 2 });
+  assert.match(second.content[0].text, /D000004 old:- new:1 \[addition\] \+value = 2/);
+  assert.equal(second.details.nextOffset, null);
+});
+
+test("review_diff searches matching captured hunks and cites anchors", async () => {
+  const context = new ReviewContext(sampleReview());
+  const tool = createReviewDiffTool({ defineTool: (definition) => definition }, context);
+  const result = await tool.execute("call-1", { query: "value = 2" });
+
+  assert.match(result.content[0].text, /D000002/);
+  assert.match(result.content[0].text, /D000003 old:1 new:- \[deletion\] -value = 1/);
+  assert.match(result.content[0].text, /D000004 old:- new:1 \[addition\] \+value = 2/);
+  assert.equal(result.details.totalLines, 3);
+});
+
+test("review_diff labels raw diff from unreviewed files", async () => {
+  const review = sampleReview();
+  review.source.lines.push(
+    { id: "D000005", text: "diff --git a/raw.txt b/raw.txt", kind: "file_header", file_id: "F002", hunk_id: null, old_line: null, new_line: null },
+    { id: "D000006", text: "+not reviewed", kind: "addition", file_id: "F002", hunk_id: "H0002", old_line: null, new_line: 1 },
+  );
+  review.files.push({ id: "F002", path: "raw.txt" });
+  review.plan.unreviewed_file_ids = ["F002"];
+  const context = new ReviewContext(review);
+  const tool = createReviewDiffTool({ defineTool: (definition) => definition }, context);
+  const result = await tool.execute("call-1", { path: "raw.txt" });
+
+  assert.match(result.content[0].text, /FILE raw\.txt \[review=unreviewed\]/);
+  assert.match(result.content[0].text, /\+not reviewed/);
+});
+
+test("review_diff never resolves arbitrary filesystem paths", async () => {
+  const context = new ReviewContext(sampleReview());
+  const tool = createReviewDiffTool({ defineTool: (definition) => definition }, context);
+  const result = await tool.execute("call-1", { path: "/etc/passwd" });
+
+  assert.match(result.content[0].text, /No captured diff file matched/);
+  assert.equal(result.details.error, "file-not-found");
+  assert.doesNotMatch(result.content[0].text, /root:/);
+});
+
+test("review_diff enforces line and character bounds defensively", async () => {
+  const review = sampleReview();
+  review.source.lines[3].text = `+${"x".repeat(40_000)}`;
+  const context = new ReviewContext(review);
+  const tool = createReviewDiffTool({ defineTool: (definition) => definition }, context);
+  const result = await tool.execute("call-1", { anchor: "d000004", limit: 999 });
+
+  assert.ok(result.content[0].text.length <= 32_000);
+  assert.equal(result.details.limit, 200);
+  assert.equal(result.details.truncatedByChars, true);
+});
+
+test("Pi SDK server inherits auth runtime while exposing only review_diff", async (t) => {
   const { bundle, state, app } = await fixture();
   t.after(async () => { await app.close(); await rm(bundle, { recursive: true, force: true }); });
   assert.equal(state.reloaded, true);
   assert.equal(state.loaderOptions.noExtensions, true);
   assert.equal(state.loaderOptions.noSkills, true);
+  assert.equal(state.loaderOptions.noPromptTemplates, true);
+  assert.equal(state.loaderOptions.noThemes, true);
   assert.equal(state.loaderOptions.noContextFiles, true);
-  assert.equal(state.sessionOptions[0].noTools, "all");
-  assert.deepEqual(state.sessionOptions[0].tools, []);
+  assert.equal(state.sessionOptions[0].noTools, "builtin");
+  assert.deepEqual(state.sessionOptions[0].tools, ["review_diff"]);
+  assert.equal(state.sessionOptions[0].customTools.length, 1);
+  assert.equal(state.sessionOptions[0].customTools[0].name, "review_diff");
 
   const query = `?bundle=${SOURCE_SHA}`;
   const health = await fetch(`${app.origin}/api/health${query}`);

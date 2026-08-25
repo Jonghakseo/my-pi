@@ -17,6 +17,8 @@
   let streaming = false;
   let controller = null;
   let capturedSelection = '';
+  const markdown = window.EasyReviewMarkdown;
+  const messageText = new WeakMap();
 
   const setOpen = (open) => {
     panel.hidden = !open;
@@ -36,6 +38,16 @@
     stopButton.hidden = !value;
   };
 
+  const setMessageText = (copy, text, useMarkdown) => {
+    messageText.set(copy, text);
+    if (useMarkdown && markdown) markdown.render(copy, text);
+    else copy.textContent = text;
+  };
+
+  const appendMessageText = (copy, delta, useMarkdown) => {
+    setMessageText(copy, `${messageText.get(copy) || ''}${delta}`, useMarkdown);
+  };
+
   const addMessage = (role, text = '') => {
     const item = document.createElement('div');
     item.className = `chat-message ${role}`;
@@ -43,8 +55,8 @@
     label.className = 'chat-message-label';
     label.textContent = role === 'user' ? 'YOU' : 'PI';
     const copy = document.createElement('div');
-    copy.className = 'chat-message-copy';
-    copy.textContent = text;
+    copy.className = `chat-message-copy${role === 'assistant' ? ' markdown' : ''}`;
+    setMessageText(copy, text, role === 'assistant');
     item.append(label, copy);
     messages.append(item);
     messages.scrollTop = messages.scrollHeight;
@@ -159,17 +171,22 @@
       }
       await readJsonLines(response, (event) => {
         if (event.type === 'delta') {
-          answer.textContent += event.delta;
+          appendMessageText(answer, event.delta, true);
           messages.scrollTop = messages.scrollHeight;
         } else if (event.type === 'error') {
           throw new Error(event.message || 'Pi 응답 오류');
         }
       });
-      if (!answer.textContent.trim()) answer.textContent = '응답 내용이 없습니다.';
+      if (!(messageText.get(answer) || '').trim()) {
+        setMessageText(answer, '응답 내용이 없습니다.', true);
+      }
       setStatus('리뷰 번들만 참조 · Pi SDK 연결됨', 'online');
     } catch (error) {
-      if (error.name === 'AbortError') answer.textContent ||= '응답을 중단했습니다.';
-      else answer.textContent = `오류: ${error.message}`;
+      if (error.name === 'AbortError') {
+        if (!(messageText.get(answer) || '').trim()) setMessageText(answer, '응답을 중단했습니다.', true);
+      } else {
+        setMessageText(answer, `오류: ${error.message}`, true);
+      }
       setStatus('응답을 완료하지 못함', 'offline');
     } finally {
       controller = null;
