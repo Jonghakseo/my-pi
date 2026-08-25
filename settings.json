@@ -4,16 +4,15 @@
   "compaction": {
     "enabled": true
   },
-  "defaultModel": "gpt-5.6-sol",
-  "defaultProvider": "openai-codex",
+  "defaultModel": "claude-opus-5",
+  "defaultProvider": "anthropic",
   "defaultThinkingLevel": "high",
   "doubleEscapeAction": "tree",
   "enabledModels": [
     "anthropic/claude-fable-5",
     "openai-codex/gpt-5.6-sol",
     "openai-codex/gpt-5.6-terra",
-    "anthropic/claude-opus-5",
-    "azure-deepseek/deepseek-v4-pro"
+    "anthropic/claude-opus-5"
   ],
   "hideThinkingBlock": true,
   "httpIdleTimeoutMs": 90000,
@@ -40,6 +39,11 @@
     "npm:@ryan_nookpi/pi-extension-subagent",
     "npm:@ryan_nookpi/pi-extension-clipboard"
   ],
+  "retry": {
+    "enabled": true,
+    "maxRetries": 15,
+    "baseDelayMs": 3000
+  },
   "quietStartup": true,
   "subagent": {
     "claudeRuntime": "cli",
