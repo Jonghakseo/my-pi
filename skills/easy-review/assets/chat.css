@@ -44,8 +44,22 @@
 .chat-message-label { display: block; margin-bottom: 5px; color: var(--ink-tertiary); font: 650 9.5px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .08em; }
 .chat-message.user { padding-left: 42px; }
 .chat-message.user .chat-message-label { color: var(--accent); }
-.chat-message-copy { color: var(--ink-secondary); font-size: 13px; line-height: 1.62; overflow-wrap: anywhere; white-space: pre-wrap; }
-.chat-message.user .chat-message-copy { color: var(--ink); }
+.chat-message-copy { color: var(--ink-secondary); font-size: 13px; line-height: 1.62; overflow-wrap: anywhere; }
+.chat-message.user .chat-message-copy { color: var(--ink); white-space: pre-wrap; }
+.chat-message-copy.markdown > :first-child { margin-top: 0; }
+.chat-message-copy.markdown > :last-child { margin-bottom: 0; }
+.chat-message-copy.markdown p { margin: 8px 0; }
+.chat-message-copy.markdown h3, .chat-message-copy.markdown h4, .chat-message-copy.markdown h5, .chat-message-copy.markdown h6 { margin: 15px 0 7px; color: var(--ink); font-size: 13px; line-height: 1.45; }
+.chat-message-copy.markdown h3 { font-size: 14px; }
+.chat-message-copy.markdown strong { color: var(--ink); font-weight: 720; }
+.chat-message-copy.markdown ul, .chat-message-copy.markdown ol { margin: 8px 0; padding-left: 20px; }
+.chat-message-copy.markdown li + li { margin-top: 4px; }
+.chat-message-copy.markdown code { padding: 1px 4px; border: 1px solid var(--rule); background: var(--paper); color: var(--ink); font: 11.5px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; }
+.chat-message-copy.markdown pre { overflow-x: auto; margin: 10px 0; padding: 10px 11px; border: 1px solid var(--rule); background: var(--paper); white-space: pre; }
+.chat-message-copy.markdown pre code { padding: 0; border: 0; background: transparent; white-space: pre; }
+.chat-message-copy.markdown blockquote { margin: 10px 0; padding-left: 11px; border-left: 2px solid var(--accent); color: var(--ink-tertiary); }
+.chat-message-copy.markdown a { color: var(--accent); text-decoration: underline; text-underline-offset: 2px; }
+.chat-message-copy.markdown hr { margin: 13px 0; border: 0; border-top: 1px solid var(--rule); }
 .chat-form { padding: 13px; border-top: 1px solid var(--rule); background: var(--paper); }
 .chat-input {
   display: block;

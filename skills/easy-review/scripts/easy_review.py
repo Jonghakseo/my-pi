@@ -1613,7 +1613,7 @@ def render_html(review: dict[str, Any], assets_dir: Path) -> str:
     syntax_script = (assets_dir / "vendor" / "prism.js").read_text(encoding="utf-8")
     behavior_script = "\n".join(
         (assets_dir / name).read_text(encoding="utf-8")
-        for name in ("review.js", "chat.js")
+        for name in ("review.js", "chat_markdown.js", "chat.js")
     )
     try:
         return render_document(
