@@ -53,15 +53,17 @@ subagent({ command: "subagent run worker --main -- \"Cycle 1 stress-interview �
 - 각 사이클마다 가능한 최소 수정으로 진행한다.
 
 ## 사이클별 체크리스트
-stress-interview 결과에서 reviewer의 `fix_class`와 `priority` 필드를 활용하여 분류한다:
+stress-interview 결과에서 reviewer findings 테이블의 `Fix` 컬럼과 `Pri` 컬럼을 활용하여 분류한다:
 
-- `Must fix now (auto)`: P0/P1 + fix_class `AUTO_FIX` (blocker / correctness / reproducible failures → worker가 즉시 수정)
-- `Must fix now (escalate)`: P0/P1 + fix_class `ASK` (판단이 필요한 심각 이슈 → **자동 수정하지 않고** 사용자에게 에스컬레이션)
-- `Good to fix`: P2/P3 + fix_class `AUTO_FIX` (maintainability / clarity / low-risk cleanup)
-- `Report as remaining risk`: P2/P3 + fix_class `ASK` (판단 필요하지만 긴급하지 않음 → Remaining Risks에 기록)
-- `Do not auto-fix`: fix_class `INFO`, 또는 근거 부족, 제품 의도 불명, 대규모 설계 변경 필요
+| 분류 | Pri | Fix | 처리 |
+|------|-----|-----|------|
+| Must fix now (auto) | 🔴 P0 / 🟠 P1 | AUTO_FIX | worker가 즉시 수정 |
+| Must fix now (escalate) | 🔴 P0 / 🟠 P1 | ASK | **자동 수정 금지** · 사용자에게 에스컬레이션 |
+| Good to fix | 🟡 P2 / ⚪ P3 | AUTO_FIX | low-risk cleanup, 수정 |
+| Report as remaining risk | 🟡 P2 / ⚪ P3 | ASK | Remaining Risks에 기록만 |
+| Do not auto-fix | - | INFO | 근거 부족 · 제품 의도 불명 · 대규모 설계 변경 필요 |
 
-reviewer가 `fix_class`를 제공하지 않는 경우 기존 심각도 언어(Critical/Important/Minor)로 폴백한다.
+reviewer가 `Fix` 컬럼을 제공하지 않는 경우 기존 심각도 언어(Critical/Important/Minor)로 폴백한다.
 
 ## 종료 조건
 다음 중 하나면 종료한다.

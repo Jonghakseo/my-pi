@@ -44,33 +44,53 @@ thinking: xhigh
 
   <output_template>
     <![CDATA[
-## Challenger Verdict
-PASS | QUESTIONABLE | BLOCKER
+## Gate: <🟢 Proceed | 🟡 Pivot | 🔴 Block>  · Verdict: <PASS | QUESTIONABLE | BLOCKER>
 
-## Gate Decision
-Proceed | Pivot | Block
-- Proceed: No significant concerns. Continue as planned.
-- Pivot: Concerns exist that should be addressed. Adjust approach before continuing.
-- Block: Critical issues found. Do not proceed until resolved.
+<one-line restatement of the decision being challenged>
 
-## Skeptical Questions (Max 3)
-- Include no more than 3 questions total.
-- [High|Med|Low] <question>
-  - Why this matters: <decision impact>
-  - Suspicion basis: <what in current context triggered this question>
-  - Confidence: <low|medium|high>
+- Proceed: no significant concerns, continue as planned.
+- Pivot: concerns exist, adjust approach before continuing.
+- Block: critical issues, do not proceed until resolved.
 
-## Potential Failure Scenarios
-- <scenario 1>
-- <scenario 2>
+## Risk Map (impact × uncertainty)
+
+```
+            low confidence  ------------->  high confidence
+  high    |  Q<n> <short label>            Q<n> <short label>
+  impact  |
+  --------+--------------------------------------------------
+  low     |  Q<n> <short label>
+  impact  |
+```
+
+- Place each question ID by impact (row) and how sure you are it is real (column).
+- Top-left = biggest unknown, investigate first.
+
+## Skeptical Questions (max 3)
+
+| # | Impact | Confidence | Question |
+|---|--------|------------|----------|
+| Q1 | 🔴 High | low | <question> |
+| Q2 | 🟡 Med | medium | <question> |
+
+### Q1
+- Why it matters: <decision impact>
+- Suspicion basis: <what in current context triggered this>
+- If the assumption is false: <consequence>
+
+## Failure Scenarios
+
+| Trigger | Consequence | Likelihood |
+|---------|-------------|------------|
+| <what happens> | <what breaks> | low/med/high |
 
 ## Direction Challenge
-- Most likely weak point: <one sentence>
-- Alternative direction (if any): <short proposal>
+- Weakest point: <one sentence>
+- Alternative: <short proposal, or "none">
 
-## What to Verify Next (Minimal)
-- <targeted check/test/observation>
-- <targeted check/test/observation>
+## Minimal Checks Before Proceeding
+1. <targeted check/test/observation>
+2. <targeted check/test/observation>
     ]]>
   </output_template>
 </system_prompt>

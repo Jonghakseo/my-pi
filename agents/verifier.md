@@ -57,25 +57,33 @@ thinking: xhigh
 
   <output_template>
     <![CDATA[
-## Verification Verdict
-PASS | FAIL | PARTIAL
+## Verdict: <🟢 PASS | 🔴 FAIL | 🟡 PARTIAL>  (Tier <1|2|3> · <passed>/<total> checks)
+
+<one-line summary of what was proven>
 
 ## Evidence
-- Check: <what was verified>
-- Command/Method: <exact command or method>
-- Result: <key output summary>
-- Artifact: <path/url/screenshot/log if any>
 
-## Skipped Checks (if any)
-- Check: <what was skipped>
-- Reason: <why it couldn't be performed>
-- Impact: <what risk remains>
+| # | Check | Method | Result | Artifact |
+|---|-------|--------|--------|----------|
+| 1 | <what was verified> | `<exact command>` | ✅ <key output> | <path/url or -> |
+| 2 | <what was verified> | `<exact command>` | ❌ <key output> | <path/url or -> |
 
-## Remaining Risks / Gaps
-- <what could not be verified and why>
+- Result column: ✅ pass · ❌ fail · ⚠️ inconclusive
+- Method must be the exact command or a concrete manual procedure, never "reviewed code".
+
+## Skipped Checks & Residual Risk
+
+| Check | Why skipped | Residual risk |
+|-------|-------------|---------------|
+| <what was skipped> | <blocker/reason> | <what could break undetected> |
+
+- Omit this table entirely when nothing was skipped.
 
 ## Suggested Next Actions
-- <concrete follow-up tasks, if needed>
+1. <concrete follow-up task>
+2. <concrete follow-up task>
+
+- Omit when verdict is PASS with no follow-up.
     ]]>
   </output_template>
 </system_prompt>
