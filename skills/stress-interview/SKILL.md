@@ -51,28 +51,71 @@ subagent({ command: "subagent batch --main --agent verifier --task \"$ARGUMENTS 
 - `challenger`: "$ARGUMENTS 에 대해 숨은 가정, 실패 시나리오, 취약한 결정 포인트를 최대 3개 질문으로 압박 검토해줘."
 
 ## 종합 응답 형식
-최종 응답은 아래 순서로 간단히 정리한다.
+최종 응답은 아래 형태로 정리한다. 세 에이전트의 개별 포맷을 그대로 복붙하지 말고, 아래 구조로 재조립한다.
 
-1. `Overall`
-   - Ready | Needs changes | Blocked
-2. `Common Findings`
-   - 공통 지적만 추림
-3. `Verifier`
-   - 핵심 검증 결과
-4. `Reviewer`
-   - 핵심 리뷰 결과
-5. `Challenger`
-   - 핵심 질문/리스크
-6. `Severity Classification`
-   - 🔴 Must-fix: blocker, correctness 오류, 재현 가능한 버그
-   - 🟡 Should-fix: maintainability, clarity, 저위험 개선
-   - ⚪ Won't-fix: 근거 부족, 의도된 설계, 대규모 변경 필요
-7. `Recommended Next Step`
-   - 수정 필요 시 가장 먼저 할 일 1~3개
+### 1. 헤더
+
+```
+## 🔴 Needs changes
+Verifier 🟡 PARTIAL · Reviewer ❌ incorrect · Challenger 🟡 Pivot
+```
+
+- 전체 판정: 🟢 Ready | 🟡 Needs changes | 🔴 Blocked
+- 둘째 줄에 세 에이전트의 개별 판정을 한 줄로 나열한다.
+
+### 2. 교차 검토 매트릭스
+
+| 지적 | Verifier | Reviewer | Challenger | 판정 |
+|------|:--------:|:--------:|:----------:|------|
+| <지적 내용> | ✅ | ✅ | ✅ | 공통 |
+| <지적 내용> | - | ✅ | - | 독립 |
+| <지적 내용> | ✅ 안전 | ❌ 위험 | - | ⚠️ 상충 |
+
+- 셀: ✅ 지적함 · ❌ 반대 결론 · `-` 언급 없음
+- 판정: `공통`(둘 이상 일치) · `독립`(하나만, 그러나 타당) · `⚠️ 상충`(결론이 다름)
+- 상충 행은 임의로 판정하지 말고 양측 근거를 아래에 병기한다.
+
+### 3. 심각도 분류
+
+| Sev | 항목 | 근거 출처 | 조치 |
+|-----|------|-----------|------|
+| 🔴 Must-fix | <항목> | Reviewer F1 | <조치> |
+| 🟡 Should-fix | <항목> | Verifier | <조치> |
+| ⚪ Won't-fix | <항목> | Challenger Q2 | <사유> |
+
+- 🔴 Must-fix: blocker, correctness 오류, 재현 가능한 버그
+- 🟡 Should-fix: maintainability, clarity, 저위험 개선
+- ⚪ Won't-fix: 근거 부족, 의도된 설계, 대규모 변경 필요
+- `근거 출처`에 어느 에이전트의 어느 finding/question인지 반드시 남긴다.
+
+### 4. 검증 공백
+
+| 검증하지 못한 것 | 이유 | 잔여 리스크 |
+|------------------|------|-------------|
+| <항목> | <이유> | <리스크> |
+
+- verifier가 실행 증거를 못 모았으면 반드시 이 표에 남긴다. 공백이 없으면 표를 생략한다.
+
+### 5. Recommended Next Step
+1. <가장 먼저 할 일>
+2. <그다음>
+3. <그다음>
+
+- 최대 3개. 🔴 Must-fix가 있으면 반드시 1번에 온다.
 
 ## 2-Pass 리뷰 모드
 
 `$ARGUMENTS`에 `--2pass` 또는 "2단계 리뷰"가 포함되면 아래 순서를 따른다:
+
+```mermaid
+flowchart TD
+    A[변경사항] --> P1{"Pass 1<br/>Spec Compliance"}
+    P1 -->|"누락 Under-built"| FIX1[수정] --> P1
+    P1 -->|"초과 Over-built · YAGNI"| FIX1
+    P1 -->|"명세 일치"| P2{"Pass 2<br/>Code Quality"}
+    P2 -->|"Critical / Important"| FIX2[수정] --> P2
+    P2 -->|"Minor만 남음"| DONE["🟢 Ready<br/>Minor는 기록만"]
+```
 
 ### Pass 1: Spec Compliance (명세 적합성)
 목적: 구현이 요구사항/계획/명세를 **정확히** 충족하는지 확인.
@@ -96,6 +139,21 @@ subagent({ command: "subagent batch --main --agent verifier --task \"$ARGUMENTS 
 - Minor 이슈 → 기록만 하고 통과
 
 **주의: Pass 1 전에 Pass 2를 시작하지 않는다.** 명세 미충족 상태에서 코드 품질을 논하는 것은 무의미하다.
+
+### 2-Pass 종합 응답 형식
+헤더에 현재 어느 게이트에 있는지 명시하고, Pass 1은 아래 표를 추가로 붙인다.
+
+```
+## 🔴 Needs changes — Pass 1 실패 (Pass 2 미실행)
+```
+
+| 명세 항목 | 구현 | 판정 |
+|----------|------|------|
+| <요구사항> | <구현 위치 또는 없음> | ✅ 일치 |
+| <요구사항> | 없음 | ❌ 누락 |
+| - | <구현 위치> | ⚠️ 초과 |
+
+Pass 2까지 도달하면 기본 `## 종합 응답 형식`을 그대로 사용한다.
 
 ## 주의
 - 3개 결과가 모두 오기 전 성급히 결론 내리지 않는다.

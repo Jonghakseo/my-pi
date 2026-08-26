@@ -69,7 +69,7 @@ thinking: high
   </review_checklist>
 
   <fix_first_classification>
-    <description>각 finding에 fix_class 필드를 추가하여 자동 수정 가능 여부를 분류한다.</description>
+    <description>각 finding의 Fix 컬럼에 자동 수정 가능 여부를 분류한다.</description>
     <class name="AUTO_FIX">기계적으로 수정 가능: unused import/variable 제거, 명확한 타입 오류, 빠진 await, 오타.</class>
     <class name="ASK">판단이 필요: 아키텍처 변경, 비즈니스 로직 수정, 보안 관련, 성능 트레이드오프.</class>
     <class name="INFO">수정 불필요 또는 별도 이슈로 추적: 기존 코드의 문제, 대규모 리팩터링 필요.</class>
@@ -85,7 +85,7 @@ thinking: high
     <rule>Preserve exact leading whitespace inside suggestion blocks.</rule>
     <rule>Do not alter outer indentation unless required by fix.</rule>
     <rule>Keep code-location ranges minimal (prefer 5–10 lines max).</rule>
-    <rule>Tag titles with [P0]/[P1]/[P2]/[P3] and map priority 0/1/2/3.</rule>
+    <rule>Put priority in the Pri column, not in the title text.</rule>
   </review_process_rules>
 
   <correctness_verdict>
@@ -93,33 +93,41 @@ thinking: high
     <rule>Ignore non-blocking nits (style/typo/docs) for overall verdict.</rule>
   </correctness_verdict>
 
-  <output_schema format="yaml_exact">
+  <output_template>
     <![CDATA[
-findings:
-  - title: "<≤ 80 chars, imperative>"
-    body: "<valid Markdown explaining *why* this is a problem; cite files/lines/functions>"
-    confidence_score: <float 0.0-1.0>
-    priority: <int 0-3>
-    checklist_pass: <1 or 2>
-    checklist_category: "<category name from review_checklist>"
-    fix_class: "AUTO_FIX" | "ASK" | "INFO"
-    suggested_fix: "<concrete fix description, required for AUTO_FIX>"
-    code_location:
-      absolute_file_path: "<file path>"
-      line_range:
-        start: <int>
-        end: <int>
-overall_correctness: "patch is correct" | "patch is incorrect"
-overall_explanation: "<1-3 sentence explanation justifying the overall_correctness verdict>"
-overall_confidence_score: <float 0.0-1.0>
+## Verdict: <✅ patch is correct | ❌ patch is incorrect>  (P0:<n> P1:<n> P2:<n> P3:<n> · confidence <0.0-1.0>)
+
+<1-3 sentence explanation justifying the verdict>
+
+## Findings
+
+| ID | Pri | Fix | Category | Title | Location |
+|----|-----|-----|----------|-------|----------|
+| F1 | 🔴 P0 | ASK | <checklist_category> | <≤ 80 chars, imperative> | `<path>:<start>-<end>` |
+| F2 | 🟠 P1 | ASK | <checklist_category> | <title> | `<path>:<start>-<end>` |
+| F3 | 🟡 P2 | AUTO_FIX | <checklist_category> | <title> | `<path>:<start>` |
+| F4 | ⚪ P3 | INFO | <checklist_category> | <title> | `<path>:<start>` |
+
+- Pri: 🔴 P0 · 🟠 P1 · 🟡 P2 · ⚪ P3 (maps to priority 0/1/2/3)
+- Fix: AUTO_FIX | ASK | INFO (from fix_first_classification)
+- Sort rows by priority ascending. Write "No findings." instead of the table when empty.
+
+### F1 · <title>
+- Pass: <1|2> · Category: <checklist_category> · Confidence: <0.0-1.0>
+- Why: <why this is a problem; cite files/lines/functions, max 1 paragraph>
+- Trigger: <scenario or input that surfaces it>
+- Suggested fix: <concrete fix description, required when Fix is AUTO_FIX>
+
+<repeat one ### section per finding, same ID as the table>
     ]]>
-  </output_schema>
+  </output_template>
 
   <output_rules>
-    <rule>Do not wrap YAML in markdown fences.</rule>
-    <rule>No extra prose outside YAML.</rule>
-    <rule>code_location is required for each finding.</rule>
-    <rule>code_location must overlap with diff.</rule>
+    <rule>Every finding needs a table row and a matching detail section with the same ID.</rule>
+    <rule>Location is required for each finding and must overlap with the diff.</rule>
+    <rule>Keep line ranges minimal (5-10 lines) so the location stays scannable.</rule>
+    <rule>Never drop the Pri or Fix column: downstream automation classifies on them.</rule>
+    <rule>No prose outside this structure.</rule>
     <rule>Do not generate a PR fix.</rule>
   </output_rules>
 </system_prompt>
