@@ -21,16 +21,18 @@ disable-model-invocation: false
 
 ## 출력 원칙
 
+**최종 보고는 반드시 한글로 작성한다.** 섹션 제목, 설명, 조치 내용, 후속 항목, 시각화에 들어가는 라벨과 문장까지 모두 한글로 쓴다. 버전 문자열, 파일 경로, 패키지명, 명령어, CHANGELOG 원문 인용, 타입·API 이름 같은 고유 식별자는 원문 그대로 둔다.
+
 항상 아래 순서로 보고한다.
 
-1. **Version** — 현재 버전 / 최신 버전 / 업데이트 필요 여부
-2. **Changelog** — 이번 업데이트에서 특히 영향 있는 항목 3~10개
-3. **Impact scan** — 영향받는 `extensions/` 파일, 패키지, 기능
-4. **Dependency updates** — 어떤 `package.json`을 어떻게 바꿨는지
-5. **Code changes** — 실제 대응한 파일과 이유
-6. **Validation** — typecheck/test 결과
-7. **Visualization** — 버전 변화, CHANGELOG 영향, 변경 파일, 검증 결과를 한눈에 볼 수 있는 시각화
-8. **Follow-ups** — 남은 수동 확인 사항
+1. **버전** — 현재 버전 / 최신 버전 / 업데이트 필요 여부
+2. **변경 내역** — 이번 업데이트에서 특히 영향 있는 항목 3~10개
+3. **영향 범위** — 영향받는 `extensions/` 파일, 패키지, 기능
+4. **의존성 업데이트** — 어떤 `package.json`을 어떻게 바꿨는지
+5. **코드 수정** — 실제 대응한 파일과 이유
+6. **검증** — typecheck/test 결과
+7. **시각화** — 버전 변화, CHANGELOG 영향, 변경 파일, 검증 결과를 한눈에 볼 수 있는 시각화
+8. **후속 확인** — 남은 수동 확인 사항
 
 공식 근거가 있으면 반드시 링크를 포함한다.
 
@@ -256,6 +258,8 @@ pi -v
 - 하단 detail cards: 실제 CHANGELOG 항목별 영향과 조치
 - 변경 파일은 `extensions/package.json`, `extensions/pnpm-lock.yaml`처럼 명확한 경로로 표시
 
+시각화의 카드 제목, 라벨, 설명 문장도 한글로 작성한다. 버전값·파일 경로·패키지명만 원문을 유지한다.
+
 시각화는 보조 산출물이므로, 최종 텍스트 보고도 기존 출력 원칙 순서대로 반드시 제공한다.
 
 ---
@@ -272,6 +276,7 @@ pi -v
 - [ ] 가능하면 `pnpm run test`도 실행했는가
 - [ ] 업데이트 내역 시각화를 제공했는가
 - [ ] 남은 수동 확인 항목을 적었는가
+- [ ] 최종 보고와 시각화 문구를 한글로 작성했는가
 
 ---
 
@@ -282,42 +287,43 @@ pi -v
 - 범위 외 파일까지 광범위하게 수정하기
 - 검증 없이 "업데이트 완료"라고 말하기
 - 시각화 도구가 사용 가능한데도 업데이트 요약 시각화를 생략하기
+- 최종 보고를 영어로 작성하기
 
 ---
 
 ## 최종 응답 템플릿
 
 ```md
-Auto-update complete.
+자동 업데이트를 완료했습니다.
 
-## Version
-- current: ...
-- latest: ...
-- update needed: yes/no
+## 버전
+- 현재: ...
+- 최신: ...
+- 업데이트 필요: 예/아니오
 
-## Changelog
-- v...
-  - impact: ...
-  - action: ...
+## 변경 내역
+- vX.Y.Z — ...
+  - 영향: ...
+  - 조치: ...
 
-## Impact scan
+## 영향 범위
 - extensions/package.json
 - extensions/...
 
-## Dependency updates
+## 의존성 업데이트
 - ...
 
-## Code changes
+## 코드 수정
 - ...
 
-## Validation
+## 검증
 - `cd extensions && pnpm run typecheck` → ...
 - `cd extensions && pnpm run test` → ...
 
-## Visualization
-- widget: shown/not shown
-- summary: version flow, impact categories, changed files, validation state
+## 시각화
+- 위젯: 표시함/표시하지 않음
+- 요약: 버전 흐름, 영향 카테고리, 변경 파일, 검증 상태
 
-## Follow-ups
+## 후속 확인
 - ...
 ```
