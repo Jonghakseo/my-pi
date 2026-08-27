@@ -45,7 +45,7 @@ The system is organized in **four layers**:
 |---|---|
 | **User / pi TUI** | Interactive terminal interface |
 | **Extensions** | Local directory-style TypeScript extensions plus installed npm extension packages |
-| **Agents** | 9 specialized agent definitions with distinct roles and models |
+| **Agents** | 8 specialized agent definitions with distinct roles and models |
 | **Infrastructure** | MCP tool integrations via `@ryan_nookpi/pi-extension-claude-mcp-bridge` — reuses your existing Claude Code MCP setup (Jira, Slack, Gmail, Calendar, GA4, Figma, DB, etc.) |
 
 ---
@@ -56,12 +56,11 @@ The system is organized in **four layers**:
   <img src="./docs/assets/agents.en.svg" alt="Agents" width="800"/>
 </p>
 
-The current setup has 9 agent definitions using OpenAI and Anthropic models:
+The current setup has 8 agent definitions using OpenAI and Anthropic models:
 
 | Agent | Model | Role | When to Use |
 |---|---|---|---|
 | **worker** | `openai-codex/gpt-5.6-terra` | General-purpose executor | Implementation, writing, fixes (complex multi-file) |
-| **simplifier** | `anthropic/claude-sonnet-5` | Code simplification specialist | Clean up recently modified code, improve readability, preserve behavior |
 | **code-cleaner** | `anthropic/claude-opus-4-6` | Code cleanup analyst | Find cleanup opportunities and quality issues |
 | **reviewer** | `openai-codex/gpt-5.6-sol` | Code review specialist | PR reviews, quality/correctness checks |
 | **challenger** | `openai-codex/gpt-5.6-sol` | Pressure tester | Stress-test plans before execution |
@@ -75,7 +74,7 @@ The current setup has 9 agent definitions using OpenAI and Anthropic models:
 
 - **openai-codex/gpt-5.6-terra** — Frontier execution (implementation and browser automation)
 - **openai-codex/gpt-5.6-sol** — Frontier review (testing, reviewing, security review)
-- **anthropic/claude-sonnet-5** — Research and code simplification
+- **anthropic/claude-sonnet-5** — Research and documentation lookup
 - **anthropic/claude-opus-4-8** — Deep verification tasks
 - **anthropic/claude-opus-4-6** — Deep cleanup analysis
 

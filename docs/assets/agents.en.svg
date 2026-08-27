@@ -1,49 +1,44 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 620" width="1200" height="620">
-  <rect width="1200" height="620" fill="#0d1117" rx="12"/>
-  <text x="600" y="45" text-anchor="middle" fill="#e6edf3" font-family="monospace" font-size="22" font-weight="bold">Agents (9)</text>
-  <g transform="translate(80,95)">
-    <rect width="280" height="105" rx="14" fill="rgba(88,166,255,0.08)" stroke="#58a6ff" stroke-width="1.5"/>
-    <text x="140" y="38" text-anchor="middle" fill="#58a6ff" font-family="monospace" font-size="17" font-weight="bold">worker</text>
-    <text x="140" y="68" text-anchor="middle" fill="#e6edf3" font-family="monospace" font-size="13">General-purpose executor</text>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 420" width="1200" height="420">
+  <rect width="1200" height="420" fill="#0d1117" rx="12"/>
+  <text x="600" y="45" text-anchor="middle" fill="#e6edf3" font-family="monospace" font-size="22" font-weight="bold">Agents (8)</text>
+  <g transform="translate(25,90)">
+    <rect width="250" height="105" rx="14" fill="rgba(88,166,255,0.08)" stroke="#58a6ff" stroke-width="1.5"/>
+    <text x="125" y="38" text-anchor="middle" fill="#58a6ff" font-family="monospace" font-size="17" font-weight="bold">worker</text>
+    <text x="125" y="68" text-anchor="middle" fill="#e6edf3" font-family="monospace" font-size="13">General-purpose executor</text>
   </g>
-  <g transform="translate(440,95)">
-    <rect width="280" height="105" rx="14" fill="rgba(88,166,255,0.08)" stroke="#58a6ff" stroke-width="1.5"/>
-    <text x="140" y="38" text-anchor="middle" fill="#58a6ff" font-family="monospace" font-size="17" font-weight="bold">simplifier</text>
-    <text x="140" y="68" text-anchor="middle" fill="#e6edf3" font-family="monospace" font-size="13">Code simplification</text>
+  <g transform="translate(325,90)">
+    <rect width="250" height="105" rx="14" fill="rgba(88,166,255,0.08)" stroke="#58a6ff" stroke-width="1.5"/>
+    <text x="125" y="38" text-anchor="middle" fill="#58a6ff" font-family="monospace" font-size="17" font-weight="bold">code-cleaner</text>
+    <text x="125" y="68" text-anchor="middle" fill="#e6edf3" font-family="monospace" font-size="13">Cleanup analyst</text>
   </g>
-  <g transform="translate(800,95)">
-    <rect width="280" height="105" rx="14" fill="rgba(88,166,255,0.08)" stroke="#58a6ff" stroke-width="1.5"/>
-    <text x="140" y="38" text-anchor="middle" fill="#58a6ff" font-family="monospace" font-size="17" font-weight="bold">code-cleaner</text>
-    <text x="140" y="68" text-anchor="middle" fill="#e6edf3" font-family="monospace" font-size="13">Cleanup analyst</text>
+  <g transform="translate(625,90)">
+    <rect width="250" height="105" rx="14" fill="rgba(88,166,255,0.08)" stroke="#58a6ff" stroke-width="1.5"/>
+    <text x="125" y="38" text-anchor="middle" fill="#58a6ff" font-family="monospace" font-size="17" font-weight="bold">reviewer</text>
+    <text x="125" y="68" text-anchor="middle" fill="#e6edf3" font-family="monospace" font-size="13">Code review</text>
   </g>
-  <g transform="translate(80,260)">
-    <rect width="280" height="105" rx="14" fill="rgba(88,166,255,0.08)" stroke="#58a6ff" stroke-width="1.5"/>
-    <text x="140" y="38" text-anchor="middle" fill="#58a6ff" font-family="monospace" font-size="17" font-weight="bold">reviewer</text>
-    <text x="140" y="68" text-anchor="middle" fill="#e6edf3" font-family="monospace" font-size="13">Code review</text>
+  <g transform="translate(925,90)">
+    <rect width="250" height="105" rx="14" fill="rgba(88,166,255,0.08)" stroke="#58a6ff" stroke-width="1.5"/>
+    <text x="125" y="38" text-anchor="middle" fill="#58a6ff" font-family="monospace" font-size="17" font-weight="bold">challenger</text>
+    <text x="125" y="68" text-anchor="middle" fill="#e6edf3" font-family="monospace" font-size="13">Pressure tester</text>
   </g>
-  <g transform="translate(440,260)">
-    <rect width="280" height="105" rx="14" fill="rgba(88,166,255,0.08)" stroke="#58a6ff" stroke-width="1.5"/>
-    <text x="140" y="38" text-anchor="middle" fill="#58a6ff" font-family="monospace" font-size="17" font-weight="bold">challenger</text>
-    <text x="140" y="68" text-anchor="middle" fill="#e6edf3" font-family="monospace" font-size="13">Pressure tester</text>
+  <g transform="translate(25,250)">
+    <rect width="250" height="105" rx="14" fill="rgba(88,166,255,0.08)" stroke="#58a6ff" stroke-width="1.5"/>
+    <text x="125" y="38" text-anchor="middle" fill="#58a6ff" font-family="monospace" font-size="17" font-weight="bold">verifier</text>
+    <text x="125" y="68" text-anchor="middle" fill="#e6edf3" font-family="monospace" font-size="13">Evidence validation</text>
   </g>
-  <g transform="translate(800,260)">
-    <rect width="280" height="105" rx="14" fill="rgba(88,166,255,0.08)" stroke="#58a6ff" stroke-width="1.5"/>
-    <text x="140" y="38" text-anchor="middle" fill="#58a6ff" font-family="monospace" font-size="17" font-weight="bold">verifier</text>
-    <text x="140" y="68" text-anchor="middle" fill="#e6edf3" font-family="monospace" font-size="13">Evidence validation</text>
+  <g transform="translate(325,250)">
+    <rect width="250" height="105" rx="14" fill="rgba(88,166,255,0.08)" stroke="#58a6ff" stroke-width="1.5"/>
+    <text x="125" y="38" text-anchor="middle" fill="#58a6ff" font-family="monospace" font-size="17" font-weight="bold">security-auditor</text>
+    <text x="125" y="68" text-anchor="middle" fill="#e6edf3" font-family="monospace" font-size="13">Security review</text>
   </g>
-  <g transform="translate(80,425)">
-    <rect width="280" height="105" rx="14" fill="rgba(88,166,255,0.08)" stroke="#58a6ff" stroke-width="1.5"/>
-    <text x="140" y="38" text-anchor="middle" fill="#58a6ff" font-family="monospace" font-size="17" font-weight="bold">security-auditor</text>
-    <text x="140" y="68" text-anchor="middle" fill="#e6edf3" font-family="monospace" font-size="13">Security review</text>
+  <g transform="translate(625,250)">
+    <rect width="250" height="105" rx="14" fill="rgba(88,166,255,0.08)" stroke="#58a6ff" stroke-width="1.5"/>
+    <text x="125" y="38" text-anchor="middle" fill="#58a6ff" font-family="monospace" font-size="17" font-weight="bold">searcher</text>
+    <text x="125" y="68" text-anchor="middle" fill="#e6edf3" font-family="monospace" font-size="13">Research &amp; web search</text>
   </g>
-  <g transform="translate(440,425)">
-    <rect width="280" height="105" rx="14" fill="rgba(88,166,255,0.08)" stroke="#58a6ff" stroke-width="1.5"/>
-    <text x="140" y="38" text-anchor="middle" fill="#58a6ff" font-family="monospace" font-size="17" font-weight="bold">searcher</text>
-    <text x="140" y="68" text-anchor="middle" fill="#e6edf3" font-family="monospace" font-size="13">Research &amp; web search</text>
-  </g>
-  <g transform="translate(800,425)">
-    <rect width="280" height="105" rx="14" fill="rgba(88,166,255,0.08)" stroke="#58a6ff" stroke-width="1.5"/>
-    <text x="140" y="38" text-anchor="middle" fill="#58a6ff" font-family="monospace" font-size="17" font-weight="bold">browser</text>
-    <text x="140" y="68" text-anchor="middle" fill="#e6edf3" font-family="monospace" font-size="13">Browser automation</text>
+  <g transform="translate(925,250)">
+    <rect width="250" height="105" rx="14" fill="rgba(88,166,255,0.08)" stroke="#58a6ff" stroke-width="1.5"/>
+    <text x="125" y="38" text-anchor="middle" fill="#58a6ff" font-family="monospace" font-size="17" font-weight="bold">browser</text>
+    <text x="125" y="68" text-anchor="middle" fill="#e6edf3" font-family="monospace" font-size="13">Browser automation</text>
   </g>
 </svg>
