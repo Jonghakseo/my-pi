@@ -124,7 +124,7 @@ Claude Code의 dynamic workflows처럼 JS 런타임이 오케스트레이션을 
 - `challenger`: 숨은 가정, 실패 시나리오, 반론.
 - `security-auditor`: auth, secret, injection, data boundary 등 보안 이슈.
 - `browser`: UI/브라우저 검증.
-- `code-cleaner`/`simplifier`: 재사용성, 품질, 단순화.
+- `code-cleaner`: 재사용성, 품질, 단순화.
 
 ### 6. Verification gate
 

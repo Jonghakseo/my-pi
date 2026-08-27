@@ -31,7 +31,7 @@ const stateDir = path.join(agentRootDir, "state");
 const stampFile = path.join(stateDir, "sync-agents.json");
 const packageJsonPath = path.join(repoRoot, "package.json");
 const forceOverwrite = process.argv.includes("--force");
-const retiredAgentFiles = ["deepseek-worker.md"];
+const retiredAgentFiles = ["deepseek-worker.md", "simplifier.md"];
 
 function readPackageVersion() {
   try {

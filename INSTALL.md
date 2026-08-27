@@ -1,7 +1,7 @@
 # Installation
 
 This guide reproduces the **`Jonghakseo/my-pi`** environment on a fresh macOS machine.
-After completing it, you should have the same `pi` TUI, the same 9 agents, all
+After completing it, you should have the same `pi` TUI, the same 8 agents, all
 remote-tracked skills, the local extension workspace, and the MCP bridge wired into
 Claude Code.
 
