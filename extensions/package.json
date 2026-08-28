@@ -14,16 +14,19 @@
 		"format:write": "biome format --write .",
 		"test": "vitest run --config tooling/vitest.config.ts",
 		"test:watch": "vitest --config tooling/vitest.config.ts",
-		"test:coverage": "vitest run --config tooling/vitest.config.ts --coverage"
+		"test:coverage": "vitest run --config tooling/vitest.config.ts --coverage",
+		"chrome-panel:daemon": "node --experimental-transform-types chrome-panel/daemon/main.ts",
+		"chrome-panel:service": "node --experimental-transform-types chrome-panel/daemon/cli.ts"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "^2.4.4",
-		"@earendil-works/pi-agent-core": "0.84.2",
-		"@earendil-works/pi-ai": "0.84.2",
-		"@earendil-works/pi-coding-agent": "0.84.2",
-		"@earendil-works/pi-tui": "0.84.2",
+		"@earendil-works/pi-agent-core": "0.84.3",
+		"@earendil-works/pi-ai": "0.84.3",
+		"@earendil-works/pi-coding-agent": "0.84.3",
+		"@earendil-works/pi-tui": "0.84.3",
 		"@types/node": "^25.3.1",
 		"@types/turndown": "^5.0.6",
+		"@types/ws": "8.18.1",
 		"@types/xxhashjs": "^0.2.4",
 		"@vitest/coverage-v8": "^4.0.18",
 		"typebox": "^1.1.24",
@@ -32,6 +35,9 @@
 	},
 	"dependencies": {
 		"@anthropic-ai/claude-agent-sdk": "^0.2.98",
+		"@earendil-works/pi-client": "0.84.3",
+		"@earendil-works/pi-protocol": "0.84.3",
+		"@earendil-works/pi-server": "0.84.3",
 		"@mozilla/readability": "^0.5.0",
 		"diff": "^8.0.4",
 		"file-type": "^21.3.0",
@@ -39,6 +45,7 @@
 		"p-limit": "^6.2.0",
 		"turndown": "^7.2.2",
 		"unpdf": "^1.4.0",
+		"ws": "8.21.3",
 		"xxhashjs": "^0.2.2",
 		"yaml": "^2.9.0"
 	}
