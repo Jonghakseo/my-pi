@@ -13,7 +13,7 @@ Custom extensions for the pi coding agent. All extensions are written in TypeScr
 ├── diff-overlay/          # /diff — Git diff split-pane overlay (file list + diff viewer)
 ├── dynamic-agents-md/     # Dynamic AGENTS.md loading per directory scope
 ├── files/                 # File picker / diff viewer UI
-├── interactive-shell/     # Interactive shell overlay (interactive/hands-free/dispatch)
+├── bash-async/            # Bounded FIFO background jobs for finite non-interactive commands
 ├── notify/                # /notify session-toggle: OSC 777/99 alert + macOS say TTS on agent_end
 ├── output-compactor/      # Compress >24KB bash output via codex-spark; save original to tmp, inject summary+path; footer shows net tokens saved (re-reading the tmp original flips that entry negative)
 ├── footer/                # Custom footer UI facade for custom-style/main.ts
@@ -23,6 +23,12 @@ Custom extensions for the pi coding agent. All extensions are written in TypeScr
 
 ## Moved Out
 - **subagent**: maintained in `~/Documents/pi-extension/packages/subagent` and loaded from npm as `@ryan_nookpi/pi-extension-subagent`. Do not re-add subagent code here; contribute to the monorepo and publish a new package version instead. `custom-style/ui.ts` mirrors its `subagent.symbolMap` setting read-only for editor hints.
+
+## Shell Tool Split
+- **`bash`**: synchronous commands. A successful result still means the command finished.
+- **`bash_async`**: finite, non-interactive work that can complete later. Use `start`, then rely on the completion follow-up rather than repeated polling. It does not support stdin, REPLs, or TUIs. Closed logs normally retain their paths for 24 hours, but the shared log root prunes its oldest closed logs early once it exceeds 1 GiB. Active and unmarked logs are preserved; concurrently running managers enforce this quota best-effort rather than atomically.
+- **`tmux-terminal` skill/helper**: use only for TUI, REPL, stdin, and selection-menu interaction that needs a PTY. Run the helper through short synchronous `bash` calls.
+- The native interactive-shell overlay, `interactive_shell` tool, `/attach`, `/dismiss`, widgets, and reattach UI are removed intentionally.
 
 ## Key Patterns
 - **Extension entry point**: Pi auto-discovers both root `*.ts` files and `directory/index.ts` files, but this repo standardizes on `extensions/<name>/index.ts` only to avoid duplicate loading.

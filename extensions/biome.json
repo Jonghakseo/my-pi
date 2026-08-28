@@ -87,16 +87,6 @@
 	},
 	"overrides": [
 		{
-			"includes": ["interactive-shell/**"],
-			"linter": {
-				"rules": {
-					"suspicious": {
-						"noControlCharactersInRegex": "off"
-					}
-				}
-			}
-		},
-		{
 			"includes": ["**/*.test.ts", "**/*.spec.ts"],
 			"linter": {
 				"rules": {

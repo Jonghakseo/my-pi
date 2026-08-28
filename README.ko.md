@@ -102,7 +102,7 @@ pi는 `extensions/*.ts`와 `extensions/*/index.ts`를 모두 자동 발견할 �
 | 확장 | 설명 |
 |---|---|
 | [`dynamic-agents-md/`](./extensions/dynamic-agents-md/index.ts) | 탐색/파일 도구 결과 이후 스코프별 `AGENTS.md` 컨텍스트를 동적으로 주입 |
-| [`interactive-shell/`](./extensions/interactive-shell/index.ts) | `interactive_shell` 도구와 `/attach`, `/dismiss` — interactive/hands-free/dispatch/background/reattach 셸 세션 |
+| [`bash-async/`](./extensions/bash-async/index.ts) | 유한한 비대화형 명령을 background job으로 실행. TUI·REPL·stdin은 패키지의 `tmux-terminal` skill/helper를 사용하며 native overlay, `/attach`, `/dismiss`, reattach UI는 제공하지 않음 |
 | [`web-access/`](./extensions/web-access/index.ts) | 로컬 웹 리서치/콘텐츠 추출 도구: `web_search`, `fetch_content`, `get_search_content`, 큐레이터 워크플로우, GitHub/PDF/동영상/YouTube 추출 |
 
 #### 도구 오버라이드 / 렌더링

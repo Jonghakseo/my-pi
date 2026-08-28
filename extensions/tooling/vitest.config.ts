@@ -15,8 +15,6 @@ const coverageCanaries = [
 	// Additional pure logic modules already meeting the default thresholds.
 	"cron/schedule.ts",
 	"cron/store.ts",
-	"interactive-shell/render-utils.ts",
-	"interactive-shell/session-query.ts",
 ];
 
 const defaultCoverageThresholds = {
