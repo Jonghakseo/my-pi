@@ -25,7 +25,6 @@
     "npm:@ryan_nookpi/pi-extension-ask-user-question",
     "npm:@ryan_nookpi/pi-extension-auto-name",
     "npm:@ryan_nookpi/pi-extension-delayed-action",
-    "npm:@ryan_nookpi/pi-extension-idle-screensaver",
     "npm:@ryan_nookpi/pi-extension-open-pr",
     "npm:@ryan_nookpi/pi-extension-generative-ui",
     "npm:@ryan_nookpi/pi-extension-cross-agent",
