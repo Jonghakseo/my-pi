@@ -11,6 +11,7 @@ sessions/
 .data/
 
 # Generated / logs
+.audit/
 daily-analysis/
 pi-crash.log
 retrospective/
