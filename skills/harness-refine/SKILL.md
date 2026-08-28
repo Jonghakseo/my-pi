@@ -105,18 +105,28 @@ python3 <skill-dir>/scripts/session_inspect.py timeline --leaf-id <cutoff> --lim
 
 중복이면 새 후보를 만들지 말고 기존 target의 `update` 또는 `merge`로 제안한다.
 
-### 4. 가장 작은 Target 선택
+### 4. 가장 강한 Enforcement와 작은 Target 선택
 
-`references/output-schema.md`의 Target mapping을 따른다.
+`references/output-schema.md`의 Enforcement hierarchy와 Target mapping을 따른다.
 
-- 프로젝트 한정 규칙 → `project-agents`
-- 모든 프로젝트에 적용되는 안정적 행동 원칙 → `global-system`
-- 반복 가능한 절차 → `skill`
-- 사실·결정·선호·gotcha → `memory`
-- 독립적인 위임 역할 → `subagent`
+강제력은 다음 순서로 우선한다.
+
+1. `static`: lint, type check, schema, test, CI guard처럼 위반을 자동 차단
+2. `tool`: extension, script, CLI default처럼 올바른 동작을 실행 경로에 내장
+3. `instruction`: AGENTS.md, SYSTEM.md, skill, subagent prompt처럼 모델이 읽고 따라야 하는 규칙
+4. `memory`: 사실·결정·선호·gotcha를 검색해 참고
+
+더 강한 단계로 구현 가능하면 약한 단계를 선택하지 않는다. 단, 정적 검사가 의미를 판별할 수 없거나 자동화의 오탐 위험이 크면 그 이유를 적고 낮은 단계를 선택한다.
+
+- lint·type·schema·test·CI 설정 또는 검사 코드 → `static-enforcement`
 - 익스텐션·스크립트 등 도구 코드 수정 → `extension`
+- 프로젝트 한정 지침 → `project-agents`
+- 모든 프로젝트에 적용되는 안정적 행동 원칙 → `global-system`
+- 반복 가능한 지침 절차 → `skill`
+- 독립적인 위임 역할·prompt contract → `subagent`
+- 사실·결정·선호·gotcha 중 위 단계로 표현할 수 없는 것 → `memory`
 
-한 lesson을 여러 target에 중복 제안하지 않는다. 가장 좁고 직접적인 대상 하나를 고른다.
+한 lesson을 여러 target에 중복 제안하지 않는다. 가장 강하면서 좁고 직접적인 대상 하나를 고른다.
 
 ### 5. Promotion Gate
 
@@ -130,7 +140,19 @@ python3 <skill-dir>/scripts/session_inspect.py timeline --leaf-id <cutoff> --lim
 
 각 후보에 concrete entry id, timestamp, tool call id 중 하나 이상을 evidence로 포함한다. 근거가 약하면 Rejected signals로 보낸다.
 
-### 6. 보고
+### 6. 메모리 승격·폐기 후보 확인
+
+기존 harness 중복 확인 과정에서 조회한 관련 메모리를 다시 검토한다. 각 메모리의 내용이 `static > tool > instruction > memory` 중 더 강한 단계로 온전히 대체 가능한지 판단한다.
+
+- 대체 가능하면 `Enforcement upgrades`에 최대 3개를 제안한다.
+- 각 제안은 현재 memory reference, 대체 enforcement/target, 구체적인 대체안, 검증 방법, 메모리 삭제 조건을 포함한다.
+- 순서는 항상 **대체 수단 구현 → 검증 → 기존 메모리 삭제**다. 대체 전에 삭제를 제안하지 않는다.
+- 일부만 대체 가능하면 메모리 전체 삭제를 제안하지 말고, 대체 가능한 부분만 분리한 뒤 남길 내용을 명시한다.
+- 사용자 취향·프로필·역사적 결정처럼 자동 강제하면 의미가 바뀌는 정보는 메모리에 유지한다.
+- 해당 항목이 없더라도 최종 섹션을 생략하지 말고 `없음`과 짧은 이유를 적는다.
+- 이 섹션은 기존 Candidate의 migration follow-up이며 Candidate 5개 제한이나 한 lesson-one-target 규칙에 포함하지 않는다.
+
+### 7. 보고
 
 `references/output-schema.md` 형식을 정확히 따른다. 보고는 두 단계다.
 
@@ -140,6 +162,7 @@ python3 <skill-dir>/scripts/session_inspect.py timeline --leaf-id <cutoff> --lim
    - Risk는 적용 시 blast radius, Confidence는 증거 품질로 평가
 2. **채팅에는 요약만 출력**: target 종류별 그룹 + 후보당 `제목 — 왜 · 변경` 한 줄씩 + 리포트 경로
    - Coverage, metrics, Rejected signals, Evidence ID는 채팅에 출력하지 않는다
+   - 후보 요약 뒤 마지막 섹션으로 `메모리 승격·폐기 제안`을 항상 출력한다. 없으면 `없음`이라고 쓴다.
    - 마지막에 아무 변경도 적용하지 않았음을 명시
 
 ## Validation
@@ -153,8 +176,11 @@ python3 <skill-dir>/scripts/session_inspect.py timeline --leaf-id <cutoff> --lim
 - 반복 패턴을 bounded `patterns`로 먼저 좁혔는가
 - 오류와 반복 패턴이 tool history로 근거화되었는가
 - 기존 harness와 중복을 확인했는가
+- 각 후보에 대해 `static > tool > instruction > memory` 순으로 가능한 가장 강한 enforcement를 검토했는가
 - 후보가 5개 이하인가
 - 각 후보에 검증 방법이 있는가
+- 관련 메모리의 승격·폐기 가능성을 검토하고 마지막 섹션에 결과를 남겼는가
+- 메모리 삭제 제안이 대체 구현과 검증 이후로 순서화되었는가
 - transcript의 시크릿·개인정보를 출력하지 않았는가
 - 풀 리포트를 파일로 저장하고 채팅에는 요약만 출력했는가
 - 리포트 파일 외에 어떤 파일·메모리도 변경하지 않았는가
