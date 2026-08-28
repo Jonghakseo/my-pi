@@ -47,12 +47,14 @@ Claude Code의 dynamic workflows처럼 JS 런타임이 오케스트레이션을 
 - Objective:
 - Non-goals / do-not-do:
 - Source of truth:
-- Success criteria:
+- Success criteria: 반증 가능한 술어로 (무엇을 실행·확인하면 done인지)
 - Constraints: 시간/토큰/권한/커밋/배포/외부 전송
 - Stop condition:
 ```
 
-복잡한 구현/아키텍처 변경이면 `design-first`를 먼저 사용한다. 이미 구조화된 계획이 있으면 `pipeline-execute`로 이어갈 수 있다.
+Success criteria를 체크 가능한 술어로 쓸 수 없으면 장기 실행을 시작하지 않는다. "잘 동작하게"는 술어가 아니다.
+
+복잡한 구현/아키텍처 변경이면 `design-first`를 먼저 사용한다. 이미 구조화된 계획이 있으면 Scope lock을 약식으로 채우고 바로 worker→verifier→reviewer 체인으로 실행한다.
 
 ### 2. Pattern 선택
 
@@ -62,7 +64,7 @@ Claude Code의 dynamic workflows처럼 JS 런타임이 오케스트레이션을 
 | ------------------------ | ------------------------------------- | ------------------------------------------------------------- |
 | classify-and-act         | 작업 종류/위험도/모델 선택이 먼저 필요                | `worker` 또는 `challenger`에게 분류 요청                             |
 | fan-out-and-synthesize   | 많은 파일/항목/문서/소스를 독립 처리                 | `subagent batch --isolated` 또는 `--main` 후 메인에서 종합             |
-| worker→verifier→reviewer | 구현 태스크 품질 게이트                         | `pipeline-execute` 또는 `subagent chain`                        |
+| worker→verifier→reviewer | 구현 태스크 품질 게이트                         | `subagent chain` (worker→verifier→reviewer)                   |
 | adversarial verification | 사실/코드/설계 검증 신뢰도 향상                    | `verifier` + `reviewer` + `challenger` 병렬, `stress-interview` |
 | generate-and-filter      | 아이디어/해결책 다수 생성 후 선별                   | 여러 `worker` → `reviewer` 필터                         |
 | tournament               | 설계/이름/접근법 비교 판단                       | N개 후보 생성 → pairwise judge/reviewer                            |
@@ -93,6 +95,7 @@ Claude Code의 dynamic workflows처럼 JS 런타임이 오케스트레이션을 
 - 구현 결과는 구현자가 아닌 `verifier`/`reviewer`가 검증한다.
 - 같은 파일을 고치는 worker를 병렬 실행하지 않는다.
 - 긴 프롬프트/컨텍스트는 임시 markdown 파일로 쓰고 subagent에게 경로를 전달한다.
+- 장기 실행·다수 사이클·사용자가 자리를 비우는 워크플로우는 `show-me-your-work` 스킬의 `decisions.tsv` 결정 로그를 유지하고, 최종 보고를 Attention 섹션으로 마무리한다.
 
 ### 4. Subagent 실행 지침
 
@@ -110,6 +113,7 @@ Claude Code의 dynamic workflows처럼 JS 런타임이 오케스트레이션을 
 주의:
 
 - 실행 직후 바로 `status/detail`로 폴링하지 않는다. 자동 완료/실패 follow-up을 기다린다.
+- 읽기 전용 역할(challenger, reviewer, verifier)에는 파일 산출물을 요구하지 않는다. write/셸 도구가 없어 조용히 불이행될 수 있다. 결과는 응답 본문으로 받고, 보존이 필요하면 메인 에이전트가 파일로 저장한다.
 - `continue`는 최신 메인 컨텍스트를 자동 동기화하지 않으므로, 이어서 필요한 변경사항/결론을 프롬프트에 명시한다.
 - 외부 전송, 삭제, 배포, 대량 변경, 비용 큰 작업은 사용자 승인 gate를 둔다.
 
@@ -170,8 +174,8 @@ Loop stop when:
 
 ## 기존 스킬과의 연결
 
-- 큰 기능/아키텍처 전환: `design-first` → `adaptive-workflow` → `pipeline-execute` → `stress-interview`.
-- 구조화된 구현 계획: 바로 `pipeline-execute`.
+- 큰 기능/아키텍처 전환: `design-first` → 이 스킬(worker→verifier→reviewer 체인) → `stress-interview`.
+- 구조화된 구현 계획: Scope lock 약식 후 바로 worker→verifier→reviewer 체인.
 - 완성본 압박 검토: `stress-interview`.
 - 결함 수집 후 짧은 자동 수정 루프: `self-healing`.
 - 단순 작업: 이 스킬을 쓰지 말고 직접 처리.

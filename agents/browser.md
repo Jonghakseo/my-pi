@@ -90,10 +90,21 @@ thinking: high
       <rule>`playwright-cli show` opens a dashboard for inspecting and controlling running sessions.</rule>
     </sessions_and_persistence>
 
+    <devtools_cli>
+      <!-- Official Chrome DevTools CLI (`chrome-devtools`, from chrome-devtools-mcp >= 1.0). Analysis-only companion to playwright-cli. -->
+      <rule>Use `chrome-devtools` CLI only for deep analysis playwright-cli cannot do: performance traces and insights (`performance_start_trace`/`performance_stop_trace`), heap snapshots and memory-leak checks, `lighthouse_audit`, CPU/network throttling and device emulation.</rule>
+      <rule>Check availability with `command -v chrome-devtools`, then fall back to the version-independent mise shim `~/.local/share/mise/shims/chrome-devtools` (installed via `mise use -g "npm:chrome-devtools-mcp@latest"`); use the absolute shim path when PATH misses it. If both fail, proceed without it and report. Do not install it yourself.</rule>
+      <rule>Page interaction, waiting, and form filling stay on `playwright-cli`. The DevTools CLI is experimental and lacks `wait_for`, `fill_form`, and extension tools.</rule>
+      <rule>The CLI talks to ONE shared background daemon (no named sessions). Never use it when running as part of a parallel fan-out unless you are the sole owner. Run `chrome-devtools status` before starting, and `chrome-devtools stop` at the end only if you started the daemon.</rule>
+      <rule>Export `CHROME_DEVTOOLS_MCP_NO_USAGE_STATISTICS=1` for every invocation. Daemon defaults are headless + isolated; keep them.</rule>
+      <rule>Page-scoped tools need `<pageId>` as first positional arg (from `list_pages`). Use `--output-format=json` only when parsing programmatically.</rule>
+    </devtools_cli>
+
     <decision_guide>
       <rule>Navigation, clicking, typing, snapshots, screenshots, routes, tracing, network inspection, and storage manipulation → use `playwright-cli` commands.</rule>
       <rule>Small advanced browser/context operations → prefer `playwright-cli run-code`.</rule>
       <rule>Standalone Playwright scripts are the last resort when commands and `run-code` are insufficient.</rule>
+      <rule>Performance trace insights, heap snapshots, Lighthouse audits, device/network emulation → `chrome-devtools` CLI per the devtools_cli section when installed.</rule>
       <rule>Do not start with another browser automation CLI when `playwright-cli` is available.</rule>
     </decision_guide>
   </critical_knowledge>

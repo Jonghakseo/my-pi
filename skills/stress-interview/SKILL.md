@@ -14,13 +14,13 @@ disable-model-invocation: false
 - 한 에이전트의 편향을 줄이고, 겹치는 지적과 상충 지적을 비교한다.
 
 ## 실행 규칙
-1. 먼저 검토 대상을 1~2문장으로 재정의한다.
+1. 먼저 **intent를 한 문단으로 선언**한다: 이 변경이 달성하려는 것이 무엇인가. 사용자 요청, 커밋 메시지, PR 설명, 코드 자체에서 도출하고, 불확실하면 진행 전에 사용자에게 확인한다. 이 intent 문단을 세 에이전트 프롬프트에 모두 포함한다. **리뷰어는 intent 달성 여부를 공격하지, intent 자체의 옳고 그름을 공격하지 않는다.**
 2. `subagent`는 셸 바이너리가 아니라 **Pi 도구**다. `bash`에서 `subagent ...`를 실행하지 말고, 반드시 `functions.subagent` 도구를 `{ "command": "subagent ..." }` 형태로 호출한다.
 3. `subagent help`가 아직 확인되지 않았거나 현재 세션에서 인터페이스가 불명확하면 먼저 Pi 도구로 확인한다.
    - 예: `subagent({ command: "subagent help" })`
 4. 아래 3개를 **병렬**로 실행한다.
    - 모든 에이전트는 반드시 `--isolated`(격리된) 상태로 호출한다.
-   - `verifier`: 테스트/타입체크/빌드/재현 가능한 검증 중심
+   - `verifier`: 테스트/타입체크/빌드/재현 가능한 검증 중심. 대상 레포에 `verify`·`verify-<app>` 계열 스킬이 있으면 프롬프트에 그 하네스 사용을 명시한다
    - `reviewer`: correctness, regressions, maintainability 중심
    - `challenger`: 숨은 가정, 실패 시나리오, 의사결정 취약점 중심
 5. 세 결과를 합쳐 아래 기준으로 정리한다.
@@ -42,18 +42,23 @@ disable-model-invocation: false
 
 ```text
 subagent({ command: "subagent help" })
-subagent({ command: "subagent batch --main --agent verifier --task \"$ARGUMENTS 를 검증해줘. 가능하면 테스트/타입체크/빌드/재현 가능한 증거를 수집해줘.\" --agent reviewer --task \"$ARGUMENTS 를 코드 리뷰해줘. correctness, regression, maintainability 위주로 봐줘.\" --agent challenger --task \"$ARGUMENTS 에 대해 숨은 가정, 실패 시나리오, 취약한 결정 포인트를 최대 3개 질문으로 압박 검토해줘.\"" })
+subagent({ command: "subagent batch --main --agent verifier --task \"Intent: <intent 문단>. $ARGUMENTS 를 검증해줘. 가능하면 테스트/타입체크/빌드/재현 가능한 증거를 수집해줘.\" --agent reviewer --task \"Intent: <intent 문단>. $ARGUMENTS 를 코드 리뷰해줘. correctness, regression, maintainability 위주로, intent 달성 여부를 기준으로 봐줘.\" --agent challenger --task \"Intent: <intent 문단>. $ARGUMENTS 에 대해 숨은 가정, 실패 시나리오, 취약한 결정 포인트를 최대 3개 질문으로 압박 검토해줘.\"" })
 ```
 
 ## 권장 호출 프롬프트
-- `verifier`: "$ARGUMENTS 를 검증해줘. 가능하면 테스트/타입체크/빌드/재현 가능한 증거를 수집해줘."
-- `reviewer`: "$ARGUMENTS 를 코드 리뷰해줘. correctness, regression, maintainability 위주로 봐줘."
-- `challenger`: "$ARGUMENTS 에 대해 숨은 가정, 실패 시나리오, 취약한 결정 포인트를 최대 3개 질문으로 압박 검토해줘."
+모든 프롬프트는 `Intent: <intent 문단>.`으로 시작한다.
+- `verifier`: "Intent: <intent 문단>. $ARGUMENTS 를 검증해줘. 가능하면 테스트/타입체크/빌드/재현 가능한 증거를 수집해줘."
+- `reviewer`: "Intent: <intent 문단>. $ARGUMENTS 를 코드 리뷰해줘. correctness, regression, maintainability 위주로, intent 달성 여부를 기준으로 봐줘."
+- `challenger`: "Intent: <intent 문단>. $ARGUMENTS 에 대해 숨은 가정, 실패 시나리오, 취약한 결정 포인트를 최대 3개 질문으로 압박 검토해줘."
 
 ## 종합 응답 형식
 최종 응답은 아래 형태로 정리한다. 세 에이전트의 개별 포맷을 그대로 복붙하지 말고, 아래 구조로 재조립한다.
 
-### 1. 헤더
+### 1. Intent
+
+> [실행 규칙 1에서 선언한 intent 문단]
+
+### 2. 헤더
 
 ```
 ## 🔴 Needs changes
@@ -63,7 +68,7 @@ Verifier 🟡 PARTIAL · Reviewer ❌ incorrect · Challenger 🟡 Pivot
 - 전체 판정: 🟢 Ready | 🟡 Needs changes | 🔴 Blocked
 - 둘째 줄에 세 에이전트의 개별 판정을 한 줄로 나열한다.
 
-### 2. 교차 검토 매트릭스
+### 3. 교차 검토 매트릭스
 
 | 지적 | Verifier | Reviewer | Challenger | 판정 |
 |------|:--------:|:--------:|:----------:|------|
@@ -75,7 +80,7 @@ Verifier 🟡 PARTIAL · Reviewer ❌ incorrect · Challenger 🟡 Pivot
 - 판정: `공통`(둘 이상 일치) · `독립`(하나만, 그러나 타당) · `⚠️ 상충`(결론이 다름)
 - 상충 행은 임의로 판정하지 말고 양측 근거를 아래에 병기한다.
 
-### 3. 심각도 분류
+### 4. 심각도 분류
 
 | Sev | 항목 | 근거 출처 | 조치 |
 |-----|------|-----------|------|
@@ -88,7 +93,7 @@ Verifier 🟡 PARTIAL · Reviewer ❌ incorrect · Challenger 🟡 Pivot
 - ⚪ Won't-fix: 근거 부족, 의도된 설계, 대규모 변경 필요
 - `근거 출처`에 어느 에이전트의 어느 finding/question인지 반드시 남긴다.
 
-### 4. 검증 공백
+### 5. 검증 공백
 
 | 검증하지 못한 것 | 이유 | 잔여 리스크 |
 |------------------|------|-------------|
@@ -96,7 +101,7 @@ Verifier 🟡 PARTIAL · Reviewer ❌ incorrect · Challenger 🟡 Pivot
 
 - verifier가 실행 증거를 못 모았으면 반드시 이 표에 남긴다. 공백이 없으면 표를 생략한다.
 
-### 5. Recommended Next Step
+### 6. Recommended Next Step
 1. <가장 먼저 할 일>
 2. <그다음>
 3. <그다음>

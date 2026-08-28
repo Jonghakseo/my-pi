@@ -46,6 +46,7 @@ Picky Pickle에 작업을 안전하게 위임하는 상위 workflow다. 저수�
 
 - Creatrip Product hotfix: repo 지침에 따라 production 기반 `gwp <slug>`를 사용한다.
 - Creatrip Product 일반 수정·기능: development 기반 `gwd <slug>`를 사용한다.
+- `gwp`와 `gwd`는 실행 파일이 아니라 zsh 함수다. Bash 기반 자동화에서는 직접 호출하거나 `command -v gwp`로 탐지하지 말고, 항상 `zsh -lc 'cd <repo-root> && gwp <slug> ...'` 또는 `zsh -lc 'cd <repo-root> && gwd <slug> ...'` 형태로 실행한다.
 - 다른 repo: 해당 repo의 로컬 지침과 worktree 도구를 따른다.
 - 생성 후 실제 경로, branch, base와 `git status --short --branch`를 확인한다.
 - 사용자가 현재 workspace 사용이나 빈 Pickle만 요청했다면 불필요한 worktree를 만들지 않는다.
@@ -58,7 +59,7 @@ Pickle이 현재 대화를 보지 않아도 수행할 수 있도록 지침을 �
 
 지침에는 필요한 항목만 포함한다.
 
-1. 목표와 사용자 의도
+1. 목표와 사용자 의도, 그리고 **완료 조건을 체크 가능한 술어로**: 무엇을 실행·확인하면 done인지(예: "X 테스트 통과", "구 API 호출부 0건"). "잘 동작하게" 같은 술어 불가 문구만 있으면 생성 전에 사용자와 완료 조건을 확정한다
 2. workspace 경로, branch, base
 3. 조사 근거와 재현 정보
 4. 수정·조사 범위와 우선순위
@@ -67,6 +68,7 @@ Pickle이 현재 대화를 보지 않아도 수행할 수 있도록 지침을 �
 7. 필수 검증 명령과 기대 결과
 8. 커밋, push, PR 생성 여부
 9. 최종 보고에 포함할 내용
+10. 장시간·무인 작업이면 결정 트레일 지시: workspace에 `decisions.tsv`(컴럼 `ts/phase/decision/why/evidence/result`, append-only, evidence는 커밋 SHA·경로 같은 포인터만)를 남기고 결정 포인트마다 한 행씩 기록하라고 명시한다 (`show-me-your-work` 스킬 포맷). 짧은 단발 작업에는 요구하지 않는다
 
 경로·브랜치·PR 정책처럼 중요한 값은 자연어에 묻어 두지 말고 별도 항목으로 명시한다. 지침이 깨졌거나 핵심 조건이 빠진 상태로 생성한 뒤 follow-up으로 보정하는 것보다, 생성 전에 handoff를 완성하는 것을 우선한다.
 
@@ -97,6 +99,7 @@ picky pickle-create "<title>" \
 
 1. JSON 응답에서 session ID와 생성 성공 여부를 확인한다.
 2. 응답이 불명확할 때만 `picky pickle-list --json --query "<id-or-title>"`로 한 번 확인한다.
+   - `pickle-list`는 활성 Pickle만 반환한다. 빈 결과는 "완료·보관됨"과 "존재하지 않음"을 구분하지 못하므로, 워크트리 삭제 등 파괴적 후속 작업 전에는 빈 결과를 종료 증거로 쓰지 말고 사용자 확인이나 다른 증거(머지된 커밋 등)로 판단한다.
 3. 다음 항목을 간결하게 보고한다.
    - title과 session ID
    - workspace와 branch/base
