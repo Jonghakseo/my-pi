@@ -1,6 +1,6 @@
 ---
 name: memory-manage
-description: "기존 user/project 메모리의 중복·노후 항목을 검토, 통합, 정리할 때 사용한다. 사용자 확인 없이 메모리를 삭제하지 않는다."
+description: "기존 user/project 메모리의 중복·노후·보안·scope 문제를 스캔하고, 보수적인 기준으로 자동 통합·정리할 때 사용한다. 별도 사용자 확인 없이 끝까지 적용한다."
 disable-model-invocation: false
 ---
 
@@ -11,11 +11,11 @@ disable-model-invocation: false
 ## Hard Rules
 
 ```
-사용자 confirm 없이 forget 을 호출하지 않는다.
-remember 로 같은 내용을 새로 쓰는 통합·이동 동작도 confirm 후에만 한다.
+사용자 confirm을 요청하지 않고 스캔부터 적용까지 자동으로 완료한다.
+확신이 낮은 후보는 삭제하거나 다시 쓰지 말고 KEEP으로 남긴다.
 ```
 
-dry-run 이 기본 — 후보를 모두 모으되, 적으면 한 번에 보여주고 많으면 여러 번에 나눠 보여준 뒤 사용자가 적용 여부를 결정한다.
+자동 적용이 기본이다. 명백하고 손실 없이 정리할 수 있는 항목만 변경하고, 판단이 애매하면 보존한다.
 
 ## Phase 1 — 스캔
 
@@ -49,7 +49,7 @@ dry-run 이 기본 — 후보를 모두 모으되, 적으면 한 번에 보여�
 - 본문에 시크릿 패턴 노출: `(ghp_[A-Za-z0-9]{36,}|gho_[A-Za-z0-9]{36,}|github_pat_[A-Za-z0-9_]{82,}|glpat_[A-Za-z0-9_-]{20,}|sk-[A-Za-z0-9]{32,}|AKIA[0-9A-Z]{16}|eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+|xoxb-[0-9]+-[0-9]+-[A-Za-z0-9]+|xoxp-[0-9]+-[0-9]+-[0-9]+-[A-Za-z0-9]+)`.
 - `[A-Z_]*(TOKEN|KEY|SECRET|PASSWORD|API_KEY)\s*=\s*\S{20,}` 형태의 환경변수.
 - 전화 (`01[016789]-?\d{3,4}-\d{4}`), 카드, 주민번호 패턴.
-- suggestion = **즉시 `URGENT_FORGET` 표시**, 사용자에 우선 노출. 같은 fact 의 sanitized 버전을 동시에 `REWRITE` 후보로 제안.
+- suggestion = **즉시 `URGENT_FORGET`**. 같은 fact가 재사용 가치가 있으면 민감값을 제거한 버전을 자동으로 `REWRITE`한다.
 
 ### M6. 의도 불명 / 너무 모호함
 - 무엇을 가리키는지 외부 참조 없이는 알 수 없는 본문 (예: "이 부분 처리하기").
@@ -61,23 +61,23 @@ dry-run 이 기본 — 후보를 모두 모으되, 적으면 한 번에 보여�
 - 중요한 사용자 선호, 안전 규칙, 반복 가능한 도구 gotcha는 좁아 보여도 이 카테고리에서 제외한다.
 - suggestion = `DEPRECATE` 또는 재사용 가능한 일반 원칙만 남기는 `REWRITE`.
 
-## Phase 3 — 사용자 컨펌
+## Phase 3 — 자동 결정
 
-`ask_user_question` 으로 다음과 같이 일괄 또는 카테고리별 묶어서 묻는다.
+사용자에게 확인 질문을 하지 않고 다음 기준으로 적용 여부를 결정한다.
 
-- 항목 수가 적음 (≤8) → 단일 `checkbox` 질문에 모든 후보를 옵션으로 나열, 적용할 것만 체크.
-- 많음 (>8) → **`ask_user_question` 을 여러 번 호출한다.** M5 보안을 첫 번째로 두고 카테고리별로 분할하며, 한 카테고리도 크면 후보를 8개 이하의 소규모 배치로 다시 나눈다.
-- 후보가 많을 때 모든 evidence·통합 초안·설명을 한 번의 질문 description 에 몰아넣지 않는다. 각 호출에는 해당 배치를 판단하는 데 필요한 설명만 넣고, 이전 응답을 받은 뒤 다음 배치를 묻는다.
-- M2 MERGE 후보는 해당 배치의 통합 본문 초안을 description 에 함께 노출. 사용자가 본문 편집 원하면 별도 `text` 질문으로 받는다.
-- M5 보안 후보는 항상 첫 번째 질문이며 default = 모두 선택.
-- M6 CLARIFY 는 항목별 `radio` (`forget` / `keep as-is` / `rewrite`).
+- M5는 즉시 적용한다.
+- M1은 제목 또는 본문이 사실상 동일할 때만 자동 병합한다.
+- M2는 기존 사실과 제약을 빠짐없이 보존하는 통합 본문을 만들 수 있을 때만 자동 병합한다.
+- M3/M4/M7은 객관적 근거가 명확할 때만 적용한다. 도구나 경로가 단지 낯설다는 이유만으로 stale 판정하지 않는다.
+- M6는 자동 삭제하지 않는다. 의미를 안전하게 복원할 수 없으면 `KEEP_UNCLEAR`로 남긴다.
+- 적용하지 않은 후보와 이유도 결과 로그에 기록한다.
 
 ## Phase 4 — 적용
 
-확정된 동작만 순서대로 실행:
+자동 결정된 동작을 다음 순서로 실행:
 
 1. **M5 URGENT_FORGET 우선** — `forget({ title, topic?, scope? })` 즉시 실행 후 sanitized 버전 `remember`.
-2. **M3/M6/M7 DEPRECATE** — `forget`.
+2. **M3/M7 DEPRECATE** — `forget`. M6는 자동 보존한다.
 3. **M3/M7 REWRITE** — old `forget` → new `remember`.
 4. **M1/M2 MERGE** — 통합 본문 `remember` → 구 entry 들 `forget`. 순서 중요 (새 entry 먼저 저장해야 사고 시 회복 가능).
 5. **M4 RELOCATE** — 새 scope 에 `remember` → 기존 `forget`.
@@ -95,11 +95,11 @@ dry-run 이 기본 — 후보를 모두 모으되, 적으면 한 번에 보여�
 ## Applied
 - 🛡️ URGENT_FORGET: 2 (M5)
 - 🔁 MERGE: 3 (M1+M2)
-- 🗑️ DEPRECATE: 5 (M3/M6/M7)
+- 🗑️ DEPRECATE: 5 (M3/M7)
 - ✏️ REWRITE: 2 (M3/M7)
 - 📦 RELOCATE: 1 (M4)
 
-## Skipped (사용자 keep 결정)
+## Kept (불확실하여 자동 보존)
 - ...
 
 ## Failed (도구 호출 실패)
@@ -108,12 +108,11 @@ dry-run 이 기본 — 후보를 모두 모으되, 적으면 한 번에 보여�
 
 ## 안전 원칙
 
-- **사용자 의도 추정 금지** — 후보로만 제안, 실행은 confirm 후.
+- **불확실하면 보존** — 사용자 의도를 추정해 삭제·축약하지 않는다.
 - **MERGE 시 새 entry 먼저 저장 → 구 forget**. 역순이면 사고 시 데이터 손실.
-- **M5 보안 위반은 항상 default-on** — 사용자가 의도적으로 unchecking 해야만 skip.
-- **Confirm 없이 forget 호출 절대 금지.**
+- **M5 보안 위반은 즉시 제거**하고, 필요한 경우 민감값 없는 사실만 다시 저장한다.
+- **자동 적용은 명백한 후보에만 수행**한다. 의미 손실 가능성이 있으면 `KEEP` 처리한다.
 - **메모리 파일 직접 fs 수정 금지** — 항상 forget/remember 도구 경유 (memory layer 가 인덱스/포맷 일관성 책임).
-- **dry-run 결과는 항상 사용자에 먼저 노출**.
 
 ## 트리거 예시
 
