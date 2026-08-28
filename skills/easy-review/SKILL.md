@@ -86,10 +86,10 @@ python3 "$SKILL_DIR/scripts/easy_review.py" compile --bundle <bundle-dir>
 python3 "$SKILL_DIR/scripts/easy_review.py" serve --bundle <bundle-dir>
 ```
 
-- `interactive_shell`의 hands-free 모드처럼 서버를 유지하고 출력을 다시 확인할 수 있는 실행 방식을 사용한다.
-- 시작 로그에서 실제 `http://127.0.0.1:<port>/` URL을 확인한 뒤, 최종 답변에 클릭 가능한 링크로 전달한다. 포트를 추측하거나 고정하지 않는다.
+- `bash_async start`로 서버를 시작하고 timeout은 `7200`초로 둔다. 반환된 job ID를 기록하며, 반복 polling하지 않고 completion follow-up을 따른다. 2시간 뒤에도 필요하면 `serve`를 다시 실행해 새 job ID와 URL을 확인하고, 기존 job은 기록한 ID로 명시적으로 `bash_async kill`해 정리한다.
+- 시작 로그가 나온 뒤 `bash_async output`을 한 번 조회해 실제 `http://127.0.0.1:<port>/` URL을 확인하고, 최종 답변에 클릭 가능한 링크로 전달한다. 포트를 추측하거나 고정하지 않는다.
 - 서버 실행 전이나 URL 확인 전에 채팅 사용이 가능하다고 말하지 않는다.
-- 자동으로 브라우저를 열지 않는다. 사용자가 중지를 요청하면 실행 세션을 종료한다.
+- 자동으로 브라우저를 열지 않는다. 사용자가 중지를 요청하면 기록한 job ID에 `bash_async kill`을 실행한다.
 - 서버는 loopback에만 바인딩하고 실행별 HttpOnly cookie와 Origin/Host 검사를 사용한다.
 - 서버는 `@earendil-works/pi-coding-agent` SDK의 `ModelRuntime.create()`와 in-memory `AgentSession`을 같은 Node 프로세스에서 사용한다. 별도 Pi CLI/RPC subprocess를 만들지 않는다.
 - `DefaultResourceLoader`에서 extensions, skills, prompt templates, themes, context files를 끄고, 세션은 `noTools: "builtin"`, `tools: ["review_diff"]`, `customTools: [reviewDiffTool]`로 만든다. custom tool 선택 계약은 설치된 Pi 공식 문서의 `docs/sdk.md`를 따르고 모델 제공자 동작은 `docs/providers.md`를 따른다.

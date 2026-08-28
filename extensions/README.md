@@ -22,7 +22,7 @@ Pi 공식 문서는 auto-discovery 대상으로 `extensions/*.ts`와 `extensions
 | [`dynamic-agents-md/`](./dynamic-agents-md/index.ts) | 디렉토리 스코프별 동적 AGENTS.md 로딩 |
 | [`files/`](./files/index.ts) | 파일 피커 / Diff 뷰어 UI |
 | [`fork-panel/`](./fork-panel/index.ts) | 현재 세션을 Ghostty split panel로 포크 |
-| [`interactive-shell/`](./interactive-shell/index.ts) | 인터랙티브/핸즈프리/디스패치 모드의 셸 오버레이 |
+| [`bash-async/`](./bash-async/index.ts) | 유한한 비대화형 명령을 background job으로 실행. TUI·REPL·stdin 상호작용은 패키지의 `tmux-terminal` skill/helper를 사용하며 native overlay 기능 손실은 의도적임 |
 | [`pr-comments/`](./pr-comments/index.ts) | `/github:get-pr-comments` — 현재 PR의 unresolved inline review comment를 에디터에 append |
 | [`pr-review-re-request/`](./pr-review-re-request/index.ts) | `/github:pr-review-re-request` — 현재 PR의 미승인 리뷰어에게 review re-request 전송 |
 | [`github-pr-merge/`](./github-pr-merge/index.ts) | `/github:pr-merge` — 현재 PR을 gh CLI로 merge |

@@ -191,7 +191,7 @@ pi --no-skills --skill /path/to/skill -p "<eval prompt>"
 pi --no-skills -p "<same eval prompt>"
 ```
 
-4. 장시간 실행, TUI, 로그 추적이 필요하면 `interactive_shell` 스킬/도구 지침을 따른다.
+4. 오래 걸리는 유한 비대화형 명령은 `bash_async`로 실행하고 completion follow-up을 기다린다. TUI·REPL·stdin 입력이 필요하면 `tmux-terminal` 스킬의 helper를 사용한다.
 5. 독립 판단이 중요한 경우에만 `subagent`를 사용한다. subagent를 쓰면 먼저 `subagent help`로 인터페이스를 확인하고, 같은 eval의 with-skill/baseline을 가능하면 batch로 띄운다.
 6. 결과는 숫자보다 사용자 피드백을 우선한다. 단, 반복되는 실패는 스킬 본문이 아니라 `scripts/`나 `references/`로 구조화할 수 있는지 본다.
 

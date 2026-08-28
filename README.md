@@ -103,7 +103,7 @@ Pi can auto-discover both `extensions/*.ts` and `extensions/*/index.ts`, but thi
 | Extension | Description |
 |---|---|
 | [`dynamic-agents-md/`](./extensions/dynamic-agents-md/index.ts) | Dynamically injects scoped `AGENTS.md` context after exploratory/file tool results |
-| [`interactive-shell/`](./extensions/interactive-shell/index.ts) | `interactive_shell` tool plus `/attach` and `/dismiss` for interactive, hands-free, dispatch, background, and reattachable shell sessions |
+| [`bash-async/`](./extensions/bash-async/index.ts) | Runs finite non-interactive commands as background jobs. Use the packaged `tmux-terminal` skill/helper for TUI, REPL, and stdin; no native overlay, `/attach`, `/dismiss`, or reattach UI remains |
 | [`web-access/`](./extensions/web-access/index.ts) | Local web research/content extraction tools: `web_search`, `fetch_content`, `get_search_content`, curator workflow, GitHub/PDF/video/YouTube extraction |
 
 #### Tool overrides / rendering
