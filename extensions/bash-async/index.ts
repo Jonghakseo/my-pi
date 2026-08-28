@@ -94,7 +94,7 @@ export default function bashAsync(pi: ExtensionAPI): void {
 		promptSnippet: "Run long finite non-interactive jobs with bash_async.",
 		promptGuidelines: [
 			"Use bash_async start only for finite non-interactive commands whose result is not needed immediately.",
-			"Do not poll bash_async repeatedly. Completion is delivered automatically as a follow-up.",
+			"Do not call sleep or poll status, output, or list to wait. Continue only with independent work; otherwise end the turn. Every terminal result arrives automatically as a follow-up.",
 			"bash_async does not support TUI, REPL, stdin, or interactive terminal programs.",
 		],
 		renderCall(args) {
