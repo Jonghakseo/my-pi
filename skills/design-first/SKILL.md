@@ -19,7 +19,7 @@ disable-model-invocation: false
 
 ## 체크리스트
 
-순서대로 수행한다:
+순서대로 수행한다. 멀티스텝이면 아래 8단계를 `todo_write`에 **그대로 복사**하고, 수행하지 않을 단계는 삭제 대신 `skip: <이유>`를 남긴다 (예: 신규 코드만이라 영향도 분석 생략). 요약·재구성하며 단계를 흘리지 않는다:
 
 1. **컨텍스트 파악** — 파일, 문서, 최근 커밋 확인
 2. **영향도 분석** — 기존 코드 변경 시 blast radius 리스크 스코어 산정
@@ -28,7 +28,7 @@ disable-model-invocation: false
 5. **외부 의존 문서 검증** — 라이브러리/API 가정을 실제 문서로 대조
 6. **설계 제시** — 복잡도에 비례한 분량, 섹션별 승인
 7. **계획 생성** — bite-sized 태스크로 변환
-8. **실행 핸드오프** — pipeline-execute 스킬로 이관
+8. **실행 핸드오프** — `dynamic-workflow`의 worker→verifier→reviewer 체인으로 이관
 
 ## 프로세스
 
@@ -131,14 +131,14 @@ disable-model-invocation: false
 ```
 계획 완료. 실행 방법을 선택하세요:
 
-1. pipeline-execute — 태스크별 worker→verifier→reviewer 자동 파이프라인
+1. 자동 파이프라인 — `dynamic-workflow` 스킬로 태스크별 worker→verifier→reviewer 체인 실행
 2. 수동 실행 — 직접 하나씩 진행
 3. 계획만 저장 — 나중에 실행
 
 어떤 방식으로 할까요?
 ```
 
-**pipeline-execute 선택 시**: 해당 스킬로 즉시 이관.
+**자동 파이프라인 선택 시**: `dynamic-workflow` 스킬로 즉시 이관하고, 승인된 계획을 work unit으로 전달한다.
 
 ## YAGNI 원칙
 
