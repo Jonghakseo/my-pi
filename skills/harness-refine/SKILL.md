@@ -105,32 +105,47 @@ python3 <skill-dir>/scripts/session_inspect.py timeline --leaf-id <cutoff> --lim
 
 중복이면 새 후보를 만들지 말고 기존 target의 `update` 또는 `merge`로 제안한다.
 
-### 4. 가장 강한 Enforcement와 작은 Target 선택
+### 4. Scope Ceiling & Generalization Gate
 
-`references/output-schema.md`의 Enforcement hierarchy와 Target mapping을 따른다.
+솔루션이나 target을 고르기 전에 **증거가 허용하는 최대 적용 범위(scope ceiling)**를 정한다. 같은 기능에서 연쇄 결함이 여러 번 발견된 것은 원인에 대한 깊이 증거이지, 일반화의 폭 증거가 아니다.
 
-강제력은 다음 순서로 우선한다.
+`Evidence breadth`는 적용 범위만 표현한다.
 
-1. `static`: lint, type check, schema, test, CI guard처럼 위반을 자동 차단
-2. `tool`: extension, script, CLI default처럼 올바른 동작을 실행 경로에 내장
-3. `instruction`: AGENTS.md, SYSTEM.md, skill, subagent prompt처럼 모델이 읽고 따라야 하는 규칙
-4. `memory`: 사실·결정·선호·gotcha를 검색해 참고
+- `same-feature`: 같은 기능·diff·이슈의 연쇄 발견
+- `same-project`: 같은 프로젝트의 서로 다른 기능 또는 세션에서 독립적으로 반복
+- `cross-project`: 서로 다른 프로젝트·도메인에서 독립적으로 반복
 
-더 강한 단계로 구현 가능하면 약한 단계를 선택하지 않는다. 단, 정적 검사가 의미를 판별할 수 없거나 자동화의 오탐 위험이 크면 그 이유를 적고 낮은 단계를 선택한다.
+`Promotion basis`는 별도 축으로 하나 이상 기록한다.
 
-- lint·type·schema·test·CI 설정 또는 검사 코드 → `static-enforcement`
-- 익스텐션·스크립트 등 도구 코드 수정 → `extension`
-- 프로젝트 한정 지침 → `project-agents`
-- 모든 프로젝트에 적용되는 안정적 행동 원칙 → `global-system`
-- 반복 가능한 지침 절차 → `skill`
-- 독립적인 위임 역할·prompt contract → `subagent`
-- 사실·결정·선호·gotcha 중 위 단계로 표현할 수 없는 것 → `memory`
+- `recurrence`: 같은 근본 원인의 반복 실패
+- `explicit-user`: 사용자가 재사용 가능한 정책·선호를 명시
+- `verified-workaround`: 실패 후 성공이 tool result로 검증된 우회책
+- `repeated-workflow`: 입력·절차·검증 또는 위임 패턴이 반복
+- `safety-critical`: 보안·데이터 손실처럼 단일 사례도 예방 가치가 큰 사건
 
-한 lesson을 여러 target에 중복 제안하지 않는다. 가장 강하면서 좁고 직접적인 대상 하나를 고른다.
+Scope eligibility:
+
+- 단일 repo에서 나온 신호는 기본적으로 project scope를 넘지 않는다.
+- `global-system`, global Pi extension, user/global scope의 `skill`·`subagent`는 원칙적으로 서로 다른 프로젝트의 독립 사례 2건 이상이 필요하다.
+- `explicit-user`는 사용자가 전역·반복 정책으로 말한 경우에만 user/global scope 근거가 된다. 현재 작업만 고친 말은 해당하지 않는다.
+- `safety-critical`은 단일 사례로 breadth 요구를 우회할 수 있지만, 넓은 예방이 필요한 이유와 오탐 통제를 명시한다.
+- `same-feature`는 project scope 후보로 좁히거나 Held ideas·Rejected signals로 보낸다. 반복 횟수만으로 scope ceiling을 올리지 않는다.
+
+Counterfactual scope check:
+
+1. 현재 repo·기능의 고유 명사, ID 형식, 내부 상태명을 제거한다.
+2. 같은 프로젝트의 다른 기능에서도 lesson이 유지되는지 먼저 확인한다.
+3. 다른 프로젝트에서도 Proposed change가 거의 그대로 유효한지 별도로 확인한다.
+4. 추상 문장만 남겨 억지로 일반화하지 않는다. 통과하지 못하면 scope를 좁히거나 hold/reject한다.
+
+Candidate consolidation:
+
+- 넓은 후보의 구체 절차가 더 좁고 타당한 project 후보에 온전히 포함되면 별도 후보로 두지 않고 `merge`한다.
+- candidate마다 `Evidence breadth`, `Promotion basis`, `Scope fit`, `Why this scope`, `Why not broader`를 기록한다.
 
 ### 5. Promotion Gate
 
-다음 중 하나를 만족해야 Candidate로 승격한다.
+Scope ceiling 안에서 다음 중 하나를 만족해야 lesson을 Candidate 검토 대상으로 올린다.
 
 - 재사용 가능한 명시적 사용자 교정
 - 같은 근본 원인의 실패 2회 이상
@@ -138,13 +153,52 @@ python3 <skill-dir>/scripts/session_inspect.py timeline --leaf-id <cutoff> --lim
 - 반복된 절차 또는 위임 패턴
 - 안전상 중요한 단일 실패
 
-각 후보에 concrete entry id, timestamp, tool call id 중 하나 이상을 evidence로 포함한다. 근거가 약하면 Rejected signals로 보낸다.
+“같은 근본 원인의 실패 2회 이상”은 선택된 scope 안에서의 승격 근거일 뿐 evidence breadth를 넓히지 않는다. 각 후보에는 concrete entry id, timestamp, tool call id 중 하나 이상을 포함한다.
 
-### 6. 메모리 승격·폐기 후보 확인
+근거는 있으나 재발 가능성·정책 정본·구현 타당성이 아직 부족하면 `Held ideas`에 보존하고, 다시 승격할 조건을 적는다. 일시적이거나 잘못된 신호는 Rejected signals에 `overfit`, `insufficient breadth`, `transient`, `duplicated` 등 구체 사유를 남긴다.
 
-기존 harness 중복 확인 과정에서 조회한 관련 메모리를 다시 검토한다. 각 메모리의 내용이 `static > tool > instruction > memory` 중 더 강한 단계로 온전히 대체 가능한지 판단한다.
+### 6. Solution-Fit Gate
 
+Candidate의 lesson과 evidence를 고정한 뒤에만 해결책을 설계한다. 다음 순서를 건너뛰지 않는다.
+
+1. **Native mechanism 확인**: 기존 repo script·config·package command·CLI 오류/옵션, 기존 skill·instruction, shell composition(`&&`, 명시적 cwd), 이미 존재하는 checker 순으로 확인한다.
+2. **Semantic determinism 판정**: 위반 여부를 명시적 입력과 로컬 상태만으로 결정할 수 있으면 `deterministic`, 사용자 목적·작업 의미·암묵적 의존성을 추론해야 하면 `context-dependent`로 기록한다.
+3. **작은 대안 비교**: 새 static/tool을 만들기 전에 기존 native mechanism 또는 더 좁은 repo-local 변경으로 해결 가능한지 적는다.
+4. **비례성 판정**: 재발 빈도·영향과 구현 복잡도·유지비·오탐 비용을 비교해 `acceptable | excessive`로 기록한다.
+5. **Hold/Reject**: `context-dependent`인데 명시적 계약이 없거나, 비례성이 `excessive`면 새 static/tool 후보로 만들지 않는다. 명시적 workflow·shell 조합·instruction으로 충분하면 그쪽으로 좁히고, 그렇지 않으면 hold/reject한다.
+
+Global mechanism 추가 조건:
+
+- global Pi extension은 cross-project breadth뿐 아니라 repo 고유명사 없이 판정 가능한 deterministic predicate가 필요하다.
+- repo별 정책을 global extension에 하드코딩하지 않는다. 이미 정당화된 범용 opt-in contract가 없는 한 repo-local script·CLI·config를 우선한다.
+- semantic dependency를 도구가 추론하게 만들지 않는다. 의존 관계는 `&&`, workflow config, explicit job dependency처럼 호출자가 선언해야 한다.
+
+각 Candidate에 `Native mechanism considered`, `Smaller alternative`, `Semantic determinism`, `Proportionality`를 기록한다.
+
+### 7. Target & Enforcement 선택
+
+`references/output-schema.md`의 Target mapping을 따른다. 먼저 문제를 소유한 위치와 `Target locality`를 정한다.
+
+- `repo-local`: 한 저장소의 script·config·CLI·test·project skill·AGENTS
+- `project-shared`: 같은 프로젝트군에서 공유하는 도구·skill
+- `global`: 거의 모든 프로젝트에 적용되는 SYSTEM·Pi extension·user/global skill·subagent
+
+그다음 같은 owner·scope·비용의 대안끼리만 enforcement 강도를 tie-breaker로 비교한다.
+
+1. `static`: 기계적으로 참/거짓을 판정하고 허용 가능한 오탐으로 위반을 차단
+2. `tool`: 올바른 동작을 실행 경로에 내장
+3. `instruction`: semantic judgment나 절차를 모델이 읽고 수행
+4. `memory`: static·tool·instruction으로 의미 손실 없이 표현할 수 없는 사실·결정·선호·gotcha
+
+“구현 가능하다”는 이유만으로 더 강하거나 넓은 수단을 선택하지 않는다. 가장 작은 native mechanism이 충분하면 그것을 선택한다. 한 lesson은 한 target에만 제안한다.
+
+### 8. 메모리 승격·폐기 후보 확인
+
+기존 harness 중복 확인 과정에서 조회한 관련 메모리를 다시 검토한다. 메모리 삭제만을 목적으로 새 enforcement를 발명하지 않는다. 독립적으로 정당화된 Candidate 또는 이미 존재하는 mechanism이 메모리를 온전히 대체할 때만 upgrade를 제안한다.
+
+- replacement의 scope ceiling, native mechanism, semantic determinism, proportionality도 Candidate와 같은 기준으로 검토한다.
 - 대체 가능하면 `Enforcement upgrades`에 최대 3개를 제안한다.
+- 각 upgrade에 `Independent justification`으로 연결된 Candidate ID 또는 이미 검증된 mechanism을 적는다.
 - 각 제안은 현재 memory reference, 대체 enforcement/target, 구체적인 대체안, 검증 방법, 메모리 삭제 조건을 포함한다.
 - 순서는 항상 **대체 수단 구현 → 검증 → 기존 메모리 삭제**다. 대체 전에 삭제를 제안하지 않는다.
 - 일부만 대체 가능하면 메모리 전체 삭제를 제안하지 말고, 대체 가능한 부분만 분리한 뒤 남길 내용을 명시한다.
@@ -152,12 +206,12 @@ python3 <skill-dir>/scripts/session_inspect.py timeline --leaf-id <cutoff> --lim
 - 해당 항목이 없더라도 최종 섹션을 생략하지 말고 `없음`과 짧은 이유를 적는다.
 - 이 섹션은 기존 Candidate의 migration follow-up이며 Candidate 5개 제한이나 한 lesson-one-target 규칙에 포함하지 않는다.
 
-### 7. 보고
+### 9. 보고
 
 `references/output-schema.md` 형식을 정확히 따른다. 보고는 두 단계다.
 
 1. **풀 리포트를 파일로 저장**: `~/.pi/agent/retrospective/refine-reports/sessions/<session-id>.md`
-   - 최대 5개 Candidate, Coverage·Session metrics(도구별 호출·빈도·오류)·Rejected signals는 Appendix에 포함
+   - 최대 5개 Candidate와 Candidate가 되지 못한 Held ideas를 구분한다. Coverage·Session metrics(도구별 호출·빈도·오류)·Rejected signals는 Appendix에 포함한다.
    - Proposed change는 나중에 그대로 적용 검토할 수 있을 정도로 구체적으로 작성
    - Risk는 적용 시 blast radius, Confidence는 증거 품질로 평가
 2. **채팅에는 요약만 출력**: target 종류별 그룹 + 후보당 `제목 — 왜 · 변경` 한 줄씩 + 리포트 경로
@@ -166,6 +220,8 @@ python3 <skill-dir>/scripts/session_inspect.py timeline --leaf-id <cutoff> --lim
    - 마지막에 아무 변경도 적용하지 않았음을 명시
 
 ## Validation
+
+Scope·solution-fit·target 규칙을 바꿀 때는 [target-selection regression cases](references/eval-cases.md)로 과잉 설계 회귀를 검토한다.
 
 완료 전 확인한다.
 
@@ -176,10 +232,19 @@ python3 <skill-dir>/scripts/session_inspect.py timeline --leaf-id <cutoff> --lim
 - 반복 패턴을 bounded `patterns`로 먼저 좁혔는가
 - 오류와 반복 패턴이 tool history로 근거화되었는가
 - 기존 harness와 중복을 확인했는가
-- 각 후보에 대해 `static > tool > instruction > memory` 순으로 가능한 가장 강한 enforcement를 검토했는가
+- target을 고르기 전에 scope ceiling과 Promotion basis를 분리해 기록했는가
+- `same-feature` 증거만으로 user/global skill·subagent·system·extension 후보를 만들지 않았는가
+- counterfactual scope check를 통과하지 못한 후보를 project scope로 좁히거나 hold/reject했는가
+- 기존 native mechanism과 더 작은 대안을 먼저 검토했는가
+- static/tool 후보의 predicate가 사용자 의도를 추론하지 않는 deterministic 조건인가
+- 구현 복잡도·유지비·오탐 비용 대비 비례성이 acceptable인가
+- global extension에 repo 고유 정책을 하드코딩하지 않았는가
+- 같은 owner·scope·비용 안에서만 enforcement 강도를 tie-breaker로 사용했는가
+- 넓은 후보가 더 좁은 project 후보에 포함될 수 있을 때 별도 후보로 중복하지 않았는가
 - 후보가 5개 이하인가
 - 각 후보에 검증 방법이 있는가
 - 관련 메모리의 승격·폐기 가능성을 검토하고 마지막 섹션에 결과를 남겼는가
+- 메모리 upgrade가 독립적으로 정당화된 Candidate 또는 기존 mechanism에 연결되었는가
 - 메모리 삭제 제안이 대체 구현과 검증 이후로 순서화되었는가
 - transcript의 시크릿·개인정보를 출력하지 않았는가
 - 풀 리포트를 파일로 저장하고 채팅에는 요약만 출력했는가
