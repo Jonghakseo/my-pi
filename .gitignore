@@ -66,9 +66,17 @@ extensions/picky-handoff
 # Local/custom skills
 # Keep already tracked skills; ignore any new/untracked skill folders by default.
 skills/*
+!skills/chrome-cdp/
+!skills/create-verification-skill/
 !skills/easy-review/
+!skills/gh-attach/
 !skills/harness-refine/
+!skills/harness-refine-sweep/
 !skills/i-have-adhd/
+!skills/make-html-report/
+!skills/pro-con-opinion/
+!skills/prove-it-works/
+!skills/show-me-your-work/
 skills-archive/*
 
 # claude-mcp-bridge local runtime settings
