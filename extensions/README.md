@@ -30,7 +30,6 @@ Pi 공식 문서는 auto-discovery 대상으로 `extensions/*.ts`와 `extensions
 | [`cron/`](./cron/index.ts) | 자연어 예약 작업을 Markdown 프롬프트로 저장하고 launchd-backed daemon에서 헤드리스 `pi -p`로 실행 |
 | [`footer/`](./footer/index.ts) | 커스텀 푸터 UI facade (`custom-style/main.ts`) |
 | [`theme-cycler/`](./theme-cycler/index.ts) | `Ctrl+Shift+X`로 테마 순환 |
-| [`until/`](./until/index.ts) | `/until`, `until_report` 기반 반복 작업 관리 |
 | [`usage-analytics/`](./usage-analytics/index.ts) | 서브에이전트·스킬 사용 통계 오버레이 |
 | [`working-text/`](./working-text/index.ts) | 스피너 작업 메시지 (팁 텍스트 + 경과 시간) |
 | [`web-access/`](./web-access/index.ts) | 웹 검색/콘텐츠 추출 도구 및 큐레이터 워크플로우 |

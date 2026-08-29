@@ -138,7 +138,6 @@ pi는 `extensions/*.ts`와 `extensions/*/index.ts`를 모두 자동 발견할 �
 | [`worktree/`](./extensions/worktree/index.ts) | `/worktree` — Git worktree 목록·열기·생성·삭제·동기화·정리를 인터랙티브하게 처리 |
 | [`notify/`](./extensions/notify/index.ts) | `/notify`, `/notify-off` — 세션 완료 알림과 macOS TTS |
 | [`cron/`](./extensions/cron/index.ts) | 영속 `cron` 도구와 `/cron` 명령 — daemon과 macOS `launchd`로 headless pi 작업 예약 |
-| [`until/`](./extensions/until/index.ts) | `/until`, `/untils`, `/until-cancel`, `until_report` — 조건 충족까지 반복 실행 |
 | [`usage-analytics/`](./extensions/usage-analytics/index.ts) | `/analytics` — 서브에이전트·스킬 사용 통계 오버레이 |
 | [`archive-to-html/`](./extensions/archive-to-html/index.ts) | 조건에 맞는 임시 HTML 출력과 `show_widget` 렌더링을 `~/Documents/agent-history/분류 전`에 아카이브 |
 
@@ -164,6 +163,7 @@ pi는 `extensions/*.ts`와 `extensions/*/index.ts`를 모두 자동 발견할 �
 | [`@ryan_nookpi/pi-extension-claude-spinner`](https://github.com/Jonghakseo/pi-extension/tree/main/packages/claude-spinner) | Claude 스타일 스피너/상태 피드백 |
 | [`@ryan_nookpi/pi-extension-cc-system-prompt`](https://github.com/Jonghakseo/pi-extension/tree/main/packages/cc-system-prompt) | Claude Code 스타일 시스템 프롬프트 |
 | [`@ryan_nookpi/pi-extension-subagent`](https://github.com/Jonghakseo/pi-extension/tree/main/packages/subagent) | 멀티 에이전트 위임 엔진 — 비동기 run/continue/batch/chain, 세션 영속화, 상태 UI, 서브세션 에스컬레이션 |
+| [`@ryan_nookpi/pi-extension-until`](https://github.com/Jonghakseo/pi-extension/tree/main/packages/until) | `/until`, `/untils`, `/until-cancel`, `until_report` — 조건 충족까지 반복 실행, 프리셋은 `until-presets/` |
 
 ---
 

@@ -137,7 +137,7 @@ These are intentionally git-ignored — recreate or substitute if you want parit
 | `.env`, `agents/.env.browser` | secrets | use the `.example` files |
 | `sessions/`, `.data/`, `state/`, `.context/`, `cron/` | per-machine runtime data | left empty; pi recreates |
 | `bin/`, `local-scripts/` | personal scripts | not portable |
-| `extensions/until-presets/`, `extensions/usage-reporter/` | personal extensions | optional |
+| `until-presets/`, `extensions/usage-reporter/` | personal `until` presets and extensions | optional |
 | `extensions/picky-handoff` | symlink to a separate repo | not required |
 | Daily/weekly retro logs and stamp files | local cron output | safe to skip |
 
