@@ -130,6 +130,10 @@ button { font: inherit; }
   line-height: 1.05;
   text-wrap: balance;
 }
+.report-header h1, .report-section h2, .section-heading, .attention-item h3, .minimap a {
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
 .summary {
   max-width: 820px;
   margin: 24px 0 0;
