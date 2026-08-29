@@ -138,7 +138,6 @@ Pi can auto-discover both `extensions/*.ts` and `extensions/*/index.ts`, but thi
 | [`pr-review-re-request/`](./extensions/pr-review-re-request/index.ts) | `/github:pr-review-re-request` — re-request reviews from pending reviewers |
 | [`worktree/`](./extensions/worktree/index.ts) | `/worktree` — interactively list, open, create, delete, sync, and clean Git worktrees |
 | [`notify/`](./extensions/notify/index.ts) | `/notify` and `/notify-off` for session completion notifications and macOS TTS |
-| [`cron/`](./extensions/cron/index.ts) | Persistent `cron` tool and `/cron` command for scheduled headless pi jobs via a daemon and macOS `launchd` |
 | [`usage-analytics/`](./extensions/usage-analytics/index.ts) | `/analytics` — subagent and skill usage analytics overlay |
 | [`archive-to-html/`](./extensions/archive-to-html/index.ts) | Archives matching temporary HTML outputs and `show_widget` renderings into `~/Documents/agent-history/분류 전` |
 
@@ -165,6 +164,7 @@ The following reusable packages are currently listed in `settings.json`.
 | [`@ryan_nookpi/pi-extension-cc-system-prompt`](https://github.com/Jonghakseo/pi-extension/tree/main/packages/cc-system-prompt) | Claude Code style system prompt |
 | [`@ryan_nookpi/pi-extension-subagent`](https://github.com/Jonghakseo/pi-extension/tree/main/packages/subagent) | Multi-agent delegation engine — asynchronous run/continue/batch/chain workflows, session persistence, status UI, and sub-session escalation |
 | [`@ryan_nookpi/pi-extension-until`](https://github.com/Jonghakseo/pi-extension/tree/main/packages/until) | `/until`, `/untils`, `/until-cancel`, and `until_report` for repeat-until-condition workflows; presets live in `until-presets/` |
+| [`@ryan_nookpi/pi-extension-cron`](https://github.com/Jonghakseo/pi-extension/tree/main/packages/cron) | Persistent `cron` tool and `/cron` commands for scheduled headless Pi jobs through a launchd-backed daemon |
 
 ---
 
