@@ -117,6 +117,14 @@ Success criteria를 체크 가능한 술어로 쓸 수 없으면 장기 실행�
 - `continue`는 최신 메인 컨텍스트를 자동 동기화하지 않으므로, 이어서 필요한 변경사항/결론을 프롬프트에 명시한다.
 - 외부 전송, 삭제, 배포, 대량 변경, 비용 큰 작업은 사용자 승인 gate를 둔다.
 
+#### Failed write-capable run recovery
+
+실패하거나 중단된 write-capable subagent를 retry, continue, 재할당하기 전에 실패 로그와 그 실행이 실제로 사용한 workspace를 확인한다. `--main`이면 공유 worktree를, `--isolated`이면 해당 isolated worktree를 직접 확인하며 호출자의 깨끗한 worktree를 대리 증거로 사용하지 않는다.
+
+Git workspace라면 `HEAD`, worker commit 유무, `git status --short`, staged/unstaged diff, 관련 untracked output을 기록한다. 관찰된 결과를 `complete | partial | unknown`으로 분류하고, 다음 프롬프트에 그 상태와 이어서 사용할 worktree 또는 revision을 명시한다. 실패가 write를 원자적으로 rollback했다고 가정하지 않는다.
+
+로그가 없으면 확인하지 못한 범위를 기록한다. 실제 workspace를 확인할 수 없으면 gate 미충족으로 보고 retry나 재할당 전에 사용자에게 에스컬레이션한다. 이 gate는 commit을 강제하지 않는다. 다음 worker나 verifier가 같은 worktree, 또는 workflow의 commit 제약이 허용한 명시적 commit/patch를 통해 동일 상태를 검사할 수 있으면 된다.
+
 ### 5. Role routing
 
 현재 사용 가능한 에이전트를 확인해야 하면 `list-agents`를 호출한다.
