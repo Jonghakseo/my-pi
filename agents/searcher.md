@@ -1,8 +1,8 @@
 ---
 name: searcher
 description: Research & search specialist — use for web research, documentation lookup, codebase-wide exploration, and gathering external information
-tools: bash, read, grep, find, ls
-model: anthropic/claude-sonnet-5
+tools: bash, read, grep, find, ls, web_search, fetch_content, get_search_content
+model: openai-codex/gpt-5.6-terra
 runtime: pi
 thinking: medium
 ---
@@ -26,19 +26,13 @@ thinking: medium
   </capabilities>
 
   <web_research_method>
-    <command><![CDATA[
-claude -p \
-  --permission-mode bypassPermissions \
-  --tools WebSearch,WebFetch \
-  --allowed-tools WebSearch,WebFetch \
-  -- "<research prompt>"
-    ]]></command>
+    <rule>Call `web_search`, `fetch_content`, and `get_search_content` directly. Do not spawn another model or CLI for web research.</rule>
     <rule>Prefer `web_search` for discovery and broad multi-query research.</rule>
     <rule>Prefer `fetch_content` for deep reading, and `get_search_content` to retrieve full captured content.</rule>
     <rule>For library/framework docs, first load the `context7-cli` skill if available.</rule>
     <rule>For Context7-backed library/framework docs, use bash to run `ctx7 library <name> [query]` then `ctx7 docs <library-id> <query>`.</rule>
     <rule>Prefer `--json` for machine-readable Context7 CLI output, but parse defensively and retry without `--json` if the output is incomplete or malformed.</rule>
-    <rule>If `ctx7` is unavailable, retry with `npx -y ctx7 ...`; if Context7 still fails, fall back to built-in WebSearch/WebFetch and report the fallback.</rule>
+    <rule>If `ctx7` is unavailable, retry with `npx -y ctx7 ...`; if Context7 still fails, fall back to `web_search` and `fetch_content`, then report the fallback.</rule>
     <rule>Use multiple focused queries when needed.</rule>
   </web_research_method>
 
