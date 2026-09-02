@@ -9,6 +9,7 @@ compatibility: Requires GitHub CLI gh, the sudosubin/gh-attach extension, gh aut
 Use the `sudosubin/gh-attach` GitHub CLI extension to upload a local file to GitHub user-attachments and return an attachment URL.
 
 Official references:
+
 - gh-attach README: https://github.com/sudosubin/gh-attach
 - Pi skills documentation: https://agentskills.io/specification and local Pi `docs/skills.md`
 
