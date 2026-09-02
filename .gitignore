@@ -1,6 +1,7 @@
 # Sensitive / credentials
 auth.json
 trust.json
+telegram.json
 agents/.env.browser
 .env
 
@@ -9,6 +10,7 @@ sessions/
 
 # Local data
 .data/
+/tmp/telegram/
 
 # Generated / logs
 .audit/

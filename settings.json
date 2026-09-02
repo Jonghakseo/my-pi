@@ -36,7 +36,8 @@
     "npm:@ryan_nookpi/pi-extension-subagent",
     "npm:@ryan_nookpi/pi-extension-clipboard",
     "npm:@ryan_nookpi/pi-extension-until",
-    "npm:@ryan_nookpi/pi-extension-cron"
+    "npm:@ryan_nookpi/pi-extension-cron",
+    "npm:@llblab/pi-telegram"
   ],
   "retry": {
     "enabled": true,
