@@ -56,29 +56,26 @@ The system is organized in **four layers**:
   <img src="./docs/assets/agents.en.svg" alt="Agents" width="800"/>
 </p>
 
-The current setup has 8 agent definitions using OpenAI and Anthropic models:
+The current setup has 8 agent definitions using the OpenAI GPT-5.6 model family:
 
 | Agent | Model | Role | When to Use |
 |---|---|---|---|
 | **worker** | `openai-codex/gpt-5.6-terra` | General-purpose executor | Implementation, writing, fixes (complex multi-file) |
-| **code-cleaner** | `anthropic/claude-opus-4-6` | Code cleanup analyst | Find cleanup opportunities and quality issues |
+| **code-cleaner** | `openai-codex/gpt-5.6-sol` | Code cleanup analyst | Find cleanup opportunities and quality issues |
 | **reviewer** | `openai-codex/gpt-5.6-sol` | Code review specialist | PR reviews, quality/correctness checks |
 | **challenger** | `openai-codex/gpt-5.6-sol` | Pressure tester | Stress-test plans before execution |
-| **verifier** | `anthropic/claude-opus-4-8` | Evidence validation | Verify claims, check correctness |
+| **verifier** | `openai-codex/gpt-5.6-sol` | Evidence validation | Verify claims, check correctness |
 | **security-auditor** | `openai-codex/gpt-5.6-sol` | Security reviewer | Focused vulnerability reviews |
-| **searcher** | `anthropic/claude-sonnet-5` | Research & web search | Documentation lookup, exploration |
+| **searcher** | `openai-codex/gpt-5.6-terra` | Research & web search | Documentation lookup, exploration |
 | **browser** | `openai-codex/gpt-5.6-terra` | Browser automation & UI testing | E2E testing, visual verification |
 
 <details>
 <summary><strong>Model Selection</strong></summary>
 
-- **openai-codex/gpt-5.6-terra** — Frontier execution (implementation and browser automation)
-- **openai-codex/gpt-5.6-sol** — Frontier review (testing, reviewing, security review)
-- **anthropic/claude-sonnet-5** — Research and documentation lookup
-- **anthropic/claude-opus-4-8** — Deep verification tasks
-- **anthropic/claude-opus-4-6** — Deep cleanup analysis
+- **openai-codex/gpt-5.6-terra** — Balanced execution and research (implementation, browser automation, documentation lookup)
+- **openai-codex/gpt-5.6-sol** — Complex analysis and verification (cleanup, review, challenge, validation, security)
 
-The main agent default is `openai-codex/gpt-5.6-sol` with max thinking.
+The main agent default is `openai-codex/gpt-5.6-sol` with high thinking.
 
 </details>
 
