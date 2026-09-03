@@ -1,84 +1,137 @@
 ---
 name: gh-attach
-description: "gh attach/gh-attach로 로컬 파일·이미지를 GitHub user-attachments에 업로드하고 첨부 URL을 얻을 때 사용한다."
-compatibility: Requires GitHub CLI gh, the sudosubin/gh-attach extension, gh auth login, and a GitHub browser session/cookies for uploads.
+description: "이슈·PR·코멘트에 로컬 이미지/영상을 첨부하거나(gh --attach), GitHub user-attachments 업로드 URL만 얻을 때(gh attach 확장) 사용한다."
+compatibility: "Native --attach requires gh >= 2.99.0 and push access to the repo. The sudosubin/gh-attach extension additionally requires a GitHub browser session/cookies."
 ---
 
 # gh-attach
 
-Use the `sudosubin/gh-attach` GitHub CLI extension to upload a local file to GitHub user-attachments and return an attachment URL.
+로컬 이미지/영상을 GitHub에 올리는 두 가지 경로를 다룬다. 목적에 따라 갈린다.
 
-Official references:
+| 목적 | 사용할 것 | 결과물 |
+| --- | --- | --- |
+| 이슈/PR/코멘트에 붙인다 | 네이티브 `--attach` (gh ≥ 2.99.0) | 본문에 인라인 렌더 |
+| URL 문자열 자체가 필요하다 (Slack, 리포트, 리뷰 문서 등) | `gh attach` 확장 | `https://github.com/user-attachments/assets/...` |
 
-- gh-attach README: https://github.com/sudosubin/gh-attach
-- Pi skills documentation: https://agentskills.io/specification and local Pi `docs/skills.md`
+공식 레퍼런스:
 
-## Core principles
+- 네이티브 첨부 문서: https://docs.github.com/en/github-cli/github-cli/attaching-files-with-github-cli
+- 릴리스 노트 v2.99.0: https://github.com/cli/cli/releases/tag/v2.99.0
+- Changelog: https://github.blog/changelog/2026-09-01-github-cli-media-in-issues-pull-requests-and-comments/
+- 확장 README: https://github.com/sudosubin/gh-attach
 
-- Only upload files the user explicitly asked to attach, or files that are clearly required for the current requested GitHub/PR/report task.
-- Never upload secrets, credentials, private keys, database dumps, logs with tokens, or files whose contents are unknown and potentially sensitive.
-- Prefer the GitHub CLI extension command `gh attach` over custom upload code.
-- Keep output easy to paste: return the final `https://github.com/user-attachments/assets/...` URL, or markdown image syntax when the user asks for PR/comment-ready text.
-- If the target repository is ambiguous and the current directory is not the intended repo, ask for `OWNER/REPO` before uploading.
+## 핵심 원칙
 
-## Workflow
+- 사용자가 명시적으로 첨부를 요청했거나, 요청한 GitHub 작업에 명백히 필요한 파일만 올린다.
+- 시크릿, 자격증명, 개인키, DB 덤프, 토큰이 섞인 로그, 내용을 모르는 파일은 절대 올리지 않는다.
+- 이슈/PR 본문에 넣을 거면 확장 대신 네이티브 `--attach`를 쓴다. 업로드와 본문 작성이 한 번에 끝난다.
+- 대상 저장소가 애매하고 현재 디렉터리가 의도한 repo가 아니면, 업로드 전에 `OWNER/REPO`를 확인한다.
 
-### 1. Check installation and authentication
+## 경로 A: 네이티브 `--attach` (권장)
 
-Run:
+### 지원 명령
+
+`gh issue create`, `gh issue edit`, `gh issue comment`, `gh pr create`, `gh pr edit`, `gh pr comment`.
+
+repo에 push 권한이 필요하다. 이미지·미디어 파일만 올라간다.
+
+### 버전 확인
 
 ```bash
 gh --version
+gh pr comment --help | rg -- '--attach' || echo "gh 업데이트 필요 (>= 2.99.0)"
+```
+
+2.99.0 미만이면 `brew upgrade gh`로 올린 뒤 진행한다. 버전이 낮은 상태로 경로 B에 우회하지 말고, 업그레이드가 곤란한 사정이 있으면 사용자에게 알린다.
+
+### 기본 사용
+
+```bash
+gh pr comment 123 --attach ./screenshot.png
+```
+
+`--attach`는 반복 가능하다. 명령당 최대 50개, 같은 파일을 두 번 붙일 수는 없다.
+
+```bash
+gh pr create \
+  --title "결제 실패 화면 수정" \
+  --body-file ./pr-body.md \
+  --attach ./before.png \
+  --attach ./after.png
+```
+
+### 본문 인라인 참조
+
+본문이 이미 로컬 경로를 참조하면 `gh`가 그 자리에서 업로드 URL로 치환한다. 참조되지 않은 첨부는 본문 끝에 플래그 순서대로 덧붙는다. 로컬에서 렌더링을 확인한 마크다운을 그대로 올릴 수 있다는 뜻이라, 리포트성 PR 본문에 특히 잘 맞는다.
+
+`pr-body.md`:
+
+```markdown
+로그인 화면에서 폼 자리에 에러가 뜬다:
+
+![로그인 인증 에러 화면](./login-error.png)
+```
+
+```bash
+gh issue comment 456 --body-file ./pr-body.md --attach ./login-error.png
+```
+
+치환 규칙은 `--body`, `--body-file`, stdin, 에디터 입력 모두에 동일하게 적용된다.
+
+### alt 텍스트
+
+경로 뒤에 `#`로 붙인다. 생략하면 파일명이 alt로 들어간다.
+
+```bash
+gh issue comment 456 --attach './login.png#로그인 에러 상태'
+```
+
+본문 마크다운이 이미 참조하는 파일은 마크다운 쪽 alt를 유지한다. 즉 `#` alt는 본문 끝에 append되는 파일에만 적용된다. 영상에는 alt를 쓸 수 없다.
+
+### 영상 임베드
+
+플레이어로 렌더하려면 참조가 해당 문단의 유일한 내용이어야 한다.
+
+```markdown
+![](./walkthrough.mp4)
+```
+
+문장 중간에 있으면 플레이어가 아니라 링크로 렌더된다.
+
+### 제약
+
+- `--web`과 함께 쓸 수 없다.
+- 이미지·미디어 외 파일 타입은 지원하지 않는다.
+- `gh issue edit` / `gh pr edit`에서 `--attach`만 주면 기존 본문을 유지한 채 아래에 덧붙인다.
+
+## 경로 B: `gh attach` 확장 (URL만 필요할 때)
+
+이슈/PR 본문이 아니라 URL 문자열 자체가 필요한 경우에만 쓴다. Slack 공유, 외부 리포트, PR 본문을 여러 단계에 걸쳐 조립하는 경우 등이다.
+
+```bash
 gh extension list | rg '^gh attach\s' || gh extension install sudosubin/gh-attach
 gh auth status
 ```
 
-If `gh` is missing, tell the user GitHub CLI is required before using this skill. If auth is missing, ask the user to run `gh auth login` or confirm that you should start it interactively.
-
-### 2. Confirm the file and repository
-
-- Verify the file exists and is the intended attachment.
-- For images, `file <path>` or `ls -lh <path>` is usually enough.
-- Use `-R OWNER/REPO` when the target repo is not certainly the current git remote.
-- If the user gave a GitHub PR/issue/repo URL, derive `OWNER/REPO` from it.
-
-### 3. Upload
-
-Basic command:
-
 ```bash
 gh attach ./image.png -R owner/repo
-```
-
-From inside the intended repository, repo auto-detection is allowed:
-
-```bash
-gh attach ./image.png
-```
-
-For structured output:
-
-```bash
 gh attach ./image.png -R owner/repo --json href,name
-```
-
-For markdown-ready output:
-
-```bash
 gh attach ./image.png -R owner/repo --json href,name --template '![{{.name}}]({{.href}})'
 ```
 
-### 4. Browser cookie options when upload fails
+의도한 repo 안에서 실행하면 `-R`을 생략하고 자동 감지에 맡겨도 된다.
 
-`gh-attach` uses the current GitHub login from `gh` and browser cookies matching that GitHub account. If upload fails because it cannot find cookies or the wrong account/session is selected, retry with explicit browser/profile options:
+### 브라우저 쿠키 옵션
+
+확장은 `gh` 로그인 계정과 일치하는 브라우저 쿠키를 사용한다. 쿠키를 못 찾거나 다른 계정 세션이 잡히면 브라우저/프로필을 명시한다.
 
 ```bash
 gh attach ./image.png -R owner/repo --browser chrome --profile Default
 ```
 
-Supported browser values include `auto`, `arc`, `brave`, `chrome`, `chromium`, `edge`, `firefox`, `safari`, `vivaldi`, `whale`, and others listed by `gh attach --help`.
+지원 값은 `gh attach --help` 참고 (`auto`, `arc`, `brave`, `chrome`, `chromium`, `edge`, `firefox`, `safari`, `vivaldi`, `whale` 등).
 
-For repeated use, create or update the config file at `~/.config/gh/attach.yml`:
+반복 사용 시 `~/.config/gh/attach.yml`:
 
 ```yaml
 browsers:
@@ -87,47 +140,41 @@ browsers:
   - browser: safari
 ```
 
-### 5. Return result
+## 트러블슈팅
 
-- If the command prints a URL, return that URL directly.
-- If the user asked to embed in GitHub Markdown, return `![alt](url)`.
-- If the user asked to add it to a PR/issue/comment, use the relevant GitHub command only after the upload succeeds.
+- `unknown flag: --attach`: `gh` 버전이 2.99.0 미만. `brew upgrade gh`.
+- `--attach`인데 권한 오류: 대상 repo에 push 권한이 필요하다.
+- 같은 파일을 두 번 첨부: 허용되지 않는다. 본문에서 한 번만 참조하도록 정리한다.
+- 확장에서 `unknown command attach`: `gh extension install sudosubin/gh-attach`.
+- 확장 쿠키/세션 불일치: `--browser`, `--profile` 명시. `gh auth status` 계정과 브라우저 로그인 계정이 같은지 확인.
+- `not logged in`: `gh auth login`.
+- 상세 로그: 확장은 `-v`.
 
-## Troubleshooting
+## 업로드 전 체크리스트
 
-- `unknown command attach`: install with `gh extension install sudosubin/gh-attach`.
-- `not logged in`: run `gh auth login`.
-- Repository detection failure: add `-R owner/repo`.
-- Cookie/session mismatch: pass `--browser` and `--profile`, or ensure the browser is logged into the same GitHub account as `gh auth status`.
-- Need verbose diagnostics: add `-v`.
-
-## Safety checklist
-
-Before upload:
-
-- The user explicitly requested this attachment or it is directly required by the requested GitHub task.
-- The file path is correct and the file exists.
-- The file is safe to upload publicly or to the target GitHub context.
-- The target repository is correct.
+- 사용자가 이 첨부를 명시적으로 요청했거나 요청한 GitHub 작업에 직접 필요하다.
+- 파일 경로가 정확하고 파일이 존재한다.
+- 공개 또는 대상 GitHub 컨텍스트에 올려도 안전한 내용이다.
+- 대상 저장소가 정확하다.
 
 ## Test prompts
 
-Use these prompts to verify the skill triggers and guides the agent correctly:
+트리거되어야 하는 프롬프트:
 
-- `gh attach로 이 스크린샷 GitHub URL 만들어줘: /tmp/a.png -R my-org/my-repo`
-- `gh attatch 사용법 알려줘`
-- `PR에 넣을 이미지 첨부 URL 만들어줘`
+- `이 스크린샷 PR 코멘트에 붙여줘`
+- `gh attach로 이 이미지 GitHub URL 만들어줘: /tmp/a.png -R my-org/my-repo`
+- `PR 본문에 before/after 이미지 넣어서 만들어줘`
 - `gh-attach가 쿠키를 못 찾는다고 하는데 해결해줘`
 
-Near-miss prompts that should not automatically upload anything:
+자동 업로드하면 안 되는 프롬프트:
 
 - `GitHub Actions artifact 다운로드해줘`
 - `이미지를 S3에 업로드해줘`
-- `이 로그 파일을 어디든 올려줘` without a clear GitHub attachment request and safety confirmation.
+- 명확한 GitHub 첨부 요청과 안전성 확인 없는 `이 로그 파일을 어디든 올려줘`
 
 ## Validation
 
-After creating or editing this skill, run:
+스킬 수정 후:
 
 ```bash
 python3 ~/.pi/agent/skills/skill-creator/scripts/validate_skill.py ~/.pi/agent/skills/gh-attach
