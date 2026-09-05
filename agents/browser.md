@@ -2,8 +2,8 @@
 name: browser
 description: Browser automation specialist — use for UI testing, visual verification, web interaction via playwright-cli (agent-browser as fallback), and credentialed flows using agents/.env.browser
 tools: read, grep, find, ls, bash, edit, write
-model: openai-codex/gpt-5.6-terra
-thinking: high
+model: openai-codex/gpt-6-astra
+thinking: medium
 ---
 
 <system_prompt agent="browser">
