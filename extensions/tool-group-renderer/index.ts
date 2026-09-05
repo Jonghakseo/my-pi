@@ -1,11 +1,10 @@
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { type ExtensionAPI, InteractiveMode, ToolExecutionComponent } from "@earendil-works/pi-coding-agent";
 import { Container, Spacer, Text, truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 import { truncatePlainToWidth } from "../utils/format-utils.js";
 
 const PATCH_STATE_KEY = Symbol.for("pi.tool-group-renderer.patch-state");
 const PATCH_VERSION = "2026-04-27-r1";
 const GROUP_STATE = Symbol("pi.tool-group-renderer.state");
-const PI_INTERACTIVE_BASE = "/usr/local/lib/node_modules/@earendil-works/pi-coding-agent/dist/modes/interactive";
 const BASH_PREVIEW_LIMIT = 56;
 const MIN_BASH_LINE_WIDTH_WITH_COMMAND = 36;
 const MIN_BASH_COMMAND_PREVIEW_WIDTH = 12;
@@ -878,23 +877,24 @@ export const __test__ = {
 	updateStreamingAssistantToolCalls,
 };
 
-export default async function toolGroupRenderer(_pi: ExtensionAPI): Promise<void> {
+export default async function toolGroupRenderer(pi: ExtensionAPI): Promise<void> {
 	const globalState = globalThis as typeof globalThis & {
 		[PATCH_STATE_KEY]?: PatchState;
 	};
 	const patchState = globalState[PATCH_STATE_KEY] ?? {};
 	globalState[PATCH_STATE_KEY] = patchState;
 
-	const [{ InteractiveMode }, { ToolExecutionComponent }, themeModule] = await Promise.all([
-		import(`${PI_INTERACTIVE_BASE}/interactive-mode.js`),
-		import(`${PI_INTERACTIVE_BASE}/components/tool-execution.js`),
-		import(`${PI_INTERACTIVE_BASE}/theme/theme.js`),
-	]);
+	patchState.toolExecutionComponent = ToolExecutionComponent as PatchState["toolExecutionComponent"];
+	pi.on("session_start", (_event, ctx) => {
+		// Read through the UI getter so theme switches also affect grouped tools.
+		runtimeTheme = {
+			fg: (color, text) => ctx.ui.theme.fg(color, text),
+			bg: (color, text) => ctx.ui.theme.bg(color, text),
+			bold: (text) => ctx.ui.theme.bold(text),
+		};
+	});
 
-	patchState.toolExecutionComponent = ToolExecutionComponent;
-	runtimeTheme = themeModule.theme as RuntimeTheme;
-
-	const proto = InteractiveMode.prototype as InteractiveModeLike & PrototypeMethods;
+	const proto = InteractiveMode.prototype as unknown as InteractiveModeLike & PrototypeMethods;
 	if (!patchState.originals) {
 		patchState.originals = {
 			handleEvent: proto.handleEvent,
