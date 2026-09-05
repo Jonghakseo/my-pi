@@ -1,0 +1,13 @@
+{
+  "providers": {
+    "anthropic": {
+      "modelOverrides": {
+        "claude-fable-5-1": {
+          "headers": {
+            "user-agent": "claude-cli/2.1.251"
+          }
+        }
+      }
+    }
+  }
+}

@@ -4,12 +4,15 @@
   "compaction": {
     "enabled": true
   },
-  "defaultModel": "gpt-5.6-sol",
+  "defaultModel": "gpt-6-astra",
   "defaultProvider": "openai-codex",
   "defaultThinkingLevel": "high",
   "doubleEscapeAction": "tree",
   "enabledModels": [
     "openai-codex/gpt-5.6-sol",
+    "anthropic/claude-opus-5",
+    "anthropic/claude-fable-5-1",
+    "openai-codex/gpt-6-astra",
     "openai-codex/gpt-5.6-terra"
   ],
   "hideThinkingBlock": true,
@@ -17,7 +20,7 @@
   "images": {
     "blockImages": false
   },
-  "lastChangelogVersion": "0.84.4",
+  "lastChangelogVersion": "0.85.0",
   "packages": [
     "npm:@ryan_nookpi/pi-extension-codex-fast-mode",
     "npm:@ryan_nookpi/pi-extension-ask-user-question",
