@@ -112,6 +112,7 @@ Success criteria를 체크 가능한 술어로 쓸 수 없으면 장기 실행�
 
 주의:
 
+- `--` 뒤로 넘기는 task 본문에 apostrophe(`'s`, `won't` 등)가 들어가면 CLI가 "Unclosed quote"로 거절한다. apostrophe를 제거하거나, task를 `.tmp/*.md`에 적고 `subagent run <agent> -- read PATH and follow the instructions there` 패턴으로 우회한다.
 - 실행 직후 바로 `status/detail`로 폴링하지 않는다. 자동 완료/실패 follow-up을 기다린다.
 - 읽기 전용 역할(challenger, reviewer, verifier)에는 파일 산출물을 요구하지 않는다. write/셸 도구가 없어 조용히 불이행될 수 있다. 결과는 응답 본문으로 받고, 보존이 필요하면 메인 에이전트가 파일로 저장한다.
 - `continue`는 최신 메인 컨텍스트를 자동 동기화하지 않으므로, 이어서 필요한 변경사항/결론을 프롬프트에 명시한다.

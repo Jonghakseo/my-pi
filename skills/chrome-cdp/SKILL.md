@@ -89,6 +89,16 @@ scripts/cdp.mjs stop [target]
 - 무관한 탭·스토리지·요청 바디를 열람하지 않는다. 증거가 충분해지면 멈춘다.
 - 디버거 입력이나 타이밍 조작을 자동화 탐지 회피 수단으로 쓰지 않는다.
 
+## Fallback: 탭 URL 목록만 필요할 때
+
+CDP 연결이 불가능하고(토글 꺼짐, Allow 거부 등) 열린 탭 URL 목록만 필요하면 짧은 timeout을 둔 AppleScript를 쓴다. 화면만 보고 URL을 추측하지 않는다.
+
+```bash
+timeout 5 osascript -e 'tell application "Google Chrome" to get URL of tabs of windows'
+```
+
+이 경로는 URL만 줌니다. DOM·네트워크·콘솔이 필요하면 auto-connect로 돌아간다.
+
 ## Troubleshooting
 
 - 연결 실패·행: `chrome-devtools stop` 후 재시도. 자세한 로그는 `DEBUG=* chrome-devtools <tool>`.
