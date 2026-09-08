@@ -106,6 +106,74 @@ describe("bash_async extension registration", () => {
 		await shutdown?.();
 	});
 
+	it("does not re-report jobs that were killed or whose terminal status was already read", async () => {
+		let tool: any;
+		const handlers = new Map<string, (event?: unknown, context?: unknown) => unknown>();
+		const sendMessage = vi.fn();
+		let idle = false;
+		bashAsync({
+			registerTool: (definition: any) => (tool = definition),
+			on: (event: string, handler: (event?: unknown, context?: unknown) => unknown) => handlers.set(event, handler),
+			sendMessage,
+		} as any);
+		expect(handlers.has("agent_end")).toBe(true);
+		const context = { ...(await makeContext()), isIdle: () => idle };
+
+		const killedJob = await tool.execute(
+			"k",
+			{ action: "start", command: "sleep 30", timeout: 0 },
+			undefined,
+			undefined,
+			context,
+		);
+		await tool.execute("kill", { action: "kill", jobId: killedJob.details.jobId }, undefined, undefined, context);
+
+		const readJob = await tool.execute(
+			"r",
+			{ action: "start", command: "printf read", timeout: 0 },
+			undefined,
+			undefined,
+			context,
+		);
+		await vi.waitFor(async () => {
+			const status = await tool.execute(
+				"s",
+				{ action: "status", jobId: readJob.details.jobId },
+				undefined,
+				undefined,
+				context,
+			);
+			expect(status.details.status).toBe("succeeded");
+		});
+
+		const unreadJob = await tool.execute(
+			"u",
+			{ action: "start", command: "printf unread", timeout: 0 },
+			undefined,
+			undefined,
+			context,
+		);
+		await vi.waitFor(async () => {
+			const listed = await tool.execute("l", { action: "list" }, undefined, undefined, context);
+			const job = listed.details.jobs.find((entry: any) => entry.id === unreadJob.details.jobId);
+			expect(job?.status).toBe("succeeded");
+		});
+
+		await new Promise((resolve) => setTimeout(resolve, 600));
+		expect(sendMessage).not.toHaveBeenCalled();
+		handlers.get("turn_end")?.({ type: "turn_end", toolResults: [{}], message: {} }, context);
+		expect(sendMessage).not.toHaveBeenCalled();
+		handlers.get("turn_end")?.({ type: "turn_end", toolResults: [], message: {} }, context);
+		expect(sendMessage).toHaveBeenCalledTimes(1);
+		expect(sendMessage.mock.calls[0]?.[0].details.jobIds).toEqual([unreadJob.details.jobId]);
+		expect(sendMessage.mock.calls[0]?.[1]).toEqual({ triggerTurn: true, deliverAs: "followUp" });
+		idle = true;
+		handlers.get("agent_end")?.({ type: "agent_end" }, context);
+		await new Promise((resolve) => setTimeout(resolve, 100));
+		expect(sendMessage).toHaveBeenCalledTimes(1);
+		await (handlers.get("session_shutdown") as () => Promise<void>)?.();
+	});
+
 	it("installs one below-editor widget for all running jobs and clears it after the final job", async () => {
 		let tool: any;
 		const ui = { setWidget: vi.fn() };

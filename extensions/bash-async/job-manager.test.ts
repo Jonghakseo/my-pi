@@ -8,8 +8,16 @@ import { clampOutputLines, validateBashAsyncParams, validateCwd } from "./tool-s
 import { compareAndSetJobStatus, isTerminalJobStatus, terminalStatusForCause, type JobStatus } from "./types.js";
 
 const tempDirectories: string[] = [];
+const managers: JobManager[] = [];
+
+function createManager(options: ConstructorParameters<typeof JobManager>[0]): JobManager {
+	const manager = new JobManager(options);
+	managers.push(manager);
+	return manager;
+}
 
 afterEach(async () => {
+	await Promise.all(managers.splice(0).map((manager) => manager.abortAndSettleAll({ graceMs: 1 })));
 	await Promise.all(tempDirectories.splice(0).map((directory) => rm(directory, { recursive: true, force: true })));
 });
 
@@ -149,7 +157,7 @@ describe("JobManager state change callbacks", () => {
 		tempDirectories.push(directory);
 		const executions = new Map<string, ReturnType<typeof deferred<{ exitCode: number | null }>>>();
 		const states: Array<{ id: string; status: string }> = [];
-		const manager = new JobManager({
+		const manager = createManager({
 			maxConcurrency: 1,
 			logsDirectory: directory,
 			onStateChange: (job) => states.push({ id: job.id, status: job.status }),
@@ -186,7 +194,7 @@ describe("JobManager state change callbacks", () => {
 		tempDirectories.push(directory);
 		const neverSettles = deferred<{ exitCode: number | null }>();
 		const states: Array<{ status: string; terminalCause?: string }> = [];
-		const manager = new JobManager({
+		const manager = createManager({
 			maxConcurrency: 1,
 			logsDirectory: directory,
 			onStateChange: (job) => {
@@ -201,7 +209,7 @@ describe("JobManager state change callbacks", () => {
 		expect(states.at(-1)).toEqual({ status: "failed", terminalCause: "cleanup_error" });
 
 		const shutdownStates: string[] = [];
-		const shutdownManager = new JobManager({
+		const shutdownManager = createManager({
 			maxConcurrency: 1,
 			logsDirectory: join(directory, "shutdown"),
 			onStateChange: (job) => shutdownStates.push(job.status),
@@ -220,7 +228,7 @@ describe("JobManager queue and lifecycle", () => {
 		tempDirectories.push(directory);
 		const running = new Map<string, ReturnType<typeof deferred<{ exitCode: number | null }>>>();
 		const started: string[] = [];
-		const manager = new JobManager({
+		const manager = createManager({
 			maxConcurrency: 4,
 			logsDirectory: directory,
 			execute: ({ job }) => {
@@ -248,7 +256,7 @@ describe("JobManager queue and lifecycle", () => {
 		const directory = await mkdtemp(join(tmpdir(), "bash-async-manager-"));
 		tempDirectories.push(directory);
 		const execute = vi.fn(() => new Promise<{ exitCode: number | null }>(() => {}));
-		const manager = new JobManager({ maxConcurrency: 1, logsDirectory: directory, execute });
+		const manager = createManager({ maxConcurrency: 1, logsDirectory: directory, execute });
 		const first = await manager.start({ command: "first", timeoutSeconds: 0, context: context(directory) });
 		const second = await manager.start({ command: "second", timeoutSeconds: 0, context: context(directory) });
 		if (!first.ok || !second.ok) throw new Error("jobs not accepted");
@@ -264,7 +272,7 @@ describe("JobManager queue and lifecycle", () => {
 	it("classifies a real nonzero command and timeout", async () => {
 		const directory = await mkdtemp(join(tmpdir(), "bash-async-manager-"));
 		tempDirectories.push(directory);
-		const manager = new JobManager({ logsDirectory: directory });
+		const manager = createManager({ logsDirectory: directory });
 		const failed = await manager.start({ command: "exit 7", timeoutSeconds: 5, context: context(directory) });
 		const timedOut = await manager.start({ command: "sleep 1", timeoutSeconds: 0.01, context: context(directory) });
 		if (!failed.ok || !timedOut.ok) throw new Error("jobs not accepted");
@@ -278,7 +286,7 @@ describe("JobManager real-process integration", () => {
 	it("accepts quickly, captures incremental output, and preserves start-time PI metadata", async () => {
 		const directory = await mkdtemp(join(tmpdir(), "bash-async-manager-"));
 		tempDirectories.push(directory);
-		const manager = new JobManager({ logsDirectory: directory });
+		const manager = createManager({ logsDirectory: directory });
 		const startedAt = performance.now();
 		const started = await manager.start({
 			command: "sleep 0.2; printf '%s\\n' \"$PI_SESSION_ID/$PI_PROVIDER/$PI_MODEL/$PI_REASONING_LEVEL\"",
@@ -303,7 +311,7 @@ describe("JobManager real-process integration", () => {
 		const hadTmpdir = Object.hasOwn(process.env, "TMPDIR");
 		process.env.TMPDIR = duplicateTemp;
 		try {
-			const manager = new JobManager({ logsDirectory: join(directory, "bounded-logs") });
+			const manager = createManager({ logsDirectory: join(directory, "bounded-logs") });
 			const started = await manager.start({
 				command: "python3 -c \"import sys; sys.stdout.write('x' * 65536)\"",
 				timeoutSeconds: 5,
@@ -323,7 +331,7 @@ describe("JobManager real-process integration", () => {
 		tempDirectories.push(directory);
 		const parentPidFile = join(directory, "parent.pid");
 		const childPidFile = join(directory, "child.pid");
-		const manager = new JobManager({ logsDirectory: directory });
+		const manager = createManager({ logsDirectory: directory });
 		const command = `PARENT_PID_FILE=${JSON.stringify(parentPidFile)} CHILD_PID_FILE=${JSON.stringify(childPidFile)} sh -c 'echo $$ > "$PARENT_PID_FILE"; sleep 30 & echo $! > "$CHILD_PID_FILE"; wait'`;
 		const started = await manager.start({ command, timeoutSeconds: 0, context: context(directory) });
 		if (!started.ok) throw new Error("job not accepted");
@@ -351,7 +359,7 @@ describe("JobManager termination races", () => {
 		const directory = await mkdtemp(join(tmpdir(), "bash-async-manager-"));
 		tempDirectories.push(directory);
 		const execution = deferred<{ exitCode: number | null }>();
-		const manager = new JobManager({ logsDirectory: directory, execute: () => execution.promise });
+		const manager = createManager({ logsDirectory: directory, execute: () => execution.promise });
 		const started = await manager.start({ command: "race", timeoutSeconds: 0, context: context(directory) });
 		if (!started.ok) throw new Error("job not accepted");
 		const kill = manager.kill(started.details.jobId);
@@ -364,7 +372,7 @@ describe("JobManager termination races", () => {
 		tempDirectories.push(directory);
 		const first = deferred<{ exitCode: number | null }>();
 		const started: string[] = [];
-		const manager = new JobManager({
+		const manager = createManager({
 			maxConcurrency: 1,
 			logsDirectory: directory,
 			execute: ({ job }) => {
@@ -381,12 +389,36 @@ describe("JobManager termination races", () => {
 		await vi.waitFor(() => expect(started).toEqual(["first", "second"]));
 	});
 
+	it("does not enqueue a completion for a job the caller killed", async () => {
+		const directory = await mkdtemp(join(tmpdir(), "bash-async-manager-"));
+		tempDirectories.push(directory);
+		const notifications = { enqueue: vi.fn(), suppress: vi.fn() };
+		const manager = createManager({
+			logsDirectory: directory,
+			execute: ({ job }) =>
+				job.command === "done"
+					? Promise.resolve({ exitCode: 0 })
+					: new Promise((resolve) =>
+							job.abortController.signal.addEventListener("abort", () => resolve({ exitCode: null })),
+						),
+			notifications: notifications as any,
+		});
+		const started = await manager.start({ command: "wait", timeoutSeconds: 0, context: context(directory) });
+		if (!started.ok) throw new Error("job not accepted");
+		expect((await manager.kill(started.details.jobId, 100))?.status).toBe("killed");
+		expect(notifications.enqueue).not.toHaveBeenCalled();
+
+		const natural = await manager.start({ command: "done", timeoutSeconds: 0, context: context(directory) });
+		if (!natural.ok) throw new Error("job not accepted");
+		await vi.waitFor(() => expect(notifications.enqueue).toHaveBeenCalledTimes(1));
+	});
+
 	it("suppresses completion delivery when shutdown races completion", async () => {
 		const directory = await mkdtemp(join(tmpdir(), "bash-async-manager-"));
 		tempDirectories.push(directory);
 		const execution = deferred<{ exitCode: number | null }>();
 		const notifications = { enqueue: vi.fn(), suppress: vi.fn() };
-		const manager = new JobManager({
+		const manager = createManager({
 			logsDirectory: directory,
 			execute: () => execution.promise,
 			notifications: notifications as any,
@@ -406,7 +438,7 @@ describe("JobManager capacity and settlement boundaries", () => {
 	it("evicts the oldest recent terminal job before rejecting a new start", async () => {
 		const directory = await mkdtemp(join(tmpdir(), "bash-async-manager-"));
 		tempDirectories.push(directory);
-		const manager = new JobManager({
+		const manager = createManager({
 			logsDirectory: directory,
 			execute: () => Promise.resolve({ exitCode: 0 }),
 		});
@@ -428,7 +460,7 @@ describe("JobManager capacity and settlement boundaries", () => {
 		const directory = await mkdtemp(join(tmpdir(), "bash-async-manager-"));
 		tempDirectories.push(directory);
 		const execution = deferred<{ exitCode: number | null }>();
-		const manager = new JobManager({ logsDirectory: directory, execute: () => execution.promise });
+		const manager = createManager({ logsDirectory: directory, execute: () => execution.promise });
 		const results = await Promise.all(
 			Array.from({ length: 21 }, (_, index) =>
 				manager.start({ command: `parallel-${index}`, timeoutSeconds: 0, context: context(directory) }),
@@ -442,7 +474,7 @@ describe("JobManager capacity and settlement boundaries", () => {
 		tempDirectories.push(directory);
 		const execution = deferred<{ exitCode: number | null }>();
 		const startedCommands: string[] = [];
-		const manager = new JobManager({
+		const manager = createManager({
 			maxConcurrency: 1,
 			logsDirectory: directory,
 			execute: ({ job }) => {
@@ -470,7 +502,7 @@ describe("JobManager capacity and settlement boundaries", () => {
 		const directory = await mkdtemp(join(tmpdir(), "bash-async-manager-"));
 		tempDirectories.push(directory);
 		let createdLog: JobLog | undefined;
-		const manager = new JobManager({
+		const manager = createManager({
 			logsDirectory: directory,
 			createLog: (path) => {
 				createdLog = new JobLog({ path });
@@ -499,7 +531,7 @@ describe("JobManager capacity and settlement boundaries", () => {
 		tempDirectories.push(directory);
 		const execution = deferred<{ exitCode: number | null }>();
 		const startedCommands: string[] = [];
-		const manager = new JobManager({
+		const manager = createManager({
 			maxConcurrency: 1,
 			logsDirectory: directory,
 			settlementGraceMs: 1,
@@ -540,7 +572,7 @@ describe("JobManager capacity and settlement boundaries", () => {
 		tempDirectories.push(directory);
 		const validation = deferred<{ ok: true; cwd: string }>();
 		const execute = vi.fn(() => Promise.resolve({ exitCode: 0 }));
-		const manager = new JobManager({ logsDirectory: directory, execute, validateCwd: () => validation.promise });
+		const manager = createManager({ logsDirectory: directory, execute, validateCwd: () => validation.promise });
 		const controller = new AbortController();
 		const start = manager.start({
 			command: "cancelled",
@@ -557,6 +589,44 @@ describe("JobManager capacity and settlement boundaries", () => {
 });
 
 describe("JobManager log retention", () => {
+	it("waits for pending log maintenance before shutdown resolves", async () => {
+		const directory = await mkdtemp(join(tmpdir(), "bash-async-shutdown-maintenance-"));
+		tempDirectories.push(directory);
+		const staleLog = join(directory, "test-session", "stale.log");
+		await mkdir(join(directory, "test-session"));
+		await writeFile(staleLog, "stale");
+		await writeFile(`${staleLog}.closed`, "");
+		const staleTime = new Date(Date.now() - 25 * 60 * 60 * 1000);
+		await utimes(staleLog, staleTime, staleTime);
+		const cleanupReached = deferred<void>();
+		const releaseCleanup = deferred<void>();
+		const manager = createManager({
+			logsDirectory: directory,
+			execute: () => Promise.resolve({ exitCode: 0 }),
+			onBeforeStaleLogRemove: async () => {
+				cleanupReached.resolve();
+				await releaseCleanup.promise;
+			},
+		});
+		await cleanupReached.promise;
+		const started = await manager.start({ command: "done", timeoutSeconds: 0, context: context(directory) });
+		if (!started.ok) throw new Error("job not accepted");
+		await vi.waitFor(() => expect(manager.get(started.details.jobId)?.status).toBe("succeeded"));
+		let shutdownFinished = false;
+		const shutdown = manager.abortAndSettleAll().then(() => {
+			shutdownFinished = true;
+		});
+		try {
+			await new Promise((resolve) => setImmediate(resolve));
+			expect(shutdownFinished).toBe(false);
+		} finally {
+			releaseCleanup.resolve();
+			await shutdown;
+			await vi.waitFor(() => expect(access(`${started.details.logPath}.closed`)).resolves.toBeUndefined());
+		}
+		await expect(access(staleLog)).rejects.toMatchObject({ code: "ENOENT" });
+	});
+
 	it("does not recursively remove a session directory when cleanup races a new start", async () => {
 		const directory = await mkdtemp(join(tmpdir(), "bash-async-cleanup-race-"));
 		tempDirectories.push(directory);
@@ -570,7 +640,7 @@ describe("JobManager log retention", () => {
 		const cleanupReached = deferred<void>();
 		const releaseCleanup = deferred<void>();
 		const execution = deferred<{ exitCode: number | null }>();
-		const manager = new JobManager({
+		const manager = createManager({
 			logsDirectory: directory,
 			execute: () => execution.promise,
 			onBeforeStaleLogRemove: async () => {
@@ -592,7 +662,7 @@ describe("JobManager log retention", () => {
 		const directory = await mkdtemp(join(tmpdir(), "bash-async-quarantined-log-"));
 		tempDirectories.push(directory);
 		const neverSettles = deferred<{ exitCode: number | null }>();
-		const firstManager = new JobManager({
+		const firstManager = createManager({
 			logsDirectory: directory,
 			execute: ({ onData }) => {
 				onData(Buffer.from("quarantined output"));
@@ -616,7 +686,7 @@ describe("JobManager log retention", () => {
 		const activeLog = new JobLog({ path: activeLogPath });
 		activeLog.append("active output");
 		try {
-			new JobManager({ logsDirectory: directory, maxClosedLogBytes: 0 });
+			createManager({ logsDirectory: directory, maxClosedLogBytes: 0 });
 			await vi.waitFor(async () =>
 				expect(access(quarantined.details.logPath)).rejects.toMatchObject({ code: "ENOENT" }),
 			);
@@ -633,7 +703,7 @@ describe("JobManager log retention", () => {
 		const directory = await mkdtemp(join(tmpdir(), "bash-async-log-quota-"));
 		tempDirectories.push(directory);
 		const activeExecution = deferred<{ exitCode: number | null }>();
-		const manager = new JobManager({
+		const manager = createManager({
 			logsDirectory: directory,
 			maxClosedLogBytes: 8,
 			execute: ({ job, onData }) => {
@@ -709,7 +779,7 @@ describe("JobManager shutdown and process boundaries", () => {
 		let shutdownState: { status: string; terminalCause?: string } | undefined;
 		let observedBeforeRemoval = false;
 		let manager: JobManager;
-		manager = new JobManager({
+		manager = createManager({
 			logsDirectory: directory,
 			createLog: (path) => {
 				createdLog = new JobLog({ path });
@@ -744,7 +814,7 @@ describe("JobManager shutdown and process boundaries", () => {
 		const directory = await mkdtemp(join(tmpdir(), "bash-async-manager-"));
 		tempDirectories.push(directory);
 		const escapedPidFile = join(directory, "escaped.pid");
-		const manager = new JobManager({ logsDirectory: directory });
+		const manager = createManager({ logsDirectory: directory });
 		const command = `PID_FILE=${JSON.stringify(escapedPidFile)} python3 -c "import os,subprocess,time; p=subprocess.Popen(['sleep','30'], start_new_session=True); open(os.environ['PID_FILE'],'w').write(str(p.pid)); time.sleep(30)"`;
 		const started = await manager.start({ command, timeoutSeconds: 0, context: context(directory) });
 		if (!started.ok) throw new Error("job not accepted");
