@@ -385,6 +385,8 @@ export class JobManager {
 			if (isTerminalJobStatus(job.status)) continue;
 			this.detachTimedOutJob(job);
 		}
+		// Closed-marker writes must finish before the caller can dispose of the log directory.
+		await this.logMaintenance;
 	}
 
 	closeAllLogs(): void {
@@ -459,13 +461,17 @@ export class JobManager {
 		this.emitStateChange(job);
 		job.resolveSettlement();
 		this.detachExecution(job);
-		if (!this.shuttingDown)
-			this.options.notifications?.enqueue({
-				...this.publicJob(job),
-				tail: job.logWriter.tail(20),
-			} satisfies CompletedJob);
+		this.notifyCompletion(job);
 		this.drain();
 		return true;
+	}
+
+	private notifyCompletion(job: ManagedJob): void {
+		if (this.shuttingDown || job.requestedCause === "kill") return;
+		this.options.notifications?.enqueue({
+			...this.publicJob(job),
+			tail: job.logWriter.tail(20),
+		} satisfies CompletedJob);
 	}
 
 	private detachTimedOutJob(job: ManagedJob): void {
@@ -536,11 +542,7 @@ export class JobManager {
 			this.running--;
 			this.drain();
 		});
-		if (!this.shuttingDown)
-			this.options.notifications?.enqueue({
-				...this.publicJob(job),
-				tail: job.logWriter.tail(20),
-			} satisfies CompletedJob);
+		this.notifyCompletion(job);
 	}
 
 	private clearSettlementTimer(job: ManagedJob): void {
