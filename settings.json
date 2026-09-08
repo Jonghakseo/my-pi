@@ -6,7 +6,7 @@
   },
   "defaultModel": "gpt-6-astra",
   "defaultProvider": "openai-codex",
-  "defaultThinkingLevel": "medium",
+  "defaultThinkingLevel": "high",
   "doubleEscapeAction": "tree",
   "enabledModels": [
     "openai-codex/gpt-5.6-sol",
