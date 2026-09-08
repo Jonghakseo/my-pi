@@ -72,6 +72,7 @@ When adding new features or refactoring, use this priority order:
 - [ ] **Gate execution:** after changes run `test` → `typecheck` (and `coverage` when feasible) and then complete review before commit.
 - [ ] **Runtime load check:** after entrypoint/type-contract changes, run isolated headless Pi loading with a temporary `PI_CODING_AGENT_DIR` and explicit `-e extensions/*/index.ts` list.
 - [ ] **Baseline control:** even if known baseline failures exist, do not introduce new failures. (fix only deltas)
+- [ ] **Async test boundaries:** update mocks for newly consumed context APIs; observe rejecting promises immediately (e.g. `Promise.allSettled`) and assert their outcomes. Verify completion callbacks, then stop resource owners and await cleanup in `finally`/`afterEach` before deleting test directories. Reproduce ordering bugs with a deferred gate or controlled delay before repeated runs. Passing assertions do not override unhandled errors or a nonzero test exit.
 
 ### Execution principles
 - Keep user-facing output contracts from breaking unless the change is explicitly intended.
