@@ -6,12 +6,10 @@
   },
   "defaultModel": "gpt-6-astra",
   "defaultProvider": "openai-codex",
-  "defaultThinkingLevel": "high",
+  "defaultThinkingLevel": "medium",
   "doubleEscapeAction": "tree",
   "enabledModels": [
     "openai-codex/gpt-5.6-sol",
-    "anthropic/claude-opus-5",
-    "anthropic/claude-fable-5-1",
     "openai-codex/gpt-6-astra",
     "openai-codex/gpt-5.6-terra"
   ],
@@ -20,7 +18,7 @@
   "images": {
     "blockImages": false
   },
-  "lastChangelogVersion": "0.85.0",
+  "lastChangelogVersion": "0.85.1",
   "packages": [
     "npm:@ryan_nookpi/pi-extension-codex-fast-mode",
     "npm:@ryan_nookpi/pi-extension-ask-user-question",
