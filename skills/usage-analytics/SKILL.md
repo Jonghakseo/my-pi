@@ -15,12 +15,12 @@ disable-model-invocation: false
 각 줄은 JSON 객체이며 4가지 타입이 있다:
 
 ```jsonc
-// 서브에이전트 시작 (run/batch/chain은 agent명 포함, continue는 "_continue" 플레이스홀더)
-// 집계: subagent_end가 우선이며, end가 없는 legacy/incomplete batch/chain start만 total fallback으로 사용
-{ "type": "subagent_start", "ts": "ISO8601", "epoch": 1234567890, "agent": "worker", "mode": "run" }
+// epoch는 밀리초. 신규 기록은 sessionId 포함, 과거 continue 시작에는 "_continue"가 있을 수 있음
+// 집계: subagent_end 우선, 안전한 식별자가 있고 end가 없는 batch/chain start만 fallback으로 사용
+{ "type": "subagent_start", "ts": "ISO8601", "epoch": 1788840000000, "sessionId": "session-uuid", "agent": "worker", "mode": "run", "runId": 42 }
 
-// 서브에이전트 완료 (집계의 단일 소스)
-{ "type": "subagent_end", "ts": "ISO8601", "epoch": 1234567890, "agent": "worker", "runId": 42, "status": "error", "elapsedMs": 45000, "model": "openai-codex/gpt-5.3-codex-spark", "errorClass": "context_overflow", "peakContextTokens": 127196, "lastToolName": "read", "lastToolOutputChars": 9032 }
+// 완료 시각은 원본 세션 메시지의 시각. 신규 기록은 세션·메시지 식별자와 가능한 경우 startedAt 포함
+{ "type": "subagent_end", "ts": "ISO8601", "epoch": 1788840045000, "sessionId": "session-uuid", "sessionEntryId": "entry-id", "startedAt": 1788840000000, "agent": "worker", "runId": 42, "status": "error", "elapsedMs": 45000, "model": "openai-codex/gpt-5.3-codex-spark", "errorClass": "context_overflow", "peakContextTokens": 127196, "lastToolName": "read", "lastToolOutputChars": 9032 }
 
 // 명시적 스킬 호출: `/skill:name`이 확장된 사용자 `<skill>` 메시지가 확정될 때 기록
 { "type": "skill_invoked", "ts": "ISO8601", "epoch": 1234567890, "skill": "picky-cli", "path": "/path/to/SKILL.md" }
@@ -61,7 +61,8 @@ cat ~/.pi/agent/state/usage-analytics.jsonl
 |------|----------|
 | **호출 빈도** | `subagent_end` 이벤트 수를 우선 집계하고, 매칭되는 end가 없는 legacy/incomplete batch/chain의 `subagent_start` 이벤트 수만 fallback으로 더함 |
 | **성공/실패 건수** | `subagent_end`의 `status` 필드로 집계 |
-| **에러율** | `error / (done + error) * 100` |
+| **완료 미확인** | fallback으로 더한 시작 이벤트 수. 실패 또는 진행 중이라고 단정하지 않음 |
+| **에러율** | `error / (done + error) * 100`. 완료 기록이 없으면 `-`, 완료 미확인은 분모에서 제외 |
 | **평균 소요시간** | `subagent_end`의 `elapsedMs` 평균 |
 | **최장/최단 소요시간** | `elapsedMs`의 max / min |
 | **사용 모델 분포** | `model` 필드별 건수 |
@@ -69,6 +70,15 @@ cat ~/.pi/agent/state/usage-analytics.jsonl
 | **실패 원인 분포** | `errorClass`별 건수 (`context_overflow`, `overloaded`, `rate_limit`, `tool_error`, `aborted`, `process_error`, `unknown`) |
 | **실패 시 컨텍스트·도구** | `peakContextTokens`, `lastToolName`, `lastToolOutputChars`로 실패 직전 상태 분석 |
 | **일별 추이** | 날짜별 호출 건수 변화 |
+
+시작/완료 매칭 규칙은 `~/.pi/agent/extensions/usage-analytics/index.ts`의 `getRunAnalyticsKeys`와 동일하게 적용한다.
+
+1. `batchId + stepIndex` 또는 `pipelineId + stepIndex`를 우선한다. 그룹이 다르면 `runId`가 같아도 다른 실행이다.
+2. 그룹 정보가 없을 때만 `sessionId + runId`를 사용한다. 숫자 `runId` 단독 매칭은 금지한다.
+3. 그룹 정보가 불완전하거나 sessionId 없는 과거 독립 실행은 임의로 연결하지 않는다. 안전한 키 없는 시작과 `_continue` 플레이스홀더는 fallback에서 제외한다.
+4. 총 호출은 성공 + 실패 + 완료 미확인으로 표시한다. 모드 분포는 별도로 `subagent_start` 이벤트를 분모로 쓰며, batch 명령 횟수가 아닌 작업별 시작 건수다.
+
+완료 복구는 시작/완료 매칭과 별도다. 그룹·단계 키, 또는 `sessionId + runId + startedAt`(없으면 `sessionId + sessionEntryId + runId`)로 중복을 막는다. 같은 runId의 다른 `continue` 완료를 합치지 않는다. sessionId 없는 과거 독립 실행은 기록 시각이 실제 완료 시각과 다를 수 있어 자동 연결하지 않는다. 해당 runId의 과거 완료가 존재하고 같은 세션·runId의 신규 시작 기록 이전인 복구 후보는 보수적으로 건너뛴다. 복구된 과거 완료 시각을 신규 계측 시작점으로 쓰지 않는다. 이 미확인 구간을 완전한 복구나 실패 0건으로 해석하지 않는다.
 
 #### 3-B. 스킬 분석
 
@@ -115,7 +125,7 @@ cat ~/.pi/agent/state/usage-analytics.jsonl
 ### 🤖 서브에이전트
 
 #### 요약
-- 총 호출: N회 (성공 N회, 실패 N회)
+- 총 호출: N회 (성공 N회, 실패 N회, 완료 미확인 N회)
 - 활성 에이전트: N개 / 전체 N개
 
 #### 에이전트별 상세

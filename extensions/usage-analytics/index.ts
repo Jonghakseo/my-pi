@@ -19,15 +19,22 @@
  *   - `subagent_end` is the **primary source** for total/done/error/duration.
  *   - `subagent_start` is retained for mode distribution and as a fallback for
  *     legacy/incomplete batch/chain runs that do not have matching end entries.
- *   - When a start/end pair can be matched by runId (or grouped step metadata),
- *     totals are counted from end only to avoid double-counting.
+ *   - Group-step identity takes precedence over session-local runId.
+ *     Unscoped legacy runIds never match starts to ends.
+ *   - Completion recovery uses attempt/source-entry identity, not just runId,
+ *     so a later continuation is not mistaken for an already logged completion.
  */
 
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
-import { type ExtensionAPI, parseSkillBlock, type SessionEntry } from "@earendil-works/pi-coding-agent";
+import {
+	type ExtensionAPI,
+	type ExtensionContext,
+	parseSkillBlock,
+	type SessionEntry,
+} from "@earendil-works/pi-coding-agent";
 import { Container, Key, matchesKey, Spacer, Text, truncateToWidth } from "@earendil-works/pi-tui";
 
 // ─── Constants ───────────────────────────────────────────────────────────────
@@ -42,6 +49,7 @@ const OVERLAY_MAX_HEIGHT = 40;
 interface BaseLogEntry {
 	ts: string; // ISO 8601
 	epoch: number; // ms since epoch
+	sessionId?: string; // absent in legacy logs
 }
 
 interface SubagentStartEntry extends BaseLogEntry {
@@ -56,6 +64,8 @@ interface SubagentStartEntry extends BaseLogEntry {
 
 interface SubagentEndEntry extends BaseLogEntry {
 	type: "subagent_end";
+	sessionEntryId?: string;
+	startedAt?: number;
 	agent: string;
 	runId?: number;
 	batchId?: string;
@@ -93,12 +103,13 @@ function ensureLogDir(): void {
 	}
 }
 
-function appendLog(entry: LogEntry): void {
+function appendLog(entry: LogEntry): boolean {
 	try {
 		ensureLogDir();
 		fs.appendFileSync(LOG_FILE, `${JSON.stringify(entry)}\n`, "utf-8");
+		return true;
 	} catch {
-		/* ignore write errors */
+		return false;
 	}
 }
 
@@ -190,18 +201,23 @@ function verbToMode(verb: string | null): SubagentStartEntry["mode"] {
 	return "unknown";
 }
 
+/** Group IDs include time/randomness; numeric run IDs are only session-local. */
 function getRunAnalyticsKeys(entry: {
+	sessionId?: string;
 	runId?: number;
 	batchId?: string;
 	pipelineId?: string;
 	stepIndex?: number;
 }): string[] {
-	const keys: string[] = [];
-	if (typeof entry.runId === "number") keys.push(`run:${entry.runId}`);
-	if (entry.batchId && typeof entry.stepIndex === "number") keys.push(`batch:${entry.batchId}:${entry.stepIndex}`);
+	if (entry.batchId && typeof entry.stepIndex === "number")
+		return [JSON.stringify(["batch", entry.batchId, entry.stepIndex])];
 	if (entry.pipelineId && typeof entry.stepIndex === "number")
-		keys.push(`chain:${entry.pipelineId}:${entry.stepIndex}`);
-	return keys;
+		return [JSON.stringify(["chain", entry.pipelineId, entry.stepIndex])];
+	// Incomplete group metadata must not fall back to a weaker run identity.
+	if (entry.batchId || entry.pipelineId) return [];
+	if (entry.sessionId && typeof entry.runId === "number")
+		return [JSON.stringify(["run", entry.sessionId, entry.runId])];
+	return [];
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -241,6 +257,7 @@ function extractSubagentEndEntriesFromCustomMessage(customMessage: {
 			{
 				agent: typeof d.agent === "string" ? d.agent : "unknown",
 				runId: d.runId,
+				...(toValidEpochMs(d.startedAt) !== undefined ? { startedAt: toValidEpochMs(d.startedAt) } : {}),
 				batchId: typeof d.batchId === "string" ? d.batchId : undefined,
 				pipelineId: typeof d.pipelineId === "string" ? d.pipelineId : undefined,
 				stepIndex: typeof d.pipelineStepIndex === "number" ? d.pipelineStepIndex : undefined,
@@ -287,45 +304,81 @@ function toValidEpochMs(value: unknown): number | undefined {
 	return undefined;
 }
 
-/** Run keys of all `subagent_end` entries already present in the log. */
+/** A completion is an attempt (or persisted message), not a reusable run slot. */
+function getCompletionAnalyticsKeys(entry: SubagentEndEntry): string[] {
+	if (entry.batchId || entry.pipelineId) return getRunAnalyticsKeys(entry);
+	if (!entry.sessionId) return [];
+	if (typeof entry.runId === "number" && entry.startedAt !== undefined)
+		return [JSON.stringify(["attempt", entry.sessionId, entry.runId, entry.startedAt])];
+	if (entry.sessionEntryId && typeof entry.runId === "number")
+		return [JSON.stringify(["completion", entry.sessionId, entry.sessionEntryId, entry.runId])];
+	return [];
+}
+
 function loggedEndKeys(entries: LogEntry[]): Set<string> {
 	return new Set(
-		entries.filter((e): e is SubagentEndEntry => e.type === "subagent_end").flatMap((e) => getRunAnalyticsKeys(e)),
+		entries.filter((e): e is SubagentEndEntry => e.type === "subagent_end").flatMap(getCompletionAnalyticsKeys),
 	);
+}
+
+interface RecoveryContext {
+	sessionId: string;
+	// Only historical replay uses this guard. Legacy scan-time timestamps cannot
+	// establish which session/continuation an unscoped standalone end belongs to.
+	legacyRunIds?: Set<number>;
+	trackedSince?: Map<number, number>;
 }
 
 /**
  * Recover `subagent_end` entries from session completion custom_messages that
  * were never logged live.
  *
- * Flush gap: `subagent_end` is only written by the `message_end` handler. When
- * a subagent completion custom_message lands in the session **after** that
- * session's final `message_end` (e.g. the run finishes after the last turn, or
- * the session is closed/interrupted while runs are still in flight), it is
- * never scanned — and the next `session_start` advances `lastProcessedEntryCount`
- * past it, dropping the end permanently. This backfills those missing ends from
- * the resumed session's entries.
+ * Historically only message_end scanned completions, before the SDK persisted
+ * that message. A final completion could remain unscanned until session resume.
+ * Lifecycle flushes now reduce that gap; this also recovers retained session
+ * entries after an interruption.
  *
- * Dedupe: skips any completion whose run key is already logged (idempotent
- * across repeated session_start). Keyless completions are skipped to avoid
- * double-counting, since they cannot be matched against existing logs.
+ * Dedupe uses group-step or scoped attempt/source-entry identity. Legacy
+ * standalone ends have no reliable occurrence identity: historical candidates
+ * sharing those runIds are left unresolved unless scoped tracking had started.
  */
-function findUnloggedSubagentEnds(sessionEntries: SessionEntry[], alreadyLoggedKeys: Set<string>): SubagentEndEntry[] {
+function findUnloggedSubagentEnds(
+	sessionEntries: SessionEntry[],
+	alreadyLoggedKeys: Set<string>,
+	context: RecoveryContext,
+): SubagentEndEntry[] {
 	const recovered: SubagentEndEntry[] = [];
 	const seenInScan = new Set<string>();
 	for (const entry of sessionEntries) {
 		if (entry?.type !== "custom_message") continue;
 		if (entry.customType !== "subagent-command" && entry.customType !== "subagent-tool") continue;
 		const ends = extractSubagentEndEntriesFromCustomMessage({ content: entry.content, details: entry.details });
-		if (ends.length === 0) continue;
-		const epoch = toValidEpochMs(entry.timestamp) ?? Date.now();
+		const epoch = toValidEpochMs(entry.timestamp);
+		// Do not invent an event time when recovering malformed historical data.
+		if (epoch === undefined) continue;
 		const ts = new Date(epoch).toISOString();
 		for (const end of ends) {
-			const keys = getRunAnalyticsKeys(end);
+			if (
+				!end.batchId &&
+				!end.pipelineId &&
+				end.runId !== undefined &&
+				context.legacyRunIds?.has(end.runId) &&
+				epoch < (context.trackedSince?.get(end.runId) ?? Infinity)
+			)
+				continue;
+			const candidate: SubagentEndEntry = {
+				type: "subagent_end",
+				ts,
+				epoch,
+				...end,
+				sessionId: context.sessionId,
+				sessionEntryId: entry.id,
+			};
+			const keys = getCompletionAnalyticsKeys(candidate);
 			if (keys.length === 0) continue;
 			if (keys.some((k) => alreadyLoggedKeys.has(k) || seenInScan.has(k))) continue;
 			for (const k of keys) seenInScan.add(k);
-			recovered.push({ type: "subagent_end", ts, epoch, ...end });
+			recovered.push(candidate);
 		}
 	}
 	return recovered;
@@ -464,7 +517,7 @@ function computeStats(entries: LogEntry[], period: Period): PeriodStats[] {
 				agent.durations.push(entry.elapsedMs);
 			}
 		} else if (entry.type === "subagent_start") {
-			if (shouldCountFallbackStart(entry as SubagentStartEntry, completedKeys)) {
+			if (shouldCountFallbackStart(entry, completedKeys)) {
 				getAgent(p, entry.agent).total++;
 			}
 		} else if (entry.type === "skill_invoked") {
@@ -626,7 +679,7 @@ function computeOverall(entries: LogEntry[]): {
 			const avgMs =
 				a.durations.length > 0 ? Math.round(a.durations.reduce((x, y) => x + y, 0) / a.durations.length) : 0;
 			const completedCount = a.done + a.error;
-			const errorRate = completedCount > 0 ? `${Math.round((a.error / completedCount) * 100)}%` : "0%";
+			const errorRate = completedCount > 0 ? `${Math.round((a.error / completedCount) * 100)}%` : "-";
 			return {
 				name,
 				total: a.total,
@@ -779,6 +832,12 @@ class AnalyticsOverlay {
 				`Total: ${overall.totalSubagentRuns} subagent runs · ${overall.totalSkillInvocations} skill invocations · ${overall.totalSkillReads} skill reads`,
 			),
 		);
+		const unconfirmed = overall.agents.reduce((sum, agent) => sum + agent.total - agent.done - agent.error, 0);
+		if (unconfirmed > 0) {
+			lines.push(
+				theme.fg("muted", `${unconfirmed} runs without completion records; Err% uses completed records only.`),
+			);
+		}
 		lines.push("");
 
 		// Top agents
@@ -842,8 +901,9 @@ class AnalyticsOverlay {
 			for (const a of agentList) {
 				const errColor = a.error > 0 ? "error" : "dim";
 				const avgLabel = formatDuration(a.avgMs);
+				const unconfirmed = a.total - a.done - a.error;
 				lines.push(
-					`    ${theme.fg("accent", a.name.padEnd(14))} ${String(a.total).padStart(3)} runs  ${theme.fg("success", `${a.done}✓`)}  ${theme.fg(errColor, `${a.error}✗`)}  avg ${avgLabel}`,
+					`    ${theme.fg("accent", a.name.padEnd(14))} ${String(a.total).padStart(3)} runs  ${theme.fg("success", `${a.done}✓`)}  ${theme.fg(errColor, `${a.error}✗`)}  avg ${avgLabel}${unconfirmed > 0 ? `  ${unconfirmed} unconfirmed` : ""}`,
 				);
 			}
 			lines.push("");
@@ -914,7 +974,10 @@ function parseSubagentCommandVerb(command: unknown): string | null {
  * `event.isError` to filter rejections. Trusting `launches` as the single
  * source of truth avoids phantom starts from command-line fallback parsing.
  */
-function logSubagentLaunch(event: { input?: unknown; details?: unknown; toolName: string; isError?: boolean }): void {
+function logSubagentLaunch(
+	event: { input?: unknown; details?: unknown; toolName: string; isError?: boolean },
+	sessionId: string,
+): void {
 	if (event.toolName !== "subagent" || event.isError) return;
 	const input = event.input as Record<string, unknown> | undefined;
 	const details = event.details as Record<string, unknown> | undefined;
@@ -932,6 +995,7 @@ function logSubagentLaunch(event: { input?: unknown; details?: unknown; toolName
 			type: "subagent_start",
 			ts,
 			epoch,
+			sessionId,
 			agent: typeof launch.agent === "string" ? launch.agent : "unknown",
 			mode,
 			runId: typeof launch.runId === "number" ? launch.runId : undefined,
@@ -961,15 +1025,31 @@ function logSkillRead(
 }
 
 export default function (pi: ExtensionAPI) {
-	// Track the number of session entries already processed to avoid
-	// re-scanning historical completion events on session_start.
-	let lastProcessedEntryCount = -1;
+	let lastProcessedEntryCount = 0;
+	let completionKeys = new Set<string>();
+	let replayContext: RecoveryContext | undefined;
 	// Debounce: skill → last logged epoch
 	const skillLastLogged = new Map<string, number>();
 
+	function flushSubagentEnds(ctx: ExtensionContext): void {
+		try {
+			const entries = ctx.sessionManager.getEntries();
+			const context = replayContext ?? { sessionId: ctx.sessionManager.getSessionId() };
+			const recovered = findUnloggedSubagentEnds(entries.slice(lastProcessedEntryCount), completionKeys, context);
+			for (const end of recovered) {
+				if (!appendLog(end)) return; // Retry the unprocessed suffix at the next flush.
+				for (const key of getCompletionAnalyticsKeys(end)) completionKeys.add(key);
+			}
+			lastProcessedEntryCount = entries.length;
+			replayContext = undefined;
+		} catch {
+			/* Preserve the cursor so the next lifecycle event can retry. */
+		}
+	}
+
 	// ── Subagent launch tracking ──
-	pi.on("tool_result", async (event, _ctx) => {
-		logSubagentLaunch(event);
+	pi.on("tool_result", async (event, ctx) => {
+		logSubagentLaunch(event, ctx.sessionManager.getSessionId());
 		logSkillRead(event, skillLastLogged);
 	});
 
@@ -983,49 +1063,33 @@ export default function (pi: ExtensionAPI) {
 			appendLog({ type: "skill_invoked", ts, epoch, ...invocation });
 		}
 
-		// Scan new session entries to find subagent completion custom_messages.
-		try {
-			const entries = ctx.sessionManager.getEntries();
-			// Initialize on first call: skip all existing entries to avoid duplicates.
-			if (lastProcessedEntryCount < 0) {
-				lastProcessedEntryCount = entries.length;
-				return;
-			}
-			if (entries.length <= lastProcessedEntryCount) return;
-
-			const newEntries = entries.slice(lastProcessedEntryCount);
-			lastProcessedEntryCount = entries.length;
-
-			for (const entry of newEntries) {
-				if ((entry as any).type !== "custom_message") continue;
-				const cm = entry as any;
-				if (cm.customType !== "subagent-command" && cm.customType !== "subagent-tool") continue;
-
-				const endEntries = extractSubagentEndEntriesFromCustomMessage(cm);
-				for (const endEntry of endEntries) {
-					const { ts, epoch } = now();
-					appendLog({ type: "subagent_end", ts, epoch, ...endEntry });
-				}
-			}
-		} catch {
-			/* ignore */
-		}
+		flushSubagentEnds(ctx);
 	});
+
+	// SDK message_end hooks run before that message is persisted. Flush again
+	// after the turn, before leaving a session, and when opening analytics.
+	pi.on("agent_end", async (_event, ctx) => flushSubagentEnds(ctx));
+	pi.on("session_shutdown", async (_event, ctx) => flushSubagentEnds(ctx));
 
 	// ── Session lifecycle ──
 	pi.on("session_start", async (event, ctx) => {
-		// Initialize entry count to current length to skip all historical entries.
-		try {
-			const sessionEntries = ctx.sessionManager.getEntries();
-			// Flush gap recovery: backfill subagent_end entries for completions that
-			// landed after the previous session's final message_end. Deduped against
-			// already-logged run keys, so this is idempotent across session_start.
-			const recovered = findUnloggedSubagentEnds(sessionEntries, loggedEndKeys(readAllLogs()));
-			for (const end of recovered) appendLog(end);
-			lastProcessedEntryCount = sessionEntries.length;
-		} catch {
-			lastProcessedEntryCount = 0;
+		const logs = readAllLogs();
+		const sessionId = ctx.sessionManager.getSessionId();
+		completionKeys = loggedEndKeys(logs);
+		lastProcessedEntryCount = 0;
+		skillLastLogged.clear();
+		const legacyRunIds = new Set<number>();
+		const trackedSince = new Map<number, number>();
+		for (const log of logs) {
+			// Recovered ends carry historical timestamps, so only scoped launches
+			// can establish when tracking of this particular run began.
+			if (log.type === "subagent_start" && log.sessionId === sessionId && log.runId !== undefined)
+				trackedSince.set(log.runId, Math.min(trackedSince.get(log.runId) ?? Infinity, log.epoch));
+			if (log.type === "subagent_end" && !log.sessionId && !log.batchId && !log.pipelineId && log.runId !== undefined)
+				legacyRunIds.add(log.runId);
 		}
+		replayContext = { sessionId, legacyRunIds, trackedSince };
+		flushSubagentEnds(ctx);
 		// Rotate old log entries only on fresh startup
 		if (event.reason === "startup") {
 			rotateLog();
@@ -1041,6 +1105,7 @@ export default function (pi: ExtensionAPI) {
 				return;
 			}
 
+			flushSubagentEnds(ctx);
 			const entries = readAllLogs();
 
 			await ctx.ui.custom(
