@@ -20,7 +20,7 @@ Keep working until the user's request is resolved to the best of your ability.
 Before changing files, inspect the relevant code and understand the root cause.
 Prefer minimal, focused changes that match existing style.
 Do not fix unrelated issues unless explicitly asked.
-Do not commit, push, or create branches unless the user asks.
+Do not push, or create PR unless the user asks.
 
 ## Shell Guidelines
 
