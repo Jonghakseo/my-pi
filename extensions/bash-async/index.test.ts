@@ -15,6 +15,7 @@ async function makeContext() {
 		cwd,
 		mode: "print",
 		hasUI: false,
+		isIdle: () => true,
 		model: undefined,
 		sessionManager: { getSessionId: () => "index-test", getSessionFile: () => undefined },
 	};
@@ -38,7 +39,8 @@ describe("bash_async extension registration", () => {
 	it("registers bash_async with guidance and returns details for invalid and accepted calls", async () => {
 		let tool: any;
 		const on = vi.fn();
-		bashAsync({ registerTool: (definition: any) => (tool = definition), on, sendMessage: vi.fn() } as any);
+		const sendMessage = vi.fn();
+		bashAsync({ registerTool: (definition: any) => (tool = definition), on, sendMessage } as any);
 		expect(tool.name).toBe(TOOL_NAME);
 		expect(tool.parameters.properties.action).toBeDefined();
 		expect(tool.promptGuidelines.join(" ")).toContain("bash_async");
@@ -54,7 +56,13 @@ describe("bash_async extension registration", () => {
 			undefined,
 			context,
 		);
-		expect(accepted.details).toMatchObject({ jobId: expect.any(String), status: expect.any(String) });
+		try {
+			expect(accepted.details).toMatchObject({ jobId: expect.any(String), status: expect.any(String) });
+			await vi.waitFor(() => expect(sendMessage).toHaveBeenCalledTimes(1), { timeout: 2_000 });
+			expect(sendMessage.mock.calls[0]?.[0].details.jobIds).toEqual([accepted.details.jobId]);
+		} finally {
+			await on.mock.calls.find(([event]) => event === "session_shutdown")?.[1]();
+		}
 	});
 
 	it("returns details for status, output, list, incremental output, and kill", async () => {
