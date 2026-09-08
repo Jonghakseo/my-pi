@@ -1,11 +1,13 @@
 ---
 name: easy-review
-description: "Use when the user asks for Easy Review (이지 리뷰), an interactive Easy Review chatbot, or to make Git changes, commits, PRs, or diffs easier to understand as a read-only, reader-ordered HTML review document with optional local Pi Q&A."
+description: "Use when the user asks for Easy Review (이지 리뷰), an interactive Easy Review chatbot, or a read-only HTML explanation of Git changes, commits, PRs, or diffs. Write for a zero-context reader: explain the problem, before/after behavior, and system responsibilities before optional code evidence, with optional local Pi Q&A."
 ---
 
 # Easy Review
 
-코드 변경을 사람이 위에서 아래로 자연스럽게 이해할 수 있는 읽기 문서로 만든다. 현재 에이전트가 의미와 위험을 판단하고, 번들 스크립트는 원본 보존·분할·검증·렌더링만 결정적으로 수행한다. HTML은 문자열 조각을 이어 붙이지 않고 표준 라이브러리의 구조화된 노드로 만든다. 동적 텍스트와 attribute는 serializer가 이스케이프하고, 검증한 정적 CSS·JavaScript 자산만 별도로 삽입한다.
+프로젝트·도메인·이전 대화를 전혀 모르는 사람에게 변경의 이유와 결과를 설명하는 읽기 문서를 만든다. 기본 독자는 코드를 읽을 수 있어도 이 서비스의 용어와 구조는 모른다. 코드 줄을 쉬운 말로 번역하는 대신, 사용자의 문제 → 기존 동작과 달라지는 점 → 시스템별 역할과 흐름 → 실패 시 영향 순서로 설명한다. 코드는 설명을 이해하기 위한 선행 조건이 아니라 원하는 독자가 펼쳐 보는 근거다.
+
+현재 에이전트가 의미와 위험을 판단하고, 번들 스크립트는 원본 보존·분할·검증·렌더링만 결정적으로 수행한다. HTML은 표준 라이브러리의 구조화된 노드로 만들며 동적 텍스트와 attribute는 serializer가 이스케이프한다. 검증한 정적 CSS·JavaScript 자산만 별도로 삽입한다.
 
 ## 지켜야 할 경계
 
@@ -56,9 +58,10 @@ python3 "$SKILL_DIR/scripts/easy_review.py" inspect --bundle <bundle-dir> --chun
 
 `<bundle-dir>/review-plan.json`을 `edit` 도구로 편집한다(대규모 재작성이 필요하면 `write`).
 
-- `summary`는 최종적으로 달라지는 결과 한 문단, `overview`는 상세 코드 전에 알아야 할 결과 1~5개다.
-- `sections` 배열 순서가 문서의 실제 읽는 순서다. Git 파일 순서를 그대로 사용하지 않는다.
-- 핵심 흐름 section은 `default_open: true`, 마이그레이션·설정·테스트·생성물 같은 보조 section은 대개 `false`로 둔다.
+- 계획 전에 ‘누가 무엇을 하려는가 / 지금은 무엇이 부족한가 / 이번에 무엇이 달라지는가 / 무엇은 그대로인가 / 어느 시스템이 무엇을 맡는가’를 근거로 정리한다. 모르는 배경을 그럴듯하게 채우지 않는다.
+- `summary`는 사용자 관점의 문제와 달라지는 결과 한 문단이다. `overview` 1~5개에는 필요한 배경·핵심 용어·기존/변경 후 차이·주요 흐름·범위 경계를 설명한다. SHA, 파일 수, 클래스명, 검토 이력으로 도입부를 채우지 않는다.
+- `sections` 배열은 독자의 질문 순서다. 각 제목·summary만 읽어도 목적과 흐름을 이해하도록 쓰고, 파일별 변경 목록을 본문으로 삼지 않는다.
+- `default_open`은 기본 `false`로 둔다. 현재 렌더러는 접힌 section에도 제목과 summary를 표시하므로 설명은 이어지고 코드는 선택적으로 펼칠 수 있다. 반드시 처음부터 보여야 하는 짧은 근거가 있을 때만 `true`로 둔다. 핵심 흐름이라는 이유로 긴 코드부터 펼치지 않는다.
 - 검토한 파일은 section(`view`: `detail` 또는 `summary`) 또는 `omitted_files` 중 정확히 한 곳에 넣고, 못 읽은 파일만 `unreviewed_file_ids`에 남긴다.
 - 모든 section과 attention에는 같은 section의 `detail` 파일을 가리키는 `D...` 근거를 붙인다. HTML에서는 파일명과 실제 줄 번호가 먼저 보이고 내부 ID는 기본적으로 숨겨진다.
 - `focus`의 `reason`은 해당 코드 바로 위의 해설로, `collapse`의 `reason`은 접힌 행의 요약으로 렌더링된다.
@@ -73,6 +76,8 @@ python3 "$SKILL_DIR/scripts/easy_review.py" preview --bundle <bundle-dir>
 ```
 
 stale hash, 알 수 없는 근거, section 밖 근거, 파일 중복·누락, 범위 겹침, 미검토 chunk 주장을 바로잡고 다시 검증한다. 오류를 없애려고 계획의 신뢰 기준을 낮추지 않는다.
+
+구조 검증만으로 설명 품질이 통과한 것은 아니다. 코드·파일 경로·근거 ID를 가리고 summary, overview, section 제목·summary, attention만 읽는다. 제로 컨텍스트 독자가 ‘왜 필요한지, 이전과 무엇이 다른지, 누가 무엇을 맡는지, 어떤 실패가 누구에게 영향을 주는지’를 답할 수 있어야 한다. 답에 필요한 용어를 뒤에서만 설명하거나 코드가 대신 설명한다면 rubric의 제로 컨텍스트 검수 기준으로 다시 쓴다.
 
 ```bash
 python3 "$SKILL_DIR/scripts/easy_review.py" compile --bundle <bundle-dir>
