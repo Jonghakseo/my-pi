@@ -8,7 +8,7 @@ disable-model-invocation: false
 
 현재 요청에 맞는 **작업 분해 → 서브에이전트 실행 → 독립 검증 → 종합/반복** 워크플로우를 동적으로 설계하고 수행한다.
 
-Claude Code의 dynamic workflows처럼 JS 런타임이 오케스트레이션을 들고 있지는 않으므로, Pi에서는 **메인 에이전트가 오케스트레이터**가 되고 `subagent` 실행, `todo_write`, 기존 스킬을 조합해 같은 품질 패턴을 재현한다.
+Pi에서는 **메인 에이전트가 오케스트레이터**가 되어 `subagent` 실행, `todo_write`, 기존 스킬을 조합한다.
 
 ## 핵심 목표
 
@@ -195,12 +195,3 @@ Loop stop when:
 - secret, token, 개인정보를 subagent 프롬프트에 불필요하게 넣지 않는다.
 - destructive action, push, deploy, 외부 메시지 전송은 사용자 명시 승인 없이는 수행하지 않는다.
 - token/time budget을 명시할 수 있으면 명시한다. 작은 slice로 먼저 검증하는 것을 선호한다.
-
-## Self-check prompts
-
-스킬 동작을 점검할 때 사용할 수 있는 프롬프트:
-
-1. “이 flaky test를 재현하고 원인 가설을 워크플로우로 검증해줘. 멈추는 조건도 정해.”
-2. “최근 변경사항을 서브에이전트로 분해해서 구현 검증 리뷰까지 해줘.”
-3. “이 설계안을 여러 관점에서 토너먼트/챌린지 방식으로 비교해줘.”
-4. “문서의 기술적 claim을 코드베이스와 공식 문서로 cross-check하는 워크플로우를 만들어줘.”

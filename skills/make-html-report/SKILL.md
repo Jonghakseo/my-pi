@@ -113,19 +113,6 @@ validation 오류가 있으면 필드명, URL scheme, 코드 줄 범위, 중복 
 
 ## Validation
 
-스킬 자체를 수정했을 때:
-
-```bash
-python3 ~/.pi/agent/skills/skill-creator/scripts/validate_skill.py "$SKILL_DIR"
-python3 -m unittest discover -s "$SKILL_DIR/scripts/tests" -p 'test_*.py'
-```
-
-현실적인 테스트 프롬프트:
-
-1. `이 인증 흐름을 코드와 공식 문서를 엮어서 HTML 리포트로 만들어줘.`
-2. `두 아키텍처 선택지를 비교하고 권장안을 읽기 좋은 보고서로 생성해줘.`
-3. `이 장애 타임라인과 관련 코드를 운영 가이드 형태의 HTML로 정리해줘.`
-
 완료 체크:
 
 - 독자가 원자료 관계를 다시 조립하지 않아도 되는가?

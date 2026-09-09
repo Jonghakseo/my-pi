@@ -5,14 +5,15 @@ description: "Pi 스킬을 생성·수정하거나 SKILL.md, description·트리
 
 # skill-creator
 
-Pi 환경에서 Agent Skills 표준을 따르는 스킬을 만들고, 작게 검증하고, 피드백으로 반복 개선한다. Anthropic의 skill-creator에서 가져온 핵심 루프(의도 파악 → 초안 → 테스트 프롬프트 → 평가 → 개선)를 Pi 도구와 로컬 스킬 구조에 맞게 적용한다.
+Pi 환경에서 Agent Skills 표준을 따르는 스킬을 만들고, 작게 검증하고, 피드백으로 개선한다.
 
 ## 핵심 원칙
 
 - **Pi 우선**: Claude Code 전용 명령, `claude -p`, Anthropic eval viewer 스크립트를 전제로 하지 않는다. Pi CLI, `read`/`write`/`edit`/`bash`, 필요 시 `subagent`, `ask_user_question`, `todo_write`를 사용한다.
 - **표준 준수, Pi 동작 우선**: `SKILL.md`는 Agent Skills 표준의 YAML frontmatter + Markdown 본문을 따른다. 단 Pi는 표준 일부를 의도적으로 완화한다(아래 "Pi vs 표준" 참고). 충돌 시 Pi 동작을 따른다.
 - **Progressive disclosure**: 항상 들어가는 `description`은 정확하고 트리거 친화적으로, 본문은 500줄 미만을 목표로, 긴 자료는 `references/`, 반복 가능한 작업은 `scripts/`, 템플릿은 `assets/`에 둔다.
-- **검증 가능한 산출물**: 새 스킬에는 최소한 자체 검증 체크리스트와 현실적인 테스트 프롬프트를 남긴다.
+- **실행 목적에 집중**: 본문과 런타임 참조에는 해당 작업의 목표 달성에 필요한 정보만 둔다. 제작 출처·작성 배경·수정 이력은 넣지 않는다. 명령·제약을 이해하는 데 필요한 외부 문서와 다른 스킬로의 연계·트리거는 유지한다.
+- **검증 가능한 산출물**: 스킬이 수행하는 작업의 결과를 확인할 기준을 담는다. 스킬 자체의 구조·트리거 평가용 자료는 실행 본문과 분리하고, 평가할 때만 읽는다.
 - **놀라움 금지**: 사용자가 기대하지 않은 권한 상승, 데이터 유출, 위험한 자동화, 악성 행위 보조 스킬은 만들지 않는다.
 
 ### Pi vs 표준 (자주 헷갈리는 지점)
@@ -148,7 +149,7 @@ Pi가 인식하는 선택 필드:
 사용자가 기대하는 최종 응답/파일 형식을 명시한다.
 
 ## Validation
-완료 전에 확인할 명령과 체크리스트를 적는다.
+작업의 실제 결과를 확인할 명령과 완료 기준을 적는다. 스킬 자체를 평가하는 명령·프롬프트는 넣지 않는다.
 
 ## Edge cases
 흔한 실패/예외와 대응을 적는다.
@@ -240,7 +241,6 @@ python3 ~/.pi/agent/skills/skill-creator/scripts/validate_skill.py /path/to/skil
 완료했습니다.
 - 생성/수정: `path/to/SKILL.md`, ...
 - 검증: `python3 .../validate_skill.py ...` 통과
-- 참고: Pi 스킬 문서 / Agent Skills 표준 기준 반영
 ```
 
 사용자에게 다음 행동이 필요하면 한 줄로만 묻는다. 예: "트리거 eval까지 돌려볼까요?"
