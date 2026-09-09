@@ -1,181 +1,104 @@
 ---
 name: gh-attach
-description: "이슈·PR·코멘트에 로컬 이미지/영상을 첨부하거나(gh --attach), GitHub user-attachments 업로드 URL만 얻을 때(gh attach 확장) 사용한다."
-compatibility: "Native --attach requires gh >= 2.99.0 and push access to the repo. The sudosubin/gh-attach extension additionally requires a GitHub browser session/cookies."
+description: "GitHub 이슈·PR·코멘트에 로컬 이미지·영상을 네이티브 --attach로 첨부하거나, 게시된 본문의 첨부 URL을 확인할 때 사용한다."
+compatibility: "Requires GitHub CLI >= 2.99.0, GitHub.com authentication, and push access to the target repository."
 ---
 
 # gh-attach
 
-로컬 이미지/영상을 GitHub에 올리는 두 가지 경로를 다룬다. 목적에 따라 갈린다.
+GitHub CLI의 `--attach`로 이미지·영상을 업로드하면서 이슈·PR·코멘트 본문에 반영한다. 별도 확장이나 브라우저 쿠키 없이 기존 `gh` 인증을 사용한다.
 
-| 목적 | 사용할 것 | 결과물 |
-| --- | --- | --- |
-| 이슈/PR/코멘트에 붙인다 | 네이티브 `--attach` (gh ≥ 2.99.0) | 본문에 인라인 렌더 |
-| URL 문자열 자체가 필요하다 (Slack, 리포트, 리뷰 문서 등) | `gh attach` 확장 | `https://github.com/user-attachments/assets/...` |
-
-공식 레퍼런스:
-
-- 네이티브 첨부 문서: https://docs.github.com/en/github-cli/github-cli/attaching-files-with-github-cli
-- 릴리스 노트 v2.99.0: https://github.com/cli/cli/releases/tag/v2.99.0
-- Changelog: https://github.blog/changelog/2026-09-01-github-cli-media-in-issues-pull-requests-and-comments/
-- 확장 README: https://github.com/sudosubin/gh-attach
-
-## 핵심 원칙
-
-- 사용자가 명시적으로 첨부를 요청했거나, 요청한 GitHub 작업에 명백히 필요한 파일만 올린다.
-- 시크릿, 자격증명, 개인키, DB 덤프, 토큰이 섞인 로그, 내용을 모르는 파일은 절대 올리지 않는다.
-- 이슈/PR 본문에 넣을 거면 확장 대신 네이티브 `--attach`를 쓴다. 업로드와 본문 작성이 한 번에 끝난다.
-- 대상 저장소가 애매하고 현재 디렉터리가 의도한 repo가 아니면, 업로드 전에 `OWNER/REPO`를 확인한다.
-
-## 경로 A: 네이티브 `--attach` (권장)
-
-### 지원 명령
-
-`gh issue create`, `gh issue edit`, `gh issue comment`, `gh pr create`, `gh pr edit`, `gh pr comment`.
-
-repo에 push 권한이 필요하다. 이미지·미디어 파일만 올라간다.
-
-### 버전 확인
+## 준비
 
 ```bash
 gh --version
-gh pr comment --help | rg -- '--attach' || echo "gh 업데이트 필요 (>= 2.99.0)"
-```
-
-2.99.0 미만이면 `brew upgrade gh`로 올린 뒤 진행한다. 버전이 낮은 상태로 경로 B에 우회하지 말고, 업그레이드가 곤란한 사정이 있으면 사용자에게 알린다.
-
-### 기본 사용
-
-```bash
-gh pr comment 123 --attach ./screenshot.png
-```
-
-`--attach`는 반복 가능하다. 명령당 최대 50개, 같은 파일을 두 번 붙일 수는 없다.
-
-```bash
-gh pr create \
-  --title "결제 실패 화면 수정" \
-  --body-file ./pr-body.md \
-  --attach ./before.png \
-  --attach ./after.png
-```
-
-### 본문 인라인 참조
-
-본문이 이미 로컬 경로를 참조하면 `gh`가 그 자리에서 업로드 URL로 치환한다. 참조되지 않은 첨부는 본문 끝에 플래그 순서대로 덧붙는다. 로컬에서 렌더링을 확인한 마크다운을 그대로 올릴 수 있다는 뜻이라, 리포트성 PR 본문에 특히 잘 맞는다.
-
-`pr-body.md`:
-
-```markdown
-로그인 화면에서 폼 자리에 에러가 뜬다:
-
-![로그인 인증 에러 화면](./login-error.png)
-```
-
-```bash
-gh issue comment 456 --body-file ./pr-body.md --attach ./login-error.png
-```
-
-치환 규칙은 `--body`, `--body-file`, stdin, 에디터 입력 모두에 동일하게 적용된다.
-
-### alt 텍스트
-
-경로 뒤에 `#`로 붙인다. 생략하면 파일명이 alt로 들어간다.
-
-```bash
-gh issue comment 456 --attach './login.png#로그인 에러 상태'
-```
-
-본문 마크다운이 이미 참조하는 파일은 마크다운 쪽 alt를 유지한다. 즉 `#` alt는 본문 끝에 append되는 파일에만 적용된다. 영상에는 alt를 쓸 수 없다.
-
-### 영상 임베드
-
-플레이어로 렌더하려면 참조가 해당 문단의 유일한 내용이어야 한다.
-
-```markdown
-![](./walkthrough.mp4)
-```
-
-문장 중간에 있으면 플레이어가 아니라 링크로 렌더된다.
-
-### 제약
-
-- `--web`과 함께 쓸 수 없다.
-- 이미지·미디어 외 파일 타입은 지원하지 않는다.
-- `gh issue edit` / `gh pr edit`에서 `--attach`만 주면 기존 본문을 유지한 채 아래에 덧붙인다.
-
-## 경로 B: `gh attach` 확장 (URL만 필요할 때)
-
-이슈/PR 본문이 아니라 URL 문자열 자체가 필요한 경우에만 쓴다. Slack 공유, 외부 리포트, PR 본문을 여러 단계에 걸쳐 조립하는 경우 등이다.
-
-```bash
-gh extension list | rg '^gh attach\s' || gh extension install sudosubin/gh-attach
+gh pr comment --help
 gh auth status
 ```
 
-```bash
-gh attach ./image.png -R owner/repo
-gh attach ./image.png -R owner/repo --json href,name
-gh attach ./image.png -R owner/repo --json href,name --template '![{{.name}}]({{.href}})'
-```
+- `gh >= 2.99.0`과 대상 저장소의 push 권한이 필요하다. 인증은 `gh auth login`의 OAuth 또는 classic PAT를 사용한다.
+- `--attach`가 없는 버전이면 설치 방식에 맞춰 업데이트한다. 예전 확장 설치나 쿠키 추출로 우회하지 않는다.
+- GitHub Enterprise Server는 지원하지 않는다.
+- 사용자 요청의 대상과 첨부 파일을 확인한다. 내용을 모르는 파일, 토큰·PII·시크릿이 포함된 로그나 캡처는 올리지 않는다.
+- 작업 디렉터리로 저장소를 명확히 식별할 수 없으면 `--repo OWNER/REPO`를 지정한다.
 
-의도한 repo 안에서 실행하면 `-R`을 생략하고 자동 감지에 맡겨도 된다.
+## 지원 명령
 
-### 브라우저 쿠키 옵션
-
-확장은 `gh` 로그인 계정과 일치하는 브라우저 쿠키를 사용한다. 쿠키를 못 찾거나 다른 계정 세션이 잡히면 브라우저/프로필을 명시한다.
-
-```bash
-gh attach ./image.png -R owner/repo --browser chrome --profile Default
-```
-
-지원 값은 `gh attach --help` 참고 (`auto`, `arc`, `brave`, `chrome`, `chromium`, `edge`, `firefox`, `safari`, `vivaldi`, `whale` 등).
-
-반복 사용 시 `~/.config/gh/attach.yml`:
-
-```yaml
-browsers:
-  - browser: chrome
-    profile: Default
-  - browser: safari
-```
-
-## 트러블슈팅
-
-- `unknown flag: --attach`: `gh` 버전이 2.99.0 미만. `brew upgrade gh`.
-- `--attach`인데 권한 오류: 대상 repo에 push 권한이 필요하다.
-- 같은 파일을 두 번 첨부: 허용되지 않는다. 본문에서 한 번만 참조하도록 정리한다.
-- 확장에서 `unknown command attach`: `gh extension install sudosubin/gh-attach`.
-- 확장 쿠키/세션 불일치: `--browser`, `--profile` 명시. `gh auth status` 계정과 브라우저 로그인 계정이 같은지 확인.
-- `not logged in`: `gh auth login`.
-- 상세 로그: 확장은 `-v`.
-
-## 업로드 전 체크리스트
-
-- 사용자가 이 첨부를 명시적으로 요청했거나 요청한 GitHub 작업에 직접 필요하다.
-- 파일 경로가 정확하고 파일이 존재한다.
-- 공개 또는 대상 GitHub 컨텍스트에 올려도 안전한 내용이다.
-- 대상 저장소가 정확하다.
-
-## Test prompts
-
-트리거되어야 하는 프롬프트:
-
-- `이 스크린샷 PR 코멘트에 붙여줘`
-- `gh attach로 이 이미지 GitHub URL 만들어줘: /tmp/a.png -R my-org/my-repo`
-- `PR 본문에 before/after 이미지 넣어서 만들어줘`
-- `gh-attach가 쿠키를 못 찾는다고 하는데 해결해줘`
-
-자동 업로드하면 안 되는 프롬프트:
-
-- `GitHub Actions artifact 다운로드해줘`
-- `이미지를 S3에 업로드해줘`
-- 명확한 GitHub 첨부 요청과 안전성 확인 없는 `이 로그 파일을 어디든 올려줘`
-
-## Validation
-
-스킬 수정 후:
+| 대상 | 명령 |
+|---|---|
+| 이슈 생성·본문 수정·코멘트 | `gh issue create`, `gh issue edit`, `gh issue comment` |
+| PR 생성·본문 수정·코멘트 | `gh pr create`, `gh pr edit`, `gh pr comment` |
 
 ```bash
-python3 ~/.pi/agent/skills/skill-creator/scripts/validate_skill.py ~/.pi/agent/skills/gh-attach
+gh pr comment 123 --repo owner/repo \
+  --body "저장 결과 화면입니다." \
+  --attach './screenshot.png#저장 완료 화면'
 ```
+
+`--attach`는 반복할 수 있으며 명령당 최대 50개다. 같은 파일을 중복 첨부하거나 `--web`과 함께 사용하지 않는다.
+
+## 본문 위치에 첨부
+
+`pr-body.md`에 로컬 파일 참조를 작성한다.
+
+```markdown
+### 저장 결과
+![저장 완료 화면](./screenshot.png)
+
+### 동작 영상
+![](./walkthrough.mp4)
+```
+
+본문과 `--attach`에는 같은 파일 경로를 사용한다. 상대 경로는 실행 CWD에 맞추고, 혼선이 있으면 둘 다 절대 경로로 작성한다.
+
+```bash
+gh pr create --repo owner/repo \
+  --title "저장 흐름 수정" --body-file ./pr-body.md \
+  --attach ./screenshot.png --attach ./walkthrough.mp4
+```
+
+기존 PR을 갱신할 때는 현재 본문을 읽어 내용을 병합한 뒤 실행한다. 다른 내용과 이미 업로드된 URL은 보존한다.
+
+```bash
+gh pr edit 123 --repo owner/repo \
+  --body-file ./pr-body.md \
+  --attach ./screenshot.png --attach ./walkthrough.mp4
+```
+
+- 본문에 참조된 파일은 해당 위치에서 업로드 URL로 치환된다. `--body`, `--body-file`, stdin, 에디터 입력 모두 동일하다.
+- 참조되지 않은 첨부는 본문 끝에 플래그 순서대로 추가된다.
+- 이미지 alt는 본문의 값을 유지한다. 본문에 없는 이미지의 alt는 `--attach './image.png#설명'`으로 지정하며, 생략하면 파일명을 사용한다.
+- 영상에는 `#alt`를 지정할 수 없다. 플레이어로 표시하려면 `![](./video.mp4)`를 별도 문단에 둔다. 문장 중간이면 링크로 표시된다.
+- `gh pr edit` 또는 `gh issue edit`에 `--attach`만 주면 기존 본문을 유지하면서 파일을 덧붙인다.
+
+## 파일 제한
+
+| 파일 | 크기 제한 |
+|---|---|
+| PNG, JPEG, GIF, WebP, SVG | 10 MB |
+| MP4, MOV, WebM | Free 플랜 10 MB, 유료 플랜 100 MB |
+| HTML, PDF, ZIP 등 이미지·영상 외 파일 | 네이티브 첨부 미지원 |
+
+큰 이미지·GIF는 해상도·프레임을 조정하고 다시 크기를 확인한다. 영상으로 변환했으면 본문 참조와 첨부 경로도 함께 바꾼다. HTML 리포트는 로컬 프리뷰로 유지하고, 공유에는 이미 정해진 별도 전달 경로를 사용한다.
+
+## 결과 확인과 실패 처리
+
+명령의 출력은 개별 첨부의 JSON `href`가 아니라 대상 이슈·PR·코멘트 URL이다. 게시 후 실제 본문을 다시 읽어 로컬 참조가 업로드 URL로 바뀌었는지 확인한다.
+
+```bash
+gh pr view 123 --repo owner/repo --json body,url
+```
+
+일부 파일 업로드가 실패해도 성공한 첨부로 대상이 생성·갱신될 수 있다. 이때 명령은 non-zero를 반환하면서 대상 URL을 출력한다. 출력된 URL의 실제 본문과 실패 파일부터 확인하고, 새 이슈·PR·코멘트를 통째로 다시 만들지 않는다. 기존 대상과 성공한 URL을 보존하면서 누락만 보완한다.
+
+인증·권한 오류는 `gh auth status`와 대상 저장소의 push 권한을 확인한다. 종료 코드만으로 전체 성공이나 전체 미반영을 단정하지 않는다.
+
+## 첨부 URL만 필요한 경우
+
+이미 게시한 첨부의 URL은 해당 본문을 재조회해 얻는다. 네이티브 CLI에는 파일만 업로드하고 URL을 반환하는 독립 명령이 없다. URL을 얻으려고 임의의 이슈·코멘트를 만들거나 PR을 수정하지 않는다. 파일 단독 업로드가 요청되면 지원 범위를 설명하고 정해진 다른 업로드 경로를 사용한다.
+
+## 명령과 제한 확인
+
+- [로컬 파일 참조 치환·alt·영상 렌더링](https://docs.github.com/en/github-cli/github-cli/attaching-files-with-github-cli)
+- [지원 버전·인증·파일 크기·서버 범위](https://github.blog/changelog/2026-09-01-github-cli-media-in-issues-pull-requests-and-comments/)
+- [`gh pr edit` 옵션과 일부 업로드 실패](https://cli.github.com/manual/gh_pr_edit)
