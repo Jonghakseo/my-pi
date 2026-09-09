@@ -7,7 +7,7 @@ description: "TUI, REPL, stdin, selection menu처럼 실제 PTY 화면 캡처와
 
 `bash_async`는 유한한 비대화형 작업용이다. 이 helper는 TUI, REPL, stdin, 선택 메뉴처럼 PTY 입력과 화면 캡처가 필요한 경우에만 쓴다. 짧은 동기 `bash` 호출로 이 스크립트를 실행한다.
 
-이 도구는 예전 native overlay, attach view, `/attach`, `/dismiss`, 위젯, reattach UI를 제공하지 않는다. 그 기능 손실은 의도적이다.
+이 도구는 native overlay, attach view, `/attach`, `/dismiss`, 위젯, reattach UI를 제공하지 않는다.
 
 ## 시작 전 확인
 
@@ -81,13 +81,3 @@ node "$HELPER" cleanup --owner "$PI_SESSION_ID"
 - owner 검사는 Pi 세션 간 실수 방지 경계다. 같은 OS 사용자가 다른 `--owner`를 사칭하거나 전용 socket에 직접 접근하는 것을 막는 보안 인증 경계는 아니다.
 - 이 helper는 큐, 자동 완료 알림, 영속 로그, 서버 관리 기능이 없다.
 - `TMUX_BIN=/path/to/tmux`로 테스트용 binary를 지정할 수 있다.
-
-## Validation
-
-변경 후 다음을 실행한다.
-
-```bash
-node --test skills/tmux-terminal/scripts/tmux-terminal.test.mjs
-python3 skills/skill-creator/scripts/validate_skill.py skills/tmux-terminal
-node skills/tmux-terminal/scripts/tmux-terminal.mjs doctor --owner test-owner
-```

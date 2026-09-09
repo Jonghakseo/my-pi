@@ -6,8 +6,6 @@ compatibility: Requires bash plus either `ctx7` in PATH or `npx -y ctx7`; Node.j
 
 # Context7 CLI
 
-Last verified: 2026-04-06
-
 ## What this skill is for
 
 Use this skill when you need Context7 documentation lookup but do **not** want MCP tool registration.
@@ -182,8 +180,4 @@ Re-check these in the current environment when accuracy matters:
 - `ctx7 library --help`
 - `ctx7 docs --help`
 
-External references used to shape this workflow:
-- Context7 repository: https://github.com/upstash/context7
-- Authentication implementation reference: https://github.com/upstash/context7/blob/6cba6fb2/packages/cli/src/utils/auth.ts#L42-L50
-- CLI overview reference: https://deepwiki.com/upstash/context7/8-cli-tools-(ctx7)
-- Authentication commands reference: https://deepwiki.com/upstash/context7/8.5-authentication-commands
+If `--help` does not clarify a command or authentication behavior, check the [official Context7 repository](https://github.com/upstash/context7).

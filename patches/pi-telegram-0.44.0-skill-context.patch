@@ -1,0 +1,87 @@
+--- a/skills/generative-apps/SKILL.md
++++ b/skills/generative-apps/SKILL.md
+@@ -20,7 +20,7 @@
+ ordinary prompt → model interpretation, explanation, teaching, or adaptation
+ ```
+
+-This is broader than one Telegram implementation. Telegram is the first renderer; a future TUI or web renderer may reuse the concept once a second implementation proves the common contract. Keep renderer-specific wire and lifecycle details with the owning runtime.
++Keep renderer-specific wire and lifecycle details with the owning runtime.
+
+ Generative Apps complement `generated-control-surface`:
+
+--- a/docs/generative-apps.md
++++ b/docs/generative-apps.md
+@@ -1,6 +1,8 @@
+ # Generative Apps Runtime For Telegram
+
+-_Status: incremental implementation. Canonical installation and explicit transactional replacement, agent-side method invocation, state/history commits, partial-tail recovery, cross-process transition locking with dead-owner recovery, installation-generation plus revision rejection for direct app-output controls, lifecycle-cancelled worker-isolated methods, the bounded non-shell process port, strict bound-action parsing, pre-model-queue `tgbtn` dispatch, new-message default views, and opt-in in-place bound-action edits with explicit-action send fallback are implemented locally. Agent-mediated initial-surface revision capture, process-birth lock proof, voice delivery, automatic refresh scheduling, removal, and complete lifecycle diagnostics remain open in the backlog._
++The runtime implements canonical installation and transactional replacement, agent-side method invocation, state/history commits, partial-tail recovery, cross-process transition locking with dead-owner recovery, installation-generation plus revision rejection for direct app-output controls, lifecycle-cancelled worker-isolated methods, the bounded non-shell process port, strict bound-action parsing, pre-model-queue `tgbtn` dispatch, new-message default views, and opt-in in-place bound-action edits with explicit-action send fallback.
++
++The runtime does not provide agent-mediated initial-surface revision capture, process-birth lock proof, voice delivery, automatic refresh scheduling, removal, or complete lifecycle diagnostics.
+
+ ## Purpose
+
+@@ -246,31 +248,7 @@
+
+ A Generative App sends a new message after a successful bound user action by default. This simple mode preserves prior surfaces and their visibly selected buttons, is robust across ordinary Telegram constraints, and remains a first-class behavior rather than a fallback to eliminate. A method may opt into `viewMode: "edit"` to replace the callback message and keyboard in place; if that explicit action cannot edit a deleted or otherwise unavailable message, it may send one fresh view because the click itself supplies recreation authority.
+
+-Automatic refresh is not implemented in the current runtime. The intended future contract uses an exported `refresh` method and a bounded scheduling hint; applications must not return or rely on that hint until the backlog item is complete:
+-
+-```js
+-export async function refresh({ state, run }) {
+-  return {
+-    output: await renderPlayer(state.player, run),
+-    refreshAfterMs: 5000
+-  };
+-}
+-```
+-
+-The runtime contract is:
+-
+-- Missing `refreshAfterMs` stops automatic refresh.
+-- Values below two seconds clamp to two seconds.
+-- The next interval starts only after the prior refresh and Telegram edit settle; calls never overlap or accumulate.
+-- One refresh schedule exists per app, profile, target, and logical surface.
+-- An unchanged normalized frame digest causes no Telegram edit.
+-- Telegram `retry_after`, bounded backoff, lifecycle cancellation, target authority, and execution generation remain authoritative.
+-- Refresh is session-bound and does not silently resume after process replacement until the surface is opened again.
+-- Output-only refresh does not change `state.json` or append `states.jsonl`.
+-
+-The runtime retains the latest `TelegramDeliveryHandle` in memory for each live app surface. The first frame sends a logical view; later app actions and refreshes edit that same view rather than creating message traffic.
+-
+-Telegram does not reliably report deletion of every ordinary private bot message. When a supported deletion update identifies the handle, the runtime invalidates it immediately. When edit returns a known message-not-found result, the runtime forgets the handle and stops refresh. It never recreates a user-deleted view automatically; the next explicit user action or app opening may create a fresh view.
++Automatic refresh is unsupported. Do not return or rely on `refreshAfterMs`.
+
+ ## Lifecycle And Safety
+
+@@ -280,10 +258,9 @@
+ - App execution cannot own Telegram polling, credentials, raw transport, Pi queue state, or another app's files through the provided contract.
+ - Per-app transitions serialize and compare immutable installation generation plus state revision so stale buttons cannot cross replacement or mutate newer state.
+ - State commit and Telegram effect ordering are explicit; ambiguous non-idempotent transport outcomes never replay blindly.
+-- Time, output, state-size, refresh-rate, and process bounds prevent one app from monopolizing the extension.
++- Time, output, state-size, and process bounds prevent one app from monopolizing the extension.
+ - Session/profile/target generation replacement makes old scheduled work inert.
+ - Diagnostics redact secrets and preserve app name, method, revision, failure class, and bounded stderr/result evidence.
+-- Removal cancels refresh, invalidates the live binding, and keeps destructive state deletion as a separate explicit operation.
+
+ ## Application Roles
+
+@@ -294,17 +271,4 @@
+
+ Both roles use the same module, state, bound-action, and safety contracts. Selection and authoring procedure belong to the bundled `generative-apps` Skill.
+
+-## Validation Contract
+-
+-Implementation is not complete until evidence covers:
+-
+-- Canonical path identity, direct app discovery, copy/install, explicit replacement with failure preservation, removal, and traversal rejection.
+-- Mandatory `init`, named method dispatch, no-argument and strict-JSON argument parsing, missing exports, and result validation.
+-- Transactional initialization, state/history equality, concurrent/stale actions, partial journal recovery, and output-only methods.
+-- CML and full JSON button equivalence, inference bypass before Pi queue admission, absent-owner failure, and unchanged native callback routing.
+-- Direct classic, leader, and follower target delivery with generation fencing and no model turn.
+-- CLI process timeout, cancellation, output bounds, stderr diagnostics, and arbitrary-shell rejection.
+-- Live-view handle retention, unchanged-frame suppression, two-second minimum, non-overlap, coalescing, Telegram backoff, deletion invalidation, message-not-found handling, and lifecycle cancellation.
+-- Poker-style internal state and media-style external-state reference applications.
+-
+-The canonical open implementation work remains in [`../BACKLOG.md`](../BACKLOG.md). This document owns the proposed subsystem contract and its architectural boundaries.
++Validate installed applications with the [Generative Apps Skill](../skills/generative-apps/SKILL.md#validation).

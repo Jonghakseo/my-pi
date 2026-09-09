@@ -221,8 +221,6 @@ Global mechanism 추가 조건:
 
 ## Validation
 
-Scope·solution-fit·target 규칙을 바꿀 때는 [target-selection regression cases](references/eval-cases.md)로 과잉 설계 회귀를 검토한다.
-
 완료 전 확인한다.
 
 - current session ID가 검증되었는가
