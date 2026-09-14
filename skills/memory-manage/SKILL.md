@@ -1,12 +1,12 @@
 ---
 name: memory-manage
-description: "기존 user/project 메모리의 중복·노후·보안·scope 문제를 스캔하고, 보수적인 기준으로 자동 통합·정리할 때 사용한다. 별도 사용자 확인 없이 끝까지 적용한다."
+description: "기존 user/project 메모리와 명시적으로 요청된 current-session agent 메모리의 중복·노후·보안·scope 문제를 스캔하고, 보수적인 기준으로 자동 통합·정리할 때 사용한다. 별도 사용자 확인 없이 끝까지 적용한다."
 disable-model-invocation: false
 ---
 
 # memory-manage
 
-`$ARGUMENTS` 가 비어있으면 user + project 양쪽 전체를 대상으로, 토픽/scope 명시가 있으면 그 범위만 다룬다.
+`$ARGUMENTS` 가 비어있으면 user + project 양쪽 전체를 대상으로, 토픽/scope 명시가 있으면 그 범위만 다룬다. `agent` scope는 사용자가 명시했을 때만 포함한다.
 
 ## Hard Rules
 
@@ -20,8 +20,9 @@ disable-model-invocation: false
 ## Phase 1 — 스캔
 
 1. `memory_list({ scope: "user" })` 와 `memory_list({ scope: "project" })` 로 전체 메모리 인덱스 확보.
-2. 항목 수가 많으면 (>30) `recall({ query })` 로 키워드 군집화 보조 (중복 후보를 좁히는 용도). 적으면 전체 `recall({ id })` 로 본문 펼쳐서 직접 비교.
-3. 본문 펼친 결과를 in-memory 로만 보유. 파일 직접 수정 금지 (반드시 forget/remember 도구 경유).
+2. 사용자가 `agent` scope를 명시했다면 `memory_list({ scope: "agent" })` 도 조회한다.
+3. 항목 수가 많으면 (>30) `recall({ query })` 로 키워드 군집화 보조 (중복 후보를 좁히는 용도). 적으면 전체 `recall({ id })` 로 본문 펼쳐서 직접 비교.
+4. 본문 펼친 결과를 in-memory 로만 보유. 파일 직접 수정 금지 (반드시 forget/remember 도구 경유).
 
 ## Phase 2 — Issue 카테고리별 후보 정리
 
@@ -42,14 +43,16 @@ disable-model-invocation: false
 - suggestion = `DEPRECATE` (forget) 또는 ID 제거하고 durable 본문으로 `REWRITE`.
 
 ### M4. 잘못된 scope
-- project memory 에 있어야 할 것이 user 에 있거나 그 반대.
-- suggestion = `RELOCATE` (forget 후 다른 scope 에 remember).
+- 현재 세션에만 유효한 내용은 agent, 여러 프로젝트에서 재사용할 개인 규칙은 user, 현재 프로젝트에만 유효한 결정·도구 규칙은 project에 둔다.
+- agent를 포함한 scope 이동은 대상 실행에서 양쪽 scope에 실제로 접근할 수 있을 때만 판단한다.
+- suggestion = `RELOCATE` (다른 scope 에 remember 후 기존 entry forget).
 
 ### M5. 블랙리스트 위반 (보안)
 - 본문에 시크릿 패턴 노출: `(ghp_[A-Za-z0-9]{36,}|gho_[A-Za-z0-9]{36,}|github_pat_[A-Za-z0-9_]{82,}|glpat_[A-Za-z0-9_-]{20,}|sk-[A-Za-z0-9]{32,}|AKIA[0-9A-Z]{16}|eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+|xoxb-[0-9]+-[0-9]+-[A-Za-z0-9]+|xoxp-[0-9]+-[0-9]+-[0-9]+-[A-Za-z0-9]+)`.
 - `[A-Z_]*(TOKEN|KEY|SECRET|PASSWORD|API_KEY)\s*=\s*\S{20,}` 형태의 환경변수.
 - 전화 (`01[016789]-?\d{3,4}-\d{4}`), 카드, 주민번호 패턴.
 - suggestion = **즉시 `URGENT_FORGET`**. 같은 fact가 재사용 가치가 있으면 민감값을 제거한 버전을 자동으로 `REWRITE`한다.
+- agent entry의 `forget`은 active recall에서 제외하는 tombstone을 남길 뿐 세션 transcript에서 원문을 물리 삭제하지 않는다. agent 메모리의 민감값은 제거 완료로 표현하지 말고, 자격 증명 폐기·회전 등 필요한 후속 조치를 보고한다.
 
 ### M6. 의도 불명 / 너무 모호함
 - 무엇을 가리키는지 외부 참조 없이는 알 수 없는 본문 (예: "이 부분 처리하기").
@@ -110,7 +113,7 @@ disable-model-invocation: false
 
 - **불확실하면 보존** — 사용자 의도를 추정해 삭제·축약하지 않는다.
 - **MERGE 시 새 entry 먼저 저장 → 구 forget**. 역순이면 사고 시 데이터 손실.
-- **M5 보안 위반은 즉시 제거**하고, 필요한 경우 민감값 없는 사실만 다시 저장한다.
+- **M5 보안 위반은 즉시 active recall에서 제거**하고, 필요한 경우 민감값 없는 사실만 다시 저장한다. agent entry는 transcript에 원문이 남는 한계를 결과에 명시한다.
 - **자동 적용은 명백한 후보에만 수행**한다. 의미 손실 가능성이 있으면 `KEEP` 처리한다.
 - **메모리 파일 직접 fs 수정 금지** — 항상 forget/remember 도구 경유 (memory layer 가 인덱스/포맷 일관성 책임).
 
