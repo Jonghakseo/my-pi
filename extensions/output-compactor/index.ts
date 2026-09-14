@@ -3,7 +3,7 @@
  *
  * 큰 툴 출력이 컨텍스트를 잡아먹는 걸 줄인다. 임계치를 넘는 bash 출력이 나오면:
  *   1. 전체 출력을 임시 파일에 저장하고,
- *   2. 저지연 모델(codex-spark)로 "의도(명령어)를 이해한" 압축을 만든 뒤,
+ *   2. 저지연 모델(GPT-5.6 Luna)로 "의도(명령어)를 이해한" 압축을 만든 뒤,
  *   3. 컨텍스트에는 압축본 + 원본 경로만 남긴다.
  * 에이전트가 원문이 필요하면 경로를 read 하면 된다 (무손실 안전밸브).
  *
@@ -32,8 +32,8 @@ import { getStats, recordCompaction, recordSkip, reverseIfTracked } from "./tele
 import { estimateTokens, formatSignedTokens } from "./tokens.ts";
 
 const DEFAULT_THRESHOLD_BYTES = 24 * 1024;
-const SPARK_PROVIDER = "openai-codex";
-const SPARK_MODEL_ID = "gpt-5.3-codex-spark";
+const COMPACTOR_PROVIDER = "openai-codex";
+const COMPACTOR_MODEL_ID = "gpt-5.6-luna";
 const COMPRESS_TIMEOUT_MS = 30_000;
 const TARGET_TOOLS = new Set(["bash"]);
 const TOGGLE_VALUES = ["on", "off"] as const;
@@ -135,7 +135,7 @@ export default function (pi: ExtensionAPI) {
 			thresholdBytes: thresholdBytes(),
 			originalBytes: size,
 		};
-		const model = ctx.modelRegistry.find(SPARK_PROVIDER, SPARK_MODEL_ID);
+		const model = ctx.modelRegistry.find(COMPACTOR_PROVIDER, COMPACTOR_MODEL_ID);
 		if (!model) {
 			recordSkip({ ...monitorBase, reason: "model_unavailable" });
 			return;
@@ -159,7 +159,7 @@ export default function (pi: ExtensionAPI) {
 		const summaryBytes = Buffer.byteLength(summary, "utf8");
 		const reductionPct = Math.round((1 - summaryBytes / size) * 100);
 		const header =
-			`[output-compactor] bash output compressed by ${SPARK_MODEL_ID}: ${formatSize(size)} \u2192 ${formatSize(summaryBytes)} (-${reductionPct}%).\n` +
+			`[output-compactor] bash output compressed by ${COMPACTOR_MODEL_ID}: ${formatSize(size)} \u2192 ${formatSize(summaryBytes)} (-${reductionPct}%).\n` +
 			`Full output saved to: ${savedPath}\n` +
 			`Re-read that file if you need exact verbatim content (full logs, precise lines).\n\n` +
 			`--- compressed summary ---\n`;
