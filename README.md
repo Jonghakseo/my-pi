@@ -60,7 +60,7 @@ The current setup has 8 agent definitions using the OpenAI GPT-5.6 model family:
 
 | Agent | Model | Role | When to Use |
 |---|---|---|---|
-| **worker** | `openai-codex/gpt-5.6-terra` | General-purpose executor | Implementation, writing, fixes (complex multi-file) |
+| **worker** | `openai-codex/gpt-6-astra` | General-purpose executor | Implementation, writing, fixes (complex multi-file) |
 | **code-cleaner** | `openai-codex/gpt-5.6-sol` | Code cleanup analyst | Find cleanup opportunities and quality issues |
 | **reviewer** | `openai-codex/gpt-5.6-sol` | Code review specialist | PR reviews, quality/correctness checks |
 | **challenger** | `openai-codex/gpt-5.6-sol` | Pressure tester | Stress-test plans before execution |
