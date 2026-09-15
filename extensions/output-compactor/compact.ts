@@ -29,6 +29,23 @@ export interface CompactorModelRegistry {
 	getApiKeyAndHeaders(model: CompactorModel): Promise<CompactorAuth>;
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+	return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/** Add Codex Fast Mode fields without discarding adapter-generated payload fields. */
+export function applyFastModePayload(payload: unknown): unknown {
+	if (!isRecord(payload)) return payload;
+	return {
+		...payload,
+		service_tier: "priority",
+		text: {
+			...(isRecord(payload.text) ? payload.text : {}),
+			verbosity: "low",
+		},
+	};
+}
+
 function extractText(content: Array<{ type: string; text?: string }>): string {
 	return content
 		.filter((part) => part.type === "text" && typeof part.text === "string")
@@ -72,6 +89,7 @@ export async function compressOutput(
 				env: auth.env,
 				signal: controller.signal,
 				reasoning: "low",
+				onPayload: applyFastModePayload,
 			},
 		);
 		if (message.stopReason === "error" || message.stopReason === "aborted") return undefined;
