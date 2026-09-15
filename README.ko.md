@@ -59,7 +59,7 @@ cd ~/.pi/agent && ./scripts/bootstrap.sh
 
 | 에이전트 | 모델 | 역할 | 사용 시점 |
 |---|---|---|---|
-| **worker** | `openai-codex/gpt-5.6-terra` | 범용 작업 실행기 | 구현, 작성, 수정 (복잡한 다중 파일) |
+| **worker** | `openai-codex/gpt-6-astra` | 범용 작업 실행기 | 구현, 작성, 수정 (복잡한 다중 파일) |
 | **code-cleaner** | `openai-codex/gpt-5.6-sol` | 코드 정리 분석가 | 중복 제거 후보, 품질 문제 탐색 |
 | **reviewer** | `openai-codex/gpt-5.6-sol` | 코드 리뷰 전문가 | PR 리뷰, 품질/정확성 점검 |
 | **challenger** | `openai-codex/gpt-5.6-sol` | 스트레스 테스터 | 실행 전 계획 검증 |
