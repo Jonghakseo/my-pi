@@ -95,6 +95,36 @@
 					}
 				}
 			}
+		},
+		{
+			"includes": ["pi-vcc-ko/**"],
+			"linter": {
+				"rules": {
+					"complexity": {
+						"noExcessiveCognitiveComplexity": "off"
+					},
+					"suspicious": {
+						"noExplicitAny": "off",
+						"noControlCharactersInRegex": "off"
+					},
+					"style": {
+						"noNonNullAssertion": "off"
+					}
+				}
+			}
+		},
+		{
+			"includes": ["pi-vcc-ko/tools/*.mjs"],
+			"linter": {
+				"rules": {
+					"suspicious": {
+						"noConsole": "off"
+					},
+					"complexity": {
+						"noForEach": "off"
+					}
+				}
+			}
 		}
 	]
 }

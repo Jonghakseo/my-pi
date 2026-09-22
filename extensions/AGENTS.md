@@ -19,6 +19,7 @@ Custom extensions for the pi coding agent. All extensions are written in TypeScr
 ├── footer/                # Custom footer UI facade for custom-style/main.ts
 ├── working-text/          # Spinner working message (tip text + elapsed time)
 ├── theme-cycler/          # Ctrl+Shift+X to cycle through themes
+├── pi-vcc-ko/             # 알고리즘형 대화 압축기 (pi-vcc 포크): 구조적 요약 + vcc_recall 히스토리 검색, 한국어 추출 정규식 확장
 ```
 
 ## Moved Out
