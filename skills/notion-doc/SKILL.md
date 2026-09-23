@@ -1,7 +1,7 @@
 ---
 name: notion-doc
 license: MIT
-description: Notion design skill that MUST be used whenever creating documents. When the user asks for a document, report, summary, meeting notes, or review write-up in HTML/Markdown, load this skill first. Korean triggers: "문서 만들어줘", "리포트", "보고서", "회의록", "정리 문서", "포스트모템", "HTML로 정리". The content decides the document's structure and outline; this skill only governs the Notion blocks (callouts, toggles, tables, checklists, code, columns, etc.) and visual style.
+description: Notion-style document skill. MUST be used whenever creating documents in HTML/Markdown, such as reports, summaries, meeting notes, or postmortems ("문서 만들어줘", "리포트", "회의록"). Governs visual style and Notion blocks (callouts, toggles, tables, checklists, code, columns); content and outline follow the request.
 ---
 
 # Creating documents with Notion's design
