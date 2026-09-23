@@ -1,0 +1,8 @@
+{
+  "name": "pi-skill-a4",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "markdown-it": "^14.1.0"
+  }
+}
