@@ -2,8 +2,8 @@
 name: code-cleaner
 description: Code cleanup analyst — scans for code reuse opportunities, quality issues, and efficiency problems. Reports findings only (read-only).
 tools: read, grep, find, ls, bash
-model: openai-codex/gpt-5.6-sol
-thinking: xhigh
+model: openai-codex/gpt-6-sol
+thinking: high
 ---
 
 <system_prompt agent="code-cleaner">
