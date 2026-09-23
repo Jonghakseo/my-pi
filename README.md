@@ -56,26 +56,26 @@ The system is organized in **four layers**:
   <img src="./docs/assets/agents.en.svg" alt="Agents" width="800"/>
 </p>
 
-The current setup has 8 agent definitions using the OpenAI GPT-5.6 model family:
+The current setup has 8 agent definitions using the OpenAI GPT-6 model family (GPT-6 Astra and GPT-6 Sol):
 
 | Agent | Model | Role | When to Use |
 |---|---|---|---|
 | **worker** | `openai-codex/gpt-6-astra` | General-purpose executor | Implementation, writing, fixes (complex multi-file) |
-| **code-cleaner** | `openai-codex/gpt-5.6-sol` | Code cleanup analyst | Find cleanup opportunities and quality issues |
-| **reviewer** | `openai-codex/gpt-5.6-sol` | Code review specialist | PR reviews, quality/correctness checks |
-| **challenger** | `openai-codex/gpt-5.6-sol` | Pressure tester | Stress-test plans before execution |
-| **verifier** | `openai-codex/gpt-5.6-sol` | Evidence validation | Verify claims, check correctness |
-| **security-auditor** | `openai-codex/gpt-5.6-sol` | Security reviewer | Focused vulnerability reviews |
-| **searcher** | `openai-codex/gpt-5.6-terra` | Research & web search | Documentation lookup, exploration |
-| **browser** | `openai-codex/gpt-5.6-terra` | Browser automation & UI testing | E2E testing, visual verification |
+| **code-cleaner** | `openai-codex/gpt-6-sol` | Code cleanup analyst | Find cleanup opportunities and quality issues |
+| **reviewer** | `openai-codex/gpt-6-sol` | Code review specialist | PR reviews, quality/correctness checks |
+| **challenger** | `openai-codex/gpt-6-sol` | Pressure tester | Stress-test plans before execution |
+| **verifier** | `openai-codex/gpt-6-sol` | Evidence validation | Verify claims, check correctness |
+| **security-auditor** | `openai-codex/gpt-6-sol` | Security reviewer | Focused vulnerability reviews |
+| **searcher** | `openai-codex/gpt-6-sol` | Research & web search | Documentation lookup, exploration |
+| **browser** | `openai-codex/gpt-6-astra` | Browser automation & UI testing | E2E testing, visual verification |
 
 <details>
 <summary><strong>Model Selection</strong></summary>
 
-- **openai-codex/gpt-5.6-terra** — Balanced execution and research (implementation, browser automation, documentation lookup)
-- **openai-codex/gpt-5.6-sol** — Complex analysis and verification (cleanup, review, challenge, validation, security)
+- **openai-codex/gpt-6-astra** — Implementation and browser automation (worker, browser)
+- **openai-codex/gpt-6-sol** — Complex analysis and verification at high thinking (cleanup, review, challenge, validation, security), low thinking for research (searcher)
 
-The main agent default is `openai-codex/gpt-5.6-sol` with high thinking.
+The main agent default is `openai-codex/gpt-6-astra` with medium thinking.
 
 </details>
 

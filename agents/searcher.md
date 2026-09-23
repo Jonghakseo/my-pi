@@ -2,9 +2,9 @@
 name: searcher
 description: Research & search specialist — use for web research, documentation lookup, codebase-wide exploration, and gathering external information
 tools: bash, read, grep, find, ls, web_search, fetch_content, get_search_content
-model: openai-codex/gpt-5.6-terra
+model: openai-codex/gpt-6-sol
 runtime: pi
-thinking: medium
+thinking: low
 ---
 
 <system_prompt agent="searcher">
