@@ -4,6 +4,11 @@
 	"private": true,
 	"type": "module",
 	"packageManager": "pnpm@10.24.0",
+	"pnpm": {
+		"overrides": {
+			"@earendil-works/pi-ai": "0.87.0"
+		}
+	},
 	"scripts": {
 		"check": "biome check .",
 		"typecheck": "tsc -p tsconfig.json --noEmit",
@@ -20,10 +25,10 @@
 	},
 	"devDependencies": {
 		"@biomejs/biome": "^2.4.4",
-		"@earendil-works/pi-agent-core": "0.84.4",
-		"@earendil-works/pi-ai": "0.84.4",
-		"@earendil-works/pi-coding-agent": "0.84.4",
-		"@earendil-works/pi-tui": "0.84.4",
+		"@earendil-works/pi-agent-core": "0.87.0",
+		"@earendil-works/pi-ai": "0.87.0",
+		"@earendil-works/pi-coding-agent": "0.87.0",
+		"@earendil-works/pi-tui": "0.87.0",
 		"@types/node": "^25.3.1",
 		"@types/turndown": "^5.0.6",
 		"@types/ws": "8.18.1",
