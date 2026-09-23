@@ -1,0 +1,414 @@
+<!--
+  notion-doc skeleton — copy this file and fill in the content only.
+  Do not write new CSS. The body below is a usage example of the blocks —
+  the document's structure is decided by its content.
+  Classes: callout(-blue/-green/-yellow/-red), tag, meta, todo, columns,
+           bookmark, btn, toc, breadcrumb, t-<color>
+
+  Every color and dimension is taken from the design tokens Notion actually
+  uses: Notion declares tokens right in its inline styles
+  (background: var(--c-graBacPri)), so the render probe
+  (scripts/notion_style_probe.py) reads the block→token mapping straight off
+  the DOM, and token values are extracted from Notion's stylesheets
+  (scripts/notion_tokens.py → sync/notion-tokens.json, light and dark).
+  The comment next to each value names its source token.
+-->
+<title>Document title</title>
+<style>
+  :root {
+    --text: #2C2C2B;                       /* --c-texPri */
+    --text-soft: #7D7A75;                  /* --c-texSec */
+    --divider: rgba(28, 19, 1, 0.11);      /* --ca-borPriTra (measured on dividers) */
+    --bg: #FFFFFF;                         /* --c-bacPri */
+    --radius: 10px;                        /* measured: callouts, code, bookmarks */
+    --callout-gray: #F9F8F7;               /* --c-graBacPri */
+    --callout-blue: #E5F2FC;               /* --c-bluBacSec */
+    --callout-green: #E8F1EC;              /* --c-greBacSec */
+    --callout-yellow: #F9F3DC;             /* --c-yelBacSec */
+    --callout-red: #FCE9E7;                /* --c-redBacSec */
+    --code-bg: rgba(66, 35, 3, 0.03);      /* --ca-graBacPriTra (measured on code blocks) */
+    --inline-code: #CF5148;                /* --c-redTexSec (measured on inline code) */
+    --inline-code-bg: rgba(33, 27, 23, 0.05); /* --ca-bacIntTra */
+    --table-header: #F7F6F3;               /* --cd-tabHeaRowColBac */
+    --table-border: #E6E5E3;               /* --c-borPri */
+    --check: #2783DE;                      /* --c-bluBacAccPri (measured on checkboxes) */
+    /* Notion text colors — *TexSec tokens. No dark overrides (same in both themes) */
+    --c-gray: #7D7A75;                     /* --c-graTexSec */
+    --c-blue: #387DC9;                     /* --c-bluTexSec */
+    --c-red: #CF5148;                      /* --c-redTexSec */
+    --c-orange: #D27B2D;                   /* --c-oraTexSec */
+    --c-green: #50946E;                    /* --c-greTexSec */
+    --c-purple: #9A6BB4;                   /* --c-purTexSec */
+    /* code syntax tokens (light) */
+    --tok-comment: #708090;
+    --tok-punct: #999999;
+    --tok-number: #990055;
+    --tok-string: #669900;
+    --tok-operator: #9A6E3A;
+    --tok-keyword: #0077AA;
+    --tok-function: #DD4A68;
+    --tok-variable: #EE9900;
+  }
+  /* Notion dark palette — actual .notion-dark-theme token values from
+     sync/notion-tokens.json. Text colors (--c-gray etc.) have no dark
+     overrides and inherit the light values. Covers system dark + explicit
+     dark selection — both wrapped in @media screen, so printing always
+     uses the light palette above. */
+  @media screen and (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --text: #F0EFED;                     /* --c-texPri */
+      --text-soft: #ADA9A3;                /* --c-texSec */
+      --divider: rgba(255, 255, 235, 0.1); /* --ca-borPriTra */
+      --bg: #191919;                       /* --c-bacPri */
+      --callout-gray: #202020;             /* --c-graBacPri */
+      --callout-blue: #233850;             /* --c-bluBacSec */
+      --callout-green: #263D30;            /* --c-greBacSec */
+      --callout-yellow: #504425;           /* --c-yelBacSec */
+      --callout-red: #502C29;              /* --c-redBacSec */
+      --code-bg: rgba(252, 252, 252, 0.03);   /* --ca-graBacPriTra */
+      --inline-code-bg: rgba(255, 255, 255, 0.055); /* --ca-bacIntTra */
+      --table-header: rgba(255, 255, 255, 0.03);    /* --cd-tabHeaRowColBac */
+      --table-border: #383836;             /* --c-borPri */
+      --tok-comment: #999999;
+      --tok-punct: #CCCCCC;
+      --tok-number: #F8C555;
+      --tok-string: #7EC699;
+      --tok-operator: #67CDCC;
+      --tok-keyword: #CC99CD;
+      --tok-function: #F08D49;
+      --tok-variable: #7EC699;
+    }
+  }
+  @media screen {
+    :root[data-theme="dark"] {
+      --text: #F0EFED;
+      --text-soft: #ADA9A3;
+      --divider: rgba(255, 255, 235, 0.1);
+      --bg: #191919;
+      --callout-gray: #202020;
+      --callout-blue: #233850;
+      --callout-green: #263D30;
+      --callout-yellow: #504425;
+      --callout-red: #502C29;
+      --code-bg: rgba(252, 252, 252, 0.03);
+      --inline-code-bg: rgba(255, 255, 255, 0.055);
+      --table-header: rgba(255, 255, 255, 0.03);
+      --table-border: #383836;
+      --tok-comment: #999999;
+      --tok-punct: #CCCCCC;
+      --tok-number: #F8C555;
+      --tok-string: #7EC699;
+      --tok-operator: #67CDCC;
+      --tok-keyword: #CC99CD;
+      --tok-function: #F08D49;
+      --tok-variable: #7EC699;
+    }
+  }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    /* measured stack + Korean fonts inserted */
+    font-family: ui-sans-serif, -apple-system, system-ui, "Segoe UI Variable Display",
+      "Segoe UI", "Apple SD Gothic Neo", "Noto Sans KR", Helvetica, Arial, sans-serif,
+      "Apple Color Emoji", "Segoe UI Emoji";
+    font-size: 16px;                       /* measured: 16px / 24px */
+    line-height: 1.5;
+    word-break: keep-all;                  /* Korean breaks at word boundaries */
+    overflow-wrap: break-word;             /* except long URLs and latin tokens */
+    -webkit-font-smoothing: antialiased;
+  }
+  .page {
+    max-width: 720px;                      /* measured: 720px */
+    margin: 0 auto;
+    padding: 72px 24px 30vh;
+  }
+  .page-icon { font-size: 68px; line-height: 1.1; }
+  h1 {
+    font-size: 40px;
+    font-weight: 700;
+    line-height: 1.2;
+    margin: 8px 0 4px;
+    letter-spacing: -0.01em;
+  }
+  .meta {
+    color: var(--text-soft);
+    font-size: 14px;
+    margin: 0 0 8px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .tag {
+    display: inline-block;
+    padding: 1px 8px;
+    border-radius: 4px;
+    font-size: 13px;
+    background: var(--callout-blue);
+    color: var(--text);
+  }
+  hr {
+    border: none;
+    border-top: 1px solid var(--divider);
+    margin: 4px 0 24px;
+  }
+  /* Notion's standard scale: heading1 30px / heading2 24px */
+  h2 {
+    font-size: 1.875em;
+    font-weight: 600;
+    margin: 1.6em 0 4px;
+    line-height: 1.3;
+    letter-spacing: -0.01em;
+  }
+  h3 { font-size: 1.5em; font-weight: 600; margin: 1.2em 0 2px; line-height: 1.3; }
+  h4 { font-size: 1.25em; font-weight: 600; margin: 1em 0 2px; }
+  p { margin: 8px 0; }
+  ul, ol { margin: 6px 0; padding-left: 26px; }
+  li { margin: 3px 0; }
+  li::marker { color: var(--text-soft); }
+  strong { font-weight: 600; }
+  a { color: inherit; text-decoration: underline; text-decoration-color: var(--text-soft); }
+
+  /* Notion text colors */
+  .t-gray { color: var(--c-gray); }
+  .t-blue { color: var(--c-blue); }
+  .t-red { color: var(--c-red); }
+  .t-orange { color: var(--c-orange); }
+  .t-green { color: var(--c-green); }
+  .t-purple { color: var(--c-purple); }
+
+  .callout {
+    display: flex;
+    gap: 10px;
+    background: var(--callout-gray);
+    border-radius: var(--radius);          /* measured: 10px */
+    padding: 12px;                         /* measured: 12px on all sides */
+    margin: 12px 0;
+    font-size: 15px;
+  }
+  .callout-blue { background: var(--callout-blue); }
+  .callout-green { background: var(--callout-green); }
+  .callout-yellow { background: var(--callout-yellow); }
+  .callout-red { background: var(--callout-red); }
+  .callout > .icon { flex: none; font-size: 18px; line-height: 1.4; }
+
+  /* 2-column layout (Notion columns) */
+  .columns { display: flex; gap: 32px; margin: 12px 0; }
+  .columns > div { flex: 1; min-width: 0; }
+  @media (max-width: 600px) { .columns { flex-direction: column; gap: 0; } }
+
+  .table-wrap { overflow-x: auto; margin: 12px 0; }
+  table { border-collapse: collapse; width: 100%; }  /* measured: cell font 16px = body */
+  th, td {
+    border: 1px solid var(--table-border); /* measured: #E6E5E3 */
+    padding: 7px 10px;
+    text-align: left;
+    vertical-align: top;
+  }
+  th { background: var(--table-header); font-weight: 600; }
+
+  blockquote {
+    margin: 12px 0;
+    padding: 0 14px;                       /* measured: 14px inline */
+    border-left: 3px solid var(--text);    /* measured: 3px solid, body color */
+  }
+
+  /* Table of contents (Notion) — measured: no underline, 14px, --c-graTexSec */
+  .toc { margin: 12px 0; font-size: 14px; }
+  .toc a {
+    display: block;
+    padding: 4px 8px;
+    border-radius: 4px;
+    text-decoration: none;
+    color: var(--text-soft);
+  }
+  .toc a:hover { background: var(--callout-gray); color: var(--text); }
+  .toc .toc-2 { padding-left: 26px; }
+
+  /* Breadcrumb (Notion) */
+  .breadcrumb { color: var(--text-soft); font-size: 14px; margin: 8px 0; }
+  .breadcrumb a { color: inherit; text-decoration: none; }
+  .breadcrumb a:hover { color: var(--text); }
+
+  /* Button block (Notion) — measured: 14px/500, body color, border --ca-borPriTra */
+  .btn {
+    display: inline-block;
+    border: 1px solid var(--divider);
+    border-radius: 8px;
+    padding: 4px 12px;
+    margin: 8px 0;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text);
+    text-decoration: none;
+    cursor: pointer;
+    background: var(--bg);
+  }
+  .btn:hover { background: var(--callout-gray); }
+
+  /* Bookmark card (Notion web bookmark) — measured: radius 10px, border #E6E5E3 */
+  .bookmark {
+    display: block;
+    border: 1px solid var(--table-border);
+    border-radius: var(--radius);
+    padding: 12px 14px;
+    margin: 12px 0;
+    text-decoration: none;
+  }
+  .bookmark:hover { background: var(--callout-gray); }
+  .bookmark .bm-title { font-weight: 600; font-size: 14.5px; }
+  .bookmark .bm-desc { color: var(--text-soft); font-size: 13.5px; margin-top: 2px; }
+  .bookmark .bm-url { color: var(--text-soft); font-size: 12.5px; margin-top: 6px; }
+
+  code {
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    font-size: 85%;
+    background: var(--inline-code-bg);
+    color: var(--inline-code);
+    border-radius: 3px;
+    padding: 2px 5px;
+  }
+  pre {
+    background: var(--code-bg);
+    border-radius: var(--radius);
+    padding: 16px 18px;
+    overflow-x: auto;
+    margin: 12px 0;
+  }
+  pre code { background: none; color: var(--text); padding: 0; font-size: 85%; } /* measured: 13.6px */
+
+  /* Prism syntax highlighting — applies to <code class="language-*"> */
+  .token.comment, .token.prolog, .token.doctype, .token.cdata { color: var(--tok-comment); }
+  .token.punctuation { color: var(--tok-punct); }
+  .token.property, .token.tag, .token.boolean, .token.number,
+  .token.constant, .token.symbol, .token.deleted { color: var(--tok-number); }
+  .token.selector, .token.attr-name, .token.string, .token.char,
+  .token.builtin, .token.inserted { color: var(--tok-string); }
+  .token.operator, .token.entity, .token.url { color: var(--tok-operator); }
+  .token.atrule, .token.attr-value, .token.keyword { color: var(--tok-keyword); }
+  .token.function, .token.class-name { color: var(--tok-function); }
+  .token.regex, .token.important, .token.variable { color: var(--tok-variable); }
+  .token.important, .token.bold { font-weight: 600; }
+  .token.italic { font-style: italic; }
+  .token.template-string .token.interpolation .token.interpolation-punctuation { color: var(--tok-operator); }
+
+  details {
+    margin: 8px 0;
+    padding: 4px 0;
+  }
+  summary {
+    cursor: pointer;
+    font-weight: 600;
+    padding: 4px 6px;
+    border-radius: 4px;
+  }
+  summary:hover { background: var(--callout-gray); }
+  details > *:not(summary) { margin-left: 22px; }
+
+  .todo { list-style: none; padding-left: 4px; }
+  .todo li { position: relative; padding-left: 26px; }
+  .todo input[type="checkbox"] { position: absolute; left: 4px; top: 5px; accent-color: var(--check); }
+  .todo li.done { color: var(--text-soft); text-decoration: line-through; }
+
+  /* Print / PDF export — the dark palette is wrapped in @media screen above,
+     so print always gets the light palette */
+  @page { margin: 14mm; }
+  @media print {
+    body {
+      background: #fff;
+      font-size: 11pt;
+      /* keep callout and code backgrounds from disappearing in print */
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+    .page { max-width: none; padding: 0; }
+    h1, h2, h3, h4 { break-after: avoid; }
+    p, blockquote { orphans: 3; widows: 3; }
+    .callout, .bookmark, .btn, blockquote, tr, img { break-inside: avoid; }
+    /* print has no horizontal scroll — wrap long code lines */
+    pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+  }
+</style>
+
+<!-- ⬇ From here on: block usage examples — structure and headings are up to the content -->
+<div class="page">
+  <div class="breadcrumb"><a href="#">Workspace</a> / <a href="#">Parent doc</a> / Document title</div>
+  <div class="page-icon">📄</div>
+  <h1>Document title</h1>
+  <p class="meta">
+    <span class="tag">Tag</span>
+    <span>2026-08-31</span>
+    <span>·</span>
+    <span>Author: Jane Doe</span>
+  </p>
+  <hr>
+
+  <nav class="toc">
+    <a href="#s1">Section title</a>
+    <a class="toc-2" href="#s1">Long documents open with a table of contents</a>
+  </nav>
+
+  <h2 id="s1">Section title</h2>
+  <p>
+    Body text. Word-level emphasis via <strong>bold</strong>, <code>inline code</code>,
+    and <span class="t-blue">blue</span>·<span class="t-red">red</span>·<span class="t-orange">orange</span>·<span class="t-green">green</span>·<span class="t-purple">purple</span>
+    text colors.
+  </p>
+
+  <div class="callout callout-blue">
+    <span class="icon">💡</span>
+    <div><strong>Key takeaway</strong> — blue callout. Gray is for notes, green (✅)
+    for done/success, yellow (⚠️) for caution, red (🚨) for warnings.</div>
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <tr><th>Item</th><th>Value</th><th>Notes</th></tr>
+      <tr><td>Comparable, listable facts</td><td>go in tables</td><td>source, path</td></tr>
+    </table>
+  </div>
+
+  <div class="columns">
+    <div>
+      <h4>Left column</h4>
+      <p>Two chunks that belong side by side go in 2 columns.</p>
+    </div>
+    <div>
+      <h4>Right column</h4>
+      <ul>
+        <li>Lists work inside columns too</li>
+      </ul>
+    </div>
+  </div>
+
+  <pre><code class="language-javascript">const name = 'Jane'
+const job = 'developer'
+
+console.log(`Hi, I'm ${name} and I work as a ${job}.`)</code></pre>
+
+  <blockquote>One striking sentence gets lifted into a quote.</blockquote>
+
+  <details>
+    <summary>Long details go in a toggle (expand)</summary>
+    <p>Logs, figures, and side notes that break the flow live inside toggles.</p>
+  </details>
+
+  <a class="bookmark" href="https://example.com">
+    <div class="bm-title">Bookmark card title</div>
+    <div class="bm-desc">Introduce external links with bookmark cards.</div>
+    <div class="bm-url">example.com</div>
+  </a>
+
+  <a class="btn" href="#">↗ Calls to action use the button block</a>
+
+  <ul class="todo">
+    <li><input type="checkbox"> Task — owner / due date</li>
+    <li class="done"><input type="checkbox" checked> Done items get strikethrough</li>
+  </ul>
+</div>
+
+<!-- Code highlighting: keep if the document has <code class="language-*"> blocks,
+     safe to delete otherwise. The autoloader fetches language files from cdnjs. -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-core.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
