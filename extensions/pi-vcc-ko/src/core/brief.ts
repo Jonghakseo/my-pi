@@ -447,13 +447,20 @@ export const buildBriefSections = (blocks: NormalizedBlock[]): BriefLine[] => {
 				lastHeader = "[user]";
 				break;
 			}
+			case "custom": {
+				const text = truncateTokensHeadTail(b.text, ASSISTANT_HEAD_WORDS, ASSISTANT_TAIL_WORDS);
+				const header = `[custom:${b.customType}]`;
+				if (text) pushText(header, text, b.sourceIndex != null ? ` (#${b.sourceIndex})` : "");
+				lastHeader = header;
+				break;
+			}
 			case "bash": {
 				const cmd = compressBash(b.command);
 				const ref = b.sourceIndex != null ? ` (#${b.sourceIndex})` : "";
 				if (cmd) {
-					push("[user]", `$ ${cmd}${ref}`);
+					push("[bash]", `$ ${cmd}${ref}`);
 				}
-				lastHeader = "[user]";
+				lastHeader = "[bash]";
 				break;
 			}
 			case "assistant": {

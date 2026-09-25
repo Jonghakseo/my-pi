@@ -1,9 +1,18 @@
-import type { Message } from "@earendil-works/pi-ai";
-import { asBashExecution, type NormalizedBlock } from "../types.ts";
+import { asBashExecution, type CompactionMessage, type NormalizedBlock } from "../types.ts";
 import { textOf } from "./content.ts";
 import { sanitize } from "./sanitize.ts";
 
-const normalizeOne = (msg: Message, msgIndex: number | undefined): NormalizedBlock[] => {
+const normalizeOne = (msg: CompactionMessage, msgIndex: number | undefined): NormalizedBlock[] => {
+	if (msg.role === "custom" || msg.role === "branchSummary" || msg.role === "compactionSummary") {
+		return [
+			{
+				kind: "custom",
+				customType: msg.role === "custom" ? msg.customType : msg.role,
+				text: sanitize(msg.role === "custom" ? textOf(msg.content) : msg.summary),
+				sourceIndex: msgIndex,
+			},
+		];
+	}
 	if (msg.role === "user") {
 		const blocks: NormalizedBlock[] = [];
 		const text = sanitize(textOf(msg.content));
@@ -24,6 +33,7 @@ const normalizeOne = (msg: Message, msgIndex: number | undefined): NormalizedBlo
 
 	const bash = asBashExecution(msg);
 	if (bash) {
+		if (bash.excludeFromContext) return [];
 		const cmd = bash.command ?? "";
 		const out = bash.output ?? "";
 		const exit = bash.exitCode;
@@ -92,5 +102,7 @@ const normalizeOne = (msg: Message, msgIndex: number | undefined): NormalizedBlo
  * legacy positional behavior is preserved (used by callers/tests that have no
  * index space to map into).
  */
-export const normalize = (messages: Message[], sourceIndices?: Array<number | undefined>): NormalizedBlock[] =>
-	messages.flatMap((msg, i) => normalizeOne(msg, sourceIndices ? sourceIndices[i] : i));
+export const normalize = (
+	messages: CompactionMessage[],
+	sourceIndices?: Array<number | undefined>,
+): NormalizedBlock[] => messages.flatMap((msg, i) => normalizeOne(msg, sourceIndices ? sourceIndices[i] : i));

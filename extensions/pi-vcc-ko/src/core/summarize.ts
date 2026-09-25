@@ -1,5 +1,7 @@
 import type { Message } from "@earendil-works/pi-ai";
-import type { FileOps } from "../types.ts";
+import type { CompactionMessage, FileOps } from "../types.ts";
+import { extractGoals } from "../extract/goals.ts";
+import { extractPreferences, dedupPreferencesAgainstGoals } from "../extract/preferences.ts";
 import { buildSections } from "./build-sections.ts";
 import { filterNoise } from "./filter-noise.ts";
 import { BRIEF_MAX_LINES, capBrief, formatSummary, RECALL_NOTE, wrapLongLines } from "./format.ts";
@@ -7,8 +9,10 @@ import { normalize } from "./normalize.ts";
 import { type DenoiseRules, builtinRules } from "./rules.ts";
 import { type BriefRankingOptions, selectRankedBriefBlocks } from "./rank.ts";
 
-export interface CompileInput {
-	messages: Message[];
+export interface CompileInput<T extends CompactionMessage = Message> {
+	messages: T[];
+	/** Actual user messages from the selected lineage, including earlier compactions. */
+	userMessages?: Message[];
 	previousSummary?: string;
 	fileOps?: FileOps;
 	/**
@@ -21,7 +25,7 @@ export interface CompileInput {
 	rules?: DenoiseRules;
 }
 
-export interface RankedCompileInput extends CompileInput {
+export interface RankedCompileInput extends CompileInput<CompactionMessage> {
 	ranking?: BriefRankingOptions;
 }
 
@@ -143,10 +147,15 @@ const mergeBriefTranscriptWithFreshBudget = (prev: string, fresh: string): strin
 	return prevTail ? `${prevTail}\n\n${fresh}` : fresh;
 };
 
-const mergePrevious = (prev: string, fresh: string, options: { preserveFreshBrief?: boolean } = {}): string => {
+const mergePrevious = (
+	prev: string,
+	fresh: string,
+	options: { preserveFreshBrief?: boolean; rebuildIntent?: boolean } = {},
+): string => {
 	// Merge header sections
 	const headers = HEADER_NAMES.map((header) => {
 		const freshSec = sectionOf(fresh, header);
+		if (options.rebuildIntent && (header === "Session Goal" || header === "User Preferences")) return freshSec;
 		const prevSec = sectionOf(prev, header);
 		return mergeHeaderSection(header, prevSec, freshSec);
 	}).filter(Boolean);
@@ -175,11 +184,21 @@ interface CompileWithBriefBlocksOptions {
 	preserveFreshBriefOnMerge?: boolean;
 }
 
-const compileWithBriefBlocks = (input: CompileInput, options: CompileWithBriefBlocksOptions = {}): string => {
+const compileWithBriefBlocks = (
+	input: CompileInput<CompactionMessage>,
+	options: CompileWithBriefBlocksOptions = {},
+): string => {
 	const rules = input.rules ?? builtinRules();
 	const blocks = filterNoise(normalize(input.messages, input.sourceIndices), rules);
 	const briefBlocks = options.briefBlocksFor?.(blocks);
 	const data = buildSections({ blocks, briefBlocks, fileOps: input.fileOps, rules });
+	// Recover intent from original user entries, including goals displaced by
+	// legacy summaries that misclassified synthetic messages as user messages.
+	if (input.userMessages) {
+		const userBlocks = filterNoise(normalize(input.userMessages), rules);
+		data.sessionGoal = extractGoals(userBlocks, rules);
+		data.userPreferences = dedupPreferencesAgainstGoals(extractPreferences(userBlocks, rules), data.sessionGoal);
+	}
 	const fresh = formatSummary(data, {
 		capBriefTranscript: options.capFreshBrief ?? true,
 	});
@@ -189,13 +208,14 @@ const compileWithBriefBlocks = (input: CompileInput, options: CompileWithBriefBl
 	const merged = prev
 		? mergePrevious(prev, fresh, {
 				preserveFreshBrief: options.preserveFreshBriefOnMerge,
+				rebuildIntent: input.userMessages !== undefined,
 			})
 		: fresh;
 	if (!merged) return "";
 	return wrapLongLines(merged + SEPARATOR + RECALL_NOTE);
 };
 
-export const compile = (input: CompileInput): string => compileWithBriefBlocks(input);
+export const compile = (input: CompileInput<CompactionMessage>): string => compileWithBriefBlocks(input);
 
 export const compileRanked = (input: RankedCompileInput): string =>
 	compileWithBriefBlocks(input, {
