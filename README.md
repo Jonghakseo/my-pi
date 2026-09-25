@@ -201,8 +201,8 @@ The setup currently ships with 8 themes, hot-swappable with `Ctrl+Shift+X` / `Ct
 This setup maintains the web research stack as a local extension in [`extensions/web-access/`](./extensions/web-access/index.ts).
 
 - Tools: `web_search`, `fetch_content`, `get_search_content`
-- Providers/workflows: Exa, Perplexity, Gemini API, Gemini Web, URL context, curator summary review
-- Extractors: readable web pages, GitHub repositories/files, PDFs, RSC payloads, YouTube/video frames and transcripts
+- Search: Exa API with a key, Exa MCP without one
+- Extractors: readable web pages (Jina Reader fallback), GitHub repositories/files, PDFs, RSC payloads, YouTube/local video frames (no transcripts or video analysis)
 
 ---
 

@@ -1,22 +1,9 @@
 import { execFileSync } from "node:child_process";
 import { existsSync, readdirSync, statSync } from "node:fs";
-import { readFile } from "node:fs/promises";
 import { basename, dirname, extname, join, resolve } from "node:path";
-import { activityMonitor } from "./activity.js";
-import { type ExtractedContent, type ExtractOptions, extractHeadingTitle, type FrameResult } from "./extract.js";
-import { API_BASE, getApiKey, queryGeminiApiWithVideo } from "./gemini-api.js";
-import { loadConfigSection, normalizeBoolean, normalizePositiveNumber, normalizeString } from "./config.js";
+import type { FrameResult } from "./extract.js";
+import { loadConfigSection, normalizeBoolean, normalizePositiveNumber } from "./config.js";
 import { mapFfmpegError, readExecError, trimErrorText } from "./utils.js";
-
-const UPLOAD_BASE = "https://generativelanguage.googleapis.com/upload/v1beta";
-
-const DEFAULT_VIDEO_PROMPT = `Extract the complete content of this video. Include:
-1. Video title (infer from content if not explicit), duration
-2. A brief summary (2-3 sentences)
-3. Full transcript with timestamps
-4. Descriptions of any code, terminal commands, diagrams, slides, or UI shown on screen
-
-Format as markdown.`;
 
 const VIDEO_EXTENSIONS: Record<string, string> = {
 	".mp4": "video/mp4",
@@ -31,11 +18,6 @@ const VIDEO_EXTENSIONS: Record<string, string> = {
 	".3gpp": "video/3gpp",
 };
 
-function shouldRethrow(err: unknown): boolean {
-	const message = err instanceof Error ? err.message : String(err);
-	return message.startsWith("Failed to parse ");
-}
-
 interface VideoFileInfo {
 	absolutePath: string;
 	mimeType: string;
@@ -44,13 +26,11 @@ interface VideoFileInfo {
 
 interface VideoConfig {
 	enabled: boolean;
-	preferredModel: string;
 	maxSizeMB: number;
 }
 
 const VIDEO_CONFIG_DEFAULTS: VideoConfig = {
 	enabled: true,
-	preferredModel: "gemini-3-flash-preview",
 	maxSizeMB: 50,
 };
 
@@ -62,7 +42,6 @@ function loadVideoConfig(): VideoConfig {
 		const v = raw.video ?? {};
 		return {
 			enabled: normalizeBoolean(v.enabled, VIDEO_CONFIG_DEFAULTS.enabled),
-			preferredModel: normalizeString(v.preferredModel, VIDEO_CONFIG_DEFAULTS.preferredModel),
 			maxSizeMB: normalizePositiveNumber(v.maxSizeMB, VIDEO_CONFIG_DEFAULTS.maxSizeMB),
 		};
 	});
@@ -128,37 +107,6 @@ function normalizeSpaces(s: string): string {
 	return s.replace(/[\u00A0\u2000-\u200B\u202F\u205F\u3000\uFEFF]/g, " ");
 }
 
-export async function extractVideo(
-	info: VideoFileInfo,
-	signal?: AbortSignal,
-	options?: ExtractOptions,
-): Promise<ExtractedContent | null> {
-	const config = loadVideoConfig();
-	const effectivePrompt = options?.prompt ?? DEFAULT_VIDEO_PROMPT;
-	const effectiveModel = options?.model ?? config.preferredModel;
-	const displayName = basename(info.absolutePath);
-	const activityId = activityMonitor.logStart({ type: "fetch", url: `video:${displayName}` });
-
-	const result = await tryVideoGeminiApi(info, effectivePrompt, effectiveModel, signal);
-
-	if (result) {
-		const thumbnail = await extractVideoFrame(info.absolutePath);
-		if (!("error" in thumbnail)) {
-			result.thumbnail = thumbnail;
-		}
-		activityMonitor.logComplete(activityId, 200);
-		return result;
-	}
-
-	if (signal?.aborted) {
-		activityMonitor.logComplete(activityId, 0);
-		return null;
-	}
-
-	activityMonitor.logError(activityId, "all video extraction paths failed");
-	return null;
-}
-
 function mapFfprobeError(err: unknown): string {
 	const { code, stderr, message } = readExecError(err);
 	if (code === "ENOENT") return "ffprobe is not installed. Install ffmpeg which includes ffprobe";
@@ -193,126 +141,4 @@ export async function getLocalVideoDuration(filePath: string): Promise<number | 
 	} catch (err) {
 		return { error: mapFfprobeError(err) };
 	}
-}
-
-async function tryVideoGeminiApi(
-	info: VideoFileInfo,
-	prompt: string,
-	model: string,
-	signal?: AbortSignal,
-): Promise<ExtractedContent | null> {
-	const apiKey = getApiKey();
-	if (!apiKey) return null;
-	if (signal?.aborted) return null;
-
-	let fileName: string | null = null;
-	try {
-		const uploaded = await uploadToFilesApi(info, apiKey, signal);
-		fileName = uploaded.name;
-
-		await pollFileState(fileName, apiKey, signal, 120000);
-
-		const text = await queryGeminiApiWithVideo(prompt, uploaded.uri, {
-			model,
-			mimeType: info.mimeType,
-			signal,
-			timeoutMs: 120000,
-		});
-
-		return {
-			url: info.absolutePath,
-			title: extractVideoTitle(text, info.absolutePath),
-			content: text,
-			error: null,
-		};
-	} catch (err) {
-		if (shouldRethrow(err)) throw err;
-		return null;
-	} finally {
-		if (fileName) deleteGeminiFile(fileName, apiKey);
-	}
-}
-
-async function uploadToFilesApi(
-	info: VideoFileInfo,
-	apiKey: string,
-	signal?: AbortSignal,
-): Promise<{ name: string; uri: string }> {
-	const displayName = basename(info.absolutePath);
-
-	const initRes = await fetch(`${UPLOAD_BASE}/files`, {
-		method: "POST",
-		headers: {
-			"x-goog-api-key": apiKey,
-			"X-Goog-Upload-Protocol": "resumable",
-			"X-Goog-Upload-Command": "start",
-			"X-Goog-Upload-Header-Content-Length": String(info.sizeBytes),
-			"X-Goog-Upload-Header-Content-Type": info.mimeType,
-			"Content-Type": "application/json",
-		},
-		body: JSON.stringify({ file: { display_name: displayName } }),
-		signal,
-	});
-
-	if (!initRes.ok) {
-		const text = await initRes.text();
-		throw new Error(`File upload init failed: ${initRes.status} (${text.slice(0, 200)})`);
-	}
-
-	const uploadUrl = initRes.headers.get("x-goog-upload-url");
-	if (!uploadUrl) throw new Error("No upload URL in response headers");
-
-	const fileData = await readFile(info.absolutePath);
-	const uploadRes = await fetch(uploadUrl, {
-		method: "PUT",
-		headers: {
-			"Content-Length": String(info.sizeBytes),
-			"X-Goog-Upload-Offset": "0",
-			"X-Goog-Upload-Command": "upload, finalize",
-		},
-		body: fileData,
-		signal,
-	});
-
-	if (!uploadRes.ok) {
-		const text = await uploadRes.text();
-		throw new Error(`File upload failed: ${uploadRes.status} (${text.slice(0, 200)})`);
-	}
-
-	const result = (await uploadRes.json()) as { file: { name: string; uri: string } };
-	return result.file;
-}
-
-async function pollFileState(
-	fileName: string,
-	apiKey: string,
-	signal?: AbortSignal,
-	timeoutMs: number = 120000,
-): Promise<void> {
-	const deadline = Date.now() + timeoutMs;
-
-	while (Date.now() < deadline) {
-		if (signal?.aborted) throw new Error("Aborted");
-
-		const res = await fetch(`${API_BASE}/${fileName}?key=${apiKey}`, { signal });
-		if (!res.ok) throw new Error(`File state check failed: ${res.status}`);
-
-		const data = (await res.json()) as { state: string };
-		if (data.state === "ACTIVE") return;
-		if (data.state === "FAILED") throw new Error("File processing failed");
-
-		await new Promise((r) => setTimeout(r, 5000));
-	}
-
-	throw new Error("File processing timed out");
-}
-
-function deleteGeminiFile(fileName: string, apiKey: string): void {
-	fetch(`${API_BASE}/${fileName}?key=${apiKey}`, { method: "DELETE" }).catch((err) => {
-		const _message = err instanceof Error ? err.message : String(err);
-	});
-}
-
-function extractVideoTitle(text: string, filePath: string): string {
-	return extractHeadingTitle(text) ?? basename(filePath, extname(filePath));
 }

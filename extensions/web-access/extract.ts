@@ -3,20 +3,12 @@ import { parseHTML } from "linkedom";
 import pLimit from "p-limit";
 import TurndownService from "turndown";
 import { activityMonitor } from "./activity.js";
-import { extractWithUrlContext } from "./gemini-url-context.js";
 import { extractGitHub } from "./github-extract.js";
 import { extractPDFToMarkdown, isPDF } from "./pdf-extract.js";
 import { extractRSCContent } from "./rsc-extract.js";
 import { formatSeconds } from "./utils.js";
-import { extractVideo, extractVideoFrame, getLocalVideoDuration, isVideoFile } from "./video-extract.js";
-import {
-	extractYouTube,
-	extractYouTubeFrame,
-	extractYouTubeFrames,
-	getYouTubeStreamInfo,
-	isYouTubeEnabled,
-	isYouTubeURL,
-} from "./youtube-extract.js";
+import { extractVideoFrame, getLocalVideoDuration, isVideoFile } from "./video-extract.js";
+import { extractYouTubeFrame, extractYouTubeFrames, getYouTubeStreamInfo, isYouTubeURL } from "./youtube-extract.js";
 
 const DEFAULT_TIMEOUT_MS = 30000;
 const CONCURRENT_LIMIT = 3;
@@ -68,10 +60,8 @@ export interface ExtractedContent {
 
 export interface ExtractOptions {
 	timeoutMs?: number;
-	prompt?: string;
 	timestamp?: string;
 	frames?: number;
-	model?: string;
 }
 
 const JINA_READER_BASE = "https://r.jina.ai/";
@@ -389,22 +379,12 @@ export async function extractContent(
 		return { url, title: "", content: "", error: localVideo.error };
 	}
 	if (localVideo.info) {
-		try {
-			const result = await extractVideo(localVideo.info, signal, options);
-			if (signal?.aborted) return abortedResult(url);
-			return (
-				result ?? {
-					url,
-					title: "",
-					content: "",
-					error:
-						"Video analysis requires Gemini access. Either:\n  1. Sign into gemini.google.com in Chrome (free, uses cookies)\n  2. Set GEMINI_API_KEY in ~/.pi/web-search.json",
-				}
-			);
-		} catch (err) {
-			if (isAbortError(err)) return abortedResult(url);
-			return { url, title: "", content: "", error: errorMessage(err) };
-		}
+		return {
+			url,
+			title: "",
+			content: "",
+			error: "Video content analysis is unavailable. Use timestamp or frames to extract images.",
+		};
 	}
 
 	try {
@@ -425,31 +405,12 @@ export async function extractContent(
 		}
 	}
 
-	const ytInfo = isYouTubeURL(url);
-	let youtubeEnabled = false;
-	try {
-		youtubeEnabled = isYouTubeEnabled();
-	} catch (err) {
-		return { url, title: "", content: "", error: errorMessage(err) };
-	}
-	if (ytInfo.isYouTube && youtubeEnabled) {
-		try {
-			const ytResult = await extractYouTube(url, signal, options?.prompt, options?.model);
-			if (ytResult) return ytResult;
-			if (signal?.aborted) return abortedResult(url);
-		} catch (err) {
-			const message = errorMessage(err);
-			if (isAbortError(err)) return abortedResult(url);
-			if (isConfigParseError(err)) {
-				return { url, title: "", content: "", error: message };
-			}
-		}
+	if (isYouTubeURL(url).isYouTube) {
 		return {
 			url,
 			title: "",
 			content: "",
-			error:
-				"Could not extract YouTube video content. Sign into Google in Chrome for automatic access, or set GEMINI_API_KEY.",
+			error: "YouTube content analysis is unavailable. Use timestamp or frames to extract images.",
 		};
 	}
 
@@ -465,28 +426,8 @@ export async function extractContent(
 	if (jinaResult) return jinaResult;
 	if (signal?.aborted) return abortedResult(url);
 
-	let geminiResult: ExtractedContent | null = null;
-	try {
-		geminiResult = await extractWithUrlContext(url, signal);
-	} catch (err) {
-		if (isAbortError(err)) return abortedResult(url);
-		if (isConfigParseError(err)) {
-			return { ...httpResult, error: errorMessage(err) };
-		}
-	}
-
-	if (geminiResult) return geminiResult;
 	if (signal?.aborted) return abortedResult(url);
-
-	const guidance = [
-		httpResult.error,
-		"",
-		"Fallback options:",
-		"  \u2022 Set GEMINI_API_KEY in ~/.pi/web-search.json",
-		"  \u2022 Sign into gemini.google.com in Chrome",
-		"  \u2022 Use web_search to find content about this topic",
-	].join("\n");
-	return { ...httpResult, error: guidance };
+	return httpResult;
 }
 
 function isLikelyJSRendered(html: string): boolean {

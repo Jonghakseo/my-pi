@@ -1,12 +1,10 @@
 import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import type { SearchProvider } from "./gemini-search.js";
 
 const WEB_SEARCH_CONFIG_PATH = join(homedir(), ".pi", "web-search.json");
 
 export interface WebSearchConfig {
-	provider?: string;
 	shortcuts?: {
 		activity?: string;
 	};
@@ -32,16 +30,6 @@ export function loadConfigForExtensionInit(): WebSearchConfig {
 		const _message = err instanceof Error ? err.message : String(err);
 		return {};
 	}
-}
-
-export function normalizeProviderInput(value: unknown): SearchProvider | undefined {
-	if (value === undefined) return undefined;
-	if (typeof value !== "string") return "auto";
-	const normalized = value.trim().toLowerCase();
-	if (normalized === "auto" || normalized === "exa" || normalized === "gemini") {
-		return normalized;
-	}
-	return "auto";
 }
 
 export function normalizeQueryList(queryList: unknown[]): string[] {

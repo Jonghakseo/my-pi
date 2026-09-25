@@ -200,8 +200,8 @@ pi는 `extensions/*.ts`와 `extensions/*/index.ts`를 모두 자동 발견할 �
 이 셋업은 웹 리서치 스택을 로컬 확장 [`extensions/web-access/`](./extensions/web-access/index.ts)으로 관리한다.
 
 - 도구: `web_search`, `fetch_content`, `get_search_content`
-- Provider/워크플로우: Exa, Perplexity, Gemini API, Gemini Web, URL context, curator summary review
-- 추출기: 읽기 쉬운 웹 페이지, GitHub 저장소/파일, PDF, RSC payload, YouTube/동영상 프레임과 transcript
+- 검색: API 키가 있으면 Exa API, 없으면 Exa MCP
+- 추출기: 웹 페이지(Jina Reader 대체 추출), GitHub 저장소/파일, PDF, RSC payload, YouTube/로컬 동영상 프레임(자막·영상 내용 분석 없음)
 
 ---
 

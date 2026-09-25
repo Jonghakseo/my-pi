@@ -2,9 +2,9 @@ import { Box, Text } from "@earendil-works/pi-tui";
 import { StringEnum } from "@earendil-works/pi-ai/compat";
 import type { AgentToolResult, ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
-import { loadConfig, normalizeProviderInput, normalizeQueryList } from "./config-runtime.js";
+import { normalizeQueryList } from "./config-runtime.js";
 import type { ExtractedContent } from "./extract.js";
-import { search } from "./gemini-search.js";
+import { search } from "./search.js";
 import { formatSearchSummary, hasFullInlineCoverage, stripThumbnails } from "./result-format.js";
 import { generateId, type QueryResultData, type StoredSearchData, storeResult } from "./storage.js";
 import { state } from "./state.js";
@@ -134,17 +134,17 @@ export function registerWebSearchTool(pi: ExtensionAPI): void {
 	pi.registerTool({
 		name: "web_search",
 		label: "Web Search",
-		description: `Search the web using Exa or Gemini. Returns an AI-synthesized answer with source citations. For comprehensive research, prefer queries (plural) with 2-4 varied angles over a single query — each query gets its own synthesized answer, so varying phrasing and scope gives much broader coverage. When includeContent is true, full page content is fetched in the background. Provider auto-selects: Exa (direct API with key, MCP fallback without), else Gemini (needs API key).`,
+		description:
+			"Search with Exa (API key or keyless MCP). Use queries for multiple searches; includeContent fetches source pages in the background.",
 		parameters: Type.Object({
 			query: Type.Optional(
 				Type.String({
-					description: "Single search query. For research tasks, prefer 'queries' with multiple varied angles instead.",
+					description: "One search query.",
 				}),
 			),
 			queries: Type.Optional(
 				Type.Array(Type.String(), {
-					description:
-						"Multiple queries searched in sequence, each returning its own synthesized answer. Prefer this for research — vary phrasing, scope, and angle across 2-4 queries to maximize coverage. Good: ['React vs Vue performance benchmarks 2026', 'React vs Vue developer experience comparison', 'React ecosystem size vs Vue ecosystem']. Bad: ['React vs Vue', 'React vs Vue comparison', 'React vs Vue review'] (too similar, redundant results).",
+					description: "Multiple search queries, processed in sequence.",
 				}),
 			),
 			numResults: Type.Optional(Type.Number({ description: "Results per query (default: 5, max: 20)" })),
@@ -153,12 +153,9 @@ export function registerWebSearchTool(pi: ExtensionAPI): void {
 			domainFilter: Type.Optional(
 				Type.Array(Type.String(), { description: "Limit to domains (prefix with - to exclude)" }),
 			),
-			provider: Type.Optional(
-				StringEnum(["auto", "gemini", "exa"], { description: "Search provider (default: auto)" }),
-			),
 		}),
 
-		// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: the web_search execute path coordinates validation, provider fallback, background fetch, and storage.
+		// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: the web_search execute path coordinates validation, Exa search, background fetch, and storage.
 		async execute(_toolCallId, params, signal, onUpdate) {
 			const rawQueryList: unknown[] = Array.isArray(params.queries)
 				? params.queries
@@ -177,7 +174,6 @@ export function registerWebSearchTool(pi: ExtensionAPI): void {
 			const searchResults: QueryResultData[] = [];
 			const allUrls: string[] = [];
 			const allInlineContent: ExtractedContent[] = [];
-			const resolvedProvider = normalizeProviderInput(params.provider ?? loadConfig().provider);
 
 			for (let i = 0; i < queryList.length; i++) {
 				const query = queryList[i];
@@ -189,7 +185,6 @@ export function registerWebSearchTool(pi: ExtensionAPI): void {
 
 				try {
 					const { answer, results, inlineContent, provider } = await search(query, {
-						provider: resolvedProvider,
 						numResults: params.numResults,
 						recencyFilter: isRecencyFilter(params.recencyFilter) ? params.recencyFilter : undefined,
 						domainFilter: params.domainFilter,
@@ -209,9 +204,7 @@ export function registerWebSearchTool(pi: ExtensionAPI): void {
 				} catch (err) {
 					if (signal?.aborted) break;
 					const message = err instanceof Error ? err.message : String(err);
-					const requestedProvider =
-						typeof resolvedProvider === "string" && resolvedProvider !== "auto" ? resolvedProvider : undefined;
-					searchResults.push({ query, answer: "", results: [], error: message, provider: requestedProvider });
+					searchResults.push({ query, answer: "", results: [], error: message });
 				}
 			}
 
