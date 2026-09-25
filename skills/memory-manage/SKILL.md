@@ -22,7 +22,7 @@ disable-model-invocation: false
 1. `memory_list({ scope: "user" })` 와 `memory_list({ scope: "project" })` 로 전체 메모리 인덱스 확보.
 2. 사용자가 `agent` scope를 명시했다면 `memory_list({ scope: "agent" })` 도 조회한다.
 3. 항목 수가 많으면 (>30) `recall({ query })` 로 키워드 군집화 보조 (중복 후보를 좁히는 용도). 적으면 전체 `recall({ id })` 로 본문 펼쳐서 직접 비교.
-4. 본문 펼친 결과를 in-memory 로만 보유. 파일 직접 수정 금지 (반드시 forget/remember 도구 경유).
+4. 각 항목의 `id`를 `memory_list` 또는 `recall({ query })` 결과에서 확보하고, 필요한 본문은 `recall({ id })`로 확인한다. `forget`에는 제목이 아닌 해당 entry의 정확한 `id`를 넘긴다. 본문은 in-memory 로만 보유하고 파일 직접 수정 금지 (반드시 forget/remember 도구 경유).
 
 ## Phase 2 — Issue 카테고리별 후보 정리
 
@@ -79,11 +79,11 @@ disable-model-invocation: false
 
 자동 결정된 동작을 다음 순서로 실행:
 
-1. **M5 URGENT_FORGET 우선** — `forget({ title, topic?, scope? })` 즉시 실행 후 sanitized 버전 `remember`.
-2. **M3/M7 DEPRECATE** — `forget`. M6는 자동 보존한다.
-3. **M3/M7 REWRITE** — old `forget` → new `remember`.
-4. **M1/M2 MERGE** — 통합 본문 `remember` → 구 entry 들 `forget`. 순서 중요 (새 entry 먼저 저장해야 사고 시 회복 가능).
-5. **M4 RELOCATE** — 새 scope 에 `remember` → 기존 `forget`.
+1. **M5 URGENT_FORGET 우선** — 해당 entry의 ID로 `forget({ id })` 즉시 실행 후 sanitized 버전 `remember`.
+2. **M3/M7 DEPRECATE** — 해당 entry의 ID로 `forget({ id })`. M6는 자동 보존한다.
+3. **M3/M7 REWRITE** — old `forget({ id })` → new `remember`.
+4. **M1/M2 MERGE** — 통합 본문 `remember` → 구 entry 각각 `forget({ id })`. 순서 중요 (새 entry 먼저 저장해야 사고 시 회복 가능).
+5. **M4 RELOCATE** — 새 scope 에 `remember` → 기존 `forget({ id })`.
 
 각 호출마다 결과 로그 (성공/실패) 를 수집한다. 실패 시 즉시 중단하고 사용자 알림 (이미 적용된 변경은 `Applied so far` 로 보고).
 
@@ -115,7 +115,7 @@ disable-model-invocation: false
 - **MERGE 시 새 entry 먼저 저장 → 구 forget**. 역순이면 사고 시 데이터 손실.
 - **M5 보안 위반은 즉시 active recall에서 제거**하고, 필요한 경우 민감값 없는 사실만 다시 저장한다. agent entry는 transcript에 원문이 남는 한계를 결과에 명시한다.
 - **자동 적용은 명백한 후보에만 수행**한다. 의미 손실 가능성이 있으면 `KEEP` 처리한다.
-- **메모리 파일 직접 fs 수정 금지** — 항상 forget/remember 도구 경유 (memory layer 가 인덱스/포맷 일관성 책임).
+- **메모리 파일 직접 fs 수정 금지** — 항상 forget/remember 도구 경유 (memory layer 가 인덱스/포맷 일관성 책임). `forget`은 `id`만 받으므로 제목·topic·scope로 대상을 추측하지 않는다.
 
 ## 트리거 예시
 
