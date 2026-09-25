@@ -1,6 +1,6 @@
 import { writeFileSync } from "node:fs";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { convertToLlm, VERSION } from "@earendil-works/pi-coding-agent";
+import { VERSION } from "@earendil-works/pi-coding-agent";
 import { PI_VCC_COMPACT_INSTRUCTION, parseKeepAndPrompt } from "../core/compact-args.ts";
 import { buildGlobalIndexById, loadGlobalIndexById } from "../core/global-indices.ts";
 import { loadSettings, type PiVccSettings } from "../core/settings.ts";
@@ -731,30 +731,10 @@ export const registerBeforeCompactHook = (pi: ExtensionAPI, piVersion: string = 
 			}
 		}
 
-		// convertToLlm is elementwise (drops/replaces per message, order
-		// preserved), so align ids by converting singletons — never by position.
-		const convertedWithIndices: Array<{
-			message: any;
-			sourceIndex: number | undefined;
-		}> = [];
-		for (let i = 0; i < agentMessages.length; i++) {
-			let converted: any[];
-			try {
-				converted = convertToLlm([agentMessages[i]]);
-			} catch {
-				continue;
-			}
-			if (converted.length === 0) continue;
-			convertedWithIndices.push({
-				message: converted[0],
-				sourceIndex: globalIndexById?.get(agentSelectedIds[i]),
-			});
-		}
-		const messages = convertedWithIndices.map((x) => x.message);
-		// Fail-closed: when no index map exists at all every slot is undefined,
-		// so refs are omitted rather than emitted window-relative (the bug being
-		// fixed). Parallel to `messages` by construction.
-		const sourceIndices = convertedWithIndices.map((x) => x.sourceIndex);
+		// Keep original roles. convertToLlm maps custom notices, summaries and bash
+		// output to user messages for transport, which destroys intent provenance.
+		const messages = agentMessages;
+		const sourceIndices = agentSelectedIds.map((id) => globalIndexById?.get(id));
 
 		// Count kept messages and estimate tokens
 		const keptIdx = (branchEntries as any[]).findIndex((e: any) => e.id === firstKeptEntryId);
@@ -803,6 +783,9 @@ export const registerBeforeCompactHook = (pi: ExtensionAPI, piVersion: string = 
 		const RANKED_BRIEF_TOKENS_PER_BLOCK = 15;
 		const summary = compileRanked({
 			messages,
+			userMessages: branchEntries
+				.filter((entry) => entry.type === "message" && entry.message.role === "user")
+				.map((entry: any) => entry.message),
 			sourceIndices,
 			rules: denoiseRules,
 			previousSummary: preparation.previousSummary,

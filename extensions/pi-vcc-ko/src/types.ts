@@ -1,3 +1,5 @@
+import type { Message } from "@earendil-works/pi-ai";
+
 export type CompactionReason = "manual" | "threshold" | "overflow";
 
 export interface FileOps {
@@ -8,6 +10,7 @@ export interface FileOps {
 
 export type NormalizedBlock =
 	| { kind: "user"; text: string; sourceIndex?: number }
+	| { kind: "custom"; customType: string; text: string; sourceIndex?: number }
 	| { kind: "assistant"; text: string; sourceIndex?: number }
 	| {
 			kind: "tool_call";
@@ -34,6 +37,7 @@ export type BashExecutionLike = {
 	command?: string;
 	output?: string;
 	exitCode?: number;
+	excludeFromContext?: boolean;
 };
 
 export const asBashExecution = (msg: unknown): BashExecutionLike | null =>
@@ -49,3 +53,10 @@ export type ToolCallPartLike = {
 
 export const isToolCallPart = (part: unknown): part is ToolCallPartLike =>
 	typeof part === "object" && part !== null && (part as ToolCallPartLike).type === "toolCall";
+
+/** Preserve persisted roles; LLM transport conversion must not classify user intent. */
+export type CompactionMessage =
+	| Message
+	| BashExecutionLike
+	| { role: "custom"; customType: string; content: Message["content"] }
+	| { role: "branchSummary" | "compactionSummary"; summary: string };
