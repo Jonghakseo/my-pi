@@ -14,20 +14,14 @@ export function registerContentTools(pi: ExtensionAPI): void {
 		name: "fetch_content",
 		label: "Fetch Content",
 		description:
-			"Fetch URL(s) and extract readable content as markdown. Supports YouTube video transcripts (with thumbnail), GitHub repository contents, and local video files (with frame thumbnail). Video frames can be extracted via timestamp/range or sampled across the entire video with frames alone. Falls back to Gemini for pages that block bots or fail Readability extraction. For YouTube and video files: ALWAYS pass the user's specific question via the prompt parameter — this directs the AI to focus on that aspect of the video, producing much better results than a generic extraction. Content is always stored and can be retrieved with get_search_content.",
+			"Extract text from web pages, GitHub, and PDFs. YouTube and local videos support frames only (timestamp/frames), not transcripts. Use get_search_content for full stored results.",
 		parameters: Type.Object({
 			url: Type.Optional(Type.String({ description: "Single URL to fetch" })),
 			urls: Type.Optional(Type.Array(Type.String(), { description: "Multiple URLs (parallel)" })),
-			prompt: Type.Optional(
-				Type.String({
-					description:
-						"Question or instruction for video analysis (YouTube and video files). Pass the user's specific question here — e.g. 'describe the book shown at the advice for beginners section'. Without this, a generic transcript extraction is used which may miss what the user is asking about.",
-				}),
-			),
 			timestamp: Type.Optional(
 				Type.String({
 					description:
-						"Extract video frame(s) at a timestamp or time range. Single: '1:23:45', '23:45', or '85' (seconds). Range: '23:41-25:00' extracts evenly-spaced frames across that span (default 6). Use frames with ranges to control density; single+frames uses a fixed 5s interval. YouTube requires yt-dlp + ffmpeg; local videos require ffmpeg. Use a range when you know the approximate area but not the exact moment — you'll get a contact sheet to visually identify the right frame.",
+						"Video frame time (seconds, MM:SS, or H:MM:SS) or range (start-end). A range extracts up to 6 frames by default; frames sets the count. Requires ffmpeg and yt-dlp for YouTube.",
 				}),
 			),
 			frames: Type.Optional(
@@ -35,13 +29,7 @@ export function registerContentTools(pi: ExtensionAPI): void {
 					minimum: 1,
 					maximum: 12,
 					description:
-						"Number of frames to extract. Use with timestamp range for custom density, with single timestamp to get N frames at 5s intervals, or alone to sample across the entire video. Requires yt-dlp + ffmpeg for YouTube, ffmpeg for local video.",
-				}),
-			),
-			model: Type.Optional(
-				Type.String({
-					description:
-						"Override the Gemini model for video/YouTube analysis (e.g. 'gemini-2.5-flash', 'gemini-3-flash-preview'). Defaults to config or gemini-3-flash-preview.",
+						"Sample 1–12 video frames. Without timestamp, samples the full video; with a single time, samples at 5-second intervals.",
 				}),
 			),
 		}),
@@ -64,10 +52,8 @@ export function registerContentTools(pi: ExtensionAPI): void {
 			// Heavy extract module graph loads on first fetch.
 			const { fetchAllContent } = await import("./extract.js");
 			const fetchResults = await fetchAllContent(urlList, signal, {
-				prompt: params.prompt,
 				timestamp: params.timestamp,
 				frames: params.frames,
-				model: params.model,
 			});
 			const successful = fetchResults.filter((r) => !r.error).length;
 			const totalChars = fetchResults.reduce((sum, r) => sum + r.content.length, 0);
@@ -95,7 +81,6 @@ export function registerContentTools(pi: ExtensionAPI): void {
 							successful: 0,
 							error: result.error,
 							responseId,
-							prompt: params.prompt,
 							timestamp: params.timestamp,
 							frames: params.frames,
 						},
@@ -138,7 +123,6 @@ export function registerContentTools(pi: ExtensionAPI): void {
 						truncated,
 						hasImage: imageCount > 0,
 						imageCount,
-						prompt: params.prompt,
 						timestamp: params.timestamp,
 						frames: params.frames,
 						duration: result.duration,
@@ -163,15 +147,12 @@ export function registerContentTools(pi: ExtensionAPI): void {
 			};
 		},
 
-		// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: fetch_content call rendering conditionally presents URL, prompt, frame, and model metadata.
 		renderCall(args, theme) {
-			const { url, urls, prompt, timestamp, frames, model } = args as {
+			const { url, urls, timestamp, frames } = args as {
 				url?: string;
 				urls?: string[];
-				prompt?: string;
 				timestamp?: string;
 				frames?: number;
-				model?: string;
 			};
 			const urlList = urls ?? (url ? [url] : []);
 			if (urlList.length === 0) {
@@ -197,13 +178,6 @@ export function registerContentTools(pi: ExtensionAPI): void {
 			if (typeof frames === "number") {
 				lines.push(theme.fg("dim", "  frames: ") + theme.fg("warning", String(frames)));
 			}
-			if (prompt) {
-				const display = prompt.length > 250 ? `${prompt.slice(0, 247)}...` : prompt;
-				lines.push(theme.fg("dim", "  prompt: ") + theme.fg("muted", `"${display}"`));
-			}
-			if (model) {
-				lines.push(theme.fg("dim", "  model: ") + theme.fg("warning", model));
-			}
 			return new Text(lines.join("\n"), 0, 0);
 		},
 
@@ -221,7 +195,6 @@ export function registerContentTools(pi: ExtensionAPI): void {
 				progress?: number;
 				hasImage?: boolean;
 				imageCount?: number;
-				prompt?: string;
 				timestamp?: string;
 				frames?: number;
 				duration?: number;
@@ -260,10 +233,6 @@ export function registerContentTools(pi: ExtensionAPI): void {
 					return new Text(`${statusLine}\n${theme.fg("dim", brief)}`, 0, 0);
 				}
 				const lines = [statusLine];
-				if (details?.prompt) {
-					const display = details.prompt.length > 250 ? `${details.prompt.slice(0, 247)}...` : details.prompt;
-					lines.push(theme.fg("dim", `  prompt: "${display}"`));
-				}
 				if (details?.timestamp) {
 					lines.push(theme.fg("dim", `  timestamp: ${details.timestamp}`));
 				}

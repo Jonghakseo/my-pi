@@ -155,18 +155,18 @@ describe("loadConfigSection", () => {
 		mkdirSync(tempDir, { recursive: true });
 		setConfigPathForTests(tempFile);
 
-		writeFileSync(tempFile, JSON.stringify({ searchModel: "first" }));
+		writeFileSync(tempFile, JSON.stringify({ exaApiKey: "first" }));
 		const first = loadConfigSection("reload-test", { value: "default" }, (raw) => ({
-			value: normalizeString(raw.searchModel, "default"),
+			value: normalizeString(raw.exaApiKey, "default"),
 		}));
 
-		writeFileSync(tempFile, JSON.stringify({ searchModel: "second" }));
+		writeFileSync(tempFile, JSON.stringify({ exaApiKey: "second" }));
 		const cached = loadConfigSection("reload-test", { value: "default" }, (raw) => ({
-			value: normalizeString(raw.searchModel, "default"),
+			value: normalizeString(raw.exaApiKey, "default"),
 		}));
 		invalidateConfig("reload-test");
 		const reloaded = loadConfigSection("reload-test", { value: "default" }, (raw) => ({
-			value: normalizeString(raw.searchModel, "default"),
+			value: normalizeString(raw.exaApiKey, "default"),
 		}));
 
 		expect(first.value).toBe("first");

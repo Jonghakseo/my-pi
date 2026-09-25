@@ -20,13 +20,8 @@ let activeConfigPath = CONFIG_PATH;
 export interface WebSearchConfig {
 	exaApiKey?: unknown;
 	perplexityApiKey?: unknown;
-	geminiApiKey?: unknown;
 	chromeProfile?: unknown;
-	searchProvider?: unknown;
-	provider?: unknown;
-	searchModel?: unknown;
-	video?: { enabled?: unknown; preferredModel?: unknown; maxSizeMB?: unknown };
-	youtube?: { enabled?: unknown; preferredModel?: unknown };
+	video?: { enabled?: unknown; maxSizeMB?: unknown };
 	githubClone?: {
 		enabled?: unknown;
 		maxRepoSizeMB?: unknown;

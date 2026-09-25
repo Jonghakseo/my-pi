@@ -1,45 +1,9 @@
 import { execFileSync } from "node:child_process";
-import { activityMonitor } from "./activity.js";
-import { type ExtractedContent, extractHeadingTitle, type FrameResult, type VideoFrame } from "./extract.js";
-import { isGeminiApiAvailable, queryGeminiApiWithVideo } from "./gemini-api.js";
-import { loadConfigSection, normalizeBoolean, normalizeString } from "./config.js";
+import type { FrameResult, VideoFrame } from "./extract.js";
 import { formatSeconds, isTimeoutError, mapFfmpegError, readExecError, trimErrorText } from "./utils.js";
-
-const YOUTUBE_PROMPT = `Extract the complete content of this YouTube video. Include:
-1. Video title, channel name, and duration
-2. A brief summary (2-3 sentences)
-3. Full transcript with timestamps
-4. Descriptions of any code, terminal commands, diagrams, slides, or UI shown on screen
-
-Format as markdown.`;
 
 const YOUTUBE_REGEX =
 	/(?:(?:www\.|m\.)?youtube\.com\/(?:watch\?.*v=|shorts\/|live\/|embed\/|v\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/;
-
-function shouldRethrow(err: unknown): boolean {
-	const message = err instanceof Error ? err.message : String(err);
-	return message.startsWith("Failed to parse ");
-}
-
-interface YouTubeConfig {
-	enabled: boolean;
-	preferredModel: string;
-}
-
-const YOUTUBE_DEFAULTS: YouTubeConfig = { enabled: true, preferredModel: "gemini-3-flash-preview" };
-let cachedConfig: YouTubeConfig | null = null;
-
-function loadYouTubeConfig(): YouTubeConfig {
-	if (cachedConfig) return cachedConfig;
-	cachedConfig = loadConfigSection("youtube", YOUTUBE_DEFAULTS, (raw) => {
-		const yt = raw.youtube ?? {};
-		return {
-			enabled: normalizeBoolean(yt.enabled, YOUTUBE_DEFAULTS.enabled),
-			preferredModel: normalizeString(yt.preferredModel, YOUTUBE_DEFAULTS.preferredModel),
-		};
-	});
-	return cachedConfig;
-}
 
 export function isYouTubeURL(url: string): { isYouTube: boolean; videoId: string | null } {
 	try {
@@ -52,45 +16,6 @@ export function isYouTubeURL(url: string): { isYouTube: boolean; videoId: string
 	const match = url.match(YOUTUBE_REGEX);
 	if (!match) return { isYouTube: false, videoId: null };
 	return { isYouTube: true, videoId: match[1] };
-}
-
-export function isYouTubeEnabled(): boolean {
-	return loadYouTubeConfig().enabled;
-}
-
-export async function extractYouTube(
-	url: string,
-	signal?: AbortSignal,
-	prompt?: string,
-	model?: string,
-): Promise<ExtractedContent | null> {
-	const config = loadYouTubeConfig();
-	const { videoId } = isYouTubeURL(url);
-	const canonicalUrl = videoId ? `https://www.youtube.com/watch?v=${videoId}` : url;
-	const effectivePrompt = prompt ?? YOUTUBE_PROMPT;
-	const effectiveModel = model ?? config.preferredModel;
-
-	const activityId = activityMonitor.logStart({ type: "fetch", url: `youtube.com/${videoId ?? "video"}` });
-
-	const result = await tryGeminiApi(canonicalUrl, effectivePrompt, effectiveModel, signal);
-
-	if (result) {
-		result.url = url;
-		if (videoId) {
-			const thumb = await fetchYouTubeThumbnail(videoId);
-			if (thumb) result.thumbnail = thumb;
-		}
-		activityMonitor.logComplete(activityId, 200);
-		return result;
-	}
-
-	if (signal?.aborted) {
-		activityMonitor.logComplete(activityId, 0);
-		return null;
-	}
-
-	activityMonitor.logError(activityId, "all extraction paths failed");
-	return null;
 }
 
 type StreamInfo = { streamUrl: string; duration: number | null };
@@ -169,47 +94,4 @@ export async function extractYouTubeFrames(
 	const frames = results.filter((f): f is VideoFrame => "data" in f);
 	const errorResult = results.find((f): f is { error: string } => "error" in f);
 	return { frames, duration: info.duration, error: frames.length === 0 && errorResult ? errorResult.error : null };
-}
-
-export async function fetchYouTubeThumbnail(videoId: string): Promise<{ data: string; mimeType: string } | null> {
-	try {
-		const res = await fetch(`https://img.youtube.com/vi/${videoId}/hqdefault.jpg`, {
-			signal: AbortSignal.timeout(5000),
-		});
-		if (!res.ok) return null;
-		const buffer = Buffer.from(await res.arrayBuffer());
-		if (buffer.length === 0) return null;
-		return { data: buffer.toString("base64"), mimeType: "image/jpeg" };
-	} catch (_err) {
-		return null;
-	}
-}
-
-async function tryGeminiApi(
-	url: string,
-	prompt: string,
-	model: string,
-	signal?: AbortSignal,
-): Promise<ExtractedContent | null> {
-	try {
-		if (!isGeminiApiAvailable()) return null;
-
-		if (signal?.aborted) return null;
-
-		const text = await queryGeminiApiWithVideo(prompt, url, {
-			model,
-			signal,
-			timeoutMs: 120000,
-		});
-
-		return {
-			url,
-			title: extractHeadingTitle(text) ?? "YouTube Video",
-			content: text,
-			error: null,
-		};
-	} catch (err) {
-		if (shouldRethrow(err)) throw err;
-		return null;
-	}
 }
