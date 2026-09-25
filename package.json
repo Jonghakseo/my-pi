@@ -15,6 +15,7 @@
 		"extensions/biome.json",
 		"extensions/bookmark/",
 		"extensions/custom-style/",
+		"extensions/debug-session/",
 		"extensions/diff-overlay/",
 		"extensions/dynamic-agents-md/",
 		"extensions/edit-tool-override/",
