@@ -1,9 +1,13 @@
 export type RecallScope = "lineage" | "all";
 export type RecallMode = "hybrid" | "touched";
+/** Rendered roles recall can filter on (see render-entries.ts). */
+export type RecallRole = "user" | "assistant" | "tool_result" | "bash" | "custom";
 
 const SCOPE_RE = /\bscope:(lineage|all)\b/i;
+const ROLE_RE = /\brole:(user|assistant|tool_result|bash|custom)\b/i;
 
 const VALID_MODES = new Set(["hybrid", "touched"]);
+const VALID_ROLES = new Set<RecallRole>(["user", "assistant", "tool_result", "bash", "custom"]);
 
 export const normalizeRecallScope = (scope?: unknown): RecallScope =>
 	typeof scope === "string" && scope.toLowerCase() === "all" ? "all" : "lineage";
@@ -24,5 +28,25 @@ export const parseRecallScope = (text: string): { scope: RecallScope; text: stri
 	return {
 		scope: normalizeRecallScope(match?.[1]),
 		text: text.replace(SCOPE_RE, "").replace(/\s+/g, " ").trim(),
+	};
+};
+
+/**
+ * Normalize a role param. Unlike scope and mode there is no default role:
+ * undefined means "every role", so an unrecognized value must not silently
+ * become a filter that hides most of the session.
+ */
+export const normalizeRecallRole = (role?: unknown): RecallRole | undefined => {
+	if (typeof role !== "string") return undefined;
+	const lower = role.toLowerCase() as RecallRole;
+	return VALID_ROLES.has(lower) ? lower : undefined;
+};
+
+/** Strip a `role:<role>` token from command text, mirroring parseRecallScope. */
+export const parseRecallRole = (text: string): { role?: RecallRole; text: string } => {
+	const match = text.match(ROLE_RE);
+	return {
+		role: normalizeRecallRole(match?.[1]),
+		text: text.replace(ROLE_RE, "").replace(/\s+/g, " ").trim(),
 	};
 };

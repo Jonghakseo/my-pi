@@ -244,13 +244,17 @@ export function expandEntryFile(
 	offset?: number,
 	limit?: number,
 ): string {
-	const { rawMessages } = loadAllMessages(sessionFile, true);
+	const { rendered, rawMessages } = loadAllMessages(sessionFile, true);
 
-	if (entryIndex < 0 || entryIndex >= rawMessages.length) {
+	// Look the entry up by its `#N` ref, never by array position: loading skips
+	// `role:"system"` messages (and may skip others), so position and `#N`
+	// diverge as soon as one entry before the target is left out.
+	const pos = rendered.findIndex((e) => e.index === entryIndex);
+	if (pos === -1) {
 		return `Entry #${entryIndex} not found in session history.`;
 	}
 
-	const msg = rawMessages[entryIndex];
+	const msg = rawMessages[pos];
 	const content = msg.content as unknown[];
 	const calls = findContentBearingCalls(content);
 
