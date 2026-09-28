@@ -8,23 +8,39 @@ export interface FileOps {
 	createdFiles?: string[];
 }
 
+/**
+ * Recall ref of the message a block came from: a session-global message index
+ * (`#N`, number) or a custom_message ref such as `"c3"` (`#cN`). See
+ * src/core/global-indices.ts. Undefined renders no ref (fail-closed).
+ */
+export type SourceRef = number | string;
+
 export type NormalizedBlock =
-	| { kind: "user"; text: string; sourceIndex?: number }
-	| { kind: "custom"; customType: string; text: string; sourceIndex?: number }
-	| { kind: "assistant"; text: string; sourceIndex?: number }
+	| { kind: "user"; text: string; sourceIndex?: SourceRef }
+	| {
+			kind: "custom";
+			customType: string;
+			text: string;
+			/** Pi's display flag: false marks model-only context injected by an extension. */
+			display?: boolean;
+			sourceIndex?: SourceRef;
+	  }
+	| { kind: "assistant"; text: string; sourceIndex?: SourceRef }
 	| {
 			kind: "tool_call";
 			name: string;
 			args: Record<string, unknown>;
-			sourceIndex?: number;
+			/** Provider tool-call id, used to pair a call with its own result. */
+			id?: string;
+			sourceIndex?: SourceRef;
 	  }
-	| { kind: "tool_result"; name: string; text: string; sourceIndex?: number }
+	| { kind: "tool_result"; name: string; text: string; toolCallId?: string; sourceIndex?: SourceRef }
 	| {
 			kind: "bash";
 			command: string;
 			output: string;
 			exitCode: number | undefined;
-			sourceIndex?: number;
+			sourceIndex?: SourceRef;
 	  };
 
 /**
@@ -58,5 +74,5 @@ export const isToolCallPart = (part: unknown): part is ToolCallPartLike =>
 export type CompactionMessage =
 	| Message
 	| BashExecutionLike
-	| { role: "custom"; customType: string; content: Message["content"] }
+	| { role: "custom"; customType: string; content: Message["content"]; display?: boolean }
 	| { role: "branchSummary" | "compactionSummary"; summary: string };

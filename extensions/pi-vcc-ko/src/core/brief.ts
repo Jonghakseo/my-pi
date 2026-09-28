@@ -243,6 +243,31 @@ const significantWordSpans = (flat: string): { start: number; end: number }[] =>
 	return words;
 };
 
+// Extension notices (subagent results, background job completions, injected
+// state snapshots) open with a status line and end with the outcome; the middle
+// is logs. Rendering them like assistant prose (80 + 120 words) let two notices
+// fill up to 45% of a 120-line brief with build output.
+const NOTICE_FIRST_LINE_CHARS = 200;
+const NOTICE_TAIL_WORDS = 40;
+// Pi's own summary messages are structured prose and keep the prose budget.
+const PROSE_CUSTOM_TYPES = new Set(["branchSummary", "compactionSummary"]);
+
+const compactNotice = (text: string, display?: boolean): string => {
+	const lines = normalizeForTokenBudget(text)
+		.split("\n")
+		.map((l) => l.trim())
+		.filter(Boolean);
+	if (lines.length === 0) return "";
+	const first =
+		lines[0].length > NOTICE_FIRST_LINE_CHARS ? `${clip(lines[0], NOTICE_FIRST_LINE_CHARS)}\u2026` : lines[0];
+	// display:false marks model-only context that the extension re-injects each turn.
+	if (display === false || lines.length === 1) return first;
+	const rest = lines.slice(1).join("\n");
+	const words = significantWordSpans(rest);
+	if (words.length <= NOTICE_TAIL_WORDS) return `${first}\n${rest}`;
+	return `${first}\n...\n${rest.slice(words[words.length - NOTICE_TAIL_WORDS].start).trimStart()}`;
+};
+
 const truncateTokensHeadTail = (text: string, headLimit: number, tailLimit: number): string => {
 	const flat = normalizeForTokenBudget(text);
 	if (headLimit <= 0 || tailLimit <= 0) return flat;
@@ -253,9 +278,11 @@ const truncateTokensHeadTail = (text: string, headLimit: number, tailLimit: numb
 	return `${head}\n...(middle truncated)...\n${tail}`;
 };
 
+// Tool results and extension notices do not end a user/assistant segment: an
+// async completion landing after the final answer must not demote that answer.
 const nextRenderableBlock = (blocks: NormalizedBlock[], index: number): NormalizedBlock | undefined => {
 	for (let i = index + 1; i < blocks.length; i++) {
-		if (blocks[i].kind !== "tool_result") return blocks[i];
+		if (blocks[i].kind !== "tool_result" && blocks[i].kind !== "custom") return blocks[i];
 	}
 	return undefined;
 };
@@ -448,7 +475,9 @@ export const buildBriefSections = (blocks: NormalizedBlock[]): BriefLine[] => {
 				break;
 			}
 			case "custom": {
-				const text = truncateTokensHeadTail(b.text, ASSISTANT_HEAD_WORDS, ASSISTANT_TAIL_WORDS);
+				const text = PROSE_CUSTOM_TYPES.has(b.customType)
+					? truncateTokensHeadTail(b.text, ASSISTANT_HEAD_WORDS, ASSISTANT_TAIL_WORDS)
+					: compactNotice(b.text, b.display);
 				const header = `[custom:${b.customType}]`;
 				if (text) pushText(header, text, b.sourceIndex != null ? ` (#${b.sourceIndex})` : "");
 				lastHeader = header;

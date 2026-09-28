@@ -3,6 +3,10 @@ import { type DenoiseRules, builtinRules } from "../core/rules.ts";
 import { collapseSkillLines } from "../core/skill-collapse.ts";
 import type { NormalizedBlock } from "../types.ts";
 
+// A user message often states two standing constraints at once ("delegate code
+// edits to workers", "don't ask me"); more than that is usually a pasted rule list.
+const PREFS_PER_BLOCK = 2;
+
 export const extractPreferences = (blocks: NormalizedBlock[], rules: DenoiseRules = builtinRules()): string[] => {
 	const prefs: string[] = [];
 	const seen = new Set<string>();
@@ -29,7 +33,7 @@ export const extractPreferences = (blocks: NormalizedBlock[], rules: DenoiseRule
 			prefs.push(clipped);
 
 			// Cap per user block to avoid pasting long rule lists as many prefs.
-			if (++perBlock >= 1) break;
+			if (++perBlock >= PREFS_PER_BLOCK) break;
 		}
 	}
 
@@ -41,7 +45,12 @@ export const extractPreferences = (blocks: NormalizedBlock[], rules: DenoiseRule
  * Called by `buildSections` so that the two sections do not overlap.
  */
 export const dedupPreferencesAgainstGoals = (prefs: string[], goals: string[]): string[] => {
-	const norm = (s: string) => s.trim().toLowerCase();
+	// Request lines carry a trailing recall ref such as " (#12)"; compare without it.
+	const norm = (s: string) =>
+		s
+			.replace(/\s*\(#c?\d+\)$/, "")
+			.trim()
+			.toLowerCase();
 	const goalSet = new Set(goals.map(norm));
 	return prefs.filter((p) => !goalSet.has(norm(p)));
 };

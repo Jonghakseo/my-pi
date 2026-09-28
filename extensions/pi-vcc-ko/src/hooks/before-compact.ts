@@ -1,11 +1,12 @@
 import { writeFileSync } from "node:fs";
+import { homedir } from "node:os";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { VERSION } from "@earendil-works/pi-coding-agent";
 import { PI_VCC_COMPACT_INSTRUCTION, parseKeepAndPrompt } from "../core/compact-args.ts";
-import { buildGlobalIndexById, loadGlobalIndexById } from "../core/global-indices.ts";
+import { buildGlobalRefById, customRef, loadGlobalRefById, type RecallRef } from "../core/global-indices.ts";
 import { loadSettings, type PiVccSettings } from "../core/settings.ts";
 import { compileRules } from "../core/rules.ts";
-import { compileRanked } from "../core/summarize.ts";
+import { compileRankedWithState, readCompactionState, summarySections } from "../core/summarize.ts";
 import {
 	calibrateCharsPerToken,
 	estimateMessageContentChars,
@@ -13,7 +14,7 @@ import {
 	estimateTokensFromChars,
 } from "../core/token-estimate.ts";
 import type { PiVccCompactionDetails } from "../details.ts";
-import type { CompactionReason } from "../types.ts";
+import type { CompactionReason, SourceRef } from "../types.ts";
 
 export { PI_VCC_COMPACT_INSTRUCTION } from "../core/compact-args.ts";
 
@@ -714,27 +715,48 @@ export const registerBeforeCompactHook = (pi: ExtensionAPI, piVersion: string = 
 		// all branches); the selected window is zero-based. Map each selected
 		// entry id to its global index so emitted (#N) refs resolve via recall.
 		// Primary source is the in-memory tree (file order, synchronously
-		// persisted); the session file is the streaming fallback.
-		let globalIndexById: Map<string, number> | undefined;
+		// persisted); the session file is the streaming fallback. Custom messages
+		// get `cN` refs from their own index space (recall expands them too).
+		let refById: Map<string, RecallRef> | undefined;
 		try {
 			const all = (ctx as any)?.sessionManager?.getEntries?.();
-			if (Array.isArray(all)) globalIndexById = buildGlobalIndexById(all);
+			if (Array.isArray(all)) refById = buildGlobalRefById(all);
 		} catch {
-			globalIndexById = undefined;
+			refById = undefined;
 		}
-		if (!globalIndexById) {
+		if (!refById) {
 			try {
 				const sf = (ctx as any)?.sessionManager?.getSessionFile?.();
-				if (typeof sf === "string" && sf) globalIndexById = loadGlobalIndexById(sf);
+				if (typeof sf === "string" && sf) refById = loadGlobalRefById(sf);
 			} catch {
-				globalIndexById = undefined;
+				refById = undefined;
 			}
 		}
+		const sourceRefOf = (id: string | undefined): SourceRef | undefined => {
+			const ref = id ? refById?.get(id) : undefined;
+			if (!ref) return undefined;
+			return ref.kind === "custom" ? customRef(ref.index) : ref.index;
+		};
 
 		// Keep original roles. convertToLlm maps custom notices, summaries and bash
 		// output to user messages for transport, which destroys intent provenance.
 		const messages = agentMessages;
-		const sourceIndices = agentSelectedIds.map((id) => globalIndexById?.get(id));
+		const sourceIndices = agentSelectedIds.map(sourceRefOf);
+
+		// Intent is rebuilt from every user entry on the branch (earlier windows
+		// included); refs let request lines point back at the full message.
+		const userEntries = (branchEntries as any[]).filter(
+			(entry) => entry.type === "message" && entry.message?.role === "user",
+		);
+
+		// Structured file/commit state of the previous pi-vcc-ko compaction (the
+		// newest compaction on the branch is the one that supplied previousSummary).
+		// Older summaries without state fall back to wrap-aware text parsing.
+		const lastCompaction = [...(branchEntries as any[])].reverse().find((e) => e.type === "compaction");
+		const previousState =
+			preparation.previousSummary && lastCompaction?.details?.compactor === "pi-vcc-ko"
+				? readCompactionState(lastCompaction.details.state)
+				: undefined;
 
 		// Count kept messages and estimate tokens
 		const keptIdx = (branchEntries as any[]).findIndex((e: any) => e.id === firstKeptEntryId);
@@ -781,14 +803,15 @@ export const registerBeforeCompactHook = (pi: ExtensionAPI, piVersion: string = 
 		const RANKED_BRIEF_BUDGET_TOKENS = 1100;
 		const RANKED_BRIEF_CEILING_TOKENS = 2000;
 		const RANKED_BRIEF_TOKENS_PER_BLOCK = 15;
-		const summary = compileRanked({
+		const { summary, state } = compileRankedWithState({
 			messages,
-			userMessages: branchEntries
-				.filter((entry) => entry.type === "message" && entry.message.role === "user")
-				.map((entry: any) => entry.message),
+			userMessages: userEntries.map((entry) => entry.message),
+			userSourceIndices: userEntries.map((entry) => sourceRefOf(entry.id)),
 			sourceIndices,
 			rules: denoiseRules,
 			previousSummary: preparation.previousSummary,
+			previousState,
+			pathDisplay: { root: typeof (ctx as any)?.cwd === "string" ? (ctx as any).cwd : undefined, home: homedir() },
 			fileOps: {
 				readFiles: [...preparation.fileOps.read],
 				modifiedFiles: [...preparation.fileOps.written, ...preparation.fileOps.edited],
@@ -832,19 +855,22 @@ export const registerBeforeCompactHook = (pi: ExtensionAPI, piVersion: string = 
 			tokenEstimate,
 			summaryLength: summary.length,
 			summaryPreview: summary.slice(0, 500),
-			sections: [...summary.matchAll(/^\[(.+?)\]/gm)].map((m) => m[1]),
+			sections: summarySections(summary),
+			previousStateUsed: Boolean(previousState),
 		});
 
 		const details: PiVccCompactionDetails = {
 			compactor: "pi-vcc-ko",
-			// version 2 = refs are session-global (recall index space); version 1
-			// summaries carried window-relative refs (issue #28).
-			version: 2,
-			sections: [...summary.matchAll(/^\[(.+?)\]/gm)].map((m) => m[1]),
+			// version 3 = session-global `#N` refs (v2, issue #28) plus `#cN` refs for
+			// custom messages and structured `state`; version 1 summaries carried
+			// window-relative refs.
+			version: 3,
+			sections: summarySections(summary),
 			sourceMessageCount: agentMessages.length,
 			previousSummaryUsed: Boolean(preparation.previousSummary),
 			reason,
 			willRetry,
+			state,
 		};
 
 		lastCompactWasPiVcc = isPiVcc;
