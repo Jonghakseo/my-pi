@@ -4,8 +4,7 @@ import { overrideAnthropicCacheTtl } from "./payload.js";
 import { isAnthropicLongCacheEnabled, setAnthropicLongCacheEnabled } from "./state.js";
 
 const STATUS_KEY = "anthropic-long-cache";
-const COMMAND = "anthropic-long-cahce";
-const COMMAND_ALIAS = "anthropic-long-cache";
+const COMMAND = "anthropic-long-cache";
 const COMMAND_ARGUMENTS = ["on", "off"];
 
 export function getArgumentCompletions(prefix: string): AutocompleteItem[] | null {
@@ -53,13 +52,11 @@ async function handleCommand(args: string, ctx: ExtensionContext): Promise<void>
 }
 
 export default function anthropicLongCache(pi: ExtensionAPI): void {
-	for (const name of [COMMAND, COMMAND_ALIAS]) {
-		pi.registerCommand(name, {
-			description: "현재 세션의 Anthropic 프롬프트 캐시 TTL 설정 (on|off)",
-			getArgumentCompletions,
-			handler: (args, ctx) => handleCommand(args, ctx),
-		});
-	}
+	pi.registerCommand(COMMAND, {
+		description: "현재 세션의 Anthropic 프롬프트 캐시 TTL 설정 (on|off)",
+		getArgumentCompletions,
+		handler: (args, ctx) => handleCommand(args, ctx),
+	});
 
 	pi.on("before_provider_request", (event, ctx) => {
 		if (ctx.model?.provider !== "anthropic") return;
