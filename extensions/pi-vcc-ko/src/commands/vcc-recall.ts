@@ -4,6 +4,7 @@ import { getActiveLineageEntryIds } from "../core/lineage.ts";
 import { filterLoadedByRole, loadAllMessages, withNonEmptySummary } from "../core/load-messages.ts";
 import { parseRecallRole, parseRecallScope } from "../core/recall-scope.ts";
 import { searchEntriesDetailed } from "../core/search-entries.ts";
+import { RECALL_OUTPUT_CUSTOM_TYPE } from "../types.ts";
 
 const PAGE_SIZE = 5;
 const DEFAULT_RECENT = 25;
@@ -30,7 +31,10 @@ export const registerVccRecallCommand = (pi: ExtensionAPI) => {
 			const sendRecent = () => {
 				const recent = withNonEmptySummary(load().rendered).slice(-DEFAULT_RECENT);
 				const output = (parsed.scope === "all" ? "Scope: all\n\n" : "") + formatRecallOutput(recent);
-				pi.sendMessage({ customType: "vcc-recall", content: output, display: true }, { triggerTurn: true });
+				pi.sendMessage(
+					{ customType: RECALL_OUTPUT_CUSTOM_TYPE, content: output, display: true },
+					{ triggerTurn: true },
+				);
 			};
 			if (!withRole.text) {
 				// No query: show recent
@@ -80,7 +84,7 @@ export const registerVccRecallCommand = (pi: ExtensionAPI) => {
 				const text =
 					`Page ${page} is outside the available range 1-${totalPages} ` +
 					`(${hits.length} matches${scopeSuffix}${truncationNote}). ${guidance}`;
-				pi.sendMessage({ customType: "vcc-recall", content: text, display: true }, { triggerTurn: true });
+				pi.sendMessage({ customType: RECALL_OUTPUT_CUSTOM_TYPE, content: text, display: true }, { triggerTurn: true });
 				return;
 			}
 
@@ -92,7 +96,7 @@ export const registerVccRecallCommand = (pi: ExtensionAPI) => {
 					: `${hits.length} matches${scopeSuffix}${truncationNote}`;
 			const footer = page < totalPages ? `\n--- ${COMMAND} ${query}${scopeArg} page:${page + 1} ---` : "";
 			const output = formatRecallOutput(pageResults, query, header) + footer;
-			pi.sendMessage({ customType: "vcc-recall", content: output, display: true }, { triggerTurn: true });
+			pi.sendMessage({ customType: RECALL_OUTPUT_CUSTOM_TYPE, content: output, display: true }, { triggerTurn: true });
 		},
 	});
 };

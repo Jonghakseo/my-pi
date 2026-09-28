@@ -1,6 +1,7 @@
 import type { Message } from "@earendil-works/pi-ai";
 import { textOf } from "./content.ts";
 import { isCountedCustomEntry, isCountedMessageEntry } from "./global-indices.ts";
+import { RECALL_OUTPUT_CUSTOM_TYPE } from "../types.ts";
 import { forEachJsonlLine } from "./jsonl.ts";
 import { type CustomPseudoMessage, type RenderedEntry, renderMessage } from "./render-entries.ts";
 
@@ -69,6 +70,8 @@ export const loadAllMessages = (
 		if (isCountedCustomEntry(entry)) {
 			const index = customIndex++;
 			if (!includeCustom) return;
+			// The command's own output (still counted, so #cN stays aligned).
+			if (entry.customType === RECALL_OUTPUT_CUSTOM_TYPE) return;
 			if (allowedEntryIds && !allowedEntryIds.has(entry.id)) return;
 			const text = textOf(entry.content);
 			if (text.trim().length === 0) return;

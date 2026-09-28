@@ -100,6 +100,17 @@ describe("custom_message entries", () => {
 		expect(rendered.filter((e) => e.role === "custom").map((e) => e.ref)).toEqual(["c1"]);
 	});
 
+	it("never indexes the recall command's own output, which would make repeated queries match themselves", () => {
+		const file = writeSession([
+			messageEntry("m1", user("redis ttl decision")),
+			customEntry("c1", "vcc-recall", '3 matches for "redis ttl":\n\n#0 [user] redis ttl decision'),
+			customEntry("c2", "subagent-tool", "[subagent:worker#7] completed"),
+		]);
+		const { rendered, rawMessages } = loadAllMessages(file, false, undefined, { includeCustom: true });
+		expect(rendered.filter((e) => e.role === "custom").map((e) => e.ref)).toEqual(["c1"]);
+		expect(searchEntries(rendered, rawMessages, "matches for").map((h) => h.ref)).toEqual([]);
+	});
+
 	it("is excluded by default so message-only callers are unaffected", () => {
 		const file = writeSession(session());
 		const { rendered, rawMessages } = loadAllMessages(file, false);

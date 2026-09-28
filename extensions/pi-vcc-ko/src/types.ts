@@ -70,6 +70,13 @@ export type ToolCallPartLike = {
 export const isToolCallPart = (part: unknown): part is ToolCallPartLike =>
 	typeof part === "object" && part !== null && (part as ToolCallPartLike).type === "toolCall";
 
+/**
+ * customType of the `/pi-vcc-ko-recall` command's output message. Recall output
+ * is never indexed by recall (a repeated query would match its own previous
+ * output) and never summarized.
+ */
+export const RECALL_OUTPUT_CUSTOM_TYPE = "vcc-recall";
+
 /** Preserve persisted roles; LLM transport conversion must not classify user intent. */
 export type CompactionMessage =
 	| Message

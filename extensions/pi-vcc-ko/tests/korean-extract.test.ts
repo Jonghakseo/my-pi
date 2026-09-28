@@ -36,20 +36,20 @@ describe("한국어 목표 추출 (extractGoals)", () => {
 		expect(goals.some((g) => g.includes("회원가입"))).toBe(true);
 	});
 
-	it("짧은 한국어 작업 지시(8자 이상)도 후속 스코프로 인식한다", () => {
+	it("짧은 한국어 작업 지시(8자 이상)도 최신 요청으로 인식한다", () => {
 		const blocks: NormalizedBlock[] = [
 			{ kind: "user", text: "로그인 버그 수정해줘" },
 			{ kind: "assistant", text: "완료했습니다" },
 			{ kind: "user", text: "테스트 케이스 추가" },
 		];
 		const goals = extractGoals(blocks);
-		expect(goals).toContain("[Scope change]");
+		expect(goals).toContain("[Latest request]");
 		expect(goals.some((g) => g.includes("테스트"))).toBe(true);
 	});
 
 	// 50세션 샘플링에서 발견: 후속 지시 동사(찾아/확인/검토/정리)가 TASK_RE_KO에 없어
 	// 최종 사용자 의도가 스코프 변경으로 추적되지 않았다. 완료형(확인했어요)은 제외한다.
-	it("후속 지시 동사(정리/확인)를 스코프 변경으로 추적한다", () => {
+	it("후속 지시 동사(정리/확인)를 최신 요청으로 추적한다", () => {
 		const blocks: NormalizedBlock[] = [
 			{ kind: "user", text: "리펙토링 작업 시작했어" },
 			{ kind: "tool_call", name: "Read", args: { file_path: "a.ts" } },
@@ -57,7 +57,7 @@ describe("한국어 목표 추출 (extractGoals)", () => {
 			{ kind: "user", text: "지금 세션 모델이 뭔지 확인해봐" },
 		];
 		const goals = extractGoals(blocks);
-		const scopeIdx = goals.indexOf("[Scope change]");
+		const scopeIdx = goals.indexOf("[Latest request]");
 		expect(scopeIdx).toBeGreaterThan(-1);
 		const scope = goals.slice(scopeIdx + 1).join("\n");
 		expect(scope).toContain("확인해봐");
@@ -70,18 +70,20 @@ describe("한국어 목표 추출 (extractGoals)", () => {
 			{ kind: "user", text: "짧게 흐름을 요약해줘." },
 		];
 		const goals = extractGoals(blocks);
-		const scopeIdx = goals.indexOf("[Scope change]");
+		const scopeIdx = goals.indexOf("[Latest request]");
 		expect(scopeIdx).toBeGreaterThan(-1);
 		expect(goals.slice(scopeIdx + 1).join("\n")).toContain("요약해줘");
 	});
 
-	it("완료형 보고(확인했어요)는 스코프 변경으로 추적하지 않는다", () => {
+	it("완료형 보고(확인했어요)는 후속 요청으로 추적하지 않는다", () => {
 		const blocks: NormalizedBlock[] = [
 			{ kind: "user", text: "리펙토링 작업 시작했어" },
 			{ kind: "tool_call", name: "Read", args: { file_path: "a.ts" } },
 			{ kind: "user", text: "확인했어요. 잘 되네요." },
 		];
-		expect(extractGoals(blocks).includes("[Scope change]")).toBe(false);
+		const goals = extractGoals(blocks);
+		expect(goals.includes("[Scope change]")).toBe(false);
+		expect(goals.includes("[Latest request]")).toBe(false);
 	});
 
 	it("한국어 커맨드 템플릿 신호에서 목표 수집을 중단한다", () => {

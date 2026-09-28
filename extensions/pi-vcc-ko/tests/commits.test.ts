@@ -32,12 +32,51 @@ describe("commit extraction", () => {
 		]);
 	});
 
-	it("does not take an unrelated hex string as the commit hash", () => {
+	it("records nothing when the output does not prove the commit (redirected, compressed, unrelated hex)", () => {
 		const blocks: NormalizedBlock[] = [
 			commitCall("a", "feat: quiet commit"),
 			result("a", "blob 3e8996c0 stored\nrange abc1234..def5678"),
+			commitCall("b", "fix: redirected"),
+			result("b", "(no output)"),
+			commitCall("c", "fix: never answered"),
 		];
-		expect(extractCommits(blocks)).toEqual([{ message: "feat: quiet commit" }]);
+		expect(extractCommits(blocks)).toEqual([]);
+	});
+
+	it("accepts `git commit -q && git log --oneline -1` when the logged subject is the commit's own", () => {
+		const blocks: NormalizedBlock[] = [
+			{
+				kind: "tool_call",
+				name: "bash",
+				id: "a",
+				args: {
+					command: 'git add x && git commit -q -m "fix: sort pickle groups by last reply" && git log --oneline -1',
+				},
+			},
+			result("a", "▶ lint staged index (zero warnings)\n410606663 fix: sort pickle groups by last reply\n"),
+		];
+		expect(extractCommits(blocks)).toEqual([{ hash: "410606663", message: "fix: sort pickle groups by last reply" }]);
+	});
+
+	it("rejects a logged commit whose subject is someone else's (the commit failed, log shows the previous one)", () => {
+		const blocks: NormalizedBlock[] = [
+			{
+				kind: "tool_call",
+				name: "bash",
+				id: "a",
+				args: { command: 'git commit -q -m "feat: new work"; git log --oneline -1' },
+			},
+			result("a", "3674451ec fix: an older commit\n"),
+		];
+		expect(extractCommits(blocks)).toEqual([]);
+	});
+
+	it("takes the subject from git when the message is passed through a shell variable", () => {
+		const blocks: NormalizedBlock[] = [
+			{ kind: "tool_call", name: "bash", id: "a", args: { command: 'msg="docs: sync policy"; git commit -m "$msg"' } },
+			result("a", "[main bc19e8e7415] docs: sync policy\n 1 file changed"),
+		];
+		expect(extractCommits(blocks)).toEqual([{ hash: "bc19e8e7415", message: "docs: sync policy" }]);
 	});
 
 	it("accepts git's root-commit and detached HEAD confirmation lines", () => {

@@ -46,14 +46,15 @@ describe("extractGoals", () => {
 		expect(goals.some((g) => g.includes("refactor"))).toBe(true);
 	});
 
-	it("detects scope change from new task statements", () => {
+	it("tracks a new task statement as the latest request, not as a scope change", () => {
 		const blocks: NormalizedBlock[] = [
 			{ kind: "user", text: "Fix login bug" },
 			{ kind: "assistant", text: "done" },
 			{ kind: "user", text: "Now implement the user registration flow" },
 		];
 		const goals = extractGoals(blocks);
-		expect(goals).toContain("[Scope change]");
+		expect(goals).toContain("[Latest request]");
+		expect(goals).not.toContain("[Scope change]");
 	});
 
 	it("keeps latest scope change only", () => {

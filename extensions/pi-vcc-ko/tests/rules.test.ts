@@ -61,7 +61,7 @@ describe("주입 규칙 동작", () => {
 		expect(goals).toEqual(["로그인 버그 고쳐줘"]);
 	});
 
-	it("커스텀 taskVerbs가 후속 지시를 스코프 변경으로 추적한다", () => {
+	it("커스텀 taskVerbs가 후속 지시를 최신 요청으로 추적한다", () => {
 		const { rules } = compileRules({ taskVerbs: ["배포준비"] });
 		const blocks: NormalizedBlock[] = [
 			user("리팩토링 작업 시작했어"),
@@ -69,7 +69,7 @@ describe("주입 규칙 동작", () => {
 			user("이제 배포준비 해줘"),
 		];
 		const goals = extractGoals(blocks, rules);
-		expect(goals).toContain("[Scope change]");
+		expect(goals).toContain("[Latest request]");
 	});
 
 	it("커스텀 preferencePatterns가 선호를 추출한다", () => {

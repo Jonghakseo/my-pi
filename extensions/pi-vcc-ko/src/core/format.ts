@@ -27,7 +27,9 @@ const wrapLine = (line: string, maxChars: number): string[] => {
 
 	while (prefix.length + remaining.length > maxChars) {
 		const available = Math.max(20, maxChars - prefix.length);
-		let splitAt = remaining.lastIndexOf(" ", available);
+		// A space split must leave the line strictly shorter than maxChars so a
+		// full-width line always means a mid-token split (see unwrapHeaderLines).
+		let splitAt = remaining.lastIndexOf(" ", available - 1);
 		if (splitAt < Math.floor(available * 0.5)) splitAt = available;
 
 		wrapped.push(prefix + remaining.slice(0, splitAt).trimEnd());
@@ -46,27 +48,37 @@ export const wrapLongLines = (text: string, maxChars = TUI_SAFE_LINE_CHARS): str
 		.join("\n");
 
 /**
+ * Whether wrapLine cut this physical line in the middle of a token (so the
+ * continuation must be re-joined without a space).
+ *
+ * wrapLine cuts mid-token only when no space falls in the second half of the
+ * chunk, and then the line fills the width exactly. Summaries written before
+ * the space-split fix could also fill the width with a split AT a space, so a
+ * full-width line counts as a mid-token cut only if it also has no space in its
+ * second half (index 64 covers continuation indents up to 8) and does not end
+ * with a list comma, which is always followed by a space.
+ */
+const isMidTokenCut = (line: string, maxChars: number): boolean =>
+	line.length >= maxChars && !line.endsWith(",") && !/\s/.test(line.slice(Math.ceil((maxChars + 8) / 2)));
+
+/**
  * Inverse of wrapLongLines for bullet lines of header sections: re-join the
  * indented continuation lines that wrapLine produced for a `- ` line.
- *
- * wrapLine splits at the last space that fits, or mid-token (exactly at the
- * width) when no space fits in the second half of the line. A physical line
- * that fills the width is therefore re-joined without a space. Merges used to
- * read only the first physical line, silently dropping the rest of long file
- * lists, commit messages and goals.
+ * Merges used to read only the first physical line, silently dropping the
+ * rest of long file lists, commit messages and goals.
  */
 export const unwrapHeaderLines = (text: string, maxChars = TUI_SAFE_LINE_CHARS): string[] => {
 	const out: string[] = [];
-	let lastPhysicalLength = 0;
+	let lastPhysical = "";
 	for (const line of text.split("\n")) {
 		const prev = out[out.length - 1];
 		if (prev?.startsWith("- ") && /^\s{2,}\S/.test(line)) {
-			const joiner = lastPhysicalLength >= maxChars ? "" : " ";
+			const joiner = isMidTokenCut(lastPhysical, maxChars) ? "" : " ";
 			out[out.length - 1] = `${prev}${joiner}${line.trim()}`;
 		} else {
 			out.push(line);
 		}
-		lastPhysicalLength = line.length;
+		lastPhysical = line;
 	}
 	return out;
 };

@@ -10,8 +10,9 @@
  * as plain text, the wrapper boilerplate and the quoted parent conversation
  * became the [Session Goal] of a subagent session (and the actual request at
  * line 140 of 142 was never reached). The rule is a general document shape,
- * not a specific tool's wording: keep the request section when one exists,
- * otherwise drop sections declared as reference material.
+ * not a specific tool's wording: keep the request section (plus any text
+ * before the first marker) when one exists, otherwise drop sections declared
+ * as reference material.
  */
 
 // A line holding only a bracketed upper-case title, optionally "TITLE — QUALIFIER".
@@ -48,10 +49,12 @@ export const focusStructuredPrompt = (text: string): string => {
 
 	const requests = sections.filter((s) => REQUEST_TITLE_RE.test(s.title) && !REFERENCE_TITLE_RE.test(s.title));
 	if (requests.length > 0) {
-		const focused = requests
-			.map((s) => lines.slice(s.start, s.end).join("\n"))
-			.join("\n")
-			.trim();
+		// Text before the first marker is what the sender wrote around a pasted
+		// document (typically the user's own instruction), never reference material.
+		const preamble = lines.slice(0, markers[0].line).join("\n").trim();
+		const focused = [preamble, ...requests.map((s) => lines.slice(s.start, s.end).join("\n").trim())]
+			.filter(Boolean)
+			.join("\n");
 		return focused || text;
 	}
 

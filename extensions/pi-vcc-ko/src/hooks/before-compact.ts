@@ -749,14 +749,16 @@ export const registerBeforeCompactHook = (pi: ExtensionAPI, piVersion: string = 
 			(entry) => entry.type === "message" && entry.message?.role === "user",
 		);
 
-		// Structured file/commit state of the previous pi-vcc-ko compaction (the
-		// newest compaction on the branch is the one that supplied previousSummary).
-		// Older summaries without state fall back to wrap-aware text parsing.
-		const lastCompaction = [...(branchEntries as any[])].reverse().find((e) => e.type === "compaction");
-		const previousState =
-			preparation.previousSummary && lastCompaction?.details?.compactor === "pi-vcc-ko"
-				? readCompactionState(lastCompaction.details.state)
-				: undefined;
+		// Structured file/commit state from the newest pi-vcc-ko compaction on the
+		// branch, even when a later compaction came from elsewhere (core fallback on
+		// overflow, skipForProviders, another compaction extension): the state is
+		// cumulative and merging is idempotent, so an older one only misses what the
+		// foreign window touched (pi-core carries its files in preparation.fileOps).
+		// Summaries without state fall back to wrap-aware text parsing.
+		const lastPiVccCompaction = [...(branchEntries as any[])]
+			.reverse()
+			.find((e) => e.type === "compaction" && e.details?.compactor === "pi-vcc-ko");
+		const previousState = lastPiVccCompaction ? readCompactionState(lastPiVccCompaction.details.state) : undefined;
 
 		// Count kept messages and estimate tokens
 		const keptIdx = (branchEntries as any[]).findIndex((e: any) => e.id === firstKeptEntryId);
