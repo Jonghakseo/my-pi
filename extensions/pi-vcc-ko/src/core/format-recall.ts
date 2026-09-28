@@ -80,8 +80,13 @@ export const formatRecallOutput = (entries: SearchHit[], query?: string, headerO
 
 	const lines = entries.map((e) => {
 		const fileSuffix = e.files?.length ? ` files:[${e.files.join(", ")}]` : "";
+		// Custom entries keep their source visible: [custom:subagent-tool].
+		const role = e.role === "custom" && e.customType ? `custom:${e.customType}` : e.role;
+		const dupSuffix = e.duplicateRefs?.length
+			? ` (same content also at ${e.duplicateRefs.map((r) => `#${r}`).join(", ")})`
+			: "";
 		const body = query && e.snippet ? e.snippet : e.summary;
-		return `#${e.index} [${e.role}]${fileSuffix} ${body}`;
+		return `#${e.ref} [${role}]${fileSuffix}${dupSuffix} ${body}`;
 	});
 
 	return `${header}\n\n${lines.join("\n\n")}`;

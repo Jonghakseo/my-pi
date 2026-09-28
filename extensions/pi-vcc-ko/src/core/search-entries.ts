@@ -1,13 +1,16 @@
 import type { Message } from "@earendil-works/pi-ai";
 import { asBashExecution } from "../types.ts";
 import { clip, extractToolCallArgsText, extractToolCallText, isContentBearing, textOf } from "./content.ts";
-import type { RenderedEntry } from "./render-entries.ts";
+import { asCustomPseudoMessage, type RenderedEntry } from "./render-entries.ts";
 
 export interface SearchHit extends RenderedEntry {
 	/** Context snippet around the first matched term (only when query provided) */
 	snippet?: string;
 	/** Number of query terms matched (for ranking) */
 	matchCount?: number;
+	/** Refs of later entries folded into this hit because their searchable
+	 *  text is identical (see `foldDuplicates`), chronological. */
+	duplicateRefs?: string[];
 }
 
 /**
@@ -93,10 +96,18 @@ const hasNestedQuantifier = (pattern: string): boolean => {
 	return false;
 };
 
+/**
+ * A pattern that is exactly one bracket expression (`[subagent:worker#41]`,
+ * `[blocked]`) is text an agent pasted, not a character class: compiled as a
+ * class it matches any entry containing one of its letters, i.e. nearly all.
+ */
+const SINGLE_BRACKET_RE = /^\[[^\]]+\]$/;
+
 /** Try to compile as regex; fall back to escaped literal. Patterns with nested
- *  unbounded quantifiers are treated as literals rather than compiled. */
+ *  unbounded quantifiers, and lone bracket expressions, are treated as literals
+ *  rather than compiled. */
 const safeRegex = (pattern: string): RegExp => {
-	if (hasNestedQuantifier(pattern)) return new RegExp(escapeRegex(pattern), "i");
+	if (SINGLE_BRACKET_RE.test(pattern) || hasNestedQuantifier(pattern)) return new RegExp(escapeRegex(pattern), "i");
 	try {
 		return new RegExp(pattern, "i");
 	} catch {
@@ -415,6 +426,8 @@ const toolCallArgsText = (content: Message["content"]): string => {
  * is still fully visible there.
  */
 const fullText = (msg: Message): string => {
+	const custom = asCustomPseudoMessage(msg);
+	if (custom) return textOf(custom.content);
 	const bash = asBashExecution(msg);
 	if (bash) {
 		return `${bash.command ?? ""} ${bash.output ?? ""}`;
@@ -565,13 +578,60 @@ export interface SearchTuning {
 	cap?: number;
 }
 
+/**
+ * Minimum normalized length for two entries to be considered duplicates.
+ * Short identical texts ("ok", a one-line ack) are genuinely distinct events
+ * worth listing separately; long identical ones are the same file read or the
+ * same command re-run, and on real sessions they filled 4 of the top 5 hits.
+ */
+const DUPLICATE_FOLD_MIN_CHARS = 80;
+
+/** A hit plus what it takes to fold duplicates: its searchable text and its
+ *  chronological position in `entries`. */
+interface HitCandidate {
+	hit: SearchHit;
+	text: string;
+	pos: number;
+}
+
+/**
+ * Collapse hits with identical searchable text into the first one in result
+ * order, listing the rest as `duplicateRefs` (chronological). Called before
+ * capping so the cap spends its budget on distinct content.
+ */
+const foldDuplicates = (candidates: HitCandidate[]): SearchHit[] => {
+	const representatives = new Map<string, { hit: SearchHit; dups: Array<{ ref: string; pos: number }> }>();
+	const folded: Array<{ hit: SearchHit; dups: Array<{ ref: string; pos: number }> }> = [];
+	const out: SearchHit[] = [];
+	for (const c of candidates) {
+		const key = c.text.replace(/\s+/g, " ").trim();
+		if (key.length < DUPLICATE_FOLD_MIN_CHARS) {
+			out.push(c.hit);
+			continue;
+		}
+		const existing = representatives.get(key);
+		if (existing) {
+			existing.dups.push({ ref: c.hit.ref, pos: c.pos });
+			continue;
+		}
+		// Copy: the hit object is shared with the caller's entry only by spread
+		// above, but duplicateRefs is attached after the fact, so keep it local.
+		const rep = { hit: { ...c.hit }, dups: [] as Array<{ ref: string; pos: number }> };
+		representatives.set(key, rep);
+		folded.push(rep);
+		out.push(rep.hit);
+	}
+	for (const rep of folded) {
+		if (rep.dups.length === 0) continue;
+		rep.hit.duplicateRefs = rep.dups.sort((a, b) => a.pos - b.pos).map((d) => d.ref);
+	}
+	return out;
+};
+
 /** Drop scored hits below `floor` of the top score. The top hit's own score
  *  always passes (score >= score * floor for floor <= 1), so this can never
  *  turn a non-empty `scored` into an empty result. */
-const applyRelativeFloor = (
-	scored: Array<{ hit: SearchHit; score: number }>,
-	floor: number,
-): Array<{ hit: SearchHit; score: number }> => {
+const applyRelativeFloor = <T extends { score: number }>(scored: T[], floor: number): T[] => {
 	if (scored.length === 0) return scored;
 	const topScore = scored[0].score;
 	if (topScore <= 0) return scored;
@@ -619,6 +679,23 @@ export const searchEntriesDetailed = (
 	const rawQuery = query.trim();
 	const checkBudget = startBudget();
 
+	// Searchable text and haystack, built once for every path below. The
+	// haystack is the entry's own text plus the paths it touched — and NOT the
+	// role name: with the role in it, a query like `[subagent:worker#41]`
+	// compiled as a character class matched every entry through the letters of
+	// "assistant".
+	const texts: string[] = [];
+	const docs: string[] = [];
+	for (let i = 0; i < entries.length; i++) {
+		checkBudget();
+		const e = entries[i];
+		const msg = messages[i];
+		const text = msg ? fullText(msg) : e.summary;
+		const filePart = e.files?.join(" ") ?? "";
+		texts.push(text);
+		docs.push(filePart ? `${text} ${filePart}` : text);
+	}
+
 	// If the query looks like a single regex pattern (contains metacharacters),
 	// treat the whole thing as one pattern — don't split into terms.
 	//
@@ -628,24 +705,40 @@ export const searchEntriesDetailed = (
 	// versus 1.1% for term search. Mode detection must never silently lose
 	// results, so an empty regex result falls through to term search below.
 	//
-	// No relative-floor filtering here: regex matches are boolean (matched or
-	// not), there's no score to be relative to. Only the hard cap applies.
+	// No relative-floor filtering here: literal and regex matches are boolean
+	// (matched or not), there's no score to be relative to. Only the hard cap
+	// applies, and hits stay in chronological order.
 	if (looksLikeRegex(rawQuery)) {
-		const regex = safeRegex(rawQuery);
-		const hits: SearchHit[] = [];
+		// Literal first. Agents paste text they saw verbatim — `[subagent:worker#41]`,
+		// `foo(bar)` — and as a regex those mean something else entirely. An exact
+		// substring match is never wrong when it has hits, so it wins; queries with
+		// real regex intent (`alpha|beta`) have no literal hits and fall through.
+		const needle = rawQuery.toLowerCase();
+		const literalRe = new RegExp(escapeRegex(rawQuery), "i");
+		const literalHits: HitCandidate[] = [];
 		for (let i = 0; i < entries.length; i++) {
 			checkBudget();
-			const e = entries[i];
-			const msg = messages[i];
-			const text = msg ? fullText(msg) : e.summary;
-			const filePart = e.files?.join(" ") ?? "";
-			const hay = `${e.role} ${text} ${filePart}`;
-			if (regex.test(hay)) {
-				const snip = lineSnippet(text, regex);
-				hits.push({ ...e, snippet: snip, matchCount: 1 });
-			}
+			if (!docs[i].toLowerCase().includes(needle)) continue;
+			literalHits.push({
+				hit: { ...entries[i], snippet: lineSnippet(texts[i], literalRe), matchCount: 1 },
+				text: texts[i],
+				pos: i,
+			});
 		}
-		if (hits.length > 0) return capHits(hits, cap);
+		if (literalHits.length > 0) return capHits(foldDuplicates(literalHits), cap);
+
+		const regex = safeRegex(rawQuery);
+		const regexHits: HitCandidate[] = [];
+		for (let i = 0; i < entries.length; i++) {
+			checkBudget();
+			if (!regex.test(docs[i])) continue;
+			regexHits.push({
+				hit: { ...entries[i], snippet: lineSnippet(texts[i], regex), matchCount: 1 },
+				text: texts[i],
+				pos: i,
+			});
+		}
+		if (regexHits.length > 0) return capHits(foldDuplicates(regexHits), cap);
 	}
 
 	// Natural language / multi-word query: BM25 scoring
@@ -653,19 +746,9 @@ export const searchEntriesDetailed = (
 	const terms = filterStopwords(rawTerms);
 	const snipRe = snippetRegex(terms);
 
-	// Build all docs for BM25 context
-	const docs: string[] = [];
-	for (let i = 0; i < entries.length; i++) {
-		const e = entries[i];
-		const msg = messages[i];
-		const text = msg ? fullText(msg) : e.summary;
-		const filePart = e.files?.join(" ") ?? "";
-		docs.push(`${e.role} ${text} ${filePart}`);
-	}
-
 	const ctx = buildBM25Context(docs, terms, checkBudget);
 
-	const scored: Array<{ hit: SearchHit; score: number }> = [];
+	const scored: Array<{ candidate: HitCandidate; score: number }> = [];
 	for (let i = 0; i < entries.length; i++) {
 		checkBudget();
 		const e = entries[i];
@@ -673,10 +756,9 @@ export const searchEntriesDetailed = (
 		const mc = countMatches(hay, terms);
 		if (mc === 0) continue;
 		const score = bm25Score(hay, terms, ctx);
-		const text = messages[i] ? fullText(messages[i]) : e.summary;
-		const snip = lineSnippet(text, snipRe);
+		const snip = lineSnippet(texts[i], snipRe);
 		scored.push({
-			hit: { ...e, snippet: snip, matchCount: mc },
+			candidate: { hit: { ...e, snippet: snip, matchCount: mc }, text: texts[i], pos: i },
 			score,
 		});
 	}
@@ -693,10 +775,7 @@ export const searchEntriesDetailed = (
 	// scoring above, which already matches case-insensitively.
 	const effectiveTermCount = new Set(terms.map((t) => t.toLowerCase())).size;
 	const floored = effectiveTermCount >= 2 ? applyRelativeFloor(scored, relativeFloor) : scored;
-	return capHits(
-		floored.map((s) => s.hit),
-		cap,
-	);
+	return capHits(foldDuplicates(floored.map((s) => s.candidate)), cap);
 };
 
 export const searchEntries = (entries: RenderedEntry[], messages: Message[], query?: string): SearchHit[] =>
