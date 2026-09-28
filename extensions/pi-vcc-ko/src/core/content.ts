@@ -40,10 +40,20 @@ export const nonEmptyLines = (text: string): string[] =>
 
 export const firstLine = (text: string, max = 200): string => clip(text.split("\n")[0] ?? "", max);
 
+// Session files are parsed without validation, and extensions write
+// custom_message content in any shape. A throw here fails the whole
+// compaction hook, so anything that is not a text part is skipped.
+const isTextPart = (part: unknown): part is { type: "text"; text: string } =>
+	typeof part === "object" &&
+	part !== null &&
+	(part as { type?: unknown }).type === "text" &&
+	typeof (part as { text?: unknown }).text === "string";
+
 export const textParts = (content: Message["content"]): string[] => {
 	if (!content) return [];
 	if (typeof content === "string") return [content];
-	return content.filter((part) => part.type === "text").map((part) => part.text);
+	if (!Array.isArray(content)) return [];
+	return (content as unknown[]).filter(isTextPart).map((part) => part.text);
 };
 
 export const textOf = (content: Message["content"]): string => textParts(content).join("\n");

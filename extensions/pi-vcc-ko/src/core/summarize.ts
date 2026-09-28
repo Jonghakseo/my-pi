@@ -1,12 +1,5 @@
 import type { Message } from "@earendil-works/pi-ai";
-import {
-	type CommitInfo,
-	extractCommits,
-	formatCommits,
-	mergeCommits,
-	parseCommitSection,
-	readCommits,
-} from "../extract/commits.ts";
+import { type CommitInfo, extractCommits, mergeCommits, parseCommitSection, readCommits } from "../extract/commits.ts";
 import {
 	type FileActivity,
 	extractFileActivity,
@@ -14,7 +7,6 @@ import {
 	type PathDisplayOptions,
 	parseFileActivitySection,
 	readFileActivity,
-	renderFileActivity,
 } from "../extract/files.ts";
 import { extractGoals } from "../extract/goals.ts";
 import { dedupPreferencesAgainstGoals, extractPreferences } from "../extract/preferences.ts";
@@ -159,11 +151,16 @@ const capBriefToLineBudget = (text: string, maxLines: number): string => {
 	return `...(${omitted} earlier lines omitted)\n\n${clean.join("\n")}`;
 };
 
+// The fresh brief is ranked and uncapped, so on long windows it used to leave
+// the previous brief zero lines: the narrative right before this window, or a
+// foreign (LLM) previous summary as a whole, vanished. Keep at least its tail.
+const MIN_PREVIOUS_BRIEF_LINES = 20;
+
 const mergeBriefTranscriptWithFreshBudget = (prev: string, fresh: string): string => {
 	if (!prev) return fresh;
 	if (!fresh) return capBrief(prev);
 	const freshLines = briefLineCount(fresh);
-	const remainingPrevLines = Math.max(0, BRIEF_MAX_LINES - freshLines);
+	const remainingPrevLines = Math.max(MIN_PREVIOUS_BRIEF_LINES, BRIEF_MAX_LINES - freshLines);
 	const prevTail = capBriefToLineBudget(prev, remainingPrevLines);
 	return prevTail ? `${prevTail}\n\n${fresh}` : fresh;
 };
@@ -208,22 +205,13 @@ const compileWithBriefBlocks = (
 	const rules = input.rules ?? builtinRules();
 	const blocks = filterNoise(normalize(input.messages, input.sourceIndices), rules);
 	const briefBlocks = options.briefBlocksFor?.(blocks);
-	const data = buildSections({ blocks, briefBlocks, fileOps: input.fileOps, rules });
-	// Recover intent from original user entries, including goals displaced by
-	// legacy summaries that misclassified synthetic messages as user messages.
-	if (input.userMessages) {
-		// No refs unless the caller maps user entries into the recall index space:
-		// positional numbers would point at the wrong messages.
-		const userRefs = input.userSourceIndices ?? input.userMessages.map(() => undefined);
-		const userBlocks = filterNoise(normalize(input.userMessages, userRefs), rules);
-		data.sessionGoal = extractGoals(userBlocks, rules);
-		data.userPreferences = dedupPreferencesAgainstGoals(extractPreferences(userBlocks, rules), data.sessionGoal);
-	}
 
 	// Strip every recall note (current, legacy, wrapped) so the merge never
 	// re-embeds an old note inside the brief.
 	const prev = input.previousSummary ? stripRecallNotes(input.previousSummary) : undefined;
 	const prevHeader = prev ? splitSummary(prev).header : "";
+	// Files and commits are cumulative: the previous state (or, for summaries
+	// written without one, its wrap-aware parsed text) plus this window.
 	const state: CompactionState = {
 		files: mergeFileActivity(
 			input.previousState?.files ?? parseFileActivitySection(sectionOf(prevHeader, "Files And Changes")),
@@ -234,8 +222,26 @@ const compileWithBriefBlocks = (
 			extractCommits(blocks),
 		),
 	};
-	data.filesAndChanges = renderFileActivity(state.files, input.pathDisplay);
-	data.commits = formatCommits(state.commits);
+
+	const data = buildSections({
+		blocks,
+		briefBlocks,
+		fileOps: input.fileOps,
+		rules,
+		files: state.files,
+		commits: state.commits,
+		pathDisplay: input.pathDisplay,
+	});
+	// Recover intent from original user entries, including goals displaced by
+	// legacy summaries that misclassified synthetic messages as user messages.
+	if (input.userMessages) {
+		// No refs unless the caller maps user entries into the recall index space:
+		// positional numbers would point at the wrong messages.
+		const userRefs = input.userSourceIndices ?? input.userMessages.map(() => undefined);
+		const userBlocks = filterNoise(normalize(input.userMessages, userRefs), rules);
+		data.sessionGoal = extractGoals(userBlocks, rules);
+		data.userPreferences = dedupPreferencesAgainstGoals(extractPreferences(userBlocks, rules), data.sessionGoal);
+	}
 
 	const fresh = formatSummary(data, {
 		capBriefTranscript: options.capFreshBrief ?? true,

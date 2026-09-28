@@ -1,15 +1,21 @@
 import { clip, nonEmptyLines } from "../core/content.ts";
 import { type DenoiseRules, builtinRules } from "../core/rules.ts";
+import { hasSecretToken } from "../core/secrets.ts";
 import { collapseSkillLines } from "../core/skill-collapse.ts";
 import type { NormalizedBlock } from "../types.ts";
 
 // A user message often states two standing constraints at once ("delegate code
 // edits to workers", "don't ask me"); more than that is usually a pasted rule list.
 const PREFS_PER_BLOCK = 2;
+const MAX_PREFERENCES = 10;
+
+// Double-quoted text is a mention or an example ("사이드에 위임해줘" 같은 트리거 문구),
+// not the user's own instruction. Single quotes are left alone: they double as
+// apostrophes ("don't").
+const QUOTED_SPAN_RE = /"[^"\n]*"|\u201c[^\u201d\n]*\u201d/g;
 
 export const extractPreferences = (blocks: NormalizedBlock[], rules: DenoiseRules = builtinRules()): string[] => {
 	const prefs: string[] = [];
-	const seen = new Set<string>();
 
 	for (const b of blocks) {
 		if (b.kind !== "user") continue;
@@ -24,12 +30,15 @@ export const extractPreferences = (blocks: NormalizedBlock[], rules: DenoiseRule
 			if (trimmed.length > 200) continue;
 			// Reject questions.
 			if (trimmed.endsWith("?") || trimmed.includes("?...")) continue;
-			if (!rules.preferencePatterns.some((p) => p.test(trimmed))) continue;
+			const unquoted = trimmed.replace(QUOTED_SPAN_RE, " ");
+			if (!rules.preferencePatterns.some((p) => p.test(unquoted))) continue;
+			if (hasSecretToken(trimmed)) continue;
 
 			const clipped = clip(trimmed, 200);
+			// A repeated preference counts as recent: move it to the end.
 			const key = clipped.toLowerCase();
-			if (seen.has(key)) continue;
-			seen.add(key);
+			const existing = prefs.findIndex((p) => p.toLowerCase() === key);
+			if (existing >= 0) prefs.splice(existing, 1);
 			prefs.push(clipped);
 
 			// Cap per user block to avoid pasting long rule lists as many prefs.
@@ -37,7 +46,10 @@ export const extractPreferences = (blocks: NormalizedBlock[], rules: DenoiseRule
 		}
 	}
 
-	return prefs.slice(0, 10);
+	// Newest win. Preferences are rebuilt from every user entry at each
+	// compaction, so keeping the oldest ten froze the section for the rest of a
+	// long session and later instructions never appeared.
+	return prefs.slice(-MAX_PREFERENCES);
 };
 
 /**

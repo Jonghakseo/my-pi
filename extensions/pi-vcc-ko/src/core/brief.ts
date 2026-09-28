@@ -243,11 +243,23 @@ const significantWordSpans = (flat: string): { start: number; end: number }[] =>
 	return words;
 };
 
+const truncateTokensHeadTail = (text: string, headLimit: number, tailLimit: number): string => {
+	const flat = normalizeForTokenBudget(text);
+	if (headLimit <= 0 || tailLimit <= 0) return flat;
+	const words = significantWordSpans(flat);
+	if (words.length <= headLimit + tailLimit) return flat;
+	const head = flat.slice(0, words[headLimit - 1].end).trimEnd();
+	const tail = flat.slice(words[words.length - tailLimit].start).trimStart();
+	return `${head}\n...(middle truncated)...\n${tail}`;
+};
+
 // Extension notices (subagent results, background job completions, injected
-// state snapshots) open with a status line and end with the outcome; the middle
-// is logs. Rendering them like assistant prose (80 + 120 words) let two notices
-// fill up to 45% of a 120-line brief with build output.
+// state snapshots) open with a status line, then the task or verdict, and end
+// with the outcome; the middle is usually logs. Rendering them like assistant
+// prose (80 + 120 words) let two notices fill up to 45% of a 120-line brief with
+// build output. A short head keeps verdicts that come first (review results).
 const NOTICE_FIRST_LINE_CHARS = 200;
+const NOTICE_HEAD_WORDS = 25;
 const NOTICE_TAIL_WORDS = 40;
 // Pi's own summary messages are structured prose and keep the prose budget.
 const PROSE_CUSTOM_TYPES = new Set(["branchSummary", "compactionSummary"]);
@@ -262,20 +274,7 @@ const compactNotice = (text: string, display?: boolean): string => {
 		lines[0].length > NOTICE_FIRST_LINE_CHARS ? `${clip(lines[0], NOTICE_FIRST_LINE_CHARS)}\u2026` : lines[0];
 	// display:false marks model-only context that the extension re-injects each turn.
 	if (display === false || lines.length === 1) return first;
-	const rest = lines.slice(1).join("\n");
-	const words = significantWordSpans(rest);
-	if (words.length <= NOTICE_TAIL_WORDS) return `${first}\n${rest}`;
-	return `${first}\n...\n${rest.slice(words[words.length - NOTICE_TAIL_WORDS].start).trimStart()}`;
-};
-
-const truncateTokensHeadTail = (text: string, headLimit: number, tailLimit: number): string => {
-	const flat = normalizeForTokenBudget(text);
-	if (headLimit <= 0 || tailLimit <= 0) return flat;
-	const words = significantWordSpans(flat);
-	if (words.length <= headLimit + tailLimit) return flat;
-	const head = flat.slice(0, words[headLimit - 1].end).trimEnd();
-	const tail = flat.slice(words[words.length - tailLimit].start).trimStart();
-	return `${head}\n...(middle truncated)...\n${tail}`;
+	return `${first}\n${truncateTokensHeadTail(lines.slice(1).join("\n"), NOTICE_HEAD_WORDS, NOTICE_TAIL_WORDS)}`;
 };
 
 // Tool results and extension notices do not end a user/assistant segment: an

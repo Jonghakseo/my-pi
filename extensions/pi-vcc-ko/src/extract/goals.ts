@@ -1,5 +1,6 @@
 import { clipSentence, nonEmptyLines } from "../core/content.ts";
 import { type DenoiseRules, builtinRules } from "../core/rules.ts";
+import { hasSecretToken } from "../core/secrets.ts";
 import { collapseSkillLines, SKILL_MARKER_RE } from "../core/skill-collapse.ts";
 import type { NormalizedBlock, SourceRef } from "../types.ts";
 
@@ -7,7 +8,7 @@ const SCOPE_CHANGE_RE =
 	/\b(instead|actually|change of plan|forget that|new task|switch to|now I want|pivot|let'?s do|stop .* and)\b/i;
 
 // 한국어 스크프 변경 신호. \b가 한글에서 동작하지 않아 부분 일치를 허용한다.
-// 오탐은 사용자 발화을 [Scope change]에 추가할 뿐이라 피해가 작다.
+// 오탐은 사용자 발화를 [Scope change]로 표시할 뿐이라 피해가 작다.
 const SCOPE_CHANGE_RE_KO =
 	/(대신|아니[,.! ]|계획(?:이)? ?바뀌|계획 변경|방향 ?전환|방향을 바꿔|그만(?:두고|하고)|무시(?:하고|해도)|잊고|새(?:로운)? ?(?:작업|태스크|요구사항)|바꿔서|옮겨서|전환해서|다시 ?생각해보니|생각해보니|이제(?:는|부터는))/;
 
@@ -68,6 +69,7 @@ const withRef = (line: string, ref: SourceRef | undefined): string => (ref == nu
 const isSubstantiveGoal = (text: string, rules: DenoiseRules): boolean => {
 	const t = text.trim();
 	if (t.length <= 5) return false;
+	if (hasSecretToken(t)) return false;
 	if (t.length > MAX_GOAL_CHARS && !looksLikeProse(t)) return false;
 	if (NOISE_SHORT_RE.test(t) || NOISE_SHORT_RE_KO.test(t)) return false;
 	// 붙여넣은 제어문 코드 줄 걸러내기. 선언문과 달리 제어문(if/for/return)은 원본이
@@ -91,6 +93,8 @@ const LEADING_CHARS = 200;
 interface Directive {
 	lines: string[];
 	ref?: SourceRef;
+	/** Explicit change of direction ("instead", "대신", "계획 변경"), not just the next task. */
+	pivot: boolean;
 }
 
 export const extractGoals = (blocks: NormalizedBlock[], rules: DenoiseRules = builtinRules()): string[] => {
@@ -124,9 +128,9 @@ export const extractGoals = (blocks: NormalizedBlock[], rules: DenoiseRules = bu
 		// 한국어는 글자당 정보량이 영어보다 높아 동일 임계치면 짧은 실제 작업 지시가 걸러진다
 		// (15자 영어 ≈ 8자 한국어). 후속 작업 인지 판단에만 적용한다.
 		if (SCOPE_CHANGE_RE.test(leading) || SCOPE_CHANGE_RE_KO.test(leading)) {
-			directives.push({ lines: lines.slice(0, 3), ref: b.sourceIndex });
+			directives.push({ lines: lines.slice(0, 3), ref: b.sourceIndex, pivot: true });
 		} else if (rules.taskVerbs.some((re) => re.test(leading)) && lines[0].length > (hasHangul(lines[0]) ? 8 : 15)) {
-			directives.push({ lines: lines.slice(0, 2), ref: b.sourceIndex });
+			directives.push({ lines: lines.slice(0, 2), ref: b.sourceIndex, pivot: false });
 		}
 	}
 
@@ -143,7 +147,9 @@ export const extractGoals = (blocks: NormalizedBlock[], rules: DenoiseRules = bu
 		const latest = directives[directives.length - 1];
 		const latestLines = latest.lines.map((l) => clipSentence(l, MAX_GOAL_CHARS));
 		latestLines[latestLines.length - 1] = withRef(latestLines[latestLines.length - 1], latest.ref);
-		goals.push("[Scope change]", ...latestLines);
+		// "[Scope change]" tells the model the earlier goal is superseded, so it is
+		// reserved for explicit pivots; an ordinary follow-up is the latest request.
+		goals.push(latest.pivot ? "[Scope change]" : "[Latest request]", ...latestLines);
 	}
 
 	return goals;

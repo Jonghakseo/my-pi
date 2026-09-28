@@ -85,8 +85,20 @@ describe("extension notices in the brief", () => {
 		]);
 		expect(out).toContain("[bash_async 1830cdab] UI 테스트 실행: succeeded (exit 0) in 97s");
 		expect(out).toContain("Log: /tmp/run.log (#c4)");
-		expect(out).not.toContain("case0()");
+		expect(out).not.toContain("case30()");
 		expect(out.split("\n").length).toBeLessThan(20);
+	});
+
+	it("keeps a verdict that opens the body of a review result", () => {
+		const out = compileBrief([
+			{
+				kind: "custom",
+				customType: "subagent-batch",
+				text: `[subagent-batch#b_1] completed\nRuns: #2 done\n\n#2 reviewer\n- Verdict: FAIL (P1:2)\n${log}\nNext: fix F1 and F2.`,
+			},
+		]);
+		expect(out).toContain("Verdict: FAIL (P1:2)");
+		expect(out).toContain("Next: fix F1 and F2.");
 	});
 
 	it("renders model-only notices (display:false) as their first line", () => {
@@ -117,6 +129,41 @@ describe("compaction hook", () => {
 		expect(summary).toContain("[bash_async 1] 테스트: succeeded (exit 0) (#c1)");
 		expect(summary).toContain("워커 결과를 확인했습니다. (#1)");
 		expect(summary).toContain("테스트도 통과했습니다. (#2)");
+	});
+
+	it("survives custom content of an unexpected shape and leaves recall output out", () => {
+		seq = 0;
+		const entries = [
+			userEntry("정리 작업 수정해줘"),
+			{ type: "custom_message", id: nextId(), customType: "odd-extension", content: { text: "not an array" } },
+			noticeEntry("vcc-recall", '3 matches for "정리":\n\n#0 [user] 정리 작업 수정해줘'),
+			textEntry("정리 완료"),
+		];
+		const { summary } = runHook(entries);
+		expect(summary).toContain("정리 완료");
+		expect(summary).not.toContain("[custom:vcc-recall]");
+	});
+
+	it("builds on the last pi-vcc-ko state when a foreign compaction came after it", () => {
+		seq = 0;
+		const entries: any[] = [
+			userEntry("첫 작업 수정해줘"),
+			...Array.from({ length: 12 }, (_, i) => editEntry(`/repo/src/a${i}.ts`)),
+		];
+		const first = runHook(entries);
+		entries.push({
+			type: "compaction",
+			id: nextId(),
+			firstKeptEntryId: "",
+			summary: first.summary,
+			details: first.details,
+		});
+		entries.push(userEntry("두 번째 작업 수정해줘"), editEntry("/repo/src/b.ts"));
+		const foreignSummary = "## Goal\n두 번째 작업\n\n## Progress\n- b.ts 수정";
+		entries.push({ type: "compaction", id: nextId(), firstKeptEntryId: "", summary: foreignSummary, details: {} });
+		entries.push(userEntry("세 번째 작업 수정해줘"), editEntry("/repo/src/c.ts"), textEntry("완료"));
+		const third = runHook(entries, foreignSummary);
+		expect(third.details.state.files.modified).toEqual([...first.details.state.files.modified, "/repo/src/c.ts"]);
 	});
 
 	it("persists file and commit state and the next compaction builds on it", () => {

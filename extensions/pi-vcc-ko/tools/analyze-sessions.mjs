@@ -91,7 +91,9 @@ for (const { p } of sample) {
 		// 첫 사용자 블록: 목표로 캡처된 라인 / 제외된 라인(어느 규칙인지)
 		const first = userBlocks[0];
 		const collapsed = collapseSkillText(first.text);
-		const firstGoals = goals.indexOf("[Scope change]") >= 0 ? goals.slice(0, goals.indexOf("[Scope change]")) : goals;
+		// 목표 뒤에 붙는 표지: [Earlier requests] → [Scope change] 또는 [Latest request]
+		const markerIdx = goals.findIndex((g) => /^\[(?:Earlier requests|Scope change|Latest request)\]$/.test(g));
+		const firstGoals = markerIdx >= 0 ? goals.slice(0, markerIdx) : goals;
 		for (const line of collapsed.split("\n").slice(0, 8)) {
 			const t = line.trim();
 			if (!t) continue;
@@ -100,8 +102,13 @@ for (const { p } of sample) {
 			const tag = captured ? "목표" : exclusionHit ? `제외← /${clip(exclusionHit.source, 40)}/` : "미채택";
 			console.log(`  [${tag}] ${clip(t, 80)}`);
 		}
-		const scopeIdx = goals.indexOf("[Scope change]");
-		if (scopeIdx >= 0) console.log(`  [스코프] ${clip(goals.slice(scopeIdx + 1).join(" / "), 100)}`);
+		const earlierIdx = goals.indexOf("[Earlier requests]");
+		const latestIdx = goals.findIndex((g) => g === "[Scope change]" || g === "[Latest request]");
+		if (earlierIdx >= 0) console.log(`  [이전 요청] ${clip(goals.slice(earlierIdx + 1, latestIdx).join(" / "), 100)}`);
+		if (latestIdx >= 0) {
+			const tag = goals[latestIdx] === "[Scope change]" ? "스코프" : "최신 요청";
+			console.log(`  [${tag}] ${clip(goals.slice(latestIdx + 1).join(" / "), 100)}`);
+		}
 		if (prefs.length > 0) console.log(`  [선호] ${prefs.map((x) => clip(x, 40)).join(" | ")}`);
 		if (secs.outstandingContext.length > 0) console.log(`  [장애물] ${clip(secs.outstandingContext.join(" / "), 120)}`);
 		console.log("");

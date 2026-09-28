@@ -1,4 +1,4 @@
-import type { NormalizedBlock } from "../types.ts";
+import { type NormalizedBlock, RECALL_OUTPUT_CUSTOM_TYPE } from "../types.ts";
 import { type DenoiseRules, builtinRules } from "./rules.ts";
 import { focusStructuredPrompt } from "./structured-prompt.ts";
 
@@ -28,6 +28,8 @@ export const filterNoise = (blocks: NormalizedBlock[], rules: DenoiseRules = bui
 	for (const b of blocks) {
 		if (b.kind === "tool_call" && NOISE_TOOLS.has(b.name)) continue;
 		if (b.kind === "tool_result" && NOISE_TOOLS.has(b.name)) continue;
+		// Recall output restates earlier history; like tool results it stays out of the brief.
+		if (b.kind === "custom" && b.customType === RECALL_OUTPUT_CUSTOM_TYPE) continue;
 		if (b.kind === "user") {
 			if (isNoiseUserBlock(b.text, rules)) continue;
 			const cleaned = cleanUserText(b.text);

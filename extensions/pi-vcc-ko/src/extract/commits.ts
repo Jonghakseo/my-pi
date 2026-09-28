@@ -14,12 +14,12 @@ export const COMMIT_DISPLAY_LIMIT = 8;
 const COMMIT_CMD_RE = /\bgit\s+commit\b/;
 const COMMIT_MSG_RE = /git\s+commit[^\n]*?-m\s+(?:"((?:[^"\\]|\\.)*)"|'((?:[^'\\]|\\.)*)'|\$?'((?:[^'\\]|\\.)*)')/;
 // git's own confirmation line: `[main abc1234] msg`, `[main (root-commit) abc1234] msg`,
-// `[detached HEAD abc1234] msg`. Only this line proves which hash a commit got;
-// any other hex string in the output (git log, file hashes, push ranges) does not.
+// `[detached HEAD abc1234] msg`.
 const COMMIT_OUTPUT_RE = /^\[[^\]\n]*?\s([0-9a-f]{7,40})\]\s+(.*)$/gm;
-// Output that shows the commit did not happen (hook failure, nothing staged, ...).
-const COMMIT_FAILED_RE =
-	/(?:^|\n)\s*(?:error|fatal):|nothing to commit|no changes added to commit|hook[^\n]{0,40}fail|exited with code [1-9]/i;
+// `git log --oneline -1` / `--format='%H %s'` after `git commit -q`: `<hash> <subject>`.
+// Accepted only when the subject matches the commit's own message; a failed
+// commit would show the previous commit here.
+const LOG_LINE_RE = /^([0-9a-f]{7,40})\s+(.+)$/gm;
 
 const firstLineOf = (text: string): string => {
 	const line = text.split(/\\n|\n/)[0] ?? "";
@@ -32,12 +32,23 @@ const normMessage = (m: string): string => m.trim().replace(/\s+/g, " ").toLower
 
 const sameHash = (a: string, b: string): boolean => a.startsWith(b) || b.startsWith(a);
 
-const hashFromOutput = (output: string, message: string): string | undefined => {
-	const lines = [...output.matchAll(COMMIT_OUTPUT_RE)];
-	if (lines.length === 0) return undefined;
-	const want = normMessage(message);
-	const exact = lines.find((m) => normMessage(m[2]).startsWith(want.slice(0, 60)));
-	return (exact ?? lines[0])[1];
+/**
+ * The commit a command's output proves, or undefined. A commit is recorded only
+ * with this evidence: summaries persist [Commits] in details.state, so a commit
+ * that failed (hook rejection, redirected output, compressed output) must not
+ * become a lasting "done" fact. The subject comes from git itself, which also
+ * fixes messages passed through shell variables (`-m "$msg"`).
+ */
+const commitFromOutput = (output: string, message: string): CommitInfo | undefined => {
+	const want = normMessage(message).slice(0, 60);
+	const matches = (subject: string) => want.length > 0 && normMessage(subject).startsWith(want);
+	const confirmations = [...output.matchAll(COMMIT_OUTPUT_RE)];
+	if (confirmations.length > 0) {
+		const line = confirmations.find((m) => matches(m[2])) ?? confirmations[0];
+		return { hash: line[1], message: line[2].trim() || message };
+	}
+	const logged = [...output.matchAll(LOG_LINE_RE)].find((m) => matches(m[2]));
+	return logged ? { hash: logged[1], message: logged[2].trim() } : undefined;
 };
 
 /**
@@ -86,8 +97,8 @@ export const addCommit = (list: CommitInfo[], commit: CommitInfo): void => {
 
 /**
  * Extract git commits from `git commit -m "..."` commands (bash tool calls and
- * user `!` executions) and read the hash from git's confirmation line in the
- * command's own output. A commit whose output shows it failed is skipped.
+ * user `!` executions). Each command is paired with its own output, and only
+ * commits that output proves (see commitFromOutput) are returned.
  */
 export const extractCommits = (blocks: NormalizedBlock[]): CommitInfo[] => {
 	const commits: CommitInfo[] = [];
@@ -108,16 +119,10 @@ export const extractCommits = (blocks: NormalizedBlock[]): CommitInfo[] => {
 			continue;
 		}
 		const m = cmd.match(COMMIT_MSG_RE);
-		if (!m) continue;
+		if (!m || output === undefined) continue;
 		const message = firstLineOf(cleanMessage(m[1] ?? m[2] ?? m[3] ?? ""));
-		if (!message) continue;
-
-		let hash: string | undefined;
-		if (output !== undefined) {
-			hash = hashFromOutput(output, message);
-			if (!hash && COMMIT_FAILED_RE.test(output)) continue;
-		}
-		addCommit(commits, hash ? { hash, message } : { message });
+		const commit = commitFromOutput(output, message);
+		if (commit) addCommit(commits, commit);
 	}
 
 	return commits;

@@ -17,7 +17,7 @@ describe("session goal", () => {
 			user("마지막으로 배포 스크립트 정리해줘", 20),
 		]);
 		expect(goals[0]).toBe("로그인 버그 수정해줘");
-		const earlier = goals.slice(goals.indexOf("[Earlier requests]") + 1, goals.indexOf("[Scope change]"));
+		const earlier = goals.slice(goals.indexOf("[Earlier requests]") + 1, goals.indexOf("[Latest request]"));
 		expect(earlier).toEqual([
 			"회원가입 폼도 검증 추가해줘 (#5)",
 			"비밀번호 재설정 메일 템플릿 수정해줘 (#9)",
@@ -72,6 +72,36 @@ describe("session goal", () => {
 			"Read /repo/.audit/w2-worker.md and implement W2 in /repo/packages. Own only the two package scopes.",
 		]);
 	});
+
+	it("keeps what the user wrote before a pasted structured document", () => {
+		const pasted = [
+			"[GENERAL INSTRUCTION — AUTHORITATIVE]",
+			"You are a sub-agent invoked within the conversational context between a Main Agent and User.",
+			"[HISTORY — REFERENCE ONLY]",
+			...Array.from({ length: 30 }, (_, i) => `User: 예전 대화 ${i}번째 요청을 처리해줘. ${"맥락 ".repeat(10)}`),
+			"[REQUEST — AUTHORITATIVE]",
+			"Summarize the delegation report for the parent session.",
+		].join("\n");
+		const message = `이 위임 프롬프트가 왜 실패했는지 원인을 분석해줘.\n\n${pasted}`;
+		expect(message.length).toBeGreaterThan(1200);
+		const goals = extractGoals(filterNoise([user(message)]));
+		expect(goals[0]).toBe("이 위임 프롬프트가 왜 실패했는지 원인을 분석해줘.");
+		expect(goals.join("\n")).not.toContain("예전 대화");
+	});
+
+	it("labels an explicit change of direction as a scope change and a plain follow-up as the latest request", () => {
+		const followUp = extractGoals([user("로그인 버그 수정해줘"), user("보고서를 만들어서 열어줘")]);
+		expect(followUp.slice(-2)).toEqual(["[Latest request]", "보고서를 만들어서 열어줘"]);
+		const pivot = extractGoals([user("로그인 버그 수정해줘"), user("대신 회원가입 페이지부터 리팩토링해줘")]);
+		expect(pivot.slice(-2)).toEqual(["[Scope change]", "대신 회원가입 페이지부터 리팩토링해줘"]);
+	});
+
+	it("never promotes a line carrying a credential into the session goal", () => {
+		const goals = extractGoals([
+			user("sk-ant-oat01-AbCdEfGhIjKlMnOpQrStUvWx 이 토큰으로 로그인 테스트해줘\n로그인 흐름을 점검해줘"),
+		]);
+		expect(goals).toEqual(["로그인 흐름을 점검해줘"]);
+	});
 });
 
 describe("user preferences", () => {
@@ -87,6 +117,27 @@ describe("user preferences", () => {
 
 	it("does not treat a regret about the past as an instruction", () => {
 		expect(extractPreferences([user("그때 배포를 하지 말았어야 했다")])).toEqual([]);
+	});
+
+	it.each([
+		"sk-ant-oat01-AbCdEfGhIjKlMnOpQrStUvWx 이거 만료된 토큰이거든? 갱신은 피클한테 위임",
+		"- Browser title: 사진 편집을 업체에 맡기면 좋을 듯한 이유 정리",
+		"요즘은 코드 수정을 워커에 위임하고 있어",
+		"bash async 도구를 적극 활용하고 있습니다",
+		'2. "Sentry 이거 핫픽스로 사이드에 위임해줘"',
+	])("does not take pasted, quoted or descriptive text as a preference: %s", (text) => {
+		expect(extractPreferences([user(text)])).toEqual([]);
+	});
+
+	it("never promotes a line carrying a credential, even one phrased as an instruction", () => {
+		expect(extractPreferences([user("앞으로 ghp_AbCdEfGhIjKlMnOpQrStUvWxYz0123 토큰은 쓰지 마")])).toEqual([]);
+	});
+
+	it("keeps the newest ten preferences so late instructions reach the summary", () => {
+		const prefs = extractPreferences(Array.from({ length: 12 }, (_, i) => user(`규칙 ${i}: 이 파일은 건드리지 마`)));
+		expect(prefs).toHaveLength(10);
+		expect(prefs[0]).toBe("규칙 2: 이 파일은 건드리지 마");
+		expect(prefs.at(-1)).toBe("규칙 11: 이 파일은 건드리지 마");
 	});
 
 	it("keeps two standing instructions stated in one message", () => {

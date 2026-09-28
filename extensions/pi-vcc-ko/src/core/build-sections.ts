@@ -1,5 +1,10 @@
-import { extractCommits, formatCommits } from "../extract/commits.ts";
-import { extractFileActivity, renderFileActivity } from "../extract/files.ts";
+import { type CommitInfo, extractCommits, formatCommits } from "../extract/commits.ts";
+import {
+	type FileActivity,
+	extractFileActivity,
+	type PathDisplayOptions,
+	renderFileActivity,
+} from "../extract/files.ts";
 import { extractGoals } from "../extract/goals.ts";
 import { dedupPreferencesAgainstGoals, extractPreferences } from "../extract/preferences.ts";
 import type { SectionData } from "../sections.ts";
@@ -16,6 +21,12 @@ export interface BuildSectionsInput {
 	fileOps?: FileOps;
 	/** 주입형 디노이즈 규칙 (settings.rules에서 해석). 기본값은 내장 규칙 세트. */
 	rules?: DenoiseRules;
+	/** Cumulative file activity to render; extracted from `blocks` when omitted. */
+	files?: FileActivity;
+	/** Cumulative commits to render; extracted from `blocks` when omitted. */
+	commits?: CommitInfo[];
+	/** How [Files And Changes] shortens paths (session cwd, home). */
+	pathDisplay?: PathDisplayOptions;
 }
 
 const BLOCKER_RE =
@@ -79,8 +90,8 @@ export const buildSections = (input: BuildSectionsInput): SectionData => {
 	return {
 		sessionGoal,
 		outstandingContext: extractOutstandingContext(blocks, rules),
-		filesAndChanges: renderFileActivity(extractFileActivity(blocks, input.fileOps)),
-		commits: formatCommits(extractCommits(blocks)),
+		filesAndChanges: renderFileActivity(input.files ?? extractFileActivity(blocks, input.fileOps), input.pathDisplay),
+		commits: formatCommits(input.commits ?? extractCommits(blocks)),
 		userPreferences,
 		briefTranscript: stringifyBrief(briefSections),
 	};

@@ -17,7 +17,7 @@ extensions/pi-vcc-ko/tools/analyze-sessions.mjs ← 분석 스크립트
 | `agentNotices` | 사용자 역할 블록 **전체** | 블록 통초 드롭 | 하네스/에이전트가 주입한 공지·프로토콜 안내가 [Session Goal]이나 브리프를 오염시킬 때 |
 | `goalExclusions` | 첫 사용자 메시지의 **라인** | 그 라인만 목표 후보에서 제외 | 목표 섹션에 문서 헤딩·붙여넣은 문서 래퍼·메타 지시가 섞일 때 |
 | `blockerExclusions` | 마지막 20블록의 **라인** | 장애물 후보에서 제외 | 붙여넣은 데이터·통계·해소 보고가 [Outstanding Context]에 오판될 때 |
-| `taskVerbs` | 후속 사용자 메시지 앞부분 | 스코프 변경 추적에 사용할 작업 동사 추가 | 도메인 특유의 명령형("배포준비", "머지 요청")이 후속 지시로 추적되지 않을 때 |
+| `taskVerbs` | 후속 사용자 메시지 앞부분 | 후속 요청 추적(`[Latest request]`, `[Earlier requests]`)에 사용할 작업 동사 추가 | 도메인 특유의 명령형("배포준비", "머지 요청")이 후속 지시로 추적되지 않을 때 |
 | `preferencePatterns` | 사용자 라인 | [User Preferences] 추출 패턴 추가 | 팀 고유 선호 표현("우리 팀은…", "레드펜 통과 후…")을 잡고 싶을 때 |
 
 그룹별 내장 규칙 전체를 끄려면 `disableBuiltinRules: ["그룹명"]`. 규칙 하나만 골라 끄는 건 지원하지 않는다.
@@ -42,7 +42,7 @@ node --experimental-transform-types tools/analyze-sessions.mjs --sample 10
 | `[제외← /패턴/]` | 규칙에 걸려 제외된 라인 — **어떤 패턴이 걸었는지 소스가 그대로 보임** |
 | `[미채택]` | 규칙에 안 걸렸지만 구조적 이유(URL 단독 줄, 길이, 템플릿 신호 등)로 목표가 아닌 라인 |
 | `[드롭]` | `agentNotices`에 걸려 블록 통초가 버려진 공지 |
-| `[스코프]` / `[선호]` / `[장애물]` | 각 섹션에 캡처된 항목 |
+| `[이전 요청]` / `[최신 요청]` / `[스코프]` / `[선호]` / `[장애물]` | 각 섹션에 캡처된 항목. `[스코프]`는 "대신/계획 변경" 같은 명시적 방향 전환만, 일반 후속 지시는 `[최신 요청]` |
 
 ### 2단계 — 작성: 관찰 결과를 규칙으로
 
@@ -51,7 +51,7 @@ node --experimental-transform-types tools/analyze-sessions.mjs --sample 10
 - **블록 전체가 공지**(작업 지시가 전혀 없음) → `agentNotices`
 - **블록 안의 특정 라인만** 쓰레기(헤딩, 래퍼, 메타 지시) → `goalExclusions`
 - 장애물 오판 → `blockerExclusions`
-- 후속 지시가 스코프로 안 잡힘 → `taskVerbs`
+- 후속 지시가 `[최신 요청]`으로 안 잡힘 → `taskVerbs`
 
 ```jsonc
 {
