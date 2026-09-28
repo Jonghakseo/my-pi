@@ -1,7 +1,7 @@
-import { clip, nonEmptyLines } from "../core/content.ts";
+import { clipSentence, nonEmptyLines } from "../core/content.ts";
 import { type DenoiseRules, builtinRules } from "../core/rules.ts";
-import { collapseSkillLines } from "../core/skill-collapse.ts";
-import type { NormalizedBlock } from "../types.ts";
+import { collapseSkillLines, SKILL_MARKER_RE } from "../core/skill-collapse.ts";
+import type { NormalizedBlock, SourceRef } from "../types.ts";
 
 const SCOPE_CHANGE_RE =
 	/\b(instead|actually|change of plan|forget that|new task|switch to|now I want|pivot|let'?s do|stop .* and)\b/i;
@@ -32,11 +32,32 @@ const truncateAtTemplate = (lines: string[]): string[] => {
 const stripLeadingBullet = (line: string): string => line.replace(/^\s*(?:[-*+]|\d+\.)\s+/, "").trim();
 
 const MAX_GOAL_CHARS = 200;
+// One line per earlier request keeps the header small; the ref recovers the rest.
+const REQUEST_LINE_CHARS = 160;
+const EARLIER_REQUESTS = 3;
 
 // URL/파일 경로 토큰. 이스케이프 공백(스크린샷\ 2026…)도 경로의 일부로 벗긴다.
 const REF_TOKEN_RE = /^(?:https?:\/\/|file:|\/)(?:[^\s\\]|\\ )+/u;
 
 const hasHangul = (text: string): boolean => /[\uAC00-\uD7A3]/.test(text);
+
+/**
+ * A long line that reads like an instruction rather than pasted data: mostly
+ * letters, several words, few digits (logs are full of timestamps and counters),
+ * almost no code punctuation. Such lines used to be
+ * dropped by the 200-char limit, which erased one-line Korean instructions and
+ * single-line subagent prompts from [Session Goal] entirely; they are now kept
+ * and clipped at a sentence boundary instead.
+ */
+const looksLikeProse = (t: string): boolean => {
+	if (t.split(/\s+/).filter(Boolean).length < 6) return false;
+	const letters = (t.match(/\p{L}/gu) ?? []).length;
+	const digits = (t.match(/\d/g) ?? []).length;
+	const codeSymbols = (t.match(/[{}[\]<>=;|\\`$]/g) ?? []).length;
+	return letters / t.length >= 0.5 && digits / t.length < 0.1 && codeSymbols / t.length < 0.03;
+};
+
+const withRef = (line: string, ref: SourceRef | undefined): string => (ref == null ? line : `${line} (#${ref})`);
 
 /**
  * 목표 후보 판정. 구조적 검사(길이, 단답, 제어문 코드)는 내장, 제외 패턴은
@@ -47,7 +68,7 @@ const hasHangul = (text: string): boolean => /[\uAC00-\uD7A3]/.test(text);
 const isSubstantiveGoal = (text: string, rules: DenoiseRules): boolean => {
 	const t = text.trim();
 	if (t.length <= 5) return false;
-	if (t.length > MAX_GOAL_CHARS) return false;
+	if (t.length > MAX_GOAL_CHARS && !looksLikeProse(t)) return false;
 	if (NOISE_SHORT_RE.test(t) || NOISE_SHORT_RE_KO.test(t)) return false;
 	// 붙여넣은 제어문 코드 줄 걸러내기. 선언문과 달리 제어문(if/for/return)은 원본이
 	// 놓쳤다. 한글이 없고 코드 구두점(;,{,=>)이 있는 줄만 거른다 — "return 값이
@@ -67,40 +88,62 @@ const isSubstantiveGoal = (text: string, rules: DenoiseRules): boolean => {
 // so that pasted outputs below the actual instruction do not trigger matches.
 const LEADING_CHARS = 200;
 
+interface Directive {
+	lines: string[];
+	ref?: SourceRef;
+}
+
 export const extractGoals = (blocks: NormalizedBlock[], rules: DenoiseRules = builtinRules()): string[] => {
 	const goals: string[] = [];
-	let latestScopeChange: string[] | null = null;
+	const directives: Directive[] = [];
 
 	for (const b of blocks) {
 		if (b.kind !== "user") continue;
-		const rawLines = nonEmptyLines(b.text);
-		const truncated = truncateAtTemplate(rawLines);
+		// 스킬 본문을 먼저 접는다. 템플릿 신호(For each, 출력: …)가 스킬 매뉴얼 안에 있으면
+		// 원래 순서에서는 그 뒤에 붙은 실제 사용자 지시까지 잘려 나갔다.
+		const cleaned = collapseSkillLines(nonEmptyLines(b.text));
 		// 불릿을 먼저 벗겨야 “- /var/...” 같은 경로/코드 줄이 필터를 통과하는 문제를 막는다.
 		// 실제 50세션 샘플링에서 발견: 필터가 불릿 앞에서 돌면 제외 대상이 역으로 통과됐다.
-		const lines = collapseSkillLines(truncated)
+		const lines = truncateAtTemplate(cleaned)
 			.map(stripLeadingBullet)
 			.filter((l) => isSubstantiveGoal(l, rules))
 			.filter((l) => l.length > 5);
 		if (lines.length === 0) continue;
 
 		if (goals.length === 0) {
-			goals.push(...lines.slice(0, 6));
+			goals.push(...lines.slice(0, 6).map((l) => clipSentence(l, MAX_GOAL_CHARS)));
 			continue;
 		}
 
-		const leading = b.text.slice(0, LEADING_CHARS);
+		// Intent signals are read from what the user wrote, not from an invoked
+		// skill's manual (the raw text of a skill invocation starts with <skill ...>).
+		const leading = cleaned
+			.filter((l) => !SKILL_MARKER_RE.test(l))
+			.join("\n")
+			.slice(0, LEADING_CHARS);
 		// 한국어는 글자당 정보량이 영어보다 높아 동일 임계치면 짧은 실제 작업 지시가 걸러진다
 		// (15자 영어 ≈ 8자 한국어). 후속 작업 인지 판단에만 적용한다.
 		if (SCOPE_CHANGE_RE.test(leading) || SCOPE_CHANGE_RE_KO.test(leading)) {
-			latestScopeChange = lines.slice(0, 3).map((l) => clip(l, MAX_GOAL_CHARS));
+			directives.push({ lines: lines.slice(0, 3), ref: b.sourceIndex });
 		} else if (rules.taskVerbs.some((re) => re.test(leading)) && lines[0].length > (hasHangul(lines[0]) ? 8 : 15)) {
-			latestScopeChange = lines.slice(0, 2).map((l) => clip(l, MAX_GOAL_CHARS));
+			directives.push({ lines: lines.slice(0, 2), ref: b.sourceIndex });
 		}
 	}
 
-	// Only emit the [Scope change] marker when we actually captured bullets.
-	if (latestScopeChange && latestScopeChange.length > 0) {
-		goals.push("[Scope change]", ...latestScopeChange);
+	if (directives.length > 0) {
+		// The latest directive is the current task. The few before it keep the
+		// trajectory visible after many compactions (previously only one survived).
+		const earlier = directives.slice(0, -1).slice(-EARLIER_REQUESTS);
+		if (earlier.length > 0) {
+			goals.push(
+				"[Earlier requests]",
+				...earlier.map((d) => withRef(clipSentence(d.lines[0], REQUEST_LINE_CHARS), d.ref)),
+			);
+		}
+		const latest = directives[directives.length - 1];
+		const latestLines = latest.lines.map((l) => clipSentence(l, MAX_GOAL_CHARS));
+		latestLines[latestLines.length - 1] = withRef(latestLines[latestLines.length - 1], latest.ref);
+		goals.push("[Scope change]", ...latestLines);
 	}
 
 	return goals;

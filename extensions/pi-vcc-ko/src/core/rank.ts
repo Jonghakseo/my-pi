@@ -116,6 +116,9 @@ const scoreBlock = (
 
 	if (block.kind === "user") add(ranked, 18, "user-turn");
 	if (block.kind === "assistant") add(ranked, 10, "assistant-context");
+	// Extension notices: below the assistant's own narration of the same event,
+	// above read-only exploration.
+	if (block.kind === "custom") add(ranked, 4, "custom-notice");
 	if (block.kind === "tool_result") add(ranked, 1, "tool-result-low-value");
 
 	if (block.kind === "tool_call") {
@@ -183,9 +186,11 @@ const boostAdjacency = (ranked: RankedBlock[]) => {
 	}
 };
 
+// Mirrors brief.ts: tool results and extension notices do not close a segment.
 const nextNonToolResult = (ranked: RankedBlock[], index: number): NormalizedBlock | undefined => {
 	for (let i = index + 1; i < ranked.length; i++) {
-		if (ranked[i].block.kind !== "tool_result") return ranked[i].block;
+		const kind = ranked[i].block.kind;
+		if (kind !== "tool_result" && kind !== "custom") return ranked[i].block;
 	}
 	return undefined;
 };

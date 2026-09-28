@@ -1,5 +1,5 @@
 import { extractCommits, formatCommits } from "../extract/commits.ts";
-import { extractFiles } from "../extract/files.ts";
+import { extractFileActivity, renderFileActivity } from "../extract/files.ts";
 import { extractGoals } from "../extract/goals.ts";
 import { dedupPreferencesAgainstGoals, extractPreferences } from "../extract/preferences.ts";
 import type { SectionData } from "../sections.ts";
@@ -70,22 +70,6 @@ const extractOutstandingContext = (blocks: NormalizedBlock[], rules: DenoiseRule
 	return items.slice(0, 5);
 };
 
-const formatFileActivity = (blocks: NormalizedBlock[], fileOps?: FileOps): string[] => {
-	const act = extractFiles(blocks, fileOps);
-	// Dedup: if already Modified, drop from Created (file existed before)
-	for (const p of act.modified) act.created.delete(p);
-	const lines: string[] = [];
-	const cap = (set: Set<string>, limit: number) => {
-		const arr = [...set];
-		if (arr.length <= limit) return arr.join(", ");
-		return `${arr.slice(0, limit).join(", ")} (+${arr.length - limit} more)`;
-	};
-	if (act.modified.size > 0) lines.push(`Modified: ${cap(act.modified, 10)}`);
-	if (act.created.size > 0) lines.push(`Created: ${cap(act.created, 10)}`);
-	if (act.read.size > 0) lines.push(`Read: ${cap(act.read, 10)}`);
-	return lines;
-};
-
 export const buildSections = (input: BuildSectionsInput): SectionData => {
 	const { blocks } = input;
 	const rules = input.rules ?? builtinRules();
@@ -95,7 +79,7 @@ export const buildSections = (input: BuildSectionsInput): SectionData => {
 	return {
 		sessionGoal,
 		outstandingContext: extractOutstandingContext(blocks, rules),
-		filesAndChanges: formatFileActivity(blocks, input.fileOps),
+		filesAndChanges: renderFileActivity(extractFileActivity(blocks, input.fileOps)),
 		commits: formatCommits(extractCommits(blocks)),
 		userPreferences,
 		briefTranscript: stringifyBrief(briefSections),

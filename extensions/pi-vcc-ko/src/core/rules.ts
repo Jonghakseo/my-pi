@@ -83,6 +83,11 @@ export const BUILTIN_BLOCKER_EXCLUSION_RES: RegExp[] = [
 	/실패\s*(?:0|없)/,
 	// Resolved narrative (수정 전 실패 → 수정 후 통과)
 	/(?:수정 후|재현 후|이후|다시|재시도|재실행)[^\n]{0,60}(?:통과|그린|해결|완료|pass(?:ed|ing)?|clean)/i,
+	// Earlier failures reported as now passing ("기존에 실패했던 3개 메서드는 모두 통과했습니다")
+	/(?:기존|이전|앞서|원래|처음)[^\n]{0,40}실패[^\n]{0,80}(?:통과|해결|성공|그린)/,
+	/\b(?:previously|formerly|earlier|originally)\b[^\n]{0,60}\bfail\w*[^\n]{0,80}\b(?:pass(?:es|ed|ing)?|green|fixed|resolved)\b/i,
+	// "실패" naming a UI or test concept, not a blocker ("실패 안내는 한 줄로 반영했습니다")
+	/실패\s?(?:시\s?)?(?:안내|메시지|문구|표시|케이스|시나리오)/,
 	// Document rationale fragments ("Why it matters:"/"Rationale:")
 	/^(?:Why\b(?: it| this)? matters?|Rationale|Reason(?:ing)?)\s*[:：]/i,
 ];
@@ -108,6 +113,13 @@ export const BUILTIN_PREFERENCE_RES: RegExp[] = [
 	/(?:꼭|반드시|되도록(?:이면)?|가급적)\s(?:사용|실행|확인|추가|포함|적용|작성|지켜|피해|먼저)/,
 	/(?:스타일|형식|포맷|언어|네이밍|명명)\s*[:：=]\s*\S/,
 	/앞으로(?:는)?\s/,
+	// 일반 부정 명령형(~지 마/말고/말아줘/말 것). "하지 말았어야" 같은 회고형은 제외된다.
+	// 실제 세션의 "묻지 말고", "나레이션식 발화는 하지 말고"가 기존 동사 목록에서 빠졌다.
+	/[가-힣]지\s?(?:마(?:라|세요|셈|요)?|말(?:고|라|것|기를?|아(?:줘| 줘|요|주세요| 주세요)?))(?=[\s,.!?~]|$)/,
+	// 작업 분담 지시("코드 수정은 워커에 위임하고", "서브에이전트에게 맡겨")
+	/(?:에게|에|한테)\s?(?:위임|맡겨|맡기)/,
+	// 도구·방식 적극 사용 지시("bash async 도구를 적극적으로 활용하도록 해")
+	/적극(?:적으로)?\s?(?:사용|활용|이용)/,
 ];
 
 export const RULE_GROUPS = [

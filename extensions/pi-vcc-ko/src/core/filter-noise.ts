@@ -1,5 +1,6 @@
 import type { NormalizedBlock } from "../types.ts";
 import { type DenoiseRules, builtinRules } from "./rules.ts";
+import { focusStructuredPrompt } from "./structured-prompt.ts";
 
 const NOISE_TOOLS = new Set([
 	"TodoWrite",
@@ -20,7 +21,7 @@ const isNoiseUserBlock = (text: string, rules: DenoiseRules): boolean => {
 	return stripped.length === 0;
 };
 
-const cleanUserText = (text: string): string => text.replace(XML_WRAPPER_RE, "").trim();
+const cleanUserText = (text: string): string => focusStructuredPrompt(text.replace(XML_WRAPPER_RE, "").trim());
 
 export const filterNoise = (blocks: NormalizedBlock[], rules: DenoiseRules = builtinRules()): NormalizedBlock[] => {
 	const out: NormalizedBlock[] = [];

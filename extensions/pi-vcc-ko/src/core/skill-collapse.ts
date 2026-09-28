@@ -3,6 +3,9 @@
 const SKILL_TAG_RE = /^-?\s*<skill\s+name="([^"]+)"/;
 const SKILL_CLOSE_RE = /^-?\s*<\/skill>/;
 
+/** The one-line marker collapseSkillLines leaves in place of a skill block. */
+export const SKILL_MARKER_RE = /^\[skill: [^\]]+\]$/;
+
 /** Collapse skill tags in an array of lines — dedup by name, drop all content inside block */
 export const collapseSkillLines = (lines: string[]): string[] => {
 	const result: string[] = [];

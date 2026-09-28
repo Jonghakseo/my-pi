@@ -1,14 +1,25 @@
-import { asBashExecution, type CompactionMessage, type NormalizedBlock } from "../types.ts";
+import { asBashExecution, type CompactionMessage, type NormalizedBlock, type SourceRef } from "../types.ts";
 import { textOf } from "./content.ts";
 import { sanitize } from "./sanitize.ts";
 
-const normalizeOne = (msg: CompactionMessage, msgIndex: number | undefined): NormalizedBlock[] => {
-	if (msg.role === "custom" || msg.role === "branchSummary" || msg.role === "compactionSummary") {
+const normalizeOne = (msg: CompactionMessage, msgIndex: SourceRef | undefined): NormalizedBlock[] => {
+	if (msg.role === "custom") {
 		return [
 			{
 				kind: "custom",
-				customType: msg.role === "custom" ? msg.customType : msg.role,
-				text: sanitize(msg.role === "custom" ? textOf(msg.content) : msg.summary),
+				customType: msg.customType,
+				text: sanitize(textOf(msg.content)),
+				...(msg.display === false && { display: false }),
+				sourceIndex: msgIndex,
+			},
+		];
+	}
+	if (msg.role === "branchSummary" || msg.role === "compactionSummary") {
+		return [
+			{
+				kind: "custom",
+				customType: msg.role,
+				text: sanitize(msg.summary),
 				sourceIndex: msgIndex,
 			},
 		];
@@ -54,6 +65,7 @@ const normalizeOne = (msg: CompactionMessage, msgIndex: number | undefined): Nor
 				kind: "tool_result",
 				name: msg.toolName,
 				text: sanitize(textOf(msg.content)),
+				...(typeof msg.toolCallId === "string" && { toolCallId: msg.toolCallId }),
 				sourceIndex: msgIndex,
 			},
 		];
@@ -84,6 +96,7 @@ const normalizeOne = (msg: CompactionMessage, msgIndex: number | undefined): Nor
 					kind: "tool_call",
 					name: part.name,
 					args: part.arguments,
+					...(typeof part.id === "string" && { id: part.id }),
 					sourceIndex: msgIndex,
 				});
 			}
@@ -104,5 +117,5 @@ const normalizeOne = (msg: CompactionMessage, msgIndex: number | undefined): Nor
  */
 export const normalize = (
 	messages: CompactionMessage[],
-	sourceIndices?: Array<number | undefined>,
+	sourceIndices?: Array<SourceRef | undefined>,
 ): NormalizedBlock[] => messages.flatMap((msg, i) => normalizeOne(msg, sourceIndices ? sourceIndices[i] : i));
