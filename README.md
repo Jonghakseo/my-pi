@@ -100,7 +100,6 @@ Pi can auto-discover both `extensions/*.ts` and `extensions/*/index.ts`, but thi
 | Extension | Description |
 |---|---|
 | [`dynamic-agents-md/`](./extensions/dynamic-agents-md/index.ts) | Dynamically injects scoped `AGENTS.md` context after exploratory/file tool results |
-| [`web-access/`](./extensions/web-access/index.ts) | Local web research/content extraction tools: `web_search`, `fetch_content`, `get_search_content`, curator workflow, GitHub/PDF/video/YouTube extraction |
 
 #### Tool overrides / rendering
 
@@ -162,6 +161,12 @@ The following reusable packages are currently listed in `settings.json`.
 | [`@ryan_nookpi/pi-extension-until`](https://github.com/Jonghakseo/pi-extension/tree/main/packages/until) | `/until`, `/untils`, `/until-cancel`, and `until_report` for repeat-until-condition workflows; presets live in `until-presets/` |
 | [`@ryan_nookpi/pi-extension-bash-async`](https://github.com/Jonghakseo/pi-extension/tree/main/packages/bash-async) | `bash_async` background jobs for finite non-interactive commands; use the `tmux-terminal` skill for TUI, REPL, and stdin |
 | [`@ryan_nookpi/pi-extension-cron`](https://github.com/Jonghakseo/pi-extension/tree/main/packages/cron) | Persistent `cron` tool and `/cron` commands for scheduled headless Pi jobs through a launchd-backed daemon |
+| [`@ryan_nookpi/pi-extension-web-access`](https://github.com/Jonghakseo/pi-extension/tree/main/packages/web-access) | `web_search`, `fetch_content`, `get_search_content` — Exa search (keyless MCP fallback) and page/PDF/GitHub/YouTube extraction |
+| [`@ryan_nookpi/pi-skill-skill-creator`](https://github.com/Jonghakseo/pi-extension/tree/main/packages/skill-skill-creator) | `skill-creator` skill |
+| [`@ryan_nookpi/pi-skill-excalidraw`](https://github.com/Jonghakseo/pi-extension/tree/main/packages/skill-excalidraw) | `excalidraw` skill with a live-synced local editor |
+| [`@ryan_nookpi/pi-skill-tmux-terminal`](https://github.com/Jonghakseo/pi-extension/tree/main/packages/skill-tmux-terminal) | `tmux-terminal` skill for TUI, REPL, and stdin |
+| [`@ryan_nookpi/pi-skill-chrome-cdp`](https://github.com/Jonghakseo/pi-extension/tree/main/packages/skill-chrome-cdp) | `chrome-cdp` skill for the user's real Chrome session |
+| [`@ryan_nookpi/pi-skill-a4`](https://github.com/Jonghakseo/pi-extension/tree/main/packages/skill-a4) | `a4` skill: Markdown to A4 Word |
 
 ---
 
@@ -198,7 +203,7 @@ The setup currently ships with 8 themes, hot-swappable with `Ctrl+Shift+X` / `Ct
 
 ## Web Research Extension
 
-This setup maintains the web research stack as a local extension in [`extensions/web-access/`](./extensions/web-access/index.ts).
+This setup loads the web research stack from the npm package [`@ryan_nookpi/pi-extension-web-access`](https://github.com/Jonghakseo/pi-extension/tree/main/packages/web-access).
 
 - Tools: `web_search`, `fetch_content`, `get_search_content`
 - Search: Exa API with a key, Exa MCP without one
