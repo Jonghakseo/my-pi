@@ -4,21 +4,23 @@
   "compaction": {
     "enabled": true
   },
-  "defaultModel": "gpt-6-astra",
-  "defaultProvider": "openai-codex",
-  "defaultThinkingLevel": "high",
+  "defaultModel": "claude-opus-5-5",
+  "defaultProvider": "anthropic",
+  "defaultThinkingLevel": "medium",
   "doubleEscapeAction": "tree",
   "enabledModels": [
-    "openai-codex/gpt-5.6-sol",
     "openai-codex/gpt-6-astra",
-    "openai-codex/gpt-5.6-terra"
+    "openai-codex/gpt-6-sol",
+    "openai-codex/gpt-6-luna",
+    "anthropic/claude-opus-5-5"
   ],
+  "fullscreenScrollbar": "auto",
   "hideThinkingBlock": true,
   "httpIdleTimeoutMs": 90000,
   "images": {
     "blockImages": false
   },
-  "lastChangelogVersion": "0.85.1",
+  "lastChangelogVersion": "0.87.1",
   "packages": [
     "npm:@ryan_nookpi/pi-extension-codex-fast-mode",
     "npm:@ryan_nookpi/pi-extension-ask-user-question",
@@ -31,22 +33,22 @@
     "npm:@ryan_nookpi/pi-extension-claude-mcp-bridge",
     "npm:@ryan_nookpi/pi-extension-memory-layer",
     "npm:@ryan_nookpi/pi-extension-claude-spinner",
-    "npm:@ryan_nookpi/pi-extension-cc-system-prompt",
     "npm:@ryan_nookpi/pi-extension-todo-write-overlay",
     "npm:@ryan_nookpi/pi-extension-diff-review",
     "npm:@ryan_nookpi/pi-extension-subagent",
     "npm:@ryan_nookpi/pi-extension-clipboard",
     "npm:@ryan_nookpi/pi-extension-until",
     "npm:@ryan_nookpi/pi-extension-cron",
-    "npm:@llblab/pi-telegram",
-    "npm:@ryan_nookpi/pi-extension-vcc-ko"
+    "npm:@dev.fast/pi-whiteboard",
+    "npm:@ryan_nookpi/pi-extension-vcc-ko",
+    "npm:@ryan_nookpi/pi-extension-bash-async"
   ],
-  "retry": {
-    "enabled": true,
-    "maxRetries": 15,
-    "baseDelayMs": 3000
-  },
   "quietStartup": true,
+  "retry": {
+    "baseDelayMs": 3000,
+    "enabled": true,
+    "maxRetries": 15
+  },
   "subagent": {
     "claudeRuntime": "cli",
     "symbolMap": {
@@ -56,12 +58,11 @@
     }
   },
   "terminal": {
-    "showImages": false
+    "showImages": true
   },
   "theme": "nord",
+  "tuiMode": "fullscreen",
   "warnings": {
     "anthropicExtraUsage": false
-  },
-  "tuiMode": "fullscreen",
-  "fullscreenScrollbar": "auto"
+  }
 }
