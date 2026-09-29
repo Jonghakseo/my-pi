@@ -99,7 +99,6 @@ pi는 `extensions/*.ts`와 `extensions/*/index.ts`를 모두 자동 발견할 �
 | 확장 | 설명 |
 |---|---|
 | [`dynamic-agents-md/`](./extensions/dynamic-agents-md/index.ts) | 탐색/파일 도구 결과 이후 스코프별 `AGENTS.md` 컨텍스트를 동적으로 주입 |
-| [`bash-async/`](./extensions/bash-async/index.ts) | 유한한 비대화형 명령을 background job으로 실행. TUI·REPL·stdin은 패키지의 `tmux-terminal` skill/helper를 사용하며 native overlay, `/attach`, `/dismiss`, reattach UI는 제공하지 않음 |
 | [`web-access/`](./extensions/web-access/index.ts) | 로컬 웹 리서치/콘텐츠 추출 도구: `web_search`, `fetch_content`, `get_search_content`, 큐레이터 워크플로우, GitHub/PDF/동영상/YouTube 추출 |
 
 #### 도구 오버라이드 / 렌더링
@@ -160,6 +159,7 @@ pi는 `extensions/*.ts`와 `extensions/*/index.ts`를 모두 자동 발견할 �
 | [`@ryan_nookpi/pi-extension-cc-system-prompt`](https://github.com/Jonghakseo/pi-extension/tree/main/packages/cc-system-prompt) | Claude Code 스타일 시스템 프롬프트 |
 | [`@ryan_nookpi/pi-extension-subagent`](https://github.com/Jonghakseo/pi-extension/tree/main/packages/subagent) | 멀티 에이전트 위임 엔진 — 비동기 run/continue/batch/chain, 세션 영속화, 상태 UI, 서브세션 에스컬레이션 |
 | [`@ryan_nookpi/pi-extension-until`](https://github.com/Jonghakseo/pi-extension/tree/main/packages/until) | `/until`, `/untils`, `/until-cancel`, `until_report` — 조건 충족까지 반복 실행, 프리셋은 `until-presets/` |
+| [`@ryan_nookpi/pi-extension-bash-async`](https://github.com/Jonghakseo/pi-extension/tree/main/packages/bash-async) | 유한한 비대화형 명령을 `bash_async` background job으로 실행. TUI·REPL·stdin은 `tmux-terminal` skill 사용 |
 | [`@ryan_nookpi/pi-extension-cron`](https://github.com/Jonghakseo/pi-extension/tree/main/packages/cron) | 영속 `cron` 도구와 `/cron` 명령 — launchd 기반 daemon으로 headless Pi 작업 예약 |
 
 ---
