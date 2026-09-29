@@ -3,7 +3,7 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { promisify } from "node:util";
-import type { ExtensionAPI, ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
+import { type ExtensionAPI, type ExtensionCommandContext, SessionManager } from "@earendil-works/pi-coding-agent";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import debugSession from "./index.ts";
 
@@ -17,17 +17,22 @@ afterEach(async () => {
 
 function setup(sessionFile?: string, exportFails = false, openFails = false) {
 	let handler!: (args: string, ctx: ExtensionCommandContext) => Promise<void>;
+	let completions: Parameters<ExtensionAPI["registerCommand"]>[1]["getArgumentCompletions"];
 	const exec = vi.fn(async (command: string, args: string[]) => {
-		if (command === "open") return { code: openFails ? 1 : 0, stdout: "", stderr: "open failed" };
+		if (command === "open") {
+			directories.add(dirname(args[0]));
+			return { code: openFails ? 1 : 0, stdout: "", stderr: "open failed" };
+		}
 		directories.add(dirname(args[2]));
 		if (exportFails) return { code: 1, stdout: "", stderr: "export failed" };
 		const result = await run(command, args);
 		return { ...result, code: 0 };
 	});
 	debugSession({
-		registerCommand: (name: string, command: { handler: typeof handler }) => {
+		registerCommand: (name: string, command: Parameters<ExtensionAPI["registerCommand"]>[1]) => {
 			expect(name).toBe("debug-session");
 			handler = command.handler;
+			completions = command.getArgumentCompletions;
 		},
 		exec,
 	} as unknown as ExtensionAPI);
@@ -35,10 +40,16 @@ function setup(sessionFile?: string, exportFails = false, openFails = false) {
 	const ctx = {
 		cwd: process.cwd(),
 		waitForIdle: async () => {},
-		sessionManager: { getSessionFile: () => sessionFile },
+		sessionManager:
+			sessionFile && !exportFails ? SessionManager.open(sessionFile) : { getSessionFile: () => sessionFile },
 		ui: { notify },
 	} as unknown as ExtensionCommandContext;
-	return { invoke: () => handler("", ctx), exec, notify };
+	return {
+		invoke: (args = "") => handler(args, ctx),
+		complete: (prefix: string) => completions?.(prefix),
+		exec,
+		notify,
+	};
 }
 
 async function fixture() {
@@ -53,10 +64,49 @@ async function fixture() {
 }
 
 describe("debug-session", () => {
+	it("suggests html and json and filters completions by prefix", async () => {
+		const { complete } = setup();
+		expect(await complete("")).toEqual([
+			{ value: "html", label: "html" },
+			{ value: "json", label: "json" },
+		]);
+		expect(await complete("j")).toEqual([{ value: "json", label: "json" }]);
+		expect(await complete("ht")).toEqual([{ value: "html", label: "html" }]);
+		expect(await complete("xml")).toBeNull();
+	});
+
+	it.each(["xml", "html json"])("rejects unsupported arguments: %s", async (args) => {
+		const { invoke, exec, notify } = setup();
+		await invoke(args);
+		expect(exec).not.toHaveBeenCalled();
+		expect(notify).toHaveBeenCalledWith(expect.stringContaining("[html|json]"), "warning");
+	});
+
+	it("writes valid JSON containing the session header, messages and active leaf, then opens it", async () => {
+		const { invoke, exec, notify } = setup(await fixture());
+		await invoke("json");
+		expect(exec).toHaveBeenCalledOnce();
+		const [command, [path]] = exec.mock.calls[0];
+		expect(command).toBe("open");
+		expect(path).toMatch(/session\.json$/);
+		const data = JSON.parse(await readFile(path, "utf8"));
+		expect(data.header.id).toBe("debug-test");
+		expect(data.leafId).toBe("message1");
+		expect(data.entries).toEqual(
+			expect.arrayContaining([
+				expect.objectContaining({
+					type: "message",
+					message: expect.objectContaining({ content: "debug-session-export-marker" }),
+				}),
+			]),
+		);
+		expect(notify).toHaveBeenLastCalledWith(expect.stringContaining("세션 JSON을 열었습니다"), "info");
+	});
+
 	it("exports real session content to unique temporary HTML files and opens each file", async () => {
 		const { invoke, exec, notify } = setup(await fixture());
 		await invoke();
-		await invoke();
+		await invoke("html");
 		const opened = exec.mock.calls.filter(([command]) => command === "open");
 		expect(opened).toHaveLength(2);
 		expect(opened[0][1][0]).not.toBe(opened[1][1][0]);
