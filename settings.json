@@ -41,7 +41,13 @@
     "npm:@ryan_nookpi/pi-extension-cron",
     "npm:@dev.fast/pi-whiteboard",
     "npm:@ryan_nookpi/pi-extension-vcc-ko",
-    "npm:@ryan_nookpi/pi-extension-bash-async"
+    "npm:@ryan_nookpi/pi-extension-bash-async",
+    "npm:@ryan_nookpi/pi-extension-web-access",
+    "npm:@ryan_nookpi/pi-skill-skill-creator",
+    "npm:@ryan_nookpi/pi-skill-tmux-terminal",
+    "npm:@ryan_nookpi/pi-skill-chrome-cdp",
+    "npm:@ryan_nookpi/pi-skill-a4",
+    "npm:@ryan_nookpi/pi-skill-excalidraw"
   ],
   "quietStartup": true,
   "retry": {

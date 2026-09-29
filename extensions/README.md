@@ -30,7 +30,6 @@ Pi 공식 문서는 auto-discovery 대상으로 `extensions/*.ts`와 `extensions
 | [`theme-cycler/`](./theme-cycler/index.ts) | `Ctrl+Shift+X`로 테마 순환 |
 | [`usage-analytics/`](./usage-analytics/index.ts) | 서브에이전트·스킬 사용 통계 오버레이 |
 | [`working-text/`](./working-text/index.ts) | 스피너 작업 메시지 (팁 텍스트 + 경과 시간) |
-| [`web-access/`](./web-access/index.ts) | 웹 검색/콘텐츠 추출 도구 및 큐레이터 워크플로우 |
 
 ## 기술 스택
 
@@ -43,8 +42,7 @@ Pi 공식 문서는 auto-discovery 대상으로 `extensions/*.ts`와 `extensions
 ## 스크립트
 
 ```bash
-pnpm run typecheck            # 전체 TypeScript 타입 체크 (web-access 포함)
-pnpm run typecheck:web-access # web-access focused 타입 체크
+pnpm run typecheck            # 전체 TypeScript 타입 체크
 pnpm test                     # extensions/**/*.test.ts 전체 실행
 pnpm run test:watch           # Vitest watch
 pnpm run test:coverage        # coverage 리포트

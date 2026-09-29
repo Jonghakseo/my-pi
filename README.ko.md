@@ -99,7 +99,6 @@ pi는 `extensions/*.ts`와 `extensions/*/index.ts`를 모두 자동 발견할 �
 | 확장 | 설명 |
 |---|---|
 | [`dynamic-agents-md/`](./extensions/dynamic-agents-md/index.ts) | 탐색/파일 도구 결과 이후 스코프별 `AGENTS.md` 컨텍스트를 동적으로 주입 |
-| [`web-access/`](./extensions/web-access/index.ts) | 로컬 웹 리서치/콘텐츠 추출 도구: `web_search`, `fetch_content`, `get_search_content`, 큐레이터 워크플로우, GitHub/PDF/동영상/YouTube 추출 |
 
 #### 도구 오버라이드 / 렌더링
 
@@ -161,6 +160,12 @@ pi는 `extensions/*.ts`와 `extensions/*/index.ts`를 모두 자동 발견할 �
 | [`@ryan_nookpi/pi-extension-until`](https://github.com/Jonghakseo/pi-extension/tree/main/packages/until) | `/until`, `/untils`, `/until-cancel`, `until_report` — 조건 충족까지 반복 실행, 프리셋은 `until-presets/` |
 | [`@ryan_nookpi/pi-extension-bash-async`](https://github.com/Jonghakseo/pi-extension/tree/main/packages/bash-async) | 유한한 비대화형 명령을 `bash_async` background job으로 실행. TUI·REPL·stdin은 `tmux-terminal` skill 사용 |
 | [`@ryan_nookpi/pi-extension-cron`](https://github.com/Jonghakseo/pi-extension/tree/main/packages/cron) | 영속 `cron` 도구와 `/cron` 명령 — launchd 기반 daemon으로 headless Pi 작업 예약 |
+| [`@ryan_nookpi/pi-extension-web-access`](https://github.com/Jonghakseo/pi-extension/tree/main/packages/web-access) | `web_search`, `fetch_content`, `get_search_content` — Exa 검색(키 없으면 MCP)과 웹 페이지·PDF·GitHub·YouTube 추출 |
+| [`@ryan_nookpi/pi-skill-skill-creator`](https://github.com/Jonghakseo/pi-extension/tree/main/packages/skill-skill-creator) | `skill-creator` 스킬 |
+| [`@ryan_nookpi/pi-skill-excalidraw`](https://github.com/Jonghakseo/pi-extension/tree/main/packages/skill-excalidraw) | 실시간 동기화 로컬 편집기를 쓰는 `excalidraw` 스킬 |
+| [`@ryan_nookpi/pi-skill-tmux-terminal`](https://github.com/Jonghakseo/pi-extension/tree/main/packages/skill-tmux-terminal) | TUI·REPL·stdin용 `tmux-terminal` 스킬 |
+| [`@ryan_nookpi/pi-skill-chrome-cdp`](https://github.com/Jonghakseo/pi-extension/tree/main/packages/skill-chrome-cdp) | 사용자 실제 Chrome 세션용 `chrome-cdp` 스킬 |
+| [`@ryan_nookpi/pi-skill-a4`](https://github.com/Jonghakseo/pi-extension/tree/main/packages/skill-a4) | Markdown을 A4 Word로 바꾸는 `a4` 스킬 |
 
 ---
 
@@ -197,7 +202,7 @@ pi는 `extensions/*.ts`와 `extensions/*/index.ts`를 모두 자동 발견할 �
 
 ## 웹 리서치 확장
 
-이 셋업은 웹 리서치 스택을 로컬 확장 [`extensions/web-access/`](./extensions/web-access/index.ts)으로 관리한다.
+이 셋업은 웹 리서치 스택을 npm 패키지 [`@ryan_nookpi/pi-extension-web-access`](https://github.com/Jonghakseo/pi-extension/tree/main/packages/web-access)로 불러온다.
 
 - 도구: `web_search`, `fetch_content`, `get_search_content`
 - 검색: API 키가 있으면 Exa API, 없으면 Exa MCP

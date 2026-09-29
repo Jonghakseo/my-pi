@@ -20,7 +20,7 @@ Install these **before** cloning. Versions below are what the repo is developed 
 |---|---|---|
 | **Node.js** | `>=22.19` (tested on `22.19.0`) | `brew install node@22` or `mise use -g node@22` |
 | **pnpm** | `>=10.24` (pinned via `packageManager`) | `corepack enable && corepack prepare pnpm@10.24.0 --activate` |
-| **Python** | `>=3.10` | for `skills/skill-creator/scripts/validate_skill.py` |
+| **Python** | `>=3.10` | for the `skill-creator` skill's `validate_skill.py` (`@ryan_nookpi/pi-skill-skill-creator`) |
 | **Git** | any recent | `brew install git` |
 
 ### Required CLIs

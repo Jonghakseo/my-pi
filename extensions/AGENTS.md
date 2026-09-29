@@ -40,8 +40,7 @@ Custom extensions for the pi coding agent. All extensions are written in TypeScr
 - **Package manager**: pnpm
 - **Test colocation**: Keep each test in the directory of the module it primarily exercises; keep shared utility tests in `utils/`.
 - **Quality checks**:
-  - `pnpm run typecheck` — TypeScript 타입 검사 (web-access 포함, 오류만 출력, 파일 변경 없음)
-  - `pnpm run typecheck:web-access` — `web-access/` focused 타입 검사
+  - `pnpm run typecheck` — TypeScript 타입 검사 (오류만 출력, 파일 변경 없음)
   - `pnpm test` — `tooling/vitest.config.ts` 기준으로 `extensions/**/*.test.ts` 전체 실행 (`tooling/`에 두어 Pi auto-discovery를 피함)
   - `pnpm run lint` — Biome lint + **자동 수정** (`biome check --write .`). 파일을 직접 고침.
   - `pnpm run format` — Biome 포맷 검사만 (파일 변경 없음)
