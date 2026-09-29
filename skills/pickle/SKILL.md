@@ -88,7 +88,9 @@ picky pickle-create "<title>" \
 
 - `--cwd`: 항상 명시한다.
 - `--instructions`: 빈 Pickle이 아니면 항상 구체적으로 제공한다.
-- `--no-context`: handoff가 self-contained인 코딩·조사 위임의 기본값이다. 사용자가 현재 화면 맥락 전달을 원할 때만 생략한다.
+- `--no-context`: handoff가 self-contained인 코딩·조사 위임의 기본값이다. 사용자가 현재 화면 맥락 전달을 원할 때만 생략한다. 필요한 원문·URL·근거는 `--instructions`에 직접 적는다.
+- `--from-main`: 실제 실행 중인 Picky 메인 에이전트 전용이다. 일반 Pi, 재개한 Pi 세션, Pickle, subagent는 사용하지 않는다. Picky에서 시작했거나 다른 Pickle을 만든다는 이유로 메인이 되는 것은 아니다. 이 플래그는 호출자의 대화가 아니라 데몬에 저장된 메인 요청·화면을 가져온다. 완료 알림을 받기 위한 옵션도 아니다.
+- 현재 CLI에서 `--from-main --no-context`를 함께 쓰면 `--no-context`가 무시된다. 두 옵션을 조합하지 않는다. 맥락 없는 생성은 메인에서도 `--from-main`을 빼고 위 예시를 사용한다. 이때 외부 생성 경로와 신규 Pickle의 완료 알림 기본 설정을 따른다. 메인의 현재 요청·화면을 의도적으로 넘길 때만 메인에서 `--from-main` 단독으로 사용한다.
 - `--json`: 생성된 session ID를 정확히 확인하기 위해 사용한다.
 - `--group <name>`: 사용자가 그룹을 지정했거나 여러 독립 작업을 fan-out할 때 사용한다.
 - `--empty`: 사용자가 명시적으로 빈 Pickle을 요청했을 때만 사용한다.
@@ -118,3 +120,4 @@ picky pickle-create "<title>" \
 - 커밋, push, PR 범위를 임의로 확대하지 않았는가
 - 생성 응답에서 정확한 session ID를 확인했는가
 - 메인 세션용 `picky submit`을 실수로 사용하지 않았는가
+- 일반 Pi/Pickle에서 `--from-main`을 붙이지 않았는가. self-contained handoff는 `--no-context`만 사용했는가
