@@ -38,7 +38,8 @@
     "npm:@ryan_nookpi/pi-extension-clipboard",
     "npm:@ryan_nookpi/pi-extension-until",
     "npm:@ryan_nookpi/pi-extension-cron",
-    "npm:@llblab/pi-telegram"
+    "npm:@llblab/pi-telegram",
+    "npm:@ryan_nookpi/pi-extension-vcc-ko"
   ],
   "retry": {
     "enabled": true,

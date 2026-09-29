@@ -19,10 +19,10 @@ Custom extensions for the pi coding agent. All extensions are written in TypeScr
 ├── footer/                # Custom footer UI facade for custom-style/main.ts
 ├── working-text/          # Spinner working message (tip text + elapsed time)
 ├── theme-cycler/          # Ctrl+Shift+X to cycle through themes
-├── pi-vcc-ko/             # 알고리즘형 대화 압축기 (pi-vcc 포크): 구조적 요약 + vcc_recall 히스토리 검색, 한국어 추출 정규식 확장
 ```
 
 ## Moved Out
+- **pi-vcc-ko**: maintained in `~/Documents/pi-extension/packages/vcc-ko` and loaded from npm as `@ryan_nookpi/pi-extension-vcc-ko`. Its config stays at `~/.pi/agent/pi-vcc-ko-config.json`. Do not re-add it here; change the monorepo package and publish a new version.
 - **subagent**: maintained in `~/Documents/pi-extension/packages/subagent` and loaded from npm as `@ryan_nookpi/pi-extension-subagent`. Do not re-add subagent code here; contribute to the monorepo and publish a new package version instead. `custom-style/ui.ts` mirrors its `subagent.symbolMap` setting read-only for editor hints.
 
 ## Shell Tool Split
