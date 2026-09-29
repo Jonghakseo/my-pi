@@ -100,7 +100,6 @@ Pi can auto-discover both `extensions/*.ts` and `extensions/*/index.ts`, but thi
 | Extension | Description |
 |---|---|
 | [`dynamic-agents-md/`](./extensions/dynamic-agents-md/index.ts) | Dynamically injects scoped `AGENTS.md` context after exploratory/file tool results |
-| [`bash-async/`](./extensions/bash-async/index.ts) | Runs finite non-interactive commands as background jobs. Use the packaged `tmux-terminal` skill/helper for TUI, REPL, and stdin; no native overlay, `/attach`, `/dismiss`, or reattach UI remains |
 | [`web-access/`](./extensions/web-access/index.ts) | Local web research/content extraction tools: `web_search`, `fetch_content`, `get_search_content`, curator workflow, GitHub/PDF/video/YouTube extraction |
 
 #### Tool overrides / rendering
@@ -161,6 +160,7 @@ The following reusable packages are currently listed in `settings.json`.
 | [`@ryan_nookpi/pi-extension-cc-system-prompt`](https://github.com/Jonghakseo/pi-extension/tree/main/packages/cc-system-prompt) | Claude Code style system prompt |
 | [`@ryan_nookpi/pi-extension-subagent`](https://github.com/Jonghakseo/pi-extension/tree/main/packages/subagent) | Multi-agent delegation engine — asynchronous run/continue/batch/chain workflows, session persistence, status UI, and sub-session escalation |
 | [`@ryan_nookpi/pi-extension-until`](https://github.com/Jonghakseo/pi-extension/tree/main/packages/until) | `/until`, `/untils`, `/until-cancel`, and `until_report` for repeat-until-condition workflows; presets live in `until-presets/` |
+| [`@ryan_nookpi/pi-extension-bash-async`](https://github.com/Jonghakseo/pi-extension/tree/main/packages/bash-async) | `bash_async` background jobs for finite non-interactive commands; use the `tmux-terminal` skill for TUI, REPL, and stdin |
 | [`@ryan_nookpi/pi-extension-cron`](https://github.com/Jonghakseo/pi-extension/tree/main/packages/cron) | Persistent `cron` tool and `/cron` commands for scheduled headless Pi jobs through a launchd-backed daemon |
 
 ---
