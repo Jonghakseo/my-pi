@@ -29,6 +29,9 @@ describe("createAzureDeepSeekProviderConfig", () => {
 			input: ["text"],
 			compat: { supportsReasoningEffort: true },
 		});
-		expect("thinkingFormat" in (config?.models?.[0]?.compat ?? {})).toBe(false);
+		const model = config?.models?.[0];
+		expect(model && "compat" in model).toBe(true);
+		if (!model || !("compat" in model)) throw new Error("Expected a chat model with compatibility settings");
+		expect("thinkingFormat" in (model.compat ?? {})).toBe(false);
 	});
 });
