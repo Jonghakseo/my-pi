@@ -1,3 +1,59 @@
 {
-  "providers": {}
+  "providers": {
+    "cloudflare": {
+      "baseUrl": "https://api.cloudflare.com/client/v4/accounts/528fd41cd4c44ee062741eb4939cbb1b/ai/v1",
+      "api": "openai-completions",
+      "apiKey": "!cat \"$HOME/.config/pi-secrets/cloudflare-workers-ai-token\"",
+      "models": [
+        {
+          "id": "@cf/zai-org/glm-5.3-flash",
+          "name": "GLM 5.3 Flash (Workers AI)",
+          "reasoning": true,
+          "input": [
+            "text",
+            "image"
+          ],
+          "contextWindow": 1310720,
+          "maxTokens": 16384,
+          "cost": {
+            "input": 0.15,
+            "output": 0.5,
+            "cacheRead": 0.03,
+            "cacheWrite": 0
+          },
+          "compat": {
+            "supportsStore": false,
+            "supportsDeveloperRole": false,
+            "supportsReasoningEffort": false,
+            "supportsStrictMode": false,
+            "maxTokensField": "max_tokens"
+          }
+        },
+        {
+          "id": "@cf/qwen/qwen3.8-27b",
+          "name": "Qwen 3.8 27B (Workers AI)",
+          "reasoning": true,
+          "input": [
+            "text",
+            "image"
+          ],
+          "contextWindow": 262144,
+          "maxTokens": 16384,
+          "cost": {
+            "input": 0.45,
+            "output": 3.2,
+            "cacheRead": 0.05,
+            "cacheWrite": 0
+          },
+          "compat": {
+            "supportsStore": false,
+            "supportsDeveloperRole": false,
+            "supportsReasoningEffort": false,
+            "supportsStrictMode": false,
+            "maxTokensField": "max_tokens"
+          }
+        }
+      ]
+    }
+  }
 }

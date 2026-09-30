@@ -10,9 +10,8 @@
   "doubleEscapeAction": "tree",
   "enabledModels": [
     "openai-codex/gpt-6-astra",
-    "openai-codex/gpt-6-sol",
-    "openai-codex/gpt-6-luna",
-    "anthropic/claude-opus-5-5"
+    "anthropic/claude-opus-5-5",
+    "openai-codex/gpt-6.1-sol"
   ],
   "fullscreenScrollbar": "auto",
   "hideThinkingBlock": true,
@@ -20,17 +19,15 @@
   "images": {
     "blockImages": false
   },
-  "lastChangelogVersion": "0.87.1",
+  "lastChangelogVersion": "0.99.1",
   "packages": [
     "npm:@ryan_nookpi/pi-extension-codex-fast-mode",
     "npm:@ryan_nookpi/pi-extension-ask-user-question",
     "npm:@ryan_nookpi/pi-extension-auto-name",
     "npm:@ryan_nookpi/pi-extension-delayed-action",
     "npm:@ryan_nookpi/pi-extension-open-pr",
-    "npm:@ryan_nookpi/pi-extension-generative-ui",
     "npm:@ryan_nookpi/pi-extension-cross-agent",
     "npm:@ryan_nookpi/pi-extension-claude-hooks-bridge",
-    "npm:@ryan_nookpi/pi-extension-claude-mcp-bridge",
     "npm:@ryan_nookpi/pi-extension-memory-layer",
     "npm:@ryan_nookpi/pi-extension-claude-spinner",
     "npm:@ryan_nookpi/pi-extension-todo-write-overlay",
