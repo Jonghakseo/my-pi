@@ -1,6 +1,6 @@
 ---
 name: usage-analytics
-description: "서브에이전트·스킬 사용 통계와 미사용 항목을 분석해 인사이트를 도출할 때 사용한다."
+description: "서브에이전트·스킬 사용 통계를 분석할 때 사용한다."
 disable-model-invocation: false
 ---
 

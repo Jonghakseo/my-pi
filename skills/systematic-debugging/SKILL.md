@@ -1,6 +1,6 @@
 ---
 name: systematic-debugging
-description: "버그, 테스트 실패, 예상 밖 동작을 수정하기 전에 근본 원인을 체계적으로 조사할 때 사용한다."
+description: "버그, 테스트 실패, 예상 밖 동작을 수정하기 전에 근본 원인을 조사할 때 사용한다."
 disable-model-invocation: false
 ---
 

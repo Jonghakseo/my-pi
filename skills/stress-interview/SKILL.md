@@ -1,6 +1,6 @@
 ---
 name: stress-interview
-description: "verifier·reviewer·challenger 서브에이전트를 병렬 호출해 변경사항을 검증·리뷰·반론 관점으로 다각도 검토할 때 사용한다."
+description: "변경사항을 여러 관점에서 검증·리뷰할 때 사용한다."
 disable-model-invocation: false
 ---
 

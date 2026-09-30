@@ -1,6 +1,6 @@
 ---
 name: pickle
-description: 코딩·조사 작업을 별도 Picky Pickle에 위임할 때 사용한다. worktree 준비, 지침 작성, Pickle 생성·후속 관리를 수행한다.
+description: "코딩·조사 작업을 별도 Picky Pickle에 위임할 때 사용한다."
 ---
 
 # Pickle
