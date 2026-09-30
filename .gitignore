@@ -95,3 +95,4 @@ __pycache__/
 pi-typesafe/
 pi-debug.log
 mcp-auth.json
+mcp.json
