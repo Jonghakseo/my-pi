@@ -46,7 +46,7 @@ The system is organized in **four layers**:
 | **User / pi TUI** | Interactive terminal interface |
 | **Extensions** | Local directory-style TypeScript extensions plus installed npm extension packages |
 | **Agents** | 8 specialized agent definitions with distinct roles and models |
-| **Infrastructure** | MCP tool integrations via `@ryan_nookpi/pi-extension-claude-mcp-bridge` — reuses your existing Claude Code MCP setup (Jira, Slack, Gmail, Calendar, GA4, Figma, DB, etc.) |
+| **Infrastructure** | MCP tool integrations via pi's built-in MCP support (`mcp.json`, `/mcp`) |
 
 ---
 
@@ -152,7 +152,6 @@ The following reusable packages are currently listed in `settings.json`.
 | [`@ryan_nookpi/pi-extension-generative-ui`](https://github.com/Jonghakseo/pi-extension/tree/main/packages/generative-ui) | `visualize_read_me`, `show_widget` native visual widgets |
 | [`@ryan_nookpi/pi-extension-cross-agent`](https://github.com/Jonghakseo/pi-extension/tree/main/packages/cross-agent) | Load agent definitions/commands from `.claude`, `.gemini`, `.codex` |
 | [`@ryan_nookpi/pi-extension-claude-hooks-bridge`](https://github.com/Jonghakseo/pi-extension/tree/main/packages/claude-hooks-bridge) | Claude Code hooks bridge |
-| [`@ryan_nookpi/pi-extension-claude-mcp-bridge`](https://github.com/Jonghakseo/pi-extension/tree/main/packages/claude-mcp-bridge) | Claude Code MCP bridge |
 | [`@ryan_nookpi/pi-extension-memory-layer`](https://github.com/Jonghakseo/pi-extension/tree/main/packages/memory-layer) | Persistent memory tools |
 | [`@ryan_nookpi/pi-extension-diff-review`](https://github.com/Jonghakseo/pi-extension/tree/main/packages/diff-review) | Diff review assistance |
 | [`@ryan_nookpi/pi-extension-claude-spinner`](https://github.com/Jonghakseo/pi-extension/tree/main/packages/claude-spinner) | Claude-style spinner/status feedback |
