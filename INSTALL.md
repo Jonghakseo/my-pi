@@ -100,17 +100,16 @@ Only needed if you use the `browser` agent with persistent cookies.
 
 ---
 
-## 5. MCP bridge (Claude Code reuse)
+## 5. MCP servers (built-in)
 
-`settings.json` enables `@ryan_nookpi/pi-extension-claude-mcp-bridge`, which
-**reuses** the MCP server list configured in your local Claude Code. You don't
-register MCPs in pi separately — instead:
+pi ships built-in MCP support (`builtin:mcp`). Servers live in
+`~/.pi/agent/mcp.json` (global) or `.pi/mcp.json` (trusted projects), and tools
+are exposed as `mcp__<server>__<tool>`.
 
-1. In Claude Code, add the MCP servers you want (Jira, Slack, Notion, GA4,
-   BigQuery, etc.).
-2. Launch `pi` once; the bridge will discover them and write
-   `claude-mcp-bridge-cache.json` and `claude-mcp-bridge-tools.json` here.
-3. Restart `pi` so the cached tool list is picked up.
+1. Add a server: `pi mcp add creatrip --url https://ai.creatrip.com/api/mcp/sse`
+   (or edit `mcp.json` directly).
+2. Check it: `pi mcp list`. Sign in with `pi mcp login <server>` if needed.
+3. Inside a session, `/mcp` manages servers (state, tools, exposure, sign-in).
 
 ---
 
@@ -154,6 +153,6 @@ in git. Cloning gives you exactly the public skill set — no extra steps.
   package is installed first; the root `package.json` declares
   `@earendil-works/pi-coding-agent` as a peer.
 - **Agents missing in TUI** → run `node scripts/sync-agents.mjs --force`.
-- **MCP tools missing** → confirm Claude Code has them registered, delete
-  `claude-mcp-bridge-cache.json`, restart `pi`.
+- **MCP tools missing** → run `pi mcp list` and fix the failing entry in
+  `mcp.json`, or `/mcp reconnect <server>` inside a session.
 - **`extensions/` typecheck errors** → `cd extensions && pnpm typecheck`.
