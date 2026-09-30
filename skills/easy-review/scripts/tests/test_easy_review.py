@@ -232,6 +232,23 @@ class EasyReviewTests(unittest.TestCase):
             self.assertNotIn("Change map", html_output)
             self.assertFalse((bundle / "review.md").exists())
 
+            # An omitted style must remain identical to the explicit original style.
+            self.assertEqual(review["presentation"]["style"], "easy-review")
+            run("compile", "--bundle", str(bundle), "--style", "easy-review")
+            self.assertEqual((bundle / "review.html").read_text(encoding="utf-8"), html_output)
+
+            # Selecting Notion changes presentation, not the captured evidence or escaping.
+            run("compile", "--bundle", str(bundle), "--style", "notion")
+            notion_output = (bundle / "review.html").read_text(encoding="utf-8")
+            notion_review = json.loads((bundle / "review.json").read_text(encoding="utf-8"))
+            self.assertNotEqual(notion_output, html_output)
+            self.assertEqual(notion_review["presentation"]["style"], "notion")
+            self.assertEqual(notion_review["source"], review["source"])
+            self.assertEqual(notion_review["plan"], review["plan"])
+            self.assertNotIn("<script>alert(1)</script>", notion_output)
+            self.assertIn("&lt;script&gt;alert(1)&lt;/script&gt;", notion_output)
+            self.assertEqual(notion_output.count(f'id="{addition_anchors[0]}"'), 1)
+
     def test_internal_easy_review_verification_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
             root = Path(temporary_directory)

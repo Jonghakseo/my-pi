@@ -1,6 +1,6 @@
 ---
 name: easy-review
-description: "Use when the user asks for Easy Review (이지 리뷰), an interactive Easy Review chatbot, or a read-only HTML explanation of Git changes, commits, PRs, or diffs. Write for a zero-context reader: explain the problem, before/after behavior, and system responsibilities before optional code evidence, with optional local Pi Q&A."
+description: "Git 변경사항·커밋·PR을 맥락 없는 사람도 이해하도록 설명하는 이지 리뷰를 만들 때 사용한다."
 ---
 
 # Easy Review
@@ -8,6 +8,15 @@ description: "Use when the user asks for Easy Review (이지 리뷰), an interac
 프로젝트·도메인·이전 대화를 전혀 모르는 사람에게 변경의 이유와 결과를 설명하는 읽기 문서를 만든다. 기본 독자는 코드를 읽을 수 있어도 이 서비스의 용어와 구조는 모른다. 코드 줄을 쉬운 말로 번역하는 대신, 사용자의 문제 → 기존 동작과 달라지는 점 → 시스템별 역할과 흐름 → 실패 시 영향 순서로 설명한다. 코드는 설명을 이해하기 위한 선행 조건이 아니라 원하는 독자가 펼쳐 보는 근거다.
 
 현재 에이전트가 의미와 위험을 판단하고, 번들 스크립트는 원본 보존·분할·검증·렌더링만 결정적으로 수행한다. HTML은 표준 라이브러리의 구조화된 노드로 만들며 동적 텍스트와 attribute는 serializer가 이스케이프한다. 검증한 정적 CSS·JavaScript 자산만 별도로 삽입한다.
+
+## 출력 스타일을 선택한다
+
+- 기본값은 원래 Easy Review 스타일이다. 사용자가 ‘노션 스타일’, ‘Notion 스타일’로 출력하라고 명시한 경우에만 Notion 스타일을 선택한다. ‘HTML’, ‘문서’, ‘리포트’, ‘읽기 쉽게’라는 표현이나 에이전트의 취향으로 스타일을 바꾸지 않는다.
+- 기본 출력은 `compile --style easy-review`(옵션 생략 가능), 명시적으로 요청받은 Notion 출력은 `compile --style notion`으로 생성한다. 스타일은 `review.json`의 `presentation.style`에 기록된다. 재컴파일할 때는 현재 사용자 지시를 따르며, 지시가 바뀌지 않았다면 기존 선택을 유지한다.
+- `notion-doc`은 Easy Review의 기본값을 덮어쓰지 않는다. 명시적인 Notion 요청에서는 그 시각 원칙을 참고하되, 별도 템플릿·exporter·lint 절차로 Easy Review HTML을 재작성하지 않는다. 번들에 포함된 Notion 스타일 자산을 사용한다.
+- 양식은 선택한 스타일을 따르고, 구조와 동작은 [references/artifact-contract.md](references/artifact-contract.md)와 번들 렌더러가 맡는다. 두 스타일 모두 설명 우선·접힌 코드 근거·미니맵·테마·전체 펼치기·선택적 채팅 UI를 유지한다.
+- 최종 `review.html`은 `compile`이 생성한 파일 그대로 전달한다. 생성 후 HTML·CSS·JavaScript를 수작업으로 수정하거나, 별도 exporter·wrapper·후처리로 재렌더링하지 않는다. 표준 출력을 보조 파일로 옮기고 다른 양식의 HTML을 주 산출물로 전달하는 것도 금지한다.
+- 내용이나 읽는 순서를 바꿀 때는 `review-plan.json`을 수정하고 `preview` → `compile`을 다시 실행한다. 렌더러 기능 자체의 변경은 사용자가 별도로 요청한 스킬 개발 작업에서만 수행한다.
 
 ## 지켜야 할 경계
 
@@ -80,8 +89,14 @@ stale hash, 알 수 없는 근거, section 밖 근거, 파일 중복·누락, �
 구조 검증만으로 설명 품질이 통과한 것은 아니다. 코드·파일 경로·근거 ID를 가리고 summary, overview, section 제목·summary, attention만 읽는다. 제로 컨텍스트 독자가 ‘왜 필요한지, 이전과 무엇이 다른지, 누가 무엇을 맡는지, 어떤 실패가 누구에게 영향을 주는지’를 답할 수 있어야 한다. 답에 필요한 용어를 뒤에서만 설명하거나 코드가 대신 설명한다면 rubric의 제로 컨텍스트 검수 기준으로 다시 쓴다.
 
 ```bash
+# 기본값: 원래 Easy Review 스타일
 python3 "$SKILL_DIR/scripts/easy_review.py" compile --bundle <bundle-dir>
+
+# 사용자가 Notion 스타일을 명시한 경우만
+python3 "$SKILL_DIR/scripts/easy_review.py" compile --bundle <bundle-dir> --style notion
 ```
+
+완료 전 `review.json`의 `presentation.style`이 사용자 지시와 일치하고, 최종 `review.html`이 위 `compile` 출력인지 확인한다. 다른 템플릿으로 바뀌었거나 후처리된 파일이면 완료로 전달하지 말고, 계획을 유지한 채 다시 컴파일한다.
 
 ## 요청받으면 로컬 Pi 채팅 서버까지 직접 실행한다
 

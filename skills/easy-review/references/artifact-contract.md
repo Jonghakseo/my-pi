@@ -96,6 +96,9 @@
 
 ## 렌더링 규칙
 
+- 출력 스타일은 `compile --style easy-review|notion`으로 선택한다. 옵션 생략 시 원래 `easy-review` 스타일이며, 사용자가 Notion 스타일을 명시한 경우에만 `notion`을 선택한다. `review.json`의 `presentation.style`은 선택한 스타일을 기록하며, 기존 번들에는 이 필드가 없을 수 있다.
+- `notion`은 번들된 Notion 색상·타이포그래피·720px 단일 설명 열·callout 스타일을 적용하되 아래 코드 근거·탐색·채팅 계약은 그대로 유지한다. `notion-doc`의 일반 문서 지시가 기본 스타일을 자동 변경하지 않는다.
+- 최종 `review.html`은 선택한 스타일로 `scripts/easy_review.py compile`이 생성한 출력 그대로 사용한다. 다른 문서 템플릿이나 별도 exporter·wrapper·후처리로 HTML·CSS·JavaScript를 대체하지 않는다.
 - 화면은 카드 모음보다 편집형 기술 문서에 가깝게 구성한다. 위계는 타이포그래피·간격·가는 구분선으로 만들고, 둥근 모서리와 배지는 실제 상태를 구분해야 할 때만 제한적으로 사용한다.
 - 긴 경로와 근거 링크는 파일명을 먼저 보여주고 전체 경로는 보조 정보나 접근 가능한 설명으로 남긴다. 작은 화면에서도 제목, 파일 설명, 코드가 서로 폭을 빼앗지 않게 재배치한다.
 - `detail`은 diff를 표시한다. focus reason은 해당 코드 바로 위에 나타난다.

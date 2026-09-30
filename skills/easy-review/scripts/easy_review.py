@@ -1377,7 +1377,7 @@ def append_chat_ui(parent: Element, source_sha256: str) -> None:
     child(chat_fab, "span", "π", {"class": "chat-fab-mark", "aria-hidden": "true"})
 
 
-def render_html(review: dict[str, Any], assets_dir: Path) -> str:
+def render_html(review: dict[str, Any], assets_dir: Path, *, style: str = "easy-review") -> str:
     plan = review["plan"]
     coverage = review["coverage"]
     source = review["source"]
@@ -1606,9 +1606,12 @@ def render_html(review: dict[str, Any], assets_dir: Path) -> str:
     )
     append_chat_ui(main, source["source_sha256"])
 
-    style = "\n".join(
+    stylesheet_names = ["review.css", "chat.css"]
+    if style == "notion":
+        stylesheet_names.extend(["notion.css", "notion-review.css"])
+    stylesheet = "\n".join(
         (assets_dir / name).read_text(encoding="utf-8")
-        for name in ("review.css", "chat.css")
+        for name in stylesheet_names
     )
     syntax_script = (assets_dir / "vendor" / "prism.js").read_text(encoding="utf-8")
     behavior_script = "\n".join(
@@ -1620,7 +1623,7 @@ def render_html(review: dict[str, Any], assets_dir: Path) -> str:
             title=plan["title"],
             main=main,
             assets=TrustedAssets(
-                stylesheet=style,
+                stylesheet=stylesheet,
                 syntax_script=syntax_script,
                 behavior_script=behavior_script,
             ),
@@ -1650,11 +1653,12 @@ def command_compile(args: argparse.Namespace) -> int:
         "warnings": warnings,
         "plan": plan,
         "files": source["files"],
+        "presentation": {"style": args.style},
     }
     write_json_atomic(bundle / "review.json", review)
     html_path = bundle / "review.html"
     assets_dir = Path(__file__).resolve().parent.parent / "assets"
-    write_text_atomic(html_path, render_html(review, assets_dir))
+    write_text_atomic(html_path, render_html(review, assets_dir, style=args.style))
     for path in (bundle / "review.json", html_path):
         print(path)
     return 0
@@ -1719,6 +1723,7 @@ def command_describe(args: argparse.Namespace) -> int:
         "capture_modes": ["worktree", "unstaged", "staged", "revision", "range", "github_pr", "diff_file"],
         "commands": ["capture", "inspect", "preview", "compile", "serve", "describe"],
         "formats": ["html"],
+        "styles": {"default": "easy-review", "choices": ["easy-review", "notion"]},
         "limits": {"max_diff_bytes": MAX_DIFF_BYTES, "default_chunk_bytes": DEFAULT_CHUNK_BYTES, "max_chunks": MAX_CHUNKS},
     }
     print(json.dumps(description, ensure_ascii=False, indent=2))
@@ -1754,6 +1759,10 @@ def build_parser() -> argparse.ArgumentParser:
 
     compile_parser = subparsers.add_parser("compile", help="compile a valid plan into review artifacts")
     compile_parser.add_argument("--bundle", required=True)
+    compile_parser.add_argument(
+        "--style", choices=("easy-review", "notion"), default="easy-review",
+        help="output style; defaults to the original Easy Review style",
+    )
     compile_parser.set_defaults(handler=command_compile)
 
     serve_parser = subparsers.add_parser("serve", help="serve review.html with an in-process Pi SDK chat session")
