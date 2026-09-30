@@ -1,6 +1,6 @@
 ---
 name: memory-manage
-description: "기존 user/project 메모리와 명시적으로 요청된 current-session agent 메모리의 중복·노후·보안·scope 문제를 스캔하고, 보수적인 기준으로 자동 통합·정리할 때 사용한다. 별도 사용자 확인 없이 끝까지 적용한다."
+description: "저장된 메모리의 중복·노후 항목을 점검하고 정리할 때 사용한다."
 disable-model-invocation: false
 ---
 

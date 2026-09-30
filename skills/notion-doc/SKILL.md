@@ -1,7 +1,7 @@
 ---
 name: notion-doc
 license: MIT
-description: Notion-style document skill. MUST be used whenever creating documents in HTML/Markdown, such as reports, summaries, meeting notes, or postmortems ("문서 만들어줘", "리포트", "회의록"). Governs visual style and Notion blocks (callouts, toggles, tables, checklists, code, columns); content and outline follow the request.
+description: "보고서·요약·회의록 같은 문서를 Notion 스타일로 만들 때 사용한다."
 ---
 
 # Creating documents with Notion's design
@@ -77,6 +77,7 @@ python3 <skill directory>/lint.py doc.html
 
 ## 5. Interaction with other skills
 
+- **Easy Review chooses its style explicitly.** An Easy Review request alone uses its original style, even when called an HTML document or report. Only an explicit user request for Notion style selects its bundled `compile --style notion` output. This skill's visual principles inform that option, but do not override the default or require its separate template and lint. Easy Review's renderer owns code evidence, navigation, and chat; do not wrap, restyle, or re-render the compiled HTML.
 - If another skill or host also governs presentation (a design-system skill, an
   artifact/preview host), take only its technical requirements — responsiveness,
   dark mode, sandbox constraints. **This skill's style tokens take precedence**

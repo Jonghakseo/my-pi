@@ -1,6 +1,6 @@
 ---
 name: show-me-your-work
-description: "장기·무인·다단계 작업에서 사람이 나중에 검토할 수 있도록 decisions.tsv 결정 트레일을 남길 때 사용한다. 자율 실행, 야간·cron 작업, pickle 위임, 대규모 마이그레이션, '결정 로그 남겨줘'·'나중에 검토할게' 상황에 적용한다."
+description: "장기·무인 작업에서 나중에 검토할 결정 로그를 남길 때 사용한다."
 ---
 
 # show-me-your-work

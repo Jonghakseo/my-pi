@@ -1,6 +1,6 @@
 ---
 name: explain-for-no-context
-description: "현재 맥락의 논의를 쉬운 말로 다시 설명할 때 사용한다. '맥락 없이 이해할 수 있게', '쉽게 다시 설명해줘' 같은 요청에 적용"
+description: "현재 논의를 맥락 없는 사람도 이해하도록 쉬운 말로 다시 설명할 때 사용한다."
 ---
 
 # explain-for-no-context

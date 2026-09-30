@@ -1,6 +1,6 @@
 ---
 name: harness-refine-sweep
-description: 최근 N일·N시간 동안의 여러 pi 세션을 worker 서브에이전트로 병렬 harness-refine 분석하고 결과를 종합해 durable harness 개선 후보를 도출할 때 사용한다. 사용자가 '최근 세션들 refine 돌려줘', 'refine 스윕', '지난 며칠 세션 시행착오 종합 검토'처럼 요청하면 트리거한다. 현재 세션 하나만 분석할 때는 harness-refine을 사용한다.
+description: "최근 여러 Pi 세션을 한꺼번에 회고해 하네스 개선점을 찾을 때 사용한다."
 ---
 
 # harness-refine-sweep

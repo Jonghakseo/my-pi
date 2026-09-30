@@ -1,6 +1,6 @@
 ---
 name: harness-refine
-description: 현재 Pi 세션의 도구 사용과 시행착오를 분석해 AGENTS.md·SYSTEM.md·스킬·메모리·서브에이전트 개선안을 dry-run으로 제안한다. `/skill:harness-refine` 또는 세션 회고 요청에 사용한다.
+description: "현재 Pi 세션을 회고해 하네스(AGENTS.md·스킬·메모리 등) 개선점을 찾을 때 사용한다."
 disable-model-invocation: true
 compatibility: Pi session environment with PI_SESSION_FILE and Python 3.10+.
 ---

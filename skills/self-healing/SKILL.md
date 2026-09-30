@@ -1,6 +1,6 @@
 ---
 name: self-healing
-description: "stress-interview 검토 후 worker 수정과 재검토를 2사이클 반복하는 self-healing·자가 치유 작업에 사용한다."
+description: "변경사항을 자동으로 리뷰·수정·재검토하는 self-healing 요청에 사용한다."
 disable-model-invocation: false
 ---
 

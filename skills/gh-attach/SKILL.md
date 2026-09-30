@@ -1,6 +1,6 @@
 ---
 name: gh-attach
-description: "GitHub 이슈·PR·코멘트에 로컬 이미지·영상을 네이티브 --attach로 첨부하거나, 게시된 본문의 첨부 URL을 확인할 때 사용한다."
+description: "GitHub 이슈·PR·코멘트에 로컬 이미지나 영상을 첨부할 때 사용한다."
 compatibility: "Requires GitHub CLI >= 2.99.0, GitHub.com authentication, and push access to the target repository."
 ---
 

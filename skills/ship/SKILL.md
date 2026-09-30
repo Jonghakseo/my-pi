@@ -1,6 +1,6 @@
 ---
 name: ship
-description: "변경사항을 remote에 올리기 전 의도 단위 커밋, 검증, push를 수행할 때 사용한다."
+description: "변경사항을 커밋하고 remote에 push할 때 사용한다."
 disable-model-invocation: false
 ---
 

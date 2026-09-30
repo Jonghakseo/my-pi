@@ -1,6 +1,6 @@
 ---
 name: create-verification-skill
-description: "레포에 유저처럼 실제 앱을 구동·조작·증거수집하는 프로젝트 로컬 verify-<app> 스킬을 생성할 때 사용한다. '이 레포용 verify 스킬 만들어줘', 'UI/CLI/서비스 동작을 증명할 스크립트가 없다', '앱 검증 스킬 세팅' 요청 시 적용한다."
+description: "레포에 실제 앱 동작을 검증하는 verify 스킬을 만들 때 사용한다."
 ---
 
 # create-verification-skill

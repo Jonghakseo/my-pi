@@ -1,6 +1,6 @@
 ---
 name: pi-auto-update
-description: "Pi 버전 및 SDK 의존성 업데이트, 공식 CHANGELOG 기반 호환성 분석, 저장소별 Pi 의존성 소유자 탐색, 업스트림 기능으로 대체·삭제·단순화 가능한 코드 검토, 검증과 시각화에 사용한다."
+description: "Pi 버전과 SDK 의존성을 업데이트할 때 사용한다."
 disable-model-invocation: false
 ---
 
@@ -17,7 +17,7 @@ disable-model-invocation: false
 5. 발견한 owner manifest의 Pi 관련 의존성을 같은 릴리즈 계열로 업데이트
 6. 필요한 호환 수정과 근거가 충분한 코드 개선 적용
 7. repo-native 검증 절차로 typecheck, test, build, smoke 확인
-8. 업데이트 및 코드 개선 내역 시각화와 최종 보고
+8. 업데이트 및 코드 개선 내역 최종 보고
 
 ---
 
@@ -35,7 +35,7 @@ disable-model-invocation: false
 
 ## 출력 원칙
 
-**최종 보고는 반드시 한글로 작성한다.** 섹션 제목, 설명, 조치 내용, 후속 항목, 시각화의 라벨과 문장까지 모두 한글로 쓴다. 버전 문자열, 파일 경로, 패키지명, 명령어, CHANGELOG 원문 인용, 타입·API 이름 같은 고유 식별자는 원문 그대로 둔다.
+**최종 보고는 반드시 한글로 작성한다.** 섹션 제목, 설명, 조치 내용, 후속 항목까지 모두 한글로 쓴다. 버전 문자열, 파일 경로, 패키지명, 명령어, CHANGELOG 원문 인용, 타입·API 이름 같은 고유 식별자는 원문 그대로 둔다.
 
 항상 아래 순서로 보고한다.
 
@@ -47,8 +47,7 @@ disable-model-invocation: false
 6. **코드 개선 검토** - 유지 / 필수 수정 / 단순화 / 대체 / 삭제 후보와 근거
 7. **코드 수정** - 실제 대응한 파일과 이유
 8. **검증** - 실행한 typecheck, test, build, smoke 결과
-9. **시각화** - 버전 변화, CHANGELOG 영향, 변경 파일, 코드 개선, 검증 결과
-10. **후속 확인** - 보류한 개선 후보와 수동 확인 사항
+9. **후속 확인** - 보류한 개선 후보와 수동 확인 사항
 
 공식 근거가 있으면 반드시 링크를 포함한다.
 
@@ -349,32 +348,9 @@ git diff --check
 
 ---
 
-## Step 8. 업데이트 내역 시각화
+## Step 8. 최종 보고
 
-최종 응답 전, 시각화 도구를 사용할 수 있으면 반드시 `show_widget`으로 결과를 보여준다.
-
-첫 `show_widget` 호출 전에는 내부 준비 단계로 `visualize_read_me`를 한 번 호출한다.
-
-### 시각화에 반드시 포함할 내용
-
-- 버전 변화: 현재 버전 → 최신/적용 버전, 업데이트 필요 여부
-- CHANGELOG 핵심 항목: provider, API, runtime, security, UI 등 영향 카테고리
-- 저장소 탐색: 실제 Pi owner manifest, extension source, workspace, upgrade 문서
-- 영향 스캔: 영향받은 package, 기능, 코드 수정 필요 여부
-- dependency update: 변경된 manifest, lockfile, Pi package version
-- 코드 개선 검토: 유지, 필수 수정, 단순화, 대체, 삭제, 보류 개수와 대표 symbol
-- validation: typecheck, test, build, smoke 성공·실패와 테스트 개수
-- follow-up: 수동 확인과 보류한 개선 후보
-
-### 권장 구성
-
-- 상단 metric cards: 버전, owner 수, 변경 package 수, 코드 개선 수, 검증 상태
-- 중간 flow: Version → Changelog → Discovery → Impact → Update → Improve → Validation
-- 하단 detail cards: CHANGELOG별 영향, 실제 변경 파일, 코드 개선 분류, 검증 결과
-
-시각화의 카드 제목, 라벨, 설명도 한글로 작성한다. 버전값, 파일 경로, package, API 이름만 원문을 유지한다.
-
-시각화는 보조 산출물이다. 최종 텍스트 보고도 출력 원칙 순서대로 반드시 제공한다.
+출력 원칙 순서대로 업데이트 및 코드 개선 내역, 검증 결과, 후속 확인 사항을 텍스트로 보고한다.
 
 ---
 
@@ -396,9 +372,8 @@ git diff --check
 - [ ] repo-native typecheck, test, build를 실행했는가
 - [ ] 삭제·대체한 코드의 동작을 회귀 테스트로 검증했는가
 - [ ] `git diff --check`와 최종 diff를 검토했는가
-- [ ] 업데이트 내역 시각화를 제공했는가
 - [ ] 보류한 개선 후보와 수동 확인 항목을 적었는가
-- [ ] 최종 보고와 시각화 문구를 한글로 작성했는가
+- [ ] 최종 보고를 한글로 작성했는가
 
 ---
 
@@ -414,7 +389,6 @@ git diff --check
 - characterization/contract test 없이 workaround나 adapter 삭제하기
 - 코드 줄 수 감소를 성과로 삼아 범위 밖 refactor 섞기
 - 검증 없이 `업데이트 완료`라고 말하기
-- 시각화 도구가 사용 가능한데도 결과 시각화를 생략하기
 - 최종 보고를 영어로 작성하기
 
 ---
@@ -458,10 +432,6 @@ git diff --check
 
 ## 검증
 - `<실제 명령>` → ...
-
-## 시각화
-- 위젯: 표시함/표시하지 않음
-- 요약: 버전, owner, 영향, dependency, 코드 개선, 검증 상태
 
 ## 후속 확인
 - ...

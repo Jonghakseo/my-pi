@@ -1,6 +1,6 @@
 ---
 name: handoff
-description: Compact the current conversation into a handoff document for another agent to pick up.
+description: "현재 대화를 다른 에이전트가 이어받도록 인계 문서로 정리할 때 사용한다."
 argument-hint: "What will the next session be used for?"
 disable-model-invocation: false
 ---

@@ -1,6 +1,6 @@
 ---
 name: dynamic-workflow
-description: "장기·병렬·대규모 작업을 서브에이전트로 분해·실행·검증하거나 동적 workflow를 설계할 때 사용한다."
+description: "장기·병렬·대규모 작업을 서브에이전트로 나눠 실행할 때 사용한다."
 disable-model-invocation: false
 ---
 
