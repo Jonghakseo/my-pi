@@ -11,24 +11,12 @@ importers:
 
   .:
     dependencies:
-      '@earendil-works/pi-client':
-        specifier: 0.84.4
-        version: 0.84.4
-      '@earendil-works/pi-protocol':
-        specifier: 0.84.4
-        version: 0.84.4
-      '@earendil-works/pi-server':
-        specifier: 0.84.4
-        version: 0.84.4(@aws-sdk/credential-provider-node@3.972.83)(@modelcontextprotocol/sdk@1.27.1(zod@4.4.3))(@smithy/signature-v4@5.7.3)(undici@8.10.2)(ws@8.21.3)(zod@4.4.3)
       diff:
         specifier: ^8.0.4
         version: 8.0.4
       file-type:
         specifier: ^21.3.0
         version: 21.3.4
-      ws:
-        specifier: 8.21.3
-        version: 8.21.3
     devDependencies:
       '@biomejs/biome':
         specifier: ^2.4.4
@@ -48,9 +36,6 @@ importers:
       '@types/node':
         specifier: ^25.3.1
         version: 25.3.1
-      '@types/ws':
-        specifier: 8.18.1
-        version: 8.18.1
       '@vitest/coverage-v8':
         specifier: ^4.0.18
         version: 4.0.18(vitest@4.0.18(@opentelemetry/api@1.9.0)(@types/node@25.3.1)(jiti@2.7.0)(lightningcss@1.32.0)(yaml@2.9.0))
@@ -249,10 +234,6 @@ packages:
     engines: {node: '>=22.19.0'}
     hasBin: true
 
-  '@earendil-works/pi-client@0.84.4':
-    resolution: {integrity: sha512-q398WY/3ZQHTizk7IKxApzqFV0xt4yM9LkSkwyqeLK5Bj5RwRjOWxESt26z4LgNp4O+8hqhqFPf/8fj4H5rE4A==}
-    engines: {node: '>=22.19.0'}
-
   '@earendil-works/pi-codemode@1.0.0':
     resolution: {integrity: sha512-LPpFI4+T9NzDnhBDs15izWAolaoM8xnwqdziRd6Zx8BQeoEPvzefD2vMMzSyF0rOtq34TfQqkZ0ki16f6cGdMg==}
     engines: {node: '>=22.19.0'}
@@ -264,14 +245,6 @@ packages:
 
   '@earendil-works/pi-mcp@1.0.0':
     resolution: {integrity: sha512-rYra0aF5iPmJd+fsB+VBuqxWNABGJ3Iiyhg0CqIc/91ta2n7IvQmCp0Cac/YkUTNnvRsVZnjgAiBkRi6+ouWuw==}
-    engines: {node: '>=22.19.0'}
-
-  '@earendil-works/pi-protocol@0.84.4':
-    resolution: {integrity: sha512-acyE9ozxkMiWiz/xyWpU0O9vwnYv0hyG889Vniv6Sg9c9zfsX+8MePnDNphBacY2Fvm1rxdsGmiVDSZl9yuDFA==}
-    engines: {node: '>=22.19.0'}
-
-  '@earendil-works/pi-server@0.84.4':
-    resolution: {integrity: sha512-VchGLu8oMF8TjxAuPwQVdcBUSMvsdhJH5+WgKOWgeSxfgsjRJsoTQKqrambPojNuB+1MB/uWgZehq2R1sQQCUA==}
     engines: {node: '>=22.19.0'}
 
   '@earendil-works/pi-telemetry@1.0.0':
@@ -842,9 +815,6 @@ packages:
 
   '@types/retry@0.12.0':
     resolution: {integrity: sha512-wWKOClTTiizcZhXnPY4wikVAwmdYHp8q6DmC+EJUzAMsycb7HB32Kh9RN4+0gExjmPmZSAQjgURXIGATPegAvA==}
-
-  '@types/ws@8.18.1':
-    resolution: {integrity: sha512-ThVF6DCVhA8kUGy+aazFQ4kXQ7E1Ty7A3ypFOe0IcJV8O/M511G99AW24irKrW56Wt44yG9+ij8FaqoBGkuBXg==}
 
   '@vitest/coverage-v8@4.0.18':
     resolution: {integrity: sha512-7i+N2i0+ME+2JFZhfuz7Tg/FqKtilHjGyGvoHYQ6iLV0zahbsJ9sljC9OcFcPDbhYKCet+sG8SsVqlyGvPflZg==}
@@ -1673,9 +1643,6 @@ packages:
   typebox@1.3.27:
     resolution: {integrity: sha512-zu+jc1pcy4UiNThxikUr36f0Rybk9PEeCg/NE6adeWr/SKsdNO4EzZHYRDlv2YCVAfj3Odq3dESSo/jNyoBXzA==}
 
-  typebox@1.3.7:
-    resolution: {integrity: sha512-meKuifc33Pccx0O6PdIzYMq3Og8zvP4TIi/a+Bw3AEMZMxOD0+RHGQvpglEe6Zdy3wZ8nqn/j95h8LUZLk/6Hg==}
-
   typescript@5.9.3:
     resolution: {integrity: sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw==}
     engines: {node: '>=14.17'}
@@ -2107,10 +2074,6 @@ snapshots:
       - ws
       - zod
 
-  '@earendil-works/pi-client@0.84.4':
-    dependencies:
-      '@earendil-works/pi-protocol': 0.84.4
-
   '@earendil-works/pi-codemode@1.0.0':
     dependencies:
       quickjs-wasi: 3.6.2
@@ -2154,27 +2117,6 @@ snapshots:
   '@earendil-works/pi-mcp@1.0.0':
     dependencies:
       cross-spawn: 7.0.6
-
-  '@earendil-works/pi-protocol@0.84.4':
-    dependencies:
-      typebox: 1.3.7
-
-  '@earendil-works/pi-server@0.84.4(@aws-sdk/credential-provider-node@3.972.83)(@modelcontextprotocol/sdk@1.27.1(zod@4.4.3))(@smithy/signature-v4@5.7.3)(undici@8.10.2)(ws@8.21.3)(zod@4.4.3)':
-    dependencies:
-      '@earendil-works/pi-ai': 1.0.0(@aws-sdk/credential-provider-node@3.972.83)(@modelcontextprotocol/sdk@1.27.1(zod@4.4.3))(@smithy/signature-v4@5.7.3)(undici@8.10.2)(ws@8.21.3)(zod@4.4.3)
-      '@earendil-works/pi-protocol': 0.84.4
-    transitivePeerDependencies:
-      - '@aws-sdk/credential-provider-node'
-      - '@modelcontextprotocol/sdk'
-      - '@smithy/hash-node'
-      - '@smithy/signature-v4'
-      - bufferutil
-      - kerberos
-      - supports-color
-      - undici
-      - utf-8-validate
-      - ws
-      - zod
 
   '@earendil-works/pi-telemetry@1.0.0': {}
 
@@ -2551,10 +2493,6 @@ snapshots:
       undici-types: 7.18.2
 
   '@types/retry@0.12.0': {}
-
-  '@types/ws@8.18.1':
-    dependencies:
-      '@types/node': 25.3.1
 
   '@vitest/coverage-v8@4.0.18(vitest@4.0.18(@opentelemetry/api@1.9.0)(@types/node@25.3.1)(jiti@2.7.0)(lightningcss@1.32.0)(yaml@2.9.0))':
     dependencies:
@@ -3507,8 +3445,6 @@ snapshots:
   typebox@1.1.31: {}
 
   typebox@1.3.27: {}
-
-  typebox@1.3.7: {}
 
   typescript@5.9.3: {}
 

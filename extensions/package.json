@@ -18,9 +18,7 @@
 		"format:write": "biome format --write .",
 		"test": "vitest run --config tooling/vitest.config.ts",
 		"test:watch": "vitest --config tooling/vitest.config.ts",
-		"test:coverage": "vitest run --config tooling/vitest.config.ts --coverage",
-		"chrome-panel:daemon": "node --experimental-transform-types chrome-panel/daemon/main.ts",
-		"chrome-panel:service": "node --experimental-transform-types chrome-panel/daemon/cli.ts"
+		"test:coverage": "vitest run --config tooling/vitest.config.ts --coverage"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "^2.4.4",
@@ -29,18 +27,13 @@
 		"@earendil-works/pi-coding-agent": "1.0.0",
 		"@earendil-works/pi-tui": "1.0.0",
 		"@types/node": "^25.3.1",
-		"@types/ws": "8.18.1",
 		"@vitest/coverage-v8": "^4.0.18",
 		"typebox": "^1.1.24",
 		"typescript": "^5.9.3",
 		"vitest": "^4.0.18"
 	},
 	"dependencies": {
-		"@earendil-works/pi-client": "0.84.4",
-		"@earendil-works/pi-protocol": "0.84.4",
-		"@earendil-works/pi-server": "0.84.4",
 		"diff": "^8.0.4",
-		"file-type": "^21.3.0",
-		"ws": "8.21.3"
+		"file-type": "^21.3.0"
 	}
 }
