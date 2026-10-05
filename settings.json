@@ -15,7 +15,7 @@
   ],
   "fullscreenScrollbar": "auto",
   "hideThinkingBlock": true,
-  "httpIdleTimeoutMs": 90000,
+  "httpIdleTimeoutMs": 180000,
   "images": {
     "blockImages": false
   },
