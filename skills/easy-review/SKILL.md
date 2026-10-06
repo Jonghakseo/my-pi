@@ -1,126 +1,143 @@
 ---
 name: easy-review
-description: "Git 변경사항·커밋·PR을 맥락 없는 사람도 이해하도록 설명하는 이지 리뷰를 만들 때 사용한다."
+description: "Git 변경사항·커밋·PR을 Excalidraw 전체 다이어그램과 번호 붙은 빨간 하이라이트로 설명하는 이지 리뷰를 만들 때 사용한다."
 ---
 
 # Easy Review
 
-프로젝트·도메인·이전 대화를 전혀 모르는 사람에게 변경의 이유와 결과를 설명하는 읽기 문서를 만든다. 기본 독자는 코드를 읽을 수 있어도 이 서비스의 용어와 구조는 모른다. 코드 줄을 쉬운 말로 번역하는 대신, 사용자의 문제 → 기존 동작과 달라지는 점 → 시스템별 역할과 흐름 → 실패 시 영향 순서로 설명한다. 코드는 설명을 이해하기 위한 선행 조건이 아니라 원하는 독자가 펼쳐 보는 근거다.
+프로젝트·도메인·이전 대화를 모르는 사람이 변경 하나를 그림 한 장으로 파악하게 만든다. 산출물은 두 가지다.
 
-현재 에이전트가 의미와 위험을 판단하고, 번들 스크립트는 원본 보존·분할·검증·렌더링만 결정적으로 수행한다. HTML은 표준 라이브러리의 구조화된 노드로 만들며 동적 텍스트와 attribute는 serializer가 이스케이프한다. 검증한 정적 CSS·JavaScript 자산만 별도로 삽입한다.
+1. 변경 전체를 보여주는 Excalidraw 다이어그램 한 장. 자세히 봐야 할 지점은 그림 안에서 번호 붙은 빨간 박스로 표시한다.
+2. 번호 순서대로 각 하이라이트를 설명하는 답변.
 
-## 출력 스타일을 선택한다
-
-- 기본값은 원래 Easy Review 스타일이다. 사용자가 ‘노션 스타일’, ‘Notion 스타일’로 출력하라고 명시한 경우에만 Notion 스타일을 선택한다. ‘HTML’, ‘문서’, ‘리포트’, ‘읽기 쉽게’라는 표현이나 에이전트의 취향으로 스타일을 바꾸지 않는다.
-- 기본 출력은 `compile --style easy-review`(옵션 생략 가능), 명시적으로 요청받은 Notion 출력은 `compile --style notion`으로 생성한다. 스타일은 `review.json`의 `presentation.style`에 기록된다. 재컴파일할 때는 현재 사용자 지시를 따르며, 지시가 바뀌지 않았다면 기존 선택을 유지한다.
-- `notion-doc`은 Easy Review의 기본값을 덮어쓰지 않는다. 명시적인 Notion 요청에서는 그 시각 원칙을 참고하되, 별도 템플릿·exporter·lint 절차로 Easy Review HTML을 재작성하지 않는다. 번들에 포함된 Notion 스타일 자산을 사용한다.
-- 양식은 선택한 스타일을 따르고, 구조와 동작은 [references/artifact-contract.md](references/artifact-contract.md)와 번들 렌더러가 맡는다. 두 스타일 모두 설명 우선·접힌 코드 근거·미니맵·테마·전체 펼치기·선택적 채팅 UI를 유지한다.
-- 최종 `review.html`은 `compile`이 생성한 파일 그대로 전달한다. 생성 후 HTML·CSS·JavaScript를 수작업으로 수정하거나, 별도 exporter·wrapper·후처리로 재렌더링하지 않는다. 표준 출력을 보조 파일로 옮기고 다른 양식의 HTML을 주 산출물로 전달하는 것도 금지한다.
-- 내용이나 읽는 순서를 바꿀 때는 `review-plan.json`을 수정하고 `preview` → `compile`을 다시 실행한다. 렌더러 기능 자체의 변경은 사용자가 별도로 요청한 스킬 개발 작업에서만 수행한다.
+그림은 `excalidraw` 스킬로 만든다. 시작 전에 그 스킬의 `SKILL.md`, `references/skeleton.md`, `references/style.md`를 읽는다.
 
 ## 지켜야 할 경계
 
-- 저장소와 원격 서비스에는 읽기 전용으로 접근한다. checkout, 소스 수정, stage, commit, push, 리뷰 게시, 스레드 해결을 하지 않는다.
-- 캡처·검증·컴파일은 외부 LLM API를 호출하거나 제공자 API 키를 읽지 않는다. 선택적 `serve`만 Node 서버 프로세스 안에 Pi SDK 세션을 만들며, 로컬 `auth.json`과 현재 모델 설정을 계승해 설정된 모델 제공자와 통신함을 사용자에게 알린다.
-- 채팅 Pi에는 일반 Pi 도구를 제공하지 않는다. 저장소나 임의 로컬 파일을 읽지 못하게 하고, 검증된 `review.json` 메모리 데이터만 검색하는 읽기 전용 `review_diff` 도구 하나만 제공한다. 이 도구의 결과는 캡처 시점 diff이며 live Git 상태가 아니다.
-- 표시할 코드를 다시 작성하지 않는다. 원본 diff의 `D000001` 형태 내부 근거 ID로 정확한 줄을 가리킨다. 원본은 모두 보존하되 HTML에 모든 파일을 표시할 의무는 없다.
-- CI 통과, merge, 배포, 실제 런타임 동작을 서로 다른 근거로 취급한다.
-- 일부 파일이나 변경 묶음을 읽지 못했다면 결과를 반드시 `partial`로 남긴다.
+- 저장소와 원격 서비스는 읽기만 한다. checkout, 소스 수정, stage, commit, push, 리뷰 게시, 스레드 해결을 하지 않는다.
+- 다이어그램 파일은 작업 트리 밖에 둔다(아래 "파일 위치").
+- 정적 코드 확인, 로컬 테스트, 원격 CI, merge·배포, 실제 런타임 동작은 서로 다른 근거로 취급한다. diff에 테스트 파일이 있다는 사실은 테스트 통과가 아니다.
+- 일부 파일을 읽지 못했다면 결과를 반드시 "일부 검토"로 밝히고, 읽지 못한 파일을 적는다.
 
-## 대상을 캡처한다
+## 1. 대상을 읽는다
 
-명확한 모드 하나를 고른다. base나 대상이 안전하게 정해지지 않을 때만 질문한다.
+모드를 하나 고른다. base나 대상이 안전하게 정해지지 않을 때만 질문한다.
 
-- 현재 에이전트 작업 또는 전체 미커밋 변경: `--worktree`
-- unstaged만: `--unstaged`
-- staged만: `--staged`
-- 단일 commit: `--revision <rev>`
-- 비교 범위: `--range <A..B-or-A...B>`
-- GitHub PR URL 또는 번호: `--pr <url-or-number>`; `gh` CLI로 읽기만 한다.
-- 기존 unified diff: `--diff-file <path>`
+| 대상 | 명령 |
+|---|---|
+| 미커밋 전체 | `git diff HEAD` + `git status --short`(untracked 파일은 직접 읽는다) |
+| unstaged / staged | `git diff` / `git diff --cached` |
+| 단일 commit | `git show <rev>` |
+| 범위 | `git diff <A..B 또는 A...B>` |
+| GitHub PR | `gh pr view <url|번호> --json title,body,baseRefName,headRefName,files` + `gh pr diff <url|번호>` |
 
-`SKILL_DIR`을 이 파일이 있는 디렉터리(`~/.pi/agent/skills/easy-review`)로 정하고 실행한다.
+- 먼저 `--stat`이나 파일 목록으로 전체 규모를 본 뒤 모든 파일의 diff를 읽는다. 큰 diff는 파일 단위로 나눠 읽되, 마지막 파일까지 본 다음에 그림 구성을 정한다.
+- 파일명이나 조각 하나만 보고 동작을 단정하지 않는다. 필요한 정의·호출자·테스트는 저장소에서 읽는다. PR이면 PR 본문과 연결된 이슈도 읽는다.
+- lockfile, 생성 코드, 스냅샷처럼 다른 원본에서 파생된 파일은 원본 변경을 확인하고 그림에서는 생략해도 된다.
 
-```bash
-python3 "$SKILL_DIR/scripts/easy_review.py" capture <mode> --repo <repo> --output <bundle-dir>
-```
+## 2. 이해한 내용을 정리한다
 
-`--output`을 생략하면 저장소의 Git metadata 아래에 번들이 생긴다. 출력된 경로를 기록한다.
+그림을 그리기 전에 다음 질문에 근거를 갖고 답한다. 모르는 배경을 그럴듯하게 채우지 않고 "미확인"으로 남긴다.
 
-## 전체 변경을 먼저 읽는다
+- 누가 무엇을 하려는가? 지금은 무엇이 부족한가?
+- 변경 전과 후에 무엇이 달라지고, 무엇은 그대로인가?
+- 어느 시스템·모듈이 무엇을 맡고, 어떤 순서로 요청과 결과를 주고받는가?
+- 실패하거나 재시도·취소하면 누구에게 어떤 결과가 생기는가?
+- 테스트로 확인한 것과 확인하지 못한 것은 무엇인가?
 
-```bash
-python3 "$SKILL_DIR/scripts/easy_review.py" inspect --bundle <bundle-dir>
-```
+## 3. 하이라이트를 고른다
 
-[references/review-rubric.md](references/review-rubric.md)를 완전히 읽은 뒤 계획을 작성한다. 모든 대상 chunk를 읽는다.
+하이라이트는 리뷰어가 diff를 직접 열어 판단해야 하는 지점만 고른다. 보통 3~7개로 시작하고, 서로 다른 판단이 더 필요할 때만 늘린다. 중요한 위험을 숨기려고 개수를 줄이지는 않는다.
 
-```bash
-python3 "$SKILL_DIR/scripts/easy_review.py" inspect --bundle <bundle-dir> --chunk C001
-```
+고를 만한 지점:
 
-큰 diff도 먼저 전체 파일 목록과 중복·이동·생성 후보·binary·rename·mode-change 힌트를 확인한다. 이후 chunk를 읽되, 마지막 chunk까지 본 다음에야 최종 묶음과 순서를 정한다. 파일명이나 한 조각만 보고 동작을 단정하지 말고, 필요한 정의·호출자·테스트를 저장소에서 읽는다.
+- 결함(fix): 현재 코드에서 재현 가능한 버그나 깨진 계약
+- 주의(caution): 조건과 영향이 구체적인 회귀·호환성·운영 위험(migration, 인증, 동시성, 외부 연동, 공개 API 변경 등)
+- 확인(confirm): 근거가 빠져 결론이 달라질 수 있는 질문
+- 핵심 결정(core): 동작을 가르는 조건, 데이터 변환, 저장·요청·이벤트처럼 이 변경의 핵심 판단이 담긴 곳
 
-## 독자의 읽는 순서를 설계한다
+취향, 스타일, 막연한 가능성은 하이라이트하지 않는다. 문제가 없다고 해서 승인이나 안전 보장으로 표현하지 않는다.
 
-무엇을 보여주고 접고 생략할지, 제목·해설·attention·verification을 어떻게 쓸지는 모두 [references/review-rubric.md](references/review-rubric.md)의 기준을 따른다. 여기서는 계획 파일의 절차만 정한다.
+번호는 그림을 읽는 순서(흐름의 시작 → 끝)를 따른다. 심각도 순서가 아니다.
 
-`<bundle-dir>/review-plan.json`을 `edit` 도구로 편집한다(대규모 재작성이 필요하면 `write`).
+## 4. 다이어그램을 그린다
 
-- 계획 전에 ‘누가 무엇을 하려는가 / 지금은 무엇이 부족한가 / 이번에 무엇이 달라지는가 / 무엇은 그대로인가 / 어느 시스템이 무엇을 맡는가’를 근거로 정리한다. 모르는 배경을 그럴듯하게 채우지 않는다.
-- `summary`는 사용자 관점의 문제와 달라지는 결과 한 문단이다. `overview` 1~5개에는 필요한 배경·핵심 용어·기존/변경 후 차이·주요 흐름·범위 경계를 설명한다. SHA, 파일 수, 클래스명, 검토 이력으로 도입부를 채우지 않는다.
-- `sections` 배열은 독자의 질문 순서다. 각 제목·summary만 읽어도 목적과 흐름을 이해하도록 쓰고, 파일별 변경 목록을 본문으로 삼지 않는다.
-- `default_open`은 기본 `false`로 둔다. 현재 렌더러는 접힌 section에도 제목과 summary를 표시하므로 설명은 이어지고 코드는 선택적으로 펼칠 수 있다. 반드시 처음부터 보여야 하는 짧은 근거가 있을 때만 `true`로 둔다. 핵심 흐름이라는 이유로 긴 코드부터 펼치지 않는다.
-- 검토한 파일은 section(`view`: `detail` 또는 `summary`) 또는 `omitted_files` 중 정확히 한 곳에 넣고, 못 읽은 파일만 `unreviewed_file_ids`에 남긴다.
-- 모든 section과 attention에는 같은 section의 `detail` 파일을 가리키는 `D...` 근거를 붙인다. HTML에서는 파일명과 실제 줄 번호가 먼저 보이고 내부 ID는 기본적으로 숨겨진다.
-- `focus`의 `reason`은 해당 코드 바로 위의 해설로, `collapse`의 `reason`은 접힌 행의 요약으로 렌더링된다.
-- `attention`과 `verification`은 rubric 기준을 만족하는 항목만 담고, 없으면 빈 배열로 둔다.
-
-스키마가 불명확하거나 검증이 실패하면 [references/artifact-contract.md](references/artifact-contract.md)를 읽는다.
-
-## 검증하고 렌더링한다
+### 파일 위치
 
 ```bash
-python3 "$SKILL_DIR/scripts/easy_review.py" preview --bundle <bundle-dir>
+DIR="$(cd <repo> && git rev-parse --path-format=absolute --git-common-dir)/easy-review"
+mkdir -p "$DIR"
+# 파일: $DIR/<대상-slug>.excalidraw  예) pr-1234.excalidraw, commit-abc1234.excalidraw, worktree.excalidraw
 ```
 
-stale hash, 알 수 없는 근거, section 밖 근거, 파일 중복·누락, 범위 겹침, 미검토 chunk 주장을 바로잡고 다시 검증한다. 오류를 없애려고 계획의 신뢰 기준을 낮추지 않는다.
+같은 대상 파일이 이미 있으면 새로 만들지 않고 `excalidraw` 스킬의 "기존 다이어그램 수정" 절차로 고친다.
 
-구조 검증만으로 설명 품질이 통과한 것은 아니다. 코드·파일 경로·근거 ID를 가리고 summary, overview, section 제목·summary, attention만 읽는다. 제로 컨텍스트 독자가 ‘왜 필요한지, 이전과 무엇이 다른지, 누가 무엇을 맡는지, 어떤 실패가 누구에게 영향을 주는지’를 답할 수 있어야 한다. 답에 필요한 용어를 뒤에서만 설명하거나 코드가 대신 설명한다면 rubric의 제로 컨텍스트 검수 기준으로 다시 쓴다.
+### 구성
 
-```bash
-# 기본값: 원래 Easy Review 스타일
-python3 "$SKILL_DIR/scripts/easy_review.py" compile --bundle <bundle-dir>
+전체 그림은 한 장으로, 위에서 아래로 다음 순서로 읽힌다.
 
-# 사용자가 Notion 스타일을 명시한 경우만
-python3 "$SKILL_DIR/scripts/easy_review.py" compile --bundle <bundle-dir> --style notion
+1. **제목**(28~32px): 변경을 한 줄로 요약한 문장. PR 번호나 SHA만 쓰지 않는다.
+2. **요약 메모**(16px 텍스트, 2~4줄): 누구의 어떤 문제를 어떻게 바꾸는지. 변경 범위 밖의 내용도 여기에 적는다.
+3. **본문 흐름**: 변경과 관련된 시스템·모듈·데이터의 관계와 정상 흐름. 성격에 맞는 레이아웃을 `references/style.md`의 레시피에서 고른다.
+   - 요청이 여러 시스템을 거치면 아키텍처(계층) 또는 시퀀스
+   - 처리 순서·분기가 핵심이면 세로 플로우차트
+   - 동작이 바뀌는 게 핵심이면 왼쪽 "변경 전", 오른쪽 "변경 후"를 나란히 둔다
+4. **범례**(오른쪽 위 또는 아래): 색 의미와 "빨간 박스 = 자세히 볼 지점"
+
+노드 작성 규칙:
+
+- 라벨 첫 줄은 역할을 쉬운 말로 적고(예: "결제 재시도 처리"), 둘째 줄에 16px로 대표 파일이나 함수명을 적는다. 식별자만으로 라벨을 채우지 않는다.
+- 새로 생기거나 바뀐 노드는 의미 색을 쓰고, 그대로인 주변 노드는 회색(`#e9ecef` / `#495057`)으로 둬서 변경 범위가 보이게 한다. 삭제된 요소는 점선 테두리에 라벨 앞에 "(삭제)"를 붙인다.
+- 화살표 라벨에는 주고받는 것(요청, 이벤트, 데이터)을 적는다.
+- 빨간색(`#e03131`)은 하이라이트 전용이다. 오류·실패 노드는 주황(`#ffec99` / `#f08c00`)으로 표현한다.
+- 노드가 15개를 넘으면 세부 모듈을 하나로 묶어 줄인다. 그림 한 장에서 전체 흐름이 보여야 한다.
+
+### 빨간 하이라이트 박스
+
+하이라이트마다 박스와 번호 배지를 하나씩 둔다. 본문 요소를 모두 쓴 뒤 배열 끝에 추가해 맨 위에 그려지게 한다.
+
+```json
+{ "type": "rectangle", "id": "hl-1", "x": 360, "y": 100, "width": 280, "height": 120,
+  "strokeColor": "#e03131", "backgroundColor": "transparent", "strokeWidth": 4, "roughness": 0 },
+{ "type": "ellipse", "id": "hl-1-badge", "x": 336, "y": 52, "width": 48, "height": 48,
+  "strokeColor": "#e03131", "backgroundColor": "#e03131", "fillStyle": "solid", "roughness": 0,
+  "label": { "text": "1", "fontSize": 20, "strokeColor": "#ffffff" } }
 ```
 
-완료 전 `review.json`의 `presentation.style`이 사용자 지시와 일치하고, 최종 `review.html`이 위 `compile` 출력인지 확인한다. 다른 템플릿으로 바뀌었거나 후처리된 파일이면 완료로 전달하지 말고, 계획을 유지한 채 다시 컴파일한다.
+- 박스는 대상 노드(또는 노드 묶음, 화살표 구간)를 사방 20px 여백으로 완전히 감싼다. 대상의 좌표에서 계산한다.
+- 배지는 박스 왼쪽 위 모서리에 걸치게 둔다(박스 `x - 24`, `y - 48`). 다른 노드나 다른 배지와 겹치면 오른쪽 위 모서리로 옮긴다.
+- 하이라이트 박스끼리 겹쳐서 무엇을 가리키는지 헷갈리면 노드 배치를 바꾼다. 한 박스에 서로 다른 지점 두 개를 담지 않는다.
+- 박스 바로 아래나 옆에 16px 빨간 텍스트로 한 줄 제목을 붙여도 된다(예: "① 재시도 시 중복 주문"). 그림만 봐도 무엇을 볼지 알 수 있게 하되 설명은 답변으로 미룬다.
 
-## 요청받으면 로컬 Pi 채팅 서버까지 직접 실행한다
+### 확인
 
-사용자가 HTML 안에서 리뷰와 대화하거나 챗봇 FAB·localhost 서버를 요청했을 때는 에이전트가 아래 명령을 장시간 실행 가능한 세션으로 직접 시작한다. 사용자가 실행할 명령만 안내하고 끝내지 않는다.
+`excalidraw` 스킬 절차대로 `lint` → `open` → `snapshot` → PNG를 `read`로 확인한다. 라벨 넘침, 화살표 관통, 박스가 대상을 덜 감쌌는지, 배지 번호가 읽히는지 보고 고친다(최대 2회).
 
-```bash
-python3 "$SKILL_DIR/scripts/easy_review.py" serve --bundle <bundle-dir>
+## 5. 하나씩 설명한다
+
+최종 답변 구조:
+
+1. 다이어그램 파일 절대 경로, 대상과 검토 범위(전체 / 일부 + 못 읽은 파일)
+2. 전체 요약 2~4문장: 문제 → 이번 변경 → 결과. 코드 식별자를 처음부터 늘어놓지 않는다.
+3. 번호별 설명. 그림의 번호와 같은 순서로 쓴다.
+
+```markdown
+### ① <리뷰어가 판단할 질문이나 영향을 담은 제목>
+- 종류: 결함 / 주의 / 확인 / 핵심 결정
+- 위치: `path/to/file.ts:120-148` (PR이면 GitHub diff 링크도 가능)
+- 무엇이 바뀌었나: 상황 → 시스템이 하는 일 → 결과를 쉬운 말로
+- 왜 봐야 하나: 어떤 조건에서 누구에게 어떤 영향이 생기는지. 필요하면 작은 실행 순서나 수량 예시(설명용 가정임을 밝힌다)
+- 확인할 것: 리뷰어가 diff에서 볼 줄, 돌려볼 테스트, 물어볼 질문
+- 근거: 확인한 사실과 가설을 구분. 재현하지 않았으면 "정적 분석만" 이라고 적는다
 ```
 
-- `bash_async start`로 서버를 시작하고 timeout은 `7200`초로 둔다. 반환된 job ID를 기록하며, 반복 polling하지 않고 completion follow-up을 따른다. 2시간 뒤에도 필요하면 `serve`를 다시 실행해 새 job ID와 URL을 확인하고, 기존 job은 기록한 ID로 명시적으로 `bash_async kill`해 정리한다.
-- 시작 로그가 나온 뒤 `bash_async output`을 한 번 조회해 실제 `http://127.0.0.1:<port>/` URL을 확인하고, 최종 답변에 클릭 가능한 링크로 전달한다. 포트를 추측하거나 고정하지 않는다.
-- 서버 실행 전이나 URL 확인 전에 채팅 사용이 가능하다고 말하지 않는다.
-- 자동으로 브라우저를 열지 않는다. 사용자가 중지를 요청하면 기록한 job ID에 `bash_async kill`을 실행한다.
-- 서버는 loopback에만 바인딩하고 실행별 HttpOnly cookie와 Origin/Host 검사를 사용한다.
-- 서버는 `@earendil-works/pi-coding-agent` SDK의 `ModelRuntime.create()`와 in-memory `AgentSession`을 같은 Node 프로세스에서 사용한다. 별도 Pi CLI/RPC subprocess를 만들지 않는다.
-- `DefaultResourceLoader`에서 extensions, skills, prompt templates, themes, context files를 끄고, 세션은 `noTools: "builtin"`, `tools: ["review_diff"]`, `customTools: [reviewDiffTool]`로 만든다. custom tool 선택 계약은 설치된 Pi 공식 문서의 `docs/sdk.md`를 따르고 모델 제공자 동작은 `docs/providers.md`를 따른다.
-- 질문에는 현재 보고 있는 section, 사용자가 선택한 리뷰 텍스트, 해당 section의 focus/evidence diff만 크기 제한과 함께 전달한다. 추가 근거가 필요할 때만 Pi가 `review_diff`로 `review.json`에 보존된 캡처 diff를 파일 경로·검색어·`D...` anchor 기준으로 조회한다.
-- `review_diff`는 파일 경로를 filesystem path로 해석하지 않고 번들 파일 인덱스와만 대조한다. 응답은 최대 200개 diff 줄과 32,000자로 제한하고 offset pagination을 제공하며, `detail`·`summary`·`omitted`·`unreviewed` 상태를 보존한다.
-- 답변은 스트리밍하면서 문단·제목·목록·강조·인라인 코드·코드 블록·인용·안전한 링크를 제한된 마크다운으로 렌더링한다. 모델 출력은 `innerHTML`에 넣지 않고 검증된 파서가 `createElement`와 text node로만 DOM을 구성한다.
-- 정적 `file://`로 연 HTML은 기존 리뷰 기능을 유지하며, FAB에는 `serve`가 필요하다고 안내한다.
-- 서버 종료 시 in-memory Pi SDK 세션을 `dispose()`한다.
+마지막에 실제로 수행한 검증(읽은 범위, 돌린 테스트, CI 상태 확인 여부)을 한두 줄로 적는다. 하지 않은 검증은 통과로 쓰지 않는다.
 
-## 결과를 전달한다
+## 제로 컨텍스트 검수
 
-`<bundle-dir>/review.html`의 절대 경로 링크를 준다. 채팅 요청이 있었다면 서버를 직접 실행해 시작 로그에서 확인한 loopback HTTP URL을 클릭 가능한 링크로 함께 준다. 실행 명령만 전달하거나 사용자가 별도로 서버를 시작하게 하지 않는다.
+답변 전에 그림과 요약만 보고 아래 질문에 답할 수 있는지 확인한다. 답할 수 없으면 라벨이나 요약 메모를 다시 쓴다.
 
-최종 답변에는 대상, 전체/일부 검토 범위, 실제로 먼저 볼 점, 수행한 검증, 생성한 HTML 링크만 간결하게 적는다. 채팅을 실행했다면 실행 중인 서버 링크와 함께 번들 전용 컨텍스트이고 Pi의 설정된 모델 제공자와 통신한다는 점을 덧붙인다. 문제를 찾지 못했다는 사실을 승인이나 안전 보장으로 표현하지 않는다.
+- 서비스를 처음 듣는 사람도 누구의 어떤 문제인지 알 수 있는가?
+- 변경 전·후와 이번에 하지 않는 일을 구분할 수 있는가?
+- 각 노드가 무엇을 맡는지 식별자 없이도 알 수 있는가?
+- 빨간 박스 각각이 흐름의 어느 지점인지, 왜 거기를 봐야 하는지 짐작할 수 있는가?

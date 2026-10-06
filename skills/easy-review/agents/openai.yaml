@@ -1,7 +1,7 @@
 interface:
   display_name: "Easy Review"
-  short_description: "PR과 코드 변경을 읽기 문서와 로컬 Pi Q&A로 정리"
-  default_prompt: "$easy-review로 이 PR 또는 변경사항을 사람이 이해하기 쉬운 순서의 읽기 전용 리뷰로 정리하고, 필요하면 로컬 Pi 채팅도 실행해줘."
+  short_description: "PR과 코드 변경을 Excalidraw 다이어그램과 번호별 하이라이트 설명으로 정리"
+  default_prompt: "$easy-review로 이 PR 또는 변경사항을 Excalidraw 전체 다이어그램으로 그리고, 자세히 볼 지점을 번호 붙은 빨간 박스로 표시한 뒤 하나씩 설명해줘."
 
 policy:
   allow_implicit_invocation: false
