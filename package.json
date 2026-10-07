@@ -28,7 +28,6 @@
 		"extensions/pnpm-workspace.yaml",
 		"extensions/pr-comments/",
 		"extensions/pr-review-re-request/",
-		"extensions/prompt-suggest-lite/",
 		"extensions/read-tool-override/",
 		"extensions/README.md",
 		"extensions/theme-cycler/",
@@ -41,7 +40,6 @@
 		"extensions/working-text/",
 		"extensions/worktree/",
 		"!extensions/**/.env",
-		"!extensions/prompt-suggest-lite/.data/",
 		"!extensions/utils/coverage/",
 		"skills/context7-cli/",
 		"skills/design-first/",
@@ -58,7 +56,6 @@
 		"scripts/validate-packlist.mjs",
 		"docs/assets/",
 		"custom-style.json",
-		"prompt-suggest-lite.json",
 		"INSTALL.md",
 		"README.ko.md",
 		"SYSTEM.md"

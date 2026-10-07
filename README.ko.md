@@ -115,7 +115,6 @@ pi는 `extensions/*.ts`와 `extensions/*/index.ts`를 모두 자동 발견할 �
 |---|---|
 | [`footer/`](./extensions/footer/index.ts) | `custom-style/` 상태/UI 모듈을 사용하는 커스텀 푸터 facade |
 | [`working-text/`](./extensions/working-text/index.ts) | 처리 중 경과 시간과 함께 팁 중심 스피너 텍스트 표시 |
-| [`prompt-suggest-lite/`](./extensions/prompt-suggest-lite/index.ts) | 매 턴 다음 프롬프트를 가볍게 제안하고 `/prompt-suggest`로 제어 |
 | [`theme-cycler/`](./extensions/theme-cycler/index.ts) | `Ctrl+Shift+X` / `Ctrl+Q` 테마 순환 및 `/theme` 선택기 |
 | [`diff-overlay/`](./extensions/diff-overlay/index.ts) | `/diff` — diff 모드와 commit 모드를 지원하는 git diff 오버레이 |
 | [`files/`](./extensions/files/index.ts) | `/files`와 파일 참조 단축키 — 탐색, 열기, Finder 표시, Quick Look |

@@ -116,7 +116,6 @@ Pi can auto-discover both `extensions/*.ts` and `extensions/*/index.ts`, but thi
 |---|---|
 | [`footer/`](./extensions/footer/index.ts) | Custom footer facade backed by `custom-style/` state and UI modules |
 | [`working-text/`](./extensions/working-text/index.ts) | Tip-focused spinner text with elapsed time during processing |
-| [`prompt-suggest-lite/`](./extensions/prompt-suggest-lite/index.ts) | Lightweight next-prompt suggestions after each turn, with `/prompt-suggest` controls |
 | [`theme-cycler/`](./extensions/theme-cycler/index.ts) | `Ctrl+Shift+X` / `Ctrl+Q` theme cycling plus `/theme` picker |
 | [`diff-overlay/`](./extensions/diff-overlay/index.ts) | `/diff` git diff overlay with diff and commit modes |
 | [`files/`](./extensions/files/index.ts) | `/files` and file-reference shortcuts for browsing, opening, revealing, and Quick Look |
