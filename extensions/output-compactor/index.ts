@@ -3,7 +3,7 @@
  *
  * 큰 툴 출력이 컨텍스트를 잡아먹는 걸 줄인다. 임계치를 넘는 bash 출력이 나오면:
  *   1. 전체 출력을 임시 파일에 저장하고,
- *   2. 저지연 모델(GPT-5.6 Luna)로 "의도(명령어)를 이해한" 압축을 만든 뒤,
+ *   2. 저지연 모델(GPT-6 Luna)로 "의도(명령어)를 이해한" 압축을 만든 뒤,
  *   3. 컨텍스트에는 압축본 + 원본 경로만 남긴다.
  * 에이전트가 원문이 필요하면 경로를 read 하면 된다 (무손실 안전밸브).
  *
@@ -33,7 +33,7 @@ import { estimateTokens, formatSignedTokens } from "./tokens.ts";
 
 const DEFAULT_THRESHOLD_BYTES = 24 * 1024;
 const COMPACTOR_PROVIDER = "openai-codex";
-const COMPACTOR_MODEL_ID = "gpt-5.6-luna";
+const COMPACTOR_MODEL_ID = "gpt-6-luna";
 const COMPRESS_TIMEOUT_MS = 30_000;
 const TARGET_TOOLS = new Set(["bash"]);
 const TOGGLE_VALUES = ["on", "off"] as const;
