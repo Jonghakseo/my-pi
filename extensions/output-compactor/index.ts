@@ -119,6 +119,9 @@ export default function (pi: ExtensionAPI) {
 	};
 
 	const compactBashResult = async (event: ToolResultEvent, ctx: ExtensionContext) => {
+		// codemode 같은 다른 툴이 낸 중첩 호출은 결과가 모델이 아닌 스크립트로 간다.
+		// content만 바꾸면 runner가 structuredContent를 지워 스크립트가 { output, exit_code } 대신 요약 문자열을 받게 된다.
+		if (event.parentToolCallId) return;
 		if (hasNonTextPart(event.content)) return;
 		const size = textPartsSize(event.content);
 		if (size <= thresholdBytes()) return;
