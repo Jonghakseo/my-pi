@@ -11,7 +11,8 @@
   "enabledModels": [
     "openai-codex/gpt-6-astra",
     "anthropic/claude-opus-5-5",
-    "openai-codex/gpt-6.1-sol"
+    "openai-codex/gpt-6.1-sol",
+    "anthropic/claude-fable-5-1"
   ],
   "fullscreenScrollbar": "auto",
   "hideThinkingBlock": true,
@@ -19,7 +20,7 @@
   "images": {
     "blockImages": false
   },
-  "lastChangelogVersion": "0.99.1",
+  "lastChangelogVersion": "1.1.0",
   "packages": [
     "npm:@ryan_nookpi/pi-extension-codex-fast-mode",
     "npm:@ryan_nookpi/pi-extension-ask-user-question",
@@ -67,5 +68,6 @@
   "tuiMode": "fullscreen",
   "warnings": {
     "anthropicExtraUsage": false
-  }
+  },
+  "showHardwareCursor": true
 }
