@@ -56,24 +56,25 @@ The system is organized in **four layers**:
   <img src="./docs/assets/agents.en.svg" alt="Agents" width="800"/>
 </p>
 
-The current setup has 8 agent definitions using the OpenAI GPT-6 model family (GPT-6 Astra and GPT-6 Sol):
+The current setup has 8 agent definitions using Claude Opus 5, Sonnet 5, and Haiku 5.5:
 
 | Agent | Model | Role | When to Use |
 |---|---|---|---|
-| **worker** | `openai-codex/gpt-6-astra` | General-purpose executor | Implementation, writing, fixes (complex multi-file) |
-| **code-cleaner** | `openai-codex/gpt-6-sol` | Code cleanup analyst | Find cleanup opportunities and quality issues |
-| **reviewer** | `openai-codex/gpt-6-sol` | Code review specialist | PR reviews, quality/correctness checks |
-| **challenger** | `openai-codex/gpt-6-sol` | Pressure tester | Stress-test plans before execution |
-| **verifier** | `openai-codex/gpt-6-sol` | Evidence validation | Verify claims, check correctness |
-| **security-auditor** | `openai-codex/gpt-6-sol` | Security reviewer | Focused vulnerability reviews |
-| **searcher** | `openai-codex/gpt-6-sol` | Research & web search | Documentation lookup, exploration |
-| **browser** | `openai-codex/gpt-6-astra` | Browser automation & UI testing | E2E testing, visual verification |
+| **worker** | `anthropic/claude-opus-5` | General-purpose executor | Implementation, writing, fixes (complex multi-file) |
+| **code-cleaner** | `anthropic/claude-sonnet-5` | Code cleanup analyst | Find cleanup opportunities and quality issues |
+| **reviewer** | `anthropic/claude-opus-5` | Code review specialist | PR reviews, quality/correctness checks |
+| **challenger** | `anthropic/claude-opus-5` | Pressure tester | Stress-test plans before execution |
+| **verifier** | `anthropic/claude-opus-5` | Evidence validation | Verify claims, check correctness |
+| **security-auditor** | `anthropic/claude-opus-5` | Security reviewer | Focused vulnerability reviews |
+| **searcher** | `anthropic/claude-haiku-5-5` | Research & web search | Documentation lookup, exploration |
+| **browser** | `anthropic/claude-sonnet-5` | Browser automation & UI testing | E2E testing, visual verification |
 
 <details>
 <summary><strong>Model Selection</strong></summary>
 
-- **openai-codex/gpt-6-astra** — Implementation and browser automation (worker, browser)
-- **openai-codex/gpt-6-sol** — Complex analysis and verification at high thinking (cleanup, review, challenge, validation, security), low thinking for research (searcher)
+- **anthropic/claude-opus-5**: Implementation, review, challenge, validation, and security, all with high thinking.
+- **anthropic/claude-sonnet-5**: Code cleanup analysis with high thinking; browser automation with low thinking.
+- **anthropic/claude-haiku-5-5**: Research and search with high thinking.
 
 The main agent default is `openai-codex/gpt-6-astra` with medium thinking.
 

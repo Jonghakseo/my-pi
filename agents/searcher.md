@@ -2,7 +2,7 @@
 name: searcher
 description: Research & search specialist — use for web research, documentation lookup, codebase-wide exploration, and gathering external information
 tools: bash, read, grep, find, ls, web_search, fetch_content, get_search_content
-model: anthropic/claude-sonnet-5
+model: anthropic/claude-haiku-5-5
 runtime: pi
 thinking: high
 ---

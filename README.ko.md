@@ -55,24 +55,25 @@ cd ~/.pi/agent && ./scripts/bootstrap.sh
   <img src="./docs/assets/agents.ko.svg" alt="에이전트" width="800"/>
 </p>
 
-현재 기준 8개의 에이전트 정의가 OpenAI GPT-6 모델 패밀리(GPT-6 Astra, GPT-6 Sol)를 사용한다:
+8개의 에이전트가 Claude Opus 5, Sonnet 5, Haiku 5.5를 사용한다.
 
 | 에이전트 | 모델 | 역할 | 사용 시점 |
 |---|---|---|---|
-| **worker** | `openai-codex/gpt-6-astra` | 범용 작업 실행기 | 구현, 작성, 수정 (복잡한 다중 파일) |
-| **code-cleaner** | `openai-codex/gpt-6-sol` | 코드 정리 분석가 | 중복 제거 후보, 품질 문제 탐색 |
-| **reviewer** | `openai-codex/gpt-6-sol` | 코드 리뷰 전문가 | PR 리뷰, 품질/정확성 점검 |
-| **challenger** | `openai-codex/gpt-6-sol` | 스트레스 테스터 | 실행 전 계획 검증 |
-| **verifier** | `openai-codex/gpt-6-sol` | 근거 기반 검증 | 주장 확인, 정확성 점검 |
-| **security-auditor** | `openai-codex/gpt-6-sol` | 보안 검토자 | 취약점 중심 리뷰 |
-| **searcher** | `openai-codex/gpt-6-sol` | 리서치·웹 검색 | 문서 탐색, 조사 |
-| **browser** | `openai-codex/gpt-6-astra` | 브라우저 자동화·UI 테스트 | E2E 테스트, 시각 검증 |
+| **worker** | `anthropic/claude-opus-5` | 범용 작업 실행기 | 구현, 작성, 수정 (복잡한 다중 파일) |
+| **code-cleaner** | `anthropic/claude-sonnet-5` | 코드 정리 분석가 | 중복 제거 후보, 품질 문제 탐색 |
+| **reviewer** | `anthropic/claude-opus-5` | 코드 리뷰 전문가 | PR 리뷰, 품질/정확성 점검 |
+| **challenger** | `anthropic/claude-opus-5` | 스트레스 테스터 | 실행 전 계획 검증 |
+| **verifier** | `anthropic/claude-opus-5` | 근거 기반 검증 | 주장 확인, 정확성 점검 |
+| **security-auditor** | `anthropic/claude-opus-5` | 보안 검토자 | 취약점 중심 리뷰 |
+| **searcher** | `anthropic/claude-haiku-5-5` | 리서치·웹 검색 | 문서 탐색, 조사 |
+| **browser** | `anthropic/claude-sonnet-5` | 브라우저 자동화·UI 테스트 | E2E 테스트, 시각 검증 |
 
 <details>
 <summary><strong>모델 선택 기준</strong></summary>
 
-- **openai-codex/gpt-6-astra** — 구현과 브라우저 자동화 (worker, browser)
-- **openai-codex/gpt-6-sol** — high thinking 복잡한 분석과 검증 (코드 정리·리뷰·반론·검증·보안), low thinking 리서치 (searcher)
+- **anthropic/claude-opus-5**: 구현·리뷰·반론·검증·보안에 사용하며 thinking은 모두 high다.
+- **anthropic/claude-sonnet-5**: 코드 정리 분석은 high, 브라우저 자동화는 low thinking을 사용한다.
+- **anthropic/claude-haiku-5-5**: 리서치·검색에 high thinking을 사용한다.
 
 메인 에이전트 기본값은 `openai-codex/gpt-6-astra` + medium thinking이다.
 
