@@ -157,7 +157,6 @@ pi는 `extensions/*.ts`와 `extensions/*/index.ts`를 모두 자동 발견할 �
 | [`@ryan_nookpi/pi-extension-claude-spinner`](https://github.com/Jonghakseo/pi-extension/tree/main/packages/claude-spinner) | Claude 스타일 스피너/상태 피드백 |
 | [`@ryan_nookpi/pi-extension-cc-system-prompt`](https://github.com/Jonghakseo/pi-extension/tree/main/packages/cc-system-prompt) | Claude Code 스타일 시스템 프롬프트 |
 | [`@ryan_nookpi/pi-extension-subagent`](https://github.com/Jonghakseo/pi-extension/tree/main/packages/subagent) | 멀티 에이전트 위임 엔진 — 비동기 run/continue/batch/chain, 세션 영속화, 상태 UI, 서브세션 에스컬레이션 |
-| [`@ryan_nookpi/pi-extension-until`](https://github.com/Jonghakseo/pi-extension/tree/main/packages/until) | `/until`, `/untils`, `/until-cancel`, `until_report` — 조건 충족까지 반복 실행, 프리셋은 `until-presets/` |
 | [`@ryan_nookpi/pi-extension-bash-async`](https://github.com/Jonghakseo/pi-extension/tree/main/packages/bash-async) | 유한한 비대화형 명령을 `bash_async` background job으로 실행. TUI·REPL·stdin은 `tmux-terminal` skill 사용 |
 | [`@ryan_nookpi/pi-extension-cron`](https://github.com/Jonghakseo/pi-extension/tree/main/packages/cron) | 영속 `cron` 도구와 `/cron` 명령 — launchd 기반 daemon으로 headless Pi 작업 예약 |
 | [`@ryan_nookpi/pi-extension-web-access`](https://github.com/Jonghakseo/pi-extension/tree/main/packages/web-access) | `web_search`, `fetch_content`, `get_search_content` — Exa 검색(키 없으면 MCP)과 웹 페이지·PDF·GitHub·YouTube 추출 |

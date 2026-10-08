@@ -1,6 +1,5 @@
 /**
  * Working text extension — shows rotating productivity tips + elapsed time
- * in the built-in spinner (⠋ tips: /until 로 조건부 루프 로직을 실행할 수 있습니다 · 12초).
  */
 
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
@@ -9,7 +8,6 @@ import { formatElapsedSince } from "../utils/time-utils.ts";
 const TIP_MESSAGES = [
 	"tips: /files 로 현재 작업 파일을 빠르게 탐색할 수 있습니다",
 	"tips: /diff 로 변경 사항을 확인할 수 있습니다",
-	"tips: /until 로 반복 점검 작업을 예약할 수 있습니다",
 	"tips: /memory 로 저장된 메모리를 찾아볼 수 있습니다",
 	"tips: /remember 로 자주 반복하는 요청을 저장할 수 있습니다",
 	"tips: /open-pr 로 현재 브랜치 PR을 브라우저에서 열 수 있습니다",
