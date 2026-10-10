@@ -44,7 +44,7 @@ Picky Pickle에 작업을 안전하게 위임하는 상위 workflow다. 저수�
 
 사용자가 새 worktree를 요청하면 Pickle 생성 전에 준비한다.
 
-- 다른 repo: 해당 repo의 로컬 지침과 worktree 도구를 따른다.
+- 해당 repo의 로컬 지침과 worktree 도구를 따른다.
 - 생성 후 실제 경로, branch, base와 `git status --short --branch`를 확인한다.
 - 사용자가 현재 workspace 사용이나 빈 Pickle만 요청했다면 불필요한 worktree를 만들지 않는다.
 
