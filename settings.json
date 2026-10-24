@@ -13,7 +13,8 @@
     "anthropic/claude-opus-5-5",
     "openai-codex/gpt-6.1-sol",
     "anthropic/claude-fable-5-1",
-    "anthropic/claude-haiku-5-5"
+    "anthropic/claude-haiku-5-5",
+    "openai-codex/gpt-5.5"
   ],
   "fullscreenScrollbar": "auto",
   "hideThinkingBlock": true,
@@ -21,7 +22,7 @@
   "images": {
     "blockImages": false
   },
-  "lastChangelogVersion": "1.1.0",
+  "lastChangelogVersion": "1.4.0",
   "packages": [
     "npm:@ryan_nookpi/pi-extension-codex-fast-mode",
     "npm:@ryan_nookpi/pi-extension-ask-user-question",
@@ -31,13 +32,10 @@
     "npm:@ryan_nookpi/pi-extension-cross-agent",
     "npm:@ryan_nookpi/pi-extension-claude-hooks-bridge",
     "npm:@ryan_nookpi/pi-extension-memory-layer",
-    "npm:@ryan_nookpi/pi-extension-claude-spinner",
     "npm:@ryan_nookpi/pi-extension-todo-write-overlay",
-    "npm:@ryan_nookpi/pi-extension-diff-review",
     "npm:@ryan_nookpi/pi-extension-subagent",
     "npm:@ryan_nookpi/pi-extension-clipboard",
     "npm:@ryan_nookpi/pi-extension-cron",
-    "npm:@dev.fast/pi-whiteboard",
     "npm:@ryan_nookpi/pi-extension-vcc-ko",
     "npm:@ryan_nookpi/pi-extension-bash-async",
     "npm:@ryan_nookpi/pi-extension-web-access",
@@ -45,7 +43,8 @@
     "npm:@ryan_nookpi/pi-skill-tmux-terminal",
     "npm:@ryan_nookpi/pi-skill-chrome-cdp",
     "npm:@ryan_nookpi/pi-skill-a4",
-    "npm:@ryan_nookpi/pi-skill-excalidraw"
+    "npm:@ryan_nookpi/pi-skill-excalidraw",
+    "npm:@ryan_nookpi/pi-skill-hairline"
   ],
   "quietStartup": true,
   "retry": {
@@ -54,7 +53,6 @@
     "maxRetries": 15
   },
   "subagent": {
-    "claudeRuntime": "cli",
     "symbolMap": {
       "!": "challenger",
       "?": "searcher",
