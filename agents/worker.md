@@ -2,7 +2,7 @@
 name: worker
 description: General-purpose implementation agent — use for complex multi-file changes, architectural refactoring, and heavy implementation tasks
 tools: read, grep, find, ls, bash, edit, write
-model: anthropic/claude-opus-5
+model: anthropic/claude-sonnet-5-5
 thinking: high
 ---
 

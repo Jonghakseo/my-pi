@@ -60,7 +60,7 @@ The current setup has 8 agent definitions using Claude Opus 5, Sonnet 5, and Hai
 
 | Agent | Model | Role | When to Use |
 |---|---|---|---|
-| **worker** | `anthropic/claude-opus-5` | General-purpose executor | Implementation, writing, fixes (complex multi-file) |
+| **worker** | `anthropic/claude-sonnet-5-5` | General-purpose executor | Implementation, writing, fixes (complex multi-file) |
 | **code-cleaner** | `anthropic/claude-sonnet-5` | Code cleanup analyst | Find cleanup opportunities and quality issues |
 | **reviewer** | `anthropic/claude-opus-5` | Code review specialist | PR reviews, quality/correctness checks |
 | **challenger** | `anthropic/claude-opus-5` | Pressure tester | Stress-test plans before execution |
