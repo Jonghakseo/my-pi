@@ -25,7 +25,6 @@ Pi 공식 문서는 auto-discovery 대상으로 `extensions/*.ts`와 `extensions
 | [`pr-comments/`](./pr-comments/index.ts) | `/github:get-pr-comments` — 현재 PR의 unresolved inline review comment를 에디터에 append |
 | [`pr-review-re-request/`](./pr-review-re-request/index.ts) | `/github:pr-review-re-request` — 현재 PR의 미승인 리뷰어에게 review re-request 전송 |
 | [`github-pr-merge/`](./github-pr-merge/index.ts) | `/github:pr-merge` — 현재 PR을 gh CLI로 merge |
-| [`notify/`](./notify/index.ts) | `/notify`로 세션별 작업 완료 알림(OSC 777/99) + macOS `say` TTS |
 | [`footer/`](./footer/index.ts) | 커스텀 푸터 UI facade (`custom-style/main.ts`) |
 | [`theme-cycler/`](./theme-cycler/index.ts) | `Ctrl+Shift+X`로 테마 순환 |
 | [`usage-analytics/`](./usage-analytics/index.ts) | 서브에이전트·스킬 사용 통계 오버레이 |

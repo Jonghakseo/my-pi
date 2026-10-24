@@ -132,7 +132,6 @@ Pi can auto-discover both `extensions/*.ts` and `extensions/*/index.ts`, but thi
 | [`pr-comments/`](./extensions/pr-comments/index.ts) | `/github:get-pr-comments` — append unresolved inline review comments from the current PR |
 | [`pr-review-re-request/`](./extensions/pr-review-re-request/index.ts) | `/github:pr-review-re-request` — re-request reviews from pending reviewers |
 | [`worktree/`](./extensions/worktree/index.ts) | `/worktree` — interactively list, open, create, delete, sync, and clean Git worktrees |
-| [`notify/`](./extensions/notify/index.ts) | `/notify` and `/notify-off` for session completion notifications and macOS TTS |
 | [`usage-analytics/`](./extensions/usage-analytics/index.ts) | `/analytics` — subagent and skill usage analytics overlay |
 | [`archive-to-html/`](./extensions/archive-to-html/index.ts) | Archives matching temporary HTML outputs and `show_widget` renderings into `~/Documents/agent-history/분류 전` |
 

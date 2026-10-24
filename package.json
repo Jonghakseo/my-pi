@@ -22,7 +22,6 @@
 		"extensions/footer/",
 		"extensions/fork-panel/",
 		"extensions/github-pr-merge/",
-		"extensions/notify/",
 		"extensions/package.json",
 		"extensions/pnpm-lock.yaml",
 		"extensions/pnpm-workspace.yaml",

@@ -131,7 +131,6 @@ pi는 `extensions/*.ts`와 `extensions/*/index.ts`를 모두 자동 발견할 �
 | [`pr-comments/`](./extensions/pr-comments/index.ts) | `/github:get-pr-comments` — 현재 PR의 미해결 inline review comment를 append |
 | [`pr-review-re-request/`](./extensions/pr-review-re-request/index.ts) | `/github:pr-review-re-request` — 미승인 리뷰어에게 review re-request 전송 |
 | [`worktree/`](./extensions/worktree/index.ts) | `/worktree` — Git worktree 목록·열기·생성·삭제·동기화·정리를 인터랙티브하게 처리 |
-| [`notify/`](./extensions/notify/index.ts) | `/notify`, `/notify-off` — 세션 완료 알림과 macOS TTS |
 | [`usage-analytics/`](./extensions/usage-analytics/index.ts) | `/analytics` — 서브에이전트·스킬 사용 통계 오버레이 |
 | [`archive-to-html/`](./extensions/archive-to-html/index.ts) | 조건에 맞는 임시 HTML 출력과 `show_widget` 렌더링을 `~/Documents/agent-history/분류 전`에 아카이브 |
 
