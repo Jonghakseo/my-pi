@@ -14,15 +14,8 @@
  *   4. Track injected paths to avoid duplicate injection.
  */
 
-import type { ImageContent, TextContent } from "@earendil-works/pi-ai";
-import type { ExtensionAPI, ToolResultEvent } from "@earendil-works/pi-coding-agent";
-
-/** Matches pi core's ToolResultEventResult shape (not exported from top-level package). */
-interface ToolResultEventResult {
-	content?: (TextContent | ImageContent)[];
-	details?: unknown;
-	isError?: boolean;
-}
+import type { TextContent } from "@earendil-works/pi-ai";
+import type { ExtensionAPI, ToolResultEvent, ToolResultEventResult } from "@earendil-works/pi-coding-agent";
 
 import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
