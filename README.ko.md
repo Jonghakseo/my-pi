@@ -121,7 +121,6 @@ pi는 `extensions/*.ts`와 `extensions/*/index.ts`를 모두 자동 발견할 �
 
 | 확장 | 설명 |
 |---|---|
-| [`bash-tool-override/`](./extensions/bash-tool-override/index.ts) | `bash` 렌더링을 오버라이드하고 셸 명령 제목을 짧은 한국어로 강제 |
 | [`read-tool-override/`](./extensions/read-tool-override/index.ts) | 커스텀 `read` 도구 UI/렌더링 |
 | [`edit-tool-override/`](./extensions/edit-tool-override/index.ts) | 커스텀 `edit` 도구 UI/렌더링 |
 | [`tool-group-renderer/`](./extensions/tool-group-renderer/index.ts) | 관련 도구 출력을 그룹화/접기 처리해 세션을 깔끔하게 유지 |

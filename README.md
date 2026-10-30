@@ -122,7 +122,6 @@ Pi can auto-discover both `extensions/*.ts` and `extensions/*/index.ts`, but thi
 
 | Extension | Description |
 |---|---|
-| [`bash-tool-override/`](./extensions/bash-tool-override/index.ts) | Overrides `bash` rendering and enforces concise Korean titles for shell commands |
 | [`read-tool-override/`](./extensions/read-tool-override/index.ts) | Custom `read` tool UI/rendering |
 | [`edit-tool-override/`](./extensions/edit-tool-override/index.ts) | Custom `edit` tool UI/rendering |
 | [`tool-group-renderer/`](./extensions/tool-group-renderer/index.ts) | Groups/collapses related tool output for cleaner sessions |

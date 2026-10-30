@@ -10,7 +10,6 @@
 		"extensions/.gitignore",
 		"extensions/AGENTS.md",
 		"extensions/archive-to-html/",
-		"extensions/bash-tool-override/",
 		"extensions/biome.json",
 		"extensions/bookmark/",
 		"extensions/custom-style/",
